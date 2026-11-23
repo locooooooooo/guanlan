@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Guanlan",
+  "version": "1.2.0",
+  "identifier": "com.guanlan.desktop",
+  "build": {
+    "frontendDist": "../../../dist"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "msi"],
+    "icon": ["icons/icon.ico", "icons/32x32.png", "icons/128x128.png"],
+    "shortDescription": "观澜（Guanlan）— 时空因果型本地文件工作台",
+    "longDescription": "零锁定全格式本地文件时间线、决定证据锚定、离线事项胶囊与多智能体 MCP 安全上下文基座。",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": false,
+        "compression": "lzma",
+        "installerHooks": "./installer/windows-context-menu.nsh"
+      },
+      "wix": {
+        "language": "zh-CN"
+      }
+    }
+  }
+}

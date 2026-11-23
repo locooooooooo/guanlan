@@ -1,0 +1,99 @@
+{
+  "comment": "token 估算向量（冻结契约 apiContract B0/B7）：est_tokens=ceil(cjk_chars*0.7+non_cjk_bytes/3.5)。CJK 码位区间固定为 U+3000-U+303F ∪ U+4E00-U+9FFF ∪ U+F900-U+FAFF ∪ U+FF01-U+FF5E（UTF-8 下每字符 3 字节）；non_cjk_bytes = 非区间字符的 UTF-8 字节数。Rust 侧 include_str! 编译期读取（crates/guanlan-core/src/index/state_machine.rs），TS 侧 fs.readFileSync 读取（前端 F8a），双端同源。估算为启发式（±20% 级），64k 阈值判定双端同公式即满足 AC。生成方式：node 按上述公式直算（本次会话）。vectors: [输入, est_tokens]。",
+  "formula": "est_tokens = Math.ceil(cjk_chars * 0.7 + non_cjk_bytes / 3.5)",
+  "cjk_ranges": "U+3000-U+303F|U+4E00-U+9FFF|U+F900-U+FAFF|U+FF01-U+FF5E",
+  "vectors": [
+    [
+      "",
+      0
+    ],
+    [
+      "abc",
+      1
+    ],
+    [
+      "⿿",
+      1
+    ],
+    [
+      "　",
+      1
+    ],
+    [
+      "〿",
+      1
+    ],
+    [
+      "〿　一",
+      3
+    ],
+    [
+      "䷿",
+      1
+    ],
+    [
+      "一",
+      1
+    ],
+    [
+      "鿿",
+      1
+    ],
+    [
+      "",
+      1
+    ],
+    [
+      "豈",
+      1
+    ],
+    [
+      "﫿",
+      1
+    ],
+    [
+      "﫿豈",
+      2
+    ],
+    [
+      "hello",
+      2
+    ],
+    [
+      "Hello World",
+      4
+    ],
+    [
+      "你好世界",
+      3
+    ],
+    [
+      "！～",
+      2
+    ],
+    [
+      "＀",
+      1
+    ],
+    [
+      "｟",
+      1
+    ],
+    [
+      "BOM与图纸联动方案",
+      6
+    ],
+    [
+      "Hello 世界！",
+      4
+    ],
+    [
+      "[P1 - 待确认] 属性字典与历史更新策略",
+      13
+    ],
+    [
+      "docs/04-智能体代码/README.md",
+      9
+    ]
+  ]
+}

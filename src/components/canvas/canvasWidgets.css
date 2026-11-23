@@ -1,0 +1,794 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   v0.8 任务空间桌面 · 画布 chrome 组件样式（画布工匠）
+   作用域：唯一消费者 = components/canvas/ 五件（PackageGroupFrame / RichDocPreviewCard /
+   CanvasPillToolbar / CanvasMiniMap / CanvasNarrativeDrawer），全部在 .dark-porthole
+   内渲染（舷窗纪律）。
+   · 色值只用 var(--cv-*) / color-mix——0 hex/rgba；depth 令牌严禁进画布域。
+   · 类名前缀 .cvw-*（canvas widgets），不与 eventGraph.css（下钻层）、index.css（动效
+     基座/壳层）串名；新 chrome 一律无边框硬线，靠色阶 + 弥散层级表达。
+   · 动效只走 transform/opacity + 既有令牌时长缓动（--dur-1/--dur-3/--ease-spring/
+     --ease-fade），不新增 keyframes；电流流动复用 index.css 的 .anim-pulse-flow 类本体。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── R1 · 任务包分组容器（画布 L1 分组语义：浅灰圆角、无边框无阴影） ───────────
+   starfix T1 消费方对号：本容器=画布上的「展开容器」——改吃 --cv-panel（工票冻结值：
+   夜航 #161922 深灰半透玻璃 / 纸面 #F0F2F5 浅灰），不再用 --cv-slot（slot 是卡内
+   chip/键帽档，语义错位且旧值 #222228 偏「浅灰卡片」）；层级 void < panel < card。 */
+.cvw-package-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  padding: 12px 14px 14px;
+  box-sizing: border-box;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--cv-panel) 94%, transparent);
+  /* 分组容器语义：无边框、无阴影——层级只由底色阶表达（R1 分组语义，色阶档位改 panel） */
+  border: none;
+  box-shadow: none;
+}
+
+.cvw-package-frame-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-shrink: 0;
+  /* 固定头行高：foreignObject 高度按 PACKAGE_GROUP_FRAME_H（12+20+8+卡高+14）推导，
+     改本行高度必须同改 PackageGroupFrame.tsx 常量 */
+  height: 20px;
+}
+
+/* 容器内卡行：横排承载富预览卡（280px 一行排开；间距 12 与布局层 gap 常量同源） */
+.cvw-package-frame-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  min-height: 0;
+  flex: 1;
+}
+
+.cvw-package-frame-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cv-ink);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cvw-package-frame-count {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--cv-ink-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 阶段点（图形档双色：执行/交付=amber 落地热区，蓝图/计划/决策=lav 规划冷区，
+   待分类=中性 ink-meta；data-tone 由组件按 StageRole 映射） */
+.cvw-stage-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: var(--cv-lav);
+}
+.cvw-stage-dot[data-tone='amber'] {
+  background: var(--cv-amber);
+}
+.cvw-stage-dot[data-tone='neutral'] {
+  background: var(--cv-ink-meta);
+}
+
+/* 选中分组：底色微亮 + 头行主色描边点（无边框纪律不破——描边只落在阶段点上）；
+   starfix T1：底阶随容器档位从 slot→panel 同步改 mix 基准，选中仍向 card 方向提亮一档 */
+.cvw-package-frame[data-selected='true'] {
+  background: color-mix(in srgb, var(--cv-panel) 55%, var(--cv-card));
+}
+
+/* ── R2 · 280px 富预览卡（L2 内容实体：实底卡面 + 弥散阴影） ─────────────────── */
+.cvw-rich-card {
+  width: 280px;
+  height: 158px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  text-align: left;
+  overflow: hidden;
+  cursor: pointer;
+  border-radius: 12px;
+  background: var(--cv-card);
+  border: 1px solid color-mix(in srgb, var(--cv-hairline-ink) 10%, transparent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--cv-hairline-ink) 7%, transparent);
+  transition:
+    transform var(--dur-2) var(--ease-spring),
+    border-color var(--dur-1) var(--ease-fade),
+    background-color var(--dur-1) var(--ease-fade),
+    box-shadow var(--dur-2) var(--ease-spring);
+}
+
+.cvw-rich-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--cv-hairline-ink) 24%, transparent);
+  box-shadow: 0 10px 24px -6px color-mix(in srgb, var(--cv-hairline-ink) 14%, transparent);
+}
+
+.cvw-rich-card[data-selected='true'] {
+  background: var(--cv-card-selected);
+  border-color: color-mix(in srgb, var(--cv-lane-md) 70%, transparent);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--cv-lane-md) 22%, transparent);
+}
+
+/* ── D02 · 增量聚光灯（画布节点样式）：已读未变退低对比度背景骨架 / 当前批阅条目琥珀描边。
+   两属性关闭态不落 DOM（undefined），像素基线零扰动；降亮度保留 hover 与点击（只退视觉不夺功能） */
+.cvw-rich-card[data-dimmed='true'] {
+  opacity: 0.38;
+  filter: saturate(0.35);
+  transition:
+    border-color var(--dur-1) var(--ease-fade),
+    background-color var(--dur-1) var(--ease-fade),
+    opacity var(--dur-2, 180ms) var(--ease-fade),
+    filter var(--dur-2, 180ms) var(--ease-fade);
+}
+
+.cvw-rich-card[data-spotlight-current='true'] {
+  border-color: color-mix(in srgb, var(--cv-amber) 65%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--cv-amber) 28%, transparent);
+}
+
+.cvw-rich-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.cvw-rich-card-title {
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cv-ink);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 版本胶囊（mono micro、--cv-slot 底；原串由 versionLabel 透出，如「BUILD · v8」） */
+.cvw-version-pill {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--cv-slot);
+  border: 1px solid color-mix(in srgb, var(--cv-hairline-ink) 10%, transparent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--cv-ink-3);
+  white-space: nowrap;
+}
+
+/* 💡核心结论行（clamp 2；空结论时组件显式占位，绝不拿文件属性冒充） */
+.cvw-rich-conclusion {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--cv-ink-2);
+}
+
+/* 正文前 3 行预览（浅灰弱化，行距紧凑；逐行 nowrap 截断由 .cvw-rich-body-line 承担） */
+.cvw-rich-body {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--cv-ink-meta);
+}
+
+.cvw-rich-body-line {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 变更章节行容器（rows 由组件 slice(0,3) 控量，容器只管纵向排布） */
+.cvw-rich-body-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 变更章节行：kind 色与 DocumentTimeMachineView.KIND_COLOR 同源令牌（--cv-lane-md/
+   --cv-add/--cv-del），文字本体走中性 ink-meta */
+.cvw-diff-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--cv-ink-meta);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.cvw-diff-row-kind {
+  flex-shrink: 0;
+  color: var(--cv-lane-md);
+}
+.cvw-diff-row[data-kind='新增'] .cvw-diff-row-kind {
+  color: var(--cv-add);
+}
+.cvw-diff-row[data-kind='删除'] .cvw-diff-row-kind {
+  color: var(--cv-del);
+}
+
+.cvw-diff-row-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* SVG 缩略图直出（bg=void 让透明图纸有底；object-fit contain 不裁切） */
+.cvw-svg-thumb {
+  flex: 1;
+  min-height: 0;
+  border-radius: 8px;
+  background: var(--cv-void);
+  border: 1px solid color-mix(in srgb, var(--cv-hairline-ink) 8%, transparent);
+  object-fit: contain;
+}
+
+/* 卡内空态占位（无正文无图纸时的诚实呈现） */
+.cvw-rich-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--cv-ink-dim);
+}
+
+/* ── R4 · 底部药丸工具栏（磨砂悬浮；定位类由宿主 Tailwind 提供） ─────────────── */
+.cvw-pill-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cv-card) 92%, var(--cv-panel));
+  backdrop-filter: blur(20px) saturate(155%);
+  -webkit-backdrop-filter: blur(20px) saturate(155%);
+  border: 1px solid color-mix(in srgb, var(--cv-hairline-ink) 12%, transparent);
+  box-shadow: var(--cv-shadow-elevated);
+}
+
+.cvw-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cv-ink-3);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color var(--dur-1) var(--ease-fade),
+    color var(--dur-1) var(--ease-fade),
+    transform var(--dur-1) var(--ease-spring),
+    box-shadow var(--dur-1) var(--ease-fade);
+}
+
+.cvw-pill-btn:hover {
+  color: var(--cv-ink);
+  background: color-mix(in srgb, var(--cv-hairline-ink) 8%, transparent);
+  transform: translateY(-0.5px);
+}
+
+.cvw-pill-btn:active {
+  transform: scale(0.95);
+}
+
+/* 双态钮激活段：starfix T1/T3 改吃底部药丸专属选中令牌（--cv-pill-active-*：夜航
+   #3B82F6 底+void 字 / 纸面 #1F2937 底+白字，工票冻结值）。不再借 --cv-seg-*——那是
+   顶栏分段钮语法（黑/白反转），药丸选中态要的是品牌强调底。aria-pressed 语义不变 */
+.cvw-pill-btn[aria-pressed='true'] {
+  background: var(--cv-pill-active-bg);
+  color: var(--cv-pill-active-ink);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--cv-pill-active-bg) 28%, transparent);
+}
+
+.cvw-pill-sep {
+  width: 1px;
+  height: 14px;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--cv-hairline-ink) 14%, transparent);
+}
+
+/* starfix T3：缩放簇读数（mono 等宽数字，min-width 防抖动）与纯图标钮（无文字时收窄内边距） */
+.cvw-pill-scale {
+  min-width: 40px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cv-ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.cvw-pill-icon-btn {
+  padding: 0 6px;
+}
+
+/* ? 快捷键轻弹层（就地浮出，不进 zoom 层；定位类由宿主提供） */
+.cvw-shortcut-pop {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--cv-card) 96%, var(--cv-panel));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--cv-hairline-ink) 10%, transparent);
+  box-shadow: var(--cv-shadow-elevated);
+}
+
+.cvw-shortcut-title {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--cv-ink-dim);
+  margin-bottom: 8px;
+}
+
+.cvw-shortcut-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--cv-ink-2);
+  line-height: 1.9;
+}
+
+.cvw-shortcut-key {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--cv-ink-3);
+  background: var(--cv-slot);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+/* ── R5 · 右上小地图（世界框 + 视口框；点击/拖拽跳转） ───────────────────────── */
+.cvw-minimap {
+  position: relative;
+  width: 164px;
+  height: 102px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--cv-panel) 92%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid color-mix(in srgb, var(--cv-hairline-ink) 12%, transparent);
+  box-shadow: var(--cv-shadow-elevated);
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: none;
+}
+
+/* 世界内容框（等比缩放居中，弱色相表达「全部内容包围盒」） */
+.cvw-minimap-world {
+  position: absolute;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--cv-hairline-ink) 16%, transparent);
+  background: color-mix(in srgb, var(--cv-hairline-ink) 4%, transparent);
+  box-sizing: border-box;
+}
+
+/* 视口框（当前 transform 折算；描边走 lane-md 交互热区色，fill 只极淡一层） */
+.cvw-minimap-viewport {
+  position: absolute;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--cv-lane-md) 70%, transparent);
+  background: color-mix(in srgb, var(--cv-lane-md) 12%, transparent);
+  box-sizing: border-box;
+  transition: left var(--dur-1) var(--ease-fade), top var(--dur-1) var(--ease-fade),
+    width var(--dur-1) var(--ease-fade), height var(--dur-1) var(--ease-fade);
+}
+
+/* ── R3/R9 · 叙事抽屉（取代 334px 常驻检视器；右侧滑出） ─────────────────────── */
+.cvw-narrative-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 340px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--cv-panel) 96%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: none;
+  border-left: 1px solid color-mix(in srgb, var(--cv-hairline-ink) 10%, transparent);
+  box-shadow: var(--cv-shadow-elevated);
+  /* R3④：translateX+opacity --dur-3 --ease-spring；关闭态藏于右缘外且不吃指针 */
+  transform: translateX(108%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform var(--dur-3) var(--ease-spring), opacity var(--dur-3) var(--ease-spring);
+}
+
+.cvw-narrative-drawer[data-open='true'] {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.cvw-narrative-head {
+  flex-shrink: 0;
+  padding: 16px 46px 12px 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--cv-hairline-ink) 8%, transparent);
+}
+
+/* 「已选中 · 层级」逐字迁移自旧检视器（R9；mono 小字形态同源） */
+.cvw-narrative-level {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--cv-ink-dim);
+}
+
+.cvw-narrative-title {
+  margin: 6px 0 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--cv-ink);
+  overflow-wrap: anywhere;
+}
+
+.cvw-narrative-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--cv-hairline-ink) 10%, transparent);
+  background: transparent;
+  color: var(--cv-ink-dim);
+  cursor: pointer;
+  transition: color var(--dur-1) var(--ease-fade), background-color var(--dur-1) var(--ease-fade);
+}
+
+.cvw-narrative-close:hover {
+  color: var(--cv-ink);
+  background: color-mix(in srgb, var(--cv-hairline-ink) 8%, transparent);
+}
+
+.cvw-narrative-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 18px 18px;
+}
+
+/* 流式时间叙事分节：竖向时间轴点线（非分割表单） */
+.cvw-narrative-section {
+  position: relative;
+  padding-left: 20px;
+  padding-bottom: 18px;
+}
+
+.cvw-narrative-section:last-child {
+  padding-bottom: 4px;
+}
+
+/* 轴线：每节左缘一根，末节收到自身高度一半（视觉收束） */
+.cvw-narrative-section::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 14px;
+  bottom: -2px;
+  width: 1px;
+  background: color-mix(in srgb, var(--cv-hairline-ink) 18%, transparent);
+}
+
+.cvw-narrative-section:last-child::before {
+  bottom: auto;
+  height: calc(100% - 14px);
+}
+
+/* 节点圆点：default=中性、change=lane-md（修改语义）、decision=lav（决策语义） */
+.cvw-narrative-section::after {
+  content: '';
+  position: absolute;
+  left: 1px;
+  top: 4px;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--cv-ink-meta);
+}
+
+.cvw-narrative-section[data-tone='change']::after {
+  background: var(--cv-lane-md);
+}
+
+.cvw-narrative-section[data-tone='decision']::after {
+  background: var(--cv-lav);
+}
+
+.cvw-narrative-label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cvw-narrative-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  color: var(--cv-ink-dim);
+}
+
+.cvw-narrative-ts {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--cv-ink-3);
+  background: var(--cv-slot);
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.cvw-narrative-content {
+  margin-top: 6px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--cv-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.cvw-narrative-list-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--cv-ink-2);
+}
+
+.cvw-narrative-list-kind {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--cv-lane-md);
+}
+
+.cvw-narrative-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--cv-lav) 30%, transparent);
+  background: color-mix(in srgb, var(--cv-lav) 10%, var(--cv-panel));
+  color: var(--cv-lav-ink);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background-color var(--dur-1) var(--ease-fade);
+}
+
+.cvw-narrative-action:hover {
+  background: color-mix(in srgb, var(--cv-lav) 18%, var(--cv-panel));
+}
+
+.cvw-narrative-muted {
+  color: var(--cv-ink-dim);
+  font-size: 11px;
+}
+
+.cvw-narrative-ref-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cvw-narrative-ref-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--cv-hairline-ink) 7%, transparent);
+  background: color-mix(in srgb, var(--cv-slot) 65%, transparent);
+  text-align: left;
+  transition: background-color var(--dur-1) var(--ease-fade), border-color var(--dur-1) var(--ease-fade);
+}
+
+.cvw-narrative-ref-item--interactive {
+  cursor: pointer;
+}
+
+.cvw-narrative-ref-item--interactive:hover {
+  background: var(--cv-ctl-hover);
+  border-color: color-mix(in srgb, var(--cv-hairline-ink) 16%, transparent);
+}
+
+.cvw-narrative-ref-title {
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--cv-ink);
+  overflow-wrap: anywhere;
+}
+
+.cvw-narrative-ref-tag {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--cv-hairline-ink) 6%, transparent);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  line-height: 1.4;
+  color: var(--cv-ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cvw-narrative-ref-more {
+  padding-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--cv-ink-dim);
+}
+
+.cvw-narrative-foot {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 12px 16px 14px;
+  border-top: 1px solid color-mix(in srgb, var(--cv-hairline-ink) 8%, transparent);
+  background: color-mix(in srgb, var(--cv-void) 60%, transparent);
+}
+
+.cvw-narrative-foot-primary {
+  width: 100%;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 9px;
+  border: none;
+  background: var(--cv-brand);
+  color: var(--cv-on-brand);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--cv-brand) 30%, transparent);
+  transition: background-color var(--dur-1) var(--ease-fade), transform var(--dur-1) var(--ease-fade);
+}
+
+.cvw-narrative-foot-primary:hover {
+  background: var(--cv-brand-hover);
+}
+
+.cvw-narrative-foot-primary:active {
+  transform: scale(0.99);
+}
+
+.cvw-narrative-foot-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+/* 出现 4 枚次级动作（定位目录 + 默认打开 + 追溯决策 + 复制证据）时自动切 2×2 对称栅格，避免 3+1 孤立拉宽 */
+.cvw-narrative-foot-secondary:has(> :nth-child(4)) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cvw-narrative-foot-btn {
+  flex: 1 1 auto;
+  min-width: max-content;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border-radius: 7px;
+  border: 1px solid color-mix(in srgb, var(--cv-hairline-ink) 10%, transparent);
+  background: var(--cv-ctl);
+  color: var(--cv-ink-3);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--dur-1) var(--ease-fade), color var(--dur-1) var(--ease-fade), border-color var(--dur-1) var(--ease-fade);
+}
+
+.cvw-narrative-foot-btn:hover {
+  background: var(--cv-ctl-hover);
+  border-color: color-mix(in srgb, var(--cv-hairline-ink) 18%, transparent);
+  color: var(--cv-ink);
+}
+
+/* 返回主轴钮（自旧检视器 :4029-4038 迁入，动作不丢失） */
+.cvw-narrative-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--cv-hairline-ink) 8%, transparent);
+  background: var(--cv-ctl);
+  color: var(--cv-ink-3);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: background-color var(--dur-1) var(--ease-fade);
+}
+
+.cvw-narrative-back:hover {
+  background: var(--cv-ctl-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cvw-narrative-drawer,
+  .cvw-minimap-viewport,
+  .cvw-rich-card,
+  .cvw-pill-btn,
+  .cvw-narrative-action,
+  .cvw-narrative-ref-item,
+  .cvw-narrative-foot-primary,
+  .cvw-narrative-foot-btn,
+  .cvw-narrative-back,
+  .cvw-narrative-close {
+    transition: none;
+  }
+}

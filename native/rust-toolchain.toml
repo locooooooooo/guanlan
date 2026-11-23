@@ -1,0 +1,12 @@
+# 观澜 Rust workspace 工具链锁定（issue #16/#17）
+#
+# 为什么锁定：`cargo fmt` 与 `clippy -D warnings` 的诊断集合随工具链版本变化——
+# 不锁定就无法保证「本地通过 = CI 通过」，也无法复现历史基线。
+# 本文件同时被 rustup（本地）与 CI（dtolnay/rust-toolchain + Swatinem/rust-cache）遵守。
+#
+# 升级流程：改 channel → 本地 cargo fmt --all && cargo clippy --workspace --all-targets
+# -- -D warnings 全绿 → 同一 PR 内提交，不单独升级工具链。
+[toolchain]
+channel = "1.99.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

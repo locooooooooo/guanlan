@@ -1,0 +1,111 @@
+name: ci
+
+# 前端（TypeScript + 单测 + Vite 构建）+ Rust（core/service/desktop）+ 真实服务冒烟与 Node↔Rust 对拍。
+# Windows 作业编译桌面壳与安装包配置；smoke 作业从干净 checkout 生成夹具后运行 release 二进制。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: install
+        run: npm ci
+      - name: typecheck
+        run: npm run lint
+      - name: unit tests
+        run: npm test
+      - name: vite build
+        run: npm run build
+
+  rust-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: native
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native
+      - name: fmt (all)
+        run: cargo fmt --all -- --check
+      - name: clippy core+service (strict)
+        run: cargo clippy -p guanlan-core -p guanlan-service --all-targets -- -D warnings
+      - name: test core+service
+        run: cargo test --locked -p guanlan-core -p guanlan-service
+
+  rust-desktop:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: native
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native
+      - name: fmt (all)
+        run: cargo fmt --all -- --check
+      - name: clippy workspace (strict, incl. desktop)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: test workspace (incl. desktop)
+        run: cargo test --workspace --locked
+      - name: verify Windows MSI/NSIS installer engineering config
+        working-directory: .
+        run: node scripts/build-windows-installer.mjs --check-only
+
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: frontend deps
+        run: npm ci
+      - name: build release server
+        run: cargo build --release --locked -p guanlan-service
+        working-directory: native
+      - name: generate fixture + expected + identity vectors
+        # testdata 全部被 .gitignore 忽略：从干净 checkout 用 seed-fixture.ts 重建
+        run: npm run seed
+      - name: resolve server binary
+        shell: bash
+        run: |
+          if [ -f native/target/release/guanlan.exe ]; then
+            echo "GUANLAN_EXE=native/target/release/guanlan.exe" >> "$GITHUB_ENV"
+          else
+            echo "GUANLAN_EXE=native/target/release/guanlan" >> "$GITHUB_ENV"
+          fi
+      - name: smoke v1
+        run: npx tsx scripts/smoke-v1.ts --exe "${{ env.GUANLAN_EXE }}"
+      - name: parity (Node ↔ Rust 写入对拍)
+        run: npx tsx scripts/parity-reconcile.ts --exe "${{ env.GUANLAN_EXE }}"

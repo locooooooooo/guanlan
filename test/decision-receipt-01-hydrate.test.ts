@@ -1,0 +1,286 @@
+import assert from 'node:assert/strict';
+import { test, describe } from 'node:test';
+import {
+  buildDecisionReceiptInstruction,
+  fillPromptOf,
+  loadDecisionReceiptSnapshot,
+  parseDecisionFormItems,
+  saveDecisionReceiptSnapshot,
+  DECISION_RECEIPT_STORAGE_KEY,
+} from '../src/components/ReaderView';
+
+/**
+ * 决策回执可交互能力（阅读工匠票）定向单测。
+ *
+ * 断言清单：
+ *  C1  「□ A) …」双项成簇 → 区带整体 hydrate，文本逐字（含标号 A)）；
+ *  C2  ☑/☒ 原文已选态 → initialChecked=true；
+ *  C3  「- [ ] /- [x]」任务行成簇 → hydrate 且已选态正确；
+ *  C4  填空行自命中关键词（「确认人：___」）→ 单项 hydrate；
+ *  C5  单项 + 前行引语关键词（「请选择…」）→ hydrate；
+ *  C6  单项 + 最近上方标题关键词（「### 需你决策」）→ hydrate；
+ *  C7  单项无任何语境信号 → 不 hydrate（Map 无该行，渲染层逐字回退）；
+ *  C8  普通文章行内提及「□」→ 不 hydrate；
+ *  C9  光杆「□」行（无内容）→ 非 item；
+ *  C10 代码围栏内「□ …」→ 不 hydrate（围栏必断带）；
+ *  C11 桥接行 ≤2 不断带；>2 断带后单项无信号不 hydrate；
+ *  C12 「□ 3.5mm 转接头」文本逐字保留（无标号误剥——保守红线）；
+ *  C13 「■」装饰字符不识别；
+ *  C14 任务行内嵌填空（「- [ ] 名称：___」）→ checkbox + 文本含 ___ 供渲染层切槽；
+ *  C15 列表填空行剥一个列表标记（「- 联系人：___」→「联系人：___」）；
+ *  S1  fillPromptOf：尾冒号剥离 / 全空格折叠 / 无文字回退原文；
+ *  I1  buildDecisionReceiptInstruction：标题/来源/版本/[x] 语法/填空段齐备，
+ *      空段整节省略，「未回写原文件」如实声明；
+ *  K1  快照存取：save→load 回环；损坏 JSON → null；非法条目 → null；
+ *      node 无 window 环境：load null / save 不炸。
+ */
+
+// ---------- C 组：命中解析 ----------
+
+function itemsOf(markdown: string): Map<number, { text: string; checked?: boolean }> {
+  const out = new Map<number, { text: string; checked?: boolean }>();
+  parseDecisionFormItems(markdown).forEach((item, line) => {
+    out.set(line, { text: item.text, checked: item.checkbox?.initialChecked });
+  });
+  return out;
+}
+
+describe('parseDecisionFormItems · 命中与保守回退', () => {
+  test('C1 双选项成簇 hydrate，文本逐字', () => {
+    const md = ['前言段落。', '', '□ A) 350mm卫生巾', '□ B) 420mm卫生巾', '', '后文。'].join('\n');
+    const items = itemsOf(md);
+    assert.deepEqual([...items.keys()], [3, 4]);
+    assert.equal(items.get(3)?.text, 'A) 350mm卫生巾');
+    assert.equal(items.get(4)?.text, 'B) 420mm卫生巾');
+    assert.equal(items.get(3)?.checked, false);
+  });
+
+  test('C2 ☑/☒ 原文已选态', () => {
+    const md = ['☑ A) 方案一', '☒ B) 方案二'].join('\n');
+    const items = itemsOf(md);
+    assert.equal(items.get(1)?.checked, true);
+    assert.equal(items.get(2)?.checked, true);
+  });
+
+  test('C3 任务行成簇 hydrate（含大写 [X]）', () => {
+    const md = ['下一步：', '', '- [ ] 联系供应商', '- [x] 已传真确认函', '- [X] 归档回执'].join('\n');
+    const items = itemsOf(md);
+    assert.deepEqual([...items.keys()].sort(), [3, 4, 5]);
+    assert.equal(items.get(3)?.checked, false);
+    assert.equal(items.get(4)?.checked, true);
+    assert.equal(items.get(5)?.checked, true);
+    assert.equal(items.get(4)?.text, '已传真确认函');
+  });
+
+  test('C4 填空行自命中关键词', () => {
+    const md = ['确认人：___'].join('\n');
+    const items = itemsOf(md);
+    assert.deepEqual([...items.keys()], [1]);
+    assert.equal(items.get(1)?.text, '确认人：___');
+  });
+
+  test('C5 单项 + 前行引语关键词', () => {
+    const md = ['请选择卫生巾规格：', '', '□ A) 350mm'].join('\n');
+    const items = itemsOf(md);
+    assert.deepEqual([...items.keys()], [3]);
+  });
+
+  test('C6 单项 + 最近上方标题关键词', () => {
+    const md = [
+      '## 背景',
+      '',
+      '一段长说明文字（无关键词）。',
+      '第二行说明。',
+      '第三行说明。',
+      '',
+      '### 需你决策',
+      '',
+      '□ A) 方案一',
+    ].join('\n');
+    const items = itemsOf(md);
+    assert.deepEqual([...items.keys()], [9]);
+  });
+
+  test('C7 单项无任何语境信号 → 不 hydrate', () => {
+    const md = ['会议纪要开头。', '', '□ 出席人员甲', '', '散会。'].join('\n');
+    const items = itemsOf(md);
+    assert.equal(items.size, 0);
+  });
+
+  test('C8 行内提及「□」不强改', () => {
+    const md = ['在表格里勾选（□ 表示未选）。全文仅此一处提及。'].join('\n');
+    const items = itemsOf(md);
+    assert.equal(items.size, 0);
+  });
+
+  test('C9 光杆「□」非 item', () => {
+    const md = ['□', '', '□ A) 有内容', '□ B) 也有内容'].join('\n');
+    const items = itemsOf(md);
+    assert.deepEqual([...items.keys()], [3, 4]);
+  });
+
+  test('C10 围栏内不 hydrate', () => {
+    const md = [
+      '```text',
+      '□ A) 这是代码示例',
+      '□ B) 同上',
+      '```',
+      '',
+      '□ C) 围栏外真选项',
+      '□ D) 同上',
+    ].join('\n');
+    const items = itemsOf(md);
+    assert.deepEqual([...items.keys()], [6, 7]);
+  });
+
+  test('C11 桥接行 ≤2 不断带，>2 断带', () => {
+    const md = [
+      '□ A) 第一项',
+      '说明一行。',
+      '说明两行。',
+      '□ B) 同带第二项（隔 2 行仍续带）',
+      '',
+      '间隔文字一。',
+      '间隔文字二。',
+      '间隔文字三。',
+      '□ C) 断带后单项',
+    ].join('\n');
+    const items = itemsOf(md);
+    // A/B 成带 hydrate；C 单项且前后无决策语境信号 → 不 hydrate
+    assert.deepEqual([...items.keys()], [1, 4]);
+    assert.equal(items.get(4)?.text, 'B) 同带第二项（隔 2 行仍续带）');
+  });
+
+  test('C12 「3.5mm」类文本逐字保留（无标号误剥）', () => {
+    const md = ['□ 3.5mm 转接头', '□ 6.5mm 转接头'].join('\n');
+    const items = itemsOf(md);
+    assert.equal(items.get(1)?.text, '3.5mm 转接头');
+    assert.equal(items.get(2)?.text, '6.5mm 转接头');
+  });
+
+  test('C13 「■」装饰字符不识别', () => {
+    const md = ['■ 分隔装饰一', '■ 分隔装饰二'].join('\n');
+    const items = itemsOf(md);
+    assert.equal(items.size, 0);
+  });
+
+  test('C14 任务行内嵌填空', () => {
+    const md = ['请补齐并勾选：', '', '- [ ] 设备名称：___'].join('\n');
+    const items = itemsOf(md);
+    assert.deepEqual([...items.keys()], [3]);
+    assert.equal(items.get(3)?.text, '设备名称：___');
+    assert.equal(items.get(3)?.checked, false);
+  });
+
+  test('C15 列表填空行剥一个列表标记', () => {
+    const md = ['收货信息（请选择或填写）：', '', '- 联系人：___', '- 电话：___'].join('\n');
+    const items = itemsOf(md);
+    assert.equal(items.get(3)?.text, '联系人：___');
+    assert.equal(items.get(4)?.text, '电话：___');
+  });
+
+  test('空正文安全', () => {
+    assert.equal(parseDecisionFormItems('').size, 0);
+    assert.equal(parseDecisionFormItems(undefined as unknown as string).size, 0);
+  });
+});
+
+// ---------- S 组：填空提示 ----------
+
+describe('fillPromptOf', () => {
+  test('S1 尾冒号剥离与回退', () => {
+    assert.equal(fillPromptOf('确认人：___'), '确认人');
+    assert.equal(fillPromptOf('规格 ___ 型号 ___'), '规格 型号');
+    assert.equal(fillPromptOf('___'), '___');
+  });
+});
+
+// ---------- I 组：指令组装 ----------
+
+describe('buildDecisionReceiptInstruction', () => {
+  test('I1 全量组装与空段省略', () => {
+    const full = buildDecisionReceiptInstruction({
+      title: '卫生巾采购确认单',
+      filePath: 'docs/采购/确认单.md',
+      revisionId: 'rev-abc',
+      selectedOptions: ['A) 350mm卫生巾'],
+      fillValues: [{ prompt: '确认人', value: '张三' }],
+    });
+    assert.ok(full.includes('## 决策回执：卫生巾采购确认单'));
+    assert.ok(full.includes('- 来源文件：docs/采购/确认单.md'));
+    assert.ok(full.includes('- 版本快照：rev-abc'));
+    assert.ok(full.includes('（只读快照，本回执未回写原文件）'));
+    assert.ok(full.includes('- [x] A) 350mm卫生巾'));
+    assert.ok(full.includes('- 确认人：张三'));
+
+    const noFill = buildDecisionReceiptInstruction({
+      title: 't',
+      filePath: 'p',
+      revisionId: 'r',
+      selectedOptions: ['A) x'],
+      fillValues: [],
+    });
+    assert.ok(!noFill.includes('### 填空内容'));
+
+    const noChecks = buildDecisionReceiptInstruction({
+      title: 't',
+      filePath: 'p',
+      revisionId: 'r',
+      selectedOptions: [],
+      fillValues: [{ prompt: 'q', value: 'v' }],
+    });
+    assert.ok(!noChecks.includes('### 已勾选决策'));
+  });
+});
+
+// ---------- K 组：快照存取（node 无 window + 假 localStorage） ----------
+
+describe('决策快照存取', () => {
+  test('K1 node 无 window：load null / save 不炸', () => {
+    assert.equal(typeof globalThis.window, 'undefined');
+    assert.equal(loadDecisionReceiptSnapshot('f::r'), null);
+    assert.doesNotThrow(() =>
+      saveDecisionReceiptSnapshot('f::r', { checks: { '1': true }, fills: {} })
+    );
+  });
+
+  test('K2 save→load 回环与损坏容错', () => {
+    const store = new Map<string, string>();
+    const fakeWindow = {
+      localStorage: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => void store.set(k, v),
+      },
+    };
+    (globalThis as { window?: unknown }).window = fakeWindow;
+    try {
+      saveDecisionReceiptSnapshot('fileA::rev1', {
+        checks: { '3': true, '4': false },
+        fills: { '5:0': '350mm' },
+      });
+      const snap = loadDecisionReceiptSnapshot('fileA::rev1');
+      assert.deepEqual(snap, { checks: { '3': true, '4': false }, fills: { '5:0': '350mm' } });
+      assert.equal(loadDecisionReceiptSnapshot('fileA::missing'), null);
+
+      // 存储键正确（工票点名 guanlan.decisionReceipt.v1）
+      assert.ok(store.has(DECISION_RECEIPT_STORAGE_KEY));
+
+      // 损坏 JSON → null（不抛）
+      store.set(DECISION_RECEIPT_STORAGE_KEY, '{not-json');
+      assert.equal(loadDecisionReceiptSnapshot('fileA::rev1'), null);
+
+      // 非法条目（checks 值非布尔）→ null
+      store.set(
+        DECISION_RECEIPT_STORAGE_KEY,
+        JSON.stringify({ 'fileA::rev1': { checks: { '3': 'yes' }, fills: {} } })
+      );
+      assert.equal(loadDecisionReceiptSnapshot('fileA::rev1'), null);
+
+      // 非对象/数组整体 → null
+      store.set(DECISION_RECEIPT_STORAGE_KEY, JSON.stringify([1, 2]));
+      assert.equal(loadDecisionReceiptSnapshot('fileA::rev1'), null);
+    } finally {
+      delete (globalThis as { window?: unknown }).window;
+    }
+  });
+});

@@ -1,0 +1,20 @@
+# 观澜桌面壳（Tauri v2）：承载现有前端构建产物 + 进程内嵌 guanlan-service。
+# 方案 §7：桌面壳不复制数据库与索引代码——壳只启动/连接同一服务实现（lib 入口）。
+[package]
+name = "guanlan-desktop"
+version.workspace = true
+edition.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde.workspace = true
+serde_json.workspace = true
+guanlan-service = { path = "../guanlan-service" }
+# C03：全局呼出热键（面板唤起；Tauri 官方插件，Rust 侧注册无需 capabilities 声明）
+tauri-plugin-global-shortcut = "2"
+
+# tauri 内部已依赖 tokio；这里显式声明以便 tauri::async_runtime 口径一致
+tokio.workspace = true

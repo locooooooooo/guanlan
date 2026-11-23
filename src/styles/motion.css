@@ -1,0 +1,1254 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   观澜 · 共享动效层（B4 动效收编批次）
+   由 src/index.css:3 @import 引入——请勿删除该行。
+   单源依据：docs/guanlan/观澜-品牌界面升级-v0.6/设计规范.md
+   §3.5（时长/缓动令牌）、§4.2（标线滑块/面板淡变）、§6（动效纪律全章）。
+
+   ── 硬契约（评审定夺，调用方与后续修改均不得违反）────────────────────
+   1. 本文件全部动画/过渡只动 transform / opacity（合成器友好，约束④）；
+      禁止 width/height/top/left 等布局属性；不新增 will-change（§6.6：
+      遗产常驻 will-change 一律移除，不再新增）。按钮 hover 的背景/阴影
+      油漆过渡属组件侧（§4.1 控件语法），不进本共享层。
+   2. 时长只取 :root 四档令牌（index.css 已落 --dur-1/2/3/pan 与
+      --dur-fast 别名），缓动只取 --ease-spring / --ease-fade；
+      不得各自写死数值。例外登记不收编：.anim-spring-pop 340ms（画布
+      入场契约，D13 画布闸后并入 --dur-3）、连线电流 linear 1.1s（画布）。
+   3. 全部尊重 prefers-reduced-motion：停帧＋终态可见，不藏内容；
+      纯装饰层 display:none（§6.6 现法原则）。本文件每个工具类都有
+      逐类降级（§4 块一）；全局兜底为 §6.6/D11 完整形态（含
+      animation-iteration-count:1），启用状态见 §4 块二闸门注释。
+   4. 数据区禁飞（§6.3）：时间线/日历/图谱既有节点与视口零位移，
+      新元素仅 .glx-fade-in（纯 opacity，--dur-1）淡入；
+      .glx-card-in 只许用于 chrome 卡片，禁入数据区。
+   5. 正文纪律（§6.4）：正文文字节点永不施加本文件任何类——
+      无正文淡入、无行高动画。
+   6. 命名空间 glx-：与画布侧 .anim-*（index.css 末段）互不侵占；
+      类名即接口，界面工程师按需引用，组件内 hover/press 状态表
+      （§4.1/§4.2）由组件自行接线。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §1 时长/缓动 token 过渡预设（工具类）
+   「预设 = transition-property + 令牌时长 + 令牌缓动」三件一体，
+   调用方只选语义档，不手写 cubic-bezier / ms。全部 transform/opacity。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* hover/淡入微动档（§3.5 --dur-1 用途行）：opacity 单属性过渡。
+   典型：透明度显隐、禁用态 opacity .4 补位（§4.1 通用语法）。 */
+.glx-t-fade {
+  transition: opacity var(--dur-1) var(--ease-fade);
+}
+
+/* 状态位移档（--dur-2 用途行）：transform 单属性过渡。
+   典型：胶囊选中位移、小件平移；不动画 left/top（约束④）。 */
+.glx-t-move {
+  transition: transform var(--dur-2) var(--ease-spring);
+}
+
+/* 抽屉/面板补位档（--dur-3 用途行）：transform 走 spring、
+   opacity 走 fade，同档双轨——位移有弹性、淡变平稳。
+   v0.8 三层景深登记：抽屉滑出归本档（--dur-3）——本轮壳层抽屉/滑出表面
+   统一挂 .glx-t-panel 双轨，不另立同义类、不新增 keyframes。 */
+.glx-t-panel {
+  transition:
+    transform var(--dur-3) var(--ease-spring),
+    opacity var(--dur-3) var(--ease-fade);
+}
+
+/* 运镜档（--dur-pan，§3.5「现役保留」）：大范围 transform 运镜专用。
+   仅限既有运镜调用点沿用，不得挪作普通 hover。 */
+.glx-t-pan {
+  transition: transform var(--dur-pan) var(--ease-spring);
+}
+
+/* 按压回弹底座：transform 过渡 --dur-1 --ease-spring。
+   :active/:hover 的具体 scale 值由组件状态表接线（§4.1/§4.2 归组件）；
+   本类只保证回弹时长缓动全应用一致。 */
+.glx-press {
+  transition: transform var(--dur-1) var(--ease-spring);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §2 页签标线滑块（§4.2 动效契约的实现底座）
+   标线是共享滑块：容器+按钮 refs 测量后由组件写 inline transform =
+   translateX(偏移) scaleX(宽/100)（基准宽 100px，primitives.tsx
+   SLIDER_BASE_WIDTH 契约）；本类只供 transform 过渡与左锚缩放原点。
+   不动画 left/width（零布局位移，约束④）；动画周期 180ms spring。
+   ══════════════════════════════════════════════════════════════════════════ */
+.glx-tab-marker {
+  transform-origin: left center;
+  transition: transform var(--dur-2) var(--ease-spring);
+}
+
+/* 标线配套面板淡变（§4.2「面板内容 120ms --ease-fade opacity 淡变」）：
+   即 §3 的 .glx-fade-in，同一实现双挂语义名——组件可按读性二选一。 */
+.glx-tab-panel {
+  animation: glx-fade-in var(--dur-1) var(--ease-fade) both;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §3 共享 keyframes 与一次性入场/衰减工具类
+   四条 keyframes 全部只走 transform + opacity；一次性播放（非 infinite），
+   契约继承「停帧＝终态可见」。交错延迟统一走 --glx-delay 自定义属性。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 3.1 视图切换/数据区淡入（§4.2 面板淡变、§6.3 数据区新元素唯一入场式）：
+   纯 opacity 0→1，--dur-1 --ease-fade。fill both 保证挂类瞬间不闪全帧。
+   视图切换＝面板挂本类；双面板叠渲染做交叉淡变由组件叠渲染实现
+   （两个面板各持本类，时长一致即互为交叉），单面板退化为快速淡入。 */
+@keyframes glx-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.glx-fade-in {
+  animation: glx-fade-in var(--dur-1) var(--ease-fade) both;
+}
+
+/* 3.2 chrome 卡片入场（§6.1 归 --dur-3 档）：translateY(6px)+scale(.985)
+   → 归位，opacity 0→1。交错：子卡依次设 --glx-delay（如 40ms 递增），
+   fill both 保证延迟期间不闪出。
+   ⚠ 只许用于 chrome 卡片；时间线/日历/图谱数据区改用 .glx-fade-in
+   （§6.3 禁飞：数据节点零位移）。 */
+@keyframes glx-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.glx-card-in {
+  animation: glx-card-in var(--dur-3) var(--ease-spring) both;
+  animation-delay: var(--glx-delay, 0ms);
+}
+
+/* 3.3 未读/新变化光环 ping 一次（§6.2 废除无限循环的替代语法、§6.5 涟漪）：
+   光环装饰层 scale(.85)→1.9 + opacity 1→0，600ms 播一次后静置；
+   类自带 opacity:0 基础态——播完（及未播时）光环不可见，
+   状态点核心恒 α1.0 由调用方静态渲染（primitives.tsx 已按此对齐）。
+   transform-box: fill-box 使 SVG 内光环绕自身包围盒扩散（同 .anim-ripple）。 */
+@keyframes glx-ping-once {
+  from {
+    transform: scale(0.85);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+.glx-ping-once {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+  animation: glx-ping-once 600ms var(--ease-fade) 1 both;
+}
+
+/* 3.4 程序态激活弹簧回位（按钮反馈一次性 keyframe）：scale(.96)→1，
+   --dur-2 --ease-spring。用于非按压路径的激活反馈（如分段控件
+   程序切换、Button 切换 active 态）；按压瞬时反馈走 .glx-press
+   + 组件 :active 状态表，不重复加本类。 */
+@keyframes glx-press-pop {
+  from {
+    transform: scale(0.96);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.glx-press-pop {
+  animation: glx-press-pop var(--dur-2) var(--ease-spring) 1 both;
+}
+
+/* 3.5 决策回传动作条底部滑入（ReaderView 决策回执票）：translateY(16px)+opacity 0
+   → 归位，--dur-3 spring（抽屉/面板补位档时长）。chrome 浮层入场（非数据区）；
+   勾选归零即整条卸载，无出场动画（出场无内容损失，避免长期挂载动效）。
+   调用方居中位移必须走 Tailwind -translate-x-1/2（v4 独立 translate 属性）——
+   写进 transform 会被本动画终帧 transform:none 抹掉（ReaderView.tsx 有同注）。 */
+@keyframes glx-slide-up-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.glx-slide-up-in {
+  animation: glx-slide-up-in var(--dur-3) var(--ease-spring) both;
+}
+
+/* 3.6 刊物级主区块交错入场（Hero / 专题卡 / 橱窗容器）：只动 opacity + transform，
+   配合 --glx-stagger (0,1,2,3...) 实现如翻阅精装画册般的节奏推进。 */
+@keyframes glx-hero-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.988);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.glx-hero-reveal {
+  animation: glx-hero-reveal 440ms var(--ease-spring) both;
+  animation-delay: calc(var(--glx-stagger, 0) * 65ms);
+}
+
+/* 3.7 浮层弹出（未决决策雷达 / 工作区切换 / 检索结果 / 溢出菜单）：
+   轻弹缩放 + 淡入，200ms spring，无抖动。 */
+@keyframes glx-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.glx-popover-in {
+  transform-origin: top center;
+  animation: glx-popover-in var(--dur-2) var(--ease-spring) both;
+}
+
+/* 3.8 数据柱状条自底生长（事件走势柱图）：scaleY 0→1，纯合成器变换，无布局重排。 */
+@keyframes glx-bar-rise {
+  from {
+    opacity: 0;
+    transform: scaleY(0.08);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+.glx-bar-rise {
+  transform-origin: bottom center;
+  animation: glx-bar-rise 480ms var(--ease-spring) both;
+  animation-delay: calc(var(--glx-bar-idx, 0) * 18ms);
+}
+
+/* 3.9 专题卡悬停扫光（纯粹伪元素 transform + opacity，零布局位移）：
+   鼠标划过专题橱窗卡时掠过一道克制的琉璃折射高光。 */
+.glx-sheen-card {
+  position: relative;
+}
+
+.glx-sheen-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    108deg,
+    transparent 26%,
+    rgba(255, 255, 255, 0.55) 48%,
+    rgba(255, 255, 255, 0.14) 54%,
+    transparent 70%
+  );
+  opacity: 0;
+  transform: translateX(-115%);
+  transition:
+    transform 680ms var(--ease-spring),
+    opacity var(--dur-2) var(--ease-fade);
+}
+
+.glx-sheen-card:hover::after {
+  opacity: 1;
+  transform: translateX(115%);
+}
+
+/* 3.10 斜叠微缩卡悬停展扇（纯 transform 过渡，悬停时前后纸片轻柔展角与上浮） */
+.glx-fan-front {
+  transform: rotate(-3.5deg) translate3d(0, 0, 0);
+  transition: transform var(--dur-3) var(--ease-spring), box-shadow var(--dur-2) var(--ease-spring);
+}
+
+.glx-fan-back {
+  transform: rotate(4.5deg) translate3d(0, 0, 0);
+  transition: transform var(--dur-3) var(--ease-spring), opacity var(--dur-2) var(--ease-fade);
+}
+
+.group:hover .glx-fan-front,
+.glx-fan-stage:hover .glx-fan-front {
+  transform: rotate(-6deg) translate3d(-4px, -5px, 0) scale(1.02);
+}
+
+.group:hover .glx-fan-back,
+.glx-fan-stage:hover .glx-fan-back {
+  transform: rotate(8deg) translate3d(6px, -2px, 0) scale(1.01);
+}
+
+/* 3.11 弹层遮罩 / 居中模态框 / 右侧抽屉进场（纯 transform + opacity，合成器友好） */
+@keyframes glx-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.glx-backdrop-in {
+  animation: glx-backdrop-in 160ms var(--ease-fade) both;
+}
+
+@keyframes glx-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.972);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.glx-modal-in {
+  animation: glx-modal-in 260ms var(--ease-spring) both;
+}
+
+@keyframes glx-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.glx-drawer-in {
+  animation: glx-drawer-in var(--dur-3) var(--ease-spring) both;
+}
+
+/* 3.12 图谱文件夹探出纸片悬停轻展 */
+.glx-folder-paper {
+  transform: rotate(var(--peek-rot, 0deg)) translate3d(0, 0, 0);
+  transition: transform var(--dur-3) var(--ease-spring);
+}
+
+.group:hover .glx-folder-paper {
+  transform: rotate(calc(var(--peek-rot, 0deg) * 1.35)) translate3d(0, -6px, 0);
+}
+
+/* 3.13 视图/子页平滑切场入场（首页 / 全景三态 / 资产库切场通用，纯 transform + opacity） */
+@keyframes glx-view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.glx-view-enter {
+  animation: glx-view-enter var(--dur-3) var(--ease-spring) both;
+}
+
+/* 3.14 日历热力格与胶囊波浪弹出（窗口切换 / 筛选切换时按 --glx-cell-idx 顺序涟漪入场） */
+@keyframes glx-heat-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.76);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.glx-heat-cell {
+  animation: glx-heat-pop var(--dur-3) var(--ease-spring) both;
+  animation-delay: calc(min(var(--glx-cell-idx, 0), 18) * 18ms);
+  transition:
+    transform var(--dur-1) var(--ease-spring),
+    box-shadow var(--dur-1) var(--ease-fade),
+    filter var(--dur-1) var(--ease-fade);
+}
+
+.glx-heat-cell:hover {
+  transform: translate(-50%, -50%) scale(1.18);
+  filter: brightness(1.04);
+  box-shadow: 0 5px 14px rgba(108, 92, 231, 0.28);
+}
+
+.glx-heat-cell:active {
+  transform: translate(-50%, -50%) scale(0.94);
+}
+
+/* 3.14b 日历高密峰值格（99+）克制微光呼吸 + 单文档胶囊波浪弹出 + 90天热力点绽放 */
+@keyframes glx-peak-shimmer {
+  0%,
+  100% {
+    box-shadow: 0 2px 10px rgba(84, 70, 160, 0.32), 0 0 0 0 rgba(124, 92, 246, 0.26);
+  }
+  50% {
+    box-shadow: 0 3px 14px rgba(84, 70, 160, 0.44), 0 0 0 3px rgba(124, 92, 246, 0.12);
+  }
+}
+
+.glx-peak-shimmer {
+  animation:
+    glx-heat-pop var(--dur-3) var(--ease-spring) both,
+    glx-peak-shimmer 3.8s ease-in-out 0.6s infinite;
+  animation-delay: calc(min(var(--glx-cell-idx, 0), 18) * 18ms), 0.6s;
+}
+
+@keyframes glx-pill-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.65);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.glx-doc-pill {
+  animation: glx-pill-pop var(--dur-2) var(--ease-spring) both;
+  animation-delay: calc(min(var(--glx-cell-idx, 0), 18) * 16ms);
+  transition:
+    transform var(--dur-1) var(--ease-spring),
+    box-shadow var(--dur-1) var(--ease-fade);
+}
+
+.glx-doc-pill:hover {
+  transform: translate(-50%, -50%) scale(1.24);
+  box-shadow: 0 4px 12px rgba(78, 62, 184, 0.22);
+}
+
+.glx-doc-pill:active {
+  transform: translate(-50%, -50%) scale(0.94);
+}
+
+@keyframes glx-dot-bloom {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.45);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+}
+
+.glx-dot-bloom {
+  animation: glx-dot-bloom var(--dur-2) var(--ease-spring) both;
+  animation-delay: calc(min(var(--glx-cell-idx, 0), 22) * 12ms);
+  transition:
+    transform var(--dur-1) var(--ease-spring),
+    box-shadow var(--dur-1) var(--ease-fade);
+}
+
+.glx-dot-bloom:hover {
+  transform: translateY(-50%) scale(1.32);
+  box-shadow: 0 0 0 3px rgba(124, 92, 246, 0.2);
+}
+
+/* 3.14c 日历纵贯时光扫描柱 + 事件脉冲波浪柱 + 累积折线描边 + 进度条/环形仪表 + 迷你月历格 */
+/* U02：纵贯光束由「动画 left」改为「动画 transform（translateX 百分比）」——
+   紧凑活跃模式下各列宽度不等，left 过渡每帧触发重排；改为 transform 后
+   位移量 = 百分比 × 定位层宽，与表头浮标 / 今日灯标 / 脉冲柱同一 x（像素级对齐）。
+   位移载体是铺满定位层的 .glx-cal-col-beam 外壳（translateX 百分比按其自身宽度解析
+   ＝ 定位层宽），内层光带以 -translate-x-1/2 居中挂在位移点上。 */
+.glx-cal-col-beam {
+  transition:
+    transform var(--dur-2) var(--ease-spring),
+    opacity var(--dur-1) var(--ease-fade);
+}
+
+/* U02：日历断层槽（紧凑活跃把连续空白段折成的「空 N 天」虚线槽）。
+   数据区节点 → 入场只走 .glx-fade-in（纯 opacity，数据区禁飞）；本类只承载
+   静态极淡底色，附带 opacity 过渡（reduce 下瞬时）。
+   槽体自身不带边框——虚线导轨由 .glx-cal-gap-rail 承担，且**自标签下方起始**，
+   窄断层（标签宽于槽体）时虚线不再穿过「空 N 天」字形。 */
+.glx-cal-gap {
+  background: color-mix(in srgb, var(--ink-soft) 5%, transparent);
+  transition: opacity var(--dur-1) var(--ease-fade);
+}
+
+/* U02：断层导轨（左右两条虚线侧边界）。只定样式与颜色，线宽由 Tailwind
+   border-l / border-r 提供；标签与导轨分属两行 → 零相交。 */
+.glx-cal-gap-rail {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--ink-soft) 55%, transparent);
+}
+
+@keyframes glx-cal-bar-rise {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scaleY(0.08);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scaleY(1);
+  }
+}
+
+.glx-cal-bar {
+  transform-origin: bottom center;
+  animation: glx-cal-bar-rise 460ms var(--ease-spring) both;
+  animation-delay: calc(min(var(--glx-bar-idx, 0), 24) * 16ms);
+  transition:
+    transform var(--dur-1) var(--ease-spring),
+    filter var(--dur-1) var(--ease-fade);
+}
+
+.glx-cal-bar:hover {
+  transform: translateX(-50%) scaleY(1.12) scaleX(1.25);
+  filter: brightness(1.08);
+}
+
+@keyframes glx-spark-draw {
+  from {
+    stroke-dashoffset: 240;
+    opacity: 0.2;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+.glx-spark-draw {
+  stroke-dasharray: 240;
+  animation: glx-spark-draw 900ms var(--ease-spring) both;
+}
+
+@keyframes glx-progress-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.glx-progress-grow {
+  transform-origin: left center;
+  animation: glx-progress-grow 580ms var(--ease-spring) both;
+}
+
+@keyframes glx-ring-draw {
+  from {
+    stroke-dashoffset: 82;
+  }
+  to {
+    stroke-dashoffset: var(--glx-ring-offset, 0);
+  }
+}
+
+.glx-ring-draw {
+  animation: glx-ring-draw 760ms var(--ease-spring) both;
+}
+
+@keyframes glx-mini-cell-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.glx-mini-cell {
+  animation: glx-mini-cell-in var(--dur-2) var(--ease-spring) both;
+  animation-delay: calc(min(var(--glx-mini-idx, 0), 30) * 9ms);
+  transition:
+    transform var(--dur-1) var(--ease-spring),
+    box-shadow var(--dur-1) var(--ease-fade),
+    border-color var(--dur-1) var(--ease-fade);
+}
+
+.glx-mini-cell:hover {
+  transform: scale(1.16);
+  box-shadow: 0 3px 10px rgba(108, 92, 231, 0.22);
+}
+
+@keyframes glx-focus-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.glx-focus-card-in {
+  animation: glx-focus-card-in var(--dur-3) var(--ease-spring) both;
+}
+
+/* 3.15 列表/目录行级轻盈入场（限首屏前 12 行交错，长列表瞬时落位不卡顿） */
+@keyframes glx-row-in {
+  from {
+    opacity: 0;
+    transform: translateX(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.glx-row-in {
+  animation: glx-row-in var(--dur-2) var(--ease-spring) both;
+  animation-delay: calc(min(var(--glx-row-idx, 0), 10) * 24ms);
+}
+
+/* 3.16 观澜品牌水波纹水印慢呼吸（首页背景同心圆轻柔律动，纯装饰） */
+@keyframes glx-ripple-breathe {
+  0%,
+  100% {
+    opacity: 0.44;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.68;
+    transform: scale(1.032);
+  }
+}
+
+.glx-ripple-breathe {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: glx-ripple-breathe 8.5s ease-in-out infinite;
+}
+
+.glx-ripple-breathe-slow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: glx-ripple-breathe 11.5s ease-in-out 1.8s infinite;
+}
+
+/* 3.17 活体状态点呼吸光环（顶栏「已同步」/ 未决提醒点，纯合成器伪元素扩散） */
+@keyframes glx-live-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.62;
+  }
+  70% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+.glx-live-dot {
+  position: relative;
+}
+
+.glx-live-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  pointer-events: none;
+  animation: glx-live-ring 3.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+/* 3.18 折叠箭头弹簧旋转（侧栏目录 / 智能视图 / 列表聚类） */
+.glx-chevron-rot {
+  transition: transform var(--dur-2) var(--ease-spring);
+}
+
+.glx-chevron-rot[data-open='true'] {
+  transform: rotate(90deg);
+}
+
+/* 3.19 悬停浮现次级操作轨（列表行 / 目录行减字降噪：静置留白，悬停/聚焦丝滑滑出） */
+.glx-hover-actions {
+  opacity: 0;
+  transform: translateX(4px);
+  pointer-events: none;
+  transition:
+    opacity var(--dur-1) var(--ease-fade),
+    transform var(--dur-2) var(--ease-spring);
+}
+
+.group:hover .glx-hover-actions,
+.group:focus-within .glx-hover-actions {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+/* 3.20 底部悬浮工具条入场 + 触感按压回弹 */
+@keyframes glx-floating-dock-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.glx-floating-dock {
+  animation: glx-floating-dock-in var(--dur-3) var(--ease-spring) both;
+}
+
+.glx-pill-tactile {
+  transition:
+    transform var(--dur-1) var(--ease-spring),
+    background-color var(--dur-1) var(--ease-fade),
+    border-color var(--dur-1) var(--ease-fade),
+    color var(--dur-1) var(--ease-fade),
+    box-shadow var(--dur-1) var(--ease-fade);
+}
+
+.glx-pill-tactile:hover {
+  transform: translateY(-1px);
+}
+
+.glx-pill-tactile:active {
+  transform: scale(0.96);
+}
+
+/* 3.21 星图画布实体卡片轻浮与压感（纸面/夜航双主题通用，只动 transform/shadow/border） */
+.glx-canvas-card {
+  transition:
+    transform var(--dur-2) var(--ease-spring),
+    border-color var(--dur-1) var(--ease-fade),
+    background-color var(--dur-1) var(--ease-fade),
+    box-shadow var(--dur-2) var(--ease-spring);
+}
+
+.glx-canvas-card:hover {
+  transform: translateY(-1.5px);
+}
+
+.glx-canvas-card:active {
+  transform: scale(0.985);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §3.22 U03 · 左侧目录树减噪动效（零值智能视图收纳 / 未读微点 / 滚动条隐身）
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 3.22 目录树展开/收起交错微过渡（纯 opacity，不位移）：
+   侧栏目录树属导航 chrome（非星图/日历数据区），故只做淡入交错、不做位移；
+   --glx-tree-idx 逐行错峰（封顶 12 行）；高密目录（数百行）整目录瞬时落位，
+   避免同帧数百次淡入拖慢滚动。 */
+@keyframes glx-tree-row-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.glx-tree-row-in {
+  animation: glx-tree-row-in var(--dur-1) var(--ease-fade) both;
+  animation-delay: calc(min(var(--glx-tree-idx, 0), 12) * 18ms);
+}
+
+/* 3.23 目录行未读微点（4px 柔和温琥珀）：
+   - 稀疏目录：静息态半透明降噪（复合到侧栏行底后 ≈3.3:1，不跌破图形 3:1 阈）；
+   - 高密目录（直接子文件 > 20 份）：静息态完全隐去（整目录零微点），
+     悬浮/聚焦才浮现（≈5.2:1）——根治百行橙点刷屏；目录行尾未读数字微标
+     （L1 托盘底琥珀数字）承担聚合语义，形状/位置/色相三重区分。
+   悬浮/聚焦时提亮并微放大（只动 opacity + transform，合成器友好）。 */
+.glx-tree-unread-dot,
+.glx-tree-pending-dot {
+  opacity: 0.75;
+  transform: scale(0.9);
+  transition:
+    opacity var(--dur-1) var(--ease-fade),
+    transform var(--dur-2) var(--ease-spring);
+}
+
+/* 高密目录：静息态隐去微点（继承 .glx-hover-actions 的「静置留白、悬停浮现」语） */
+.glx-tree-row-dense .glx-tree-unread-dot {
+  opacity: 0;
+  transform: scale(0.6);
+}
+
+.glx-tree-row:hover .glx-tree-unread-dot,
+.glx-tree-row:focus-within .glx-tree-unread-dot,
+.glx-tree-row:hover .glx-tree-pending-dot,
+.glx-tree-row:focus-within .glx-tree-pending-dot {
+  opacity: 1;
+  transform: scale(1.18);
+}
+
+/* 3.24 长列表滚动条隐身（侧栏目录树）：常态近乎隐形（低透明细条），
+   悬停渐显；thumb 颜色过渡走令牌时长（reduce 下瞬时完成，静态外观不变）。
+   颜色走 --ink-soft 令牌 + color-mix 降透明度（构建期由 lightningcss 自动
+   生成旧内核兜底行），禁裸 hex 硬编码。 */
+.glx-scroll-slim {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--ink-soft) 22%, transparent) transparent;
+}
+
+.glx-scroll-slim::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.glx-scroll-slim::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.glx-scroll-slim::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--ink-soft) 22%, transparent);
+  border-radius: var(--r-pill);
+  transition: background-color var(--dur-2) var(--ease-fade);
+}
+
+.glx-scroll-slim:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--ink-soft) 42%, transparent);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §3.25 U04 · 版本时光机「司辰琉璃化」动效（司辰跟随 / 切版流光）
+   —— 仍守本文件硬契约：只动 transform / opacity；时长缓动只吃 --dur-* / --ease-*；
+      新类必在 §4 块一逐类登记（停帧 + 终态可见）。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 3.25a 司辰跟随位移（transform 单属性过渡，--dur-3 --ease-spring）：
+   司辰随当前选中版本阻尼位移（位移量由 --glx-follow-y 传入，纯函数算好）。
+   ⚠ 特异性说明：index.css 的主题 morph 规则 `.dark-porthole.theme-morphing *`
+   （特异性 0,2,0）用 transition 简写覆盖全子树 transition 声明——本类若以 0,1,0
+   声明，翻转一次主题后司辰跟随会瞬移。故双类选择器提特异性（0,3,0），
+   同本仓 `.theme-morphing.theme-morphing` / `.depth-2-card-hover.depth-2-card-hover`
+   双写先例；不依赖源码顺序，也不怕压缩器重排同款规则。 */
+.dark-porthole .glx-axis-follow.glx-axis-follow {
+  transform: translate(var(--glx-follow-x, 0px), var(--glx-follow-y, 0px));
+  transform-origin: 0 0;
+  transition: transform var(--dur-3) var(--ease-spring);
+}
+
+/* 3.25b 切版流光：司辰外圈光环扩散一圈（scale + opacity，纯装饰层）。
+   一次性播放（1 次）后 opacity 归零静置；reduce 下整层 display:none。 */
+@keyframes glx-machine-flow-pulse {
+  from {
+    transform: scale(0.72);
+    opacity: 0.55;
+  }
+  to {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+.glx-machine-flow-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  fill: none;
+  stroke: var(--cv-lane-unknown);
+  stroke-width: 1.2;
+  opacity: 0;
+  animation: glx-machine-flow-pulse var(--dur-3) var(--ease-fade) 1 both;
+}
+
+/* 3.25c 柔和贝塞尔流光引线：一段细亮沿引线扫过（切版即重播，一次性）。
+   描边动画只用于「轻量微图元」——本类挂在 1px 细引线的叠加描边上（chrome 导线层，
+   非数据节点），不碰主干粗描边与任何数据区节点；一次性播放、时长只吃 --dur-3。
+   reduce 下整层 display:none（基线引线恒在，终态可见）。 */
+@keyframes glx-machine-lead-flow {
+  from {
+    stroke-dashoffset: 130;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.glx-machine-lead-flow {
+  stroke-dasharray: 10 120;
+  animation: glx-machine-lead-flow var(--dur-3) var(--ease-fade) 1 both;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §3.26 U05 · 阅读器极简顶栏 / 琉璃进度光条 / 专注纸面（Zen）
+   —— 仍守本文件硬契约：只动 transform / opacity；时长缓动只吃 --dur-* / --ease-*；
+      新类必在 §4 块一逐类登记（停帧 + 终态可见）。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 3.26a 琉璃阅读进度光条（2px，紧贴阅读器顶栏下沿）：
+   只过渡 transform（scaleX）——GPU 合成器无重排，禁动画 width/left；
+   百分比由 useReaderController.handleMarkdownScroll 已算好的 pct 单向直写，
+   本类只负责让「跳变」柔化为「琉璃流光」。reduce 下瞬时跟随（撤过渡，终态＝当前值）。 */
+.glx-reader-progress {
+  transform-origin: left center;
+  transition: transform var(--dur-1) var(--ease-fade);
+}
+
+/* 3.26b 阅读器外框柔化（昼夜切换同步）：
+   纸面 ↔ 夜航切换时外框底色/文字色走令牌时长的柔和淡变（只动 color/background-color，
+   非布局属性、不引发重排）；reduce 下瞬时完成（终态＝切换后的底色）。 */
+.glx-reader-frame {
+  transition:
+    background-color var(--dur-3) var(--ease-fade),
+    color var(--dur-3) var(--ease-fade);
+}
+
+/* 3.26c 专注纸面（Zen）顶栏降噪：
+   进入 Zen 时次级工具行（查看模式分段 + 专项 Stepper）整体降噪淡出为静息态，
+   只动 opacity（纯 chrome 层，正文文字节点永不挂本文件任何类）；
+   reduce 下瞬时落位（撤过渡，终态＝Zen 态的静息透明度）。 */
+.glx-zen-chrome {
+  transition: opacity var(--dur-3) var(--ease-fade);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §3.27 U08 · 批阅看板「已知悉 / 孤儿修复」正向反馈动效
+   —— 唯一合法触发源 = 后端 CAS 确认成功（store notice.kind === 'ok'）；
+      CAS 冲突分支恒 error，绝不染绿（假乐观红线）。仍守本文件硬契约：
+      只动 transform / opacity；时长缓动只吃 --dur-* / --ease-*；
+      新类必在 §4 块一逐类登记（停帧 + 终态可见）。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 3.27a 翠绿勾选徽记（aria-hidden 纯装饰层，不承载任何信息）：
+   徽记 scale 弹出（--dur-2 spring）；::after 光环一次性扩散（--dur-3 fade）。
+   reduce：光环整层 display:none（§6.6 纯装饰原则），徽记停帧常显（终态＝静态翠绿勾）。 */
+@keyframes glx-ack-mark-in {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes glx-ack-ring-pop {
+  from {
+    transform: scale(0.8);
+    opacity: 0.55;
+  }
+  to {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+
+.glx-ack-mark {
+  animation: glx-ack-mark-in var(--dur-2) var(--ease-spring) both;
+}
+
+.glx-ack-mark::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--stage-ink-deliver) 36%, transparent);
+  animation: glx-ack-ring-pop var(--dur-3) var(--ease-fade) 1 both;
+}
+
+/* 3.27b 卡片顺滑退场（处理完成后淡出下沉离场；随后由数据刷新以新 bucket 重新归位）：
+   只动 opacity + transform；reduce 下停帧＝卡片保持可见（终态可见），
+   由数据层直接移除，无内容损失。 */
+@keyframes glx-card-settle {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+.glx-card-settle {
+  animation: glx-card-settle var(--dur-3) var(--ease-fade) both;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §3.28 U09 · 证据篮徽标微缩放脉冲（glx-badge-pop）
+   —— 唯一合法触发源 = store 实际入篮生效（TopHeader 只在 contextBasketCount
+      仅上升沿触发——计数派生自 store 的 contextPointers.length，是「实际入篮」
+      的事实源；移除/其他减量沿零触发，绝不假乐观伪造成功）。仍守本文件硬契约：
+      只动 transform；时长缓动只吃 --dur-* / --ease-*；无 will-change；
+      新类必在 §4 块一逐类登记（停帧 + 终态可见）。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 3.28 证据篮计数角标一次性微缩放脉冲：scale 1→1.2→1，--dur-2 --ease-spring，
+   播 1 次即静置（角标常态＝scale 1，终态可见零隐藏）。调用方以「key 重挂」重播——
+   TopHeader 以 basketPulseSeq 递增 key，仅计数上升沿递增（remove 沿不重挂不重播）。
+   队列切换交叉淡入复用既有 .glx-fade-in（--dur-1 纯 opacity，数据区唯一入场式），
+   本轮零新增入场类；轻预览/胶囊弹窗入场复用既有 .glx-popover-in / .glx-backdrop-in。 */
+@keyframes glx-badge-pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+.glx-badge-pop {
+  animation: glx-badge-pop var(--dur-2) var(--ease-spring) 1 both;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §3.29 U11 · 琉璃骨架屏流光（GlassSkeleton 通用轻组件）
+   —— 流光是纯装饰伪元素层：translateX 扫光（只动 transform，合成器友好，
+      禁背景位移式流光）；骨架本体零动画零过渡——
+      reduce 下流光层 display:none，终态＝静态琉璃骨架恒可见（不藏占位结构）。
+      时长走 calc(var(--dur-pan) * 6)：新类不写死 ms，只消费 :root 令牌
+      （运镜档的 6 倍＝一次扫光约 3s，琉璃级克制不抢内容）。
+   ══════════════════════════════════════════════════════════════════════════ */
+@keyframes glx-skeleton-sweep {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(110%);
+  }
+}
+
+.glx-skeleton {
+  position: relative;
+  overflow: hidden;
+}
+
+.glx-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    104deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.62) 50%,
+    transparent 70%
+  );
+  transform: translateX(-110%);
+  animation: glx-skeleton-sweep calc(var(--dur-pan) * 6) var(--ease-fade) infinite;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §3.30 · 已读 / 未读视觉微动效（全 GPU 合成层：仅动 transform / opacity）
+   —— 进度轨 scaleX 平滑推进、标为已读单次轻弹反馈、读后更新双环标识；
+      时长只消费 :root 令牌（零硬编码时长、零常驻合成层提示），reduce 下逐类静默。
+   ══════════════════════════════════════════════════════════════════════════ */
+@keyframes glx-read-confirm-pop {
+  0% {
+    transform: scale(0.86);
+    opacity: 0.72;
+  }
+  58% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.glx-read-confirm-pop {
+  animation: glx-read-confirm-pop var(--dur-2) var(--ease-spring) both;
+}
+
+.glx-read-meter-fill {
+  transform-origin: left center;
+  transition: transform var(--dur-3) var(--ease-spring);
+}
+
+.glx-unread-updated-dot {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-wave) 26%, transparent);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §4 prefers-reduced-motion 降级
+   块一（本文件逐类，随批次即时生效）：过渡类撤 transition；
+   入场/回位类撤 animation＝停帧＋终态可见（终态即完全可见，不藏内容）；
+   .glx-ping-once 是纯装饰光环层，整层 display:none（§6.6 现法原则）。
+   块二（全局兜底，§6.6/D11 完整形态）：三属性齐备——含
+   animation-iteration-count:1 !important（D11 明令：无此项的兜底
+   不得单独上线，防 WebView2 无限循环空转发热）。
+   ⚠ 闸门标注：全局兜底在规范 §8 属「画布基线确认门」勾销项（画布
+   负责人对照基准图确认后启用，闸状态 ⬜ 待确认，且暂无签收记录）。
+   评审第 1 轮 #5 判定提前启用属越闸——现按注释自述「整块删除即可」
+   停用块二，退回逐类降级（块一）；待画布闸签收后再原样启用。
+   它只作用于 reduce 偏好用户，启用与否默认渲染零像素变化，X-Ray 基线
+   （默认偏好截图）结构性不受影响；且逐类语义（index.css B0 底册的
+   停初始帧/display:none 划界）优先级由更具体选择器与装饰层规则保留。
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  /* 块一 · 本文件工具类逐类降级 */
+  .glx-t-fade,
+  .glx-t-move,
+  .glx-t-panel,
+  .glx-t-pan,
+  .glx-press,
+  .glx-tab-marker {
+    transition: none;
+  }
+
+  /* v0.7 画布主题切换 morph 降级（评审 F8 显式化；声明在 index.css .theme-morphing 块）：
+     reduce 用户切换瞬时完成、无过渡。此行为登记处；保证级联生效的撤除声明
+     与 morph 声明同文件相邻（motion.css 经 @import 先于 index.css，同特异性
+     在此单独声明会输掉级联顺序，故 index.css 内 @media 同款行不可省）。 */
+  .dark-porthole.theme-morphing,
+  .dark-porthole.theme-morphing * {
+    transition: none;
+  }
+
+  /* v0.8 三层景深登记：depth-2-card-hover 浮起归 hover/淡入微动档（--dur-1
+     spring；过渡声明在 index.css v0.8 depth 工具类块，transform+box-shadow
+     双属性）。reduce 用户 hover 浮起瞬时完成、无过渡。此行为登记处——
+     级联生效的撤除声明在 index.css depth 块尾 @media（同文件相邻 + 类名双写
+     提特异性），理由同上方 morph 行：@import 先序同特异性输级联。 */
+  .depth-2-card-hover {
+    transition: none;
+  }
+
+  .glx-fade-in,
+  .glx-card-in,
+  .glx-press-pop,
+  .glx-slide-up-in,
+  .glx-hero-reveal,
+  .glx-popover-in,
+  .glx-backdrop-in,
+  .glx-modal-in,
+  .glx-drawer-in,
+  .glx-bar-rise,
+  .glx-tab-panel,
+  .glx-view-enter,
+  .glx-heat-cell,
+  .glx-peak-shimmer,
+  .glx-doc-pill,
+  .glx-dot-bloom,
+  .glx-cal-bar,
+  .glx-spark-draw,
+  .glx-progress-grow,
+  .glx-ring-draw,
+  .glx-mini-cell,
+  .glx-focus-card-in,
+  .glx-row-in,
+  .glx-floating-dock,
+  .glx-ripple-breathe,
+  .glx-ripple-breathe-slow,
+  .glx-tree-row-in,
+  .glx-ack-mark,
+  .glx-card-settle,
+  .glx-badge-pop,
+  .glx-read-confirm-pop {
+    animation: none;
+  }
+
+  .glx-sheen-card::after,
+  .glx-live-dot::after,
+  .glx-ack-mark::after {
+    display: none;
+  }
+
+  /* U11 · 琉璃骨架屏：流光是纯装饰伪元素层，reduce 下整层隐藏
+     （骨架本体零动画，无需停帧——终态＝静态琉璃骨架占位结构恒可见）。 */
+  .glx-skeleton::after {
+    display: none;
+  }
+
+  .glx-fan-front,
+  .glx-fan-back,
+  .glx-folder-paper,
+  .glx-chevron-rot,
+  .glx-hover-actions,
+  .glx-pill-tactile,
+  .glx-canvas-card,
+  .glx-heat-cell,
+  .glx-doc-pill,
+  .glx-dot-bloom,
+  .glx-cal-col-beam,
+  .glx-cal-bar,
+  .glx-cal-gap,
+  .glx-cal-gap-rail,
+  .glx-mini-cell,
+  .glx-tree-unread-dot,
+  .glx-tree-pending-dot,
+  .glx-read-meter-fill,
+  .glx-unread-updated-dot {
+    transition: none;
+  }
+
+  /* U05 · 阅读器三件：进度光条瞬时跟随（终态＝当前滚动比例）；
+     昼夜外框瞬时切换（终态＝切换后的底色）；Zen 顶栏降噪瞬时落位（终态＝静息透明度）。
+     三者均只动 transform/opacity/color，撤过渡不藏任何内容。 */
+  .glx-reader-progress,
+  .glx-reader-frame,
+  .glx-zen-chrome {
+    transition: none;
+  }
+
+  /* U03：长列表滚动条隐身的 thumb 颜色过渡撤除（静态外观不变——滚动条仍可见可滚）。 */
+  .glx-scroll-slim::-webkit-scrollbar-thumb {
+    transition: none;
+  }
+
+  /* U03：高密目录「静置留白、悬停浮现」的未读微点——终态与常规态一致
+     （reduce 用户同样看不到静息微点，目录行尾未读数字微标承担语义）。 */
+  .glx-tree-row-dense .glx-tree-unread-dot {
+    opacity: 0;
+  }
+
+  .glx-ping-once {
+    animation: none;
+    display: none;
+  }
+
+  /* U04 · 司辰跟随：reduce 下瞬时落位（无位移过渡，终态＝跟随目标位，司辰恒可见）。
+     声明与 §3.25a 同特异性且同文件在后 → 覆盖生效（不依赖 morph 类是否在场）。 */
+  .dark-porthole .glx-axis-follow.glx-axis-follow {
+    transition: none;
+  }
+
+  /* U04 · 切版流光：纯装饰光环层，整层隐藏（终态＝光环不可见，司辰本体仍在）。 */
+  .glx-machine-flow-pulse {
+    animation: none;
+    display: none;
+  }
+
+  /* U04 · 流光引线：纯装饰叠加描边层，整层隐藏（终态＝基线引线恒在可见）。 */
+  .glx-machine-lead-flow {
+    animation: none;
+    display: none;
+  }
+
+  /* 块二 · 全局兜底（§6.6 D11 完整形态；闸门说明见上）
+     ⚠ 评审第 1 轮 #5：画布基线确认门（§8）未签收，越闸提前启用已停用——
+     待画布闸负责人确认后，删除本段注释标记即原样恢复启用。 */
+  /* * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  } */
+}

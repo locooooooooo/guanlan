@@ -1,0 +1,135 @@
+# 观澜 Guanlan
+
+> 用时间线找到变化，用关系找到依据，用阅读器理解内容。
+
+观澜是一款**本地优先、零锁定**的文件工作台：为任意目录建立可追溯的时间线与版本快照，用星图关系与证据锚点串起「为什么变成现在这样」，并内置全格式阅读器与 MCP 智能体上下文基座。
+
+所有索引、快照与阅读状态都保存在本机私有数据目录，不写入、不移动用户的业务文件，也不依赖云端服务。
+
+## 特性
+
+- **时间线 / 日历 / 星图 / Atlas 多视图**：按发生时间、活跃密度、关系网络浏览同一份工作区。
+- **版本时光机**：去重快照 + SHA-256 内容哈希，支持版本链、差异对比与「续读保持旧版」。
+- **全格式阅读器**：Markdown、Office（DOCX/XLSX/PPTX）、PDF、SVG、图片、纯文本/代码，以及**无同源权限的 HTML 隔离沙盒**（离线 CSP，可按需放行 HTTPS 外链）。
+- **已读 / 未读与阅读岛**：目录树递归未读汇总、单篇/目录一键标已读或未读、读后有更新双环提示，收藏与批注永不丢失。
+- **决定与证据锚定**：把决定、证据指针、版本与文档章节绑定，形成可复核的因果链。
+- **MCP 安全上下文**：通过 stdio 向支持 MCP 的智能体暴露受限的本地上下文工具，不提供任意路径下载。
+- **桌面端**：Tauri v2 单包（内嵌 Rust 服务 + CLI sidecar），支持 Windows MSI / NSIS 安装包。
+
+## 技术栈
+
+| 层 | 技术 | 职责 |
+| --- | --- | --- |
+| Web 前端 | React 19 · Vite 8 · Tailwind CSS 4 · d3 | 时间线、星图、阅读器、Atlas 与全部交互 |
+| 领域核心 | Rust · `guanlan-core` | 领域规则、SQLite 索引、去重存储、只读查询契约 |
+| 读服务 | Rust · axum · rusqlite (bundled) | `/api/v1` HTTP + SSE、`guanlan` CLI、MCP stdio |
+| 桌面壳 | Tauri v2 | 进程内嵌服务、窗口与安装包 |
+| 开发中间件 | TypeScript · Vite plugin | 早期 Node 管线，保留用于对拍与历史参考 |
+
+## 目录结构
+
+```text
+src/                        前端源码（组件 / stores / services / utils）
+test/                       前端与契约回归测试（node:test + tsx）
+server/                     早期 Vite 开发中间件（历史参考，已被 Rust 服务取代）
+public/                     静态资源
+scripts/                    基准、冒烟、种子数据、视觉基线与安装包构建
+native/
+  crates/guanlan-core/      领域模型、索引与只读查询
+  crates/guanlan-service/   HTTP/SSE/MCP 服务与 guanlan CLI
+  crates/guanlan-desktop/   Tauri v2 桌面壳
+  docs/                     存储与查询 API 契约
+  testdata/                 测试夹具（由脚本生成，不入库）
+```
+
+## 快速开始
+
+### 环境要求
+
+- Node.js ≥ 20.19（推荐 22 LTS）与 npm
+- Rust 1.99.1（由 `native/rust-toolchain.toml` 锁定）
+- Windows 桌面端需要 WebView2（Windows 10/11 通常已内置）
+
+### 1. 安装前端依赖
+
+```bash
+npm install
+```
+
+### 2. 启动 Rust 读服务
+
+```bash
+cd native
+cargo run --locked -p guanlan-service -- serve --root "<你的工作区目录>" --port 8787
+```
+
+服务只监听 `127.0.0.1`，启动后会打印 `GUANLAN_ENDPOINT=http://127.0.0.1:<port>`。索引与快照默认写入 `%LOCALAPPDATA%\Guanlan\workspaces\<rootKey>`，可用 `GUANLAN_DATA_DIR` 整体覆盖。
+
+### 3. 启动前端
+
+```bash
+npm run dev
+```
+
+打开 <http://localhost:3000>。Vite 会把 `/api` 代理到 `GUANLAN_SERVE`（默认 `http://127.0.0.1:8787`）。
+
+### 桌面端
+
+```bash
+node scripts/build-windows-installer.mjs            # 构建 MSI + NSIS
+node scripts/build-windows-installer.mjs --check-only  # 仅校验打包配置
+```
+
+## 常用命令
+
+```bash
+npm run dev        # 前端开发服务器（3000）
+npm run build      # 生产构建
+npm run lint       # TypeScript 类型检查（tsc --noEmit）
+npm test           # 前端全量回归测试
+npm run seed       # 生成测试夹具
+```
+
+Rust 门禁：
+
+```bash
+cd native
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --locked --workspace
+```
+
+端到端冒烟与基准（先构建 release CLI）：
+
+```bash
+node scripts/smoke-v1.ts --exe native/target/release/guanlan.exe
+node scripts/bench-f04-golden-tasks.ts
+node scripts/bench-v1.ts
+node scripts/bench-search-v1.ts
+node scripts/visual-baseline.mjs capture
+```
+
+## MCP 接入
+
+先启动 `guanlan serve`，再让智能体通过 stdio 启动：
+
+```bash
+GUANLAN_ENDPOINT=http://127.0.0.1:8787 guanlan mcp
+```
+
+MCP 只暴露白名单工具，且不提供任意路径读取；端点缺失时会明确报错而不是猜测端口。
+
+## 数据与隐私
+
+- 业务目录**只读**：观澜不写入、不重命名、不移动用户文件。
+- 索引与去重快照均在本机数据目录；卸载应用不会删除工作区原始文件。
+- 无遥测、无云同步；外部网络仅在你显式开启 HTML「允许 HTTPS 外链」时由沙盒页面发起。
+
+## 契约文档
+
+- [`native/docs/contract-storage.md`](native/docs/contract-storage.md)：存储布局、快照三档策略与完整性校验。
+- [`native/docs/contract-query-api.md`](native/docs/contract-query-api.md)：`/api/v1` 查询契约、错误包络与分页语义。
+
+## 许可证
+
+[MIT](LICENSE)

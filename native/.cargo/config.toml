@@ -1,0 +1,4 @@
+# 本机 rustc 在 release 全量优化阶段偶发进程崩溃（STATUS_ACCESS_VIOLATION，
+# 不同 crate 随机出现，debug 与重试可通过）。降低并行度减轻内存/杀软竞争窗口。
+[build]
+jobs = 2

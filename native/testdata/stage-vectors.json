@@ -1,0 +1,27 @@
+{
+  "comment": "阶段分类共享向量（AC-01 双端锁定）：前端 stageOfPath（src/utils/taskPackages.ts，basename 决策强信号 > basename 关键词表[交付>执行>决策>计划>蓝图] > 容器默认）与 Rust stage_from_path（crates/guanlan-core/src/index/state_machine.rs，全路径关键词短路 决策>计划[含方案/设计]>交付>蓝图>执行）是两套独立实现，规则确有分叉（非逐字镜像）。本文件锁两层：(1) agree = 两端在全部命中路径上必须同判的核心向量（任一侧关键词表演进导致失配即测试失败——双端同步点从『人工双侧改』机械化为本文件）；(2) divergent_registered = 已登记的刻意分叉（[路径, 前端值, Rust值, 说明]，前端值由 test/stage-classify-01.test.ts 断言、Rust 值由 state_machine.rs 测试断言），要收敛分叉必须先改本文件并双侧同步实现。注意：Rust 关键词匹配全路径，容器名「01-方案文档」中的「方案」使其下未命中更高优先关键词的文件全部归计划——该口径差异已登记。Rust 侧 include_str! 编译期读取（state_machine.rs 测试），TS 侧 fs.readFileSync 读取，与 token-vectors.json 同范式。",
+  "wire_words": ["蓝图", "计划", "决策", "执行", "交付", "待分类"],
+  "agree": [
+    ["01-演示专项/03-待确认事项.md", "决策"],
+    ["01-演示专项/决策记录.md", "决策"],
+    ["docs/拍板回执.md", "决策"],
+    ["docs/交付清单.md", "交付"],
+    ["docs/run-长任务-执行轮次.md", "执行"],
+    ["docs/需求总览.md", "蓝图"],
+    ["docs/项目计划与排期.md", "计划"],
+    ["01-方案文档/项目计划与需求/排期表.md", "计划"],
+    ["docs/README.md", "待分类"],
+    ["assets/结构图.svg", "待分类"]
+  ],
+  "divergent_registered": [
+    ["docs/handoff-notes.md", "交付", "待分类", "英文关键词 handoff 仅前端 basename 关键词表生效（Rust 关键词表为中文口径）"],
+    ["docs/plan-v2.md", "计划", "待分类", "英文关键词 plan 仅前端 basename 关键词表生效"],
+    ["docs/run-01.md", "执行", "待分类", "英文关键词 run- 仅前端 basename 关键词表生效"],
+    ["docs/已确认记录.md", "待分类", "决策", "「已确认」仅 Rust 关键词表生效（前端决策强信号不含已确认）"],
+    ["01-方案文档/产品需求与任务包/接口规格.md", "蓝图", "计划", "前端按容器默认（产品需求与任务包→蓝图）；Rust 全路径匹配且容器名「01-方案文档」含「方案」→计划关键词先中"],
+    ["01-方案文档/汇报与整理/x.md", "交付", "计划", "前端按容器默认（汇报与整理→交付）；Rust 容器名「方案」→计划关键词先中"],
+    ["01-方案文档/发布包/x.md", "交付", "计划", "同上：前端容器默认生效、Rust 容器名「方案」→计划关键词先中"],
+    ["01-方案文档/长任务与执行记录/run-07.md", "执行", "计划", "前端 basename run- →执行；Rust 容器名「方案」→计划关键词先中"],
+    ["output/run-1/x.md", "执行", "待分类", "前端容器 output 兜底生效、Rust 无关键词命中"]
+  ]
+}

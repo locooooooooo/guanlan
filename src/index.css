@@ -1,0 +1,1490 @@
+@import "tailwindcss";
+/* 动效层（占位，动效工程师 B4/B6 填充；契约见文件内注释） */
+@import "./styles/motion.css";
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ══════════════════════════════════════════════════════════════════════════
+   V01 · coss.com/ui 语义令牌映射层（Tailwind v4 @theme inline）
+   与既有观澜令牌（--ink-* / --accent-iris / --depth-* / --cv-*）并行共存：
+   新原语（src/components/ui/*）消费标准语义色阶；既有组件零破坏渐进迁移。
+   ══════════════════════════════════════════════════════════════════════════ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-code: var(--code);
+  --color-code-foreground: var(--code-foreground);
+  --color-code-highlight: var(--code-highlight);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 6px);
+  --animate-toast-success-odd: coss-toast-success-odd 0.32s cubic-bezier(0.5, 1, 0.89, 1);
+  --animate-toast-success-even: coss-toast-success-even 0.32s cubic-bezier(0.5, 1, 0.89, 1);
+  --animate-toast-error-odd: coss-toast-error-odd 0.28s cubic-bezier(0.5, 1, 0.89, 1);
+  --animate-toast-error-even: coss-toast-error-even 0.28s cubic-bezier(0.5, 1, 0.89, 1);
+  @keyframes coss-toast-success-odd {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.025); }
+    60% { transform: scale(0.99); }
+    100% { transform: scale(1); }
+  }
+  @keyframes coss-toast-success-even {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.025); }
+    60% { transform: scale(0.99); }
+    100% { transform: scale(1); }
+  }
+  @keyframes coss-toast-error-odd {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-3px); }
+    50% { transform: translateX(3px); }
+    75% { transform: translateX(-3px); }
+    100% { transform: translateX(0); }
+  }
+  @keyframes coss-toast-error-even {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-3px); }
+    50% { transform: translateX(3px); }
+    75% { transform: translateX(-3px); }
+    100% { transform: translateX(0); }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(
+    .animate-toast-success-odd,
+    .animate-toast-success-even,
+    .animate-toast-error-odd,
+    .animate-toast-error-even
+  ) {
+    animation: none;
+  }
+}
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Source Han Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-serif: 'Source Serif 4', 'Noto Serif SC', 'Lora', Georgia, Cambria, serif;
+    /* R3：等宽栈补入系统中文字族——Latin/数字仍由 JetBrains Mono/Menlo/Consolas 等宽渲染（tabular-nums 不变），
+       中文回退到黑体（微软雅黑/苹方/思源黑体，均为系统字或已加载的 Noto Sans SC webfont），
+       不再落到 generic monospace 的宋体锯齿混排。 */
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Microsoft YaHei', 'PingFang SC', 'Source Han Sans SC', 'Noto Sans SC', monospace;
+
+    /* Claude Code X-Ray + Anthropic Editorial Dark Palette (Exact Reference Match)
+       —— 暗色令牌保留:星图 / 事件链 / 时光机等 D3 画布内部仍走这套,
+          以 .dark-porthole 深色舷窗形式嵌入下方浅色玻璃界面。
+       ⚠ deprecated（v0.7 设计增补 §1.2/V7-D15，保留一版，下一版删除）：
+         画布消费面已改走下方 .dark-porthole 的 --cv-* 双主题令牌，映射表：
+         --claude-bg-void→--cv-void、--claude-bg-panel→--cv-panel、--claude-bg-card→--cv-card、
+         --claude-ink-primary→--cv-ink、--claude-ink-secondary→--cv-ink-muted、
+         --claude-terracotta→--cv-brand、--claude-lavender→--cv-lav、--claude-amber→--cv-amber、
+         --claude-sage→--cv-read-line（暗档同值）。
+         幽灵令牌（画布 0 消费，勘察 §5.4 对账）：--claude-bg-canvas、--claude-bg-card-hover、
+         --claude-slate——一并标记 deprecated，勿新增引用。 */
+    --claude-bg-void: #0D0D0F;
+    --claude-bg-canvas: #0F0F12;      /* deprecated · 幽灵令牌（0 消费） */
+    --claude-bg-panel: #141417;
+    --claude-bg-card: #18181C;
+    --claude-bg-card-hover: #1F1F24;  /* deprecated · 幽灵令牌（0 消费） */
+    --claude-bg-card-selected: #211F26;
+    --claude-border-hairline: rgba(255, 255, 255, 0.08);
+    --claude-border-subtle: rgba(244, 243, 238, 0.12);
+    --claude-ink-primary: #F4F3EE;
+    --claude-ink-secondary: #A1A09A;
+    --claude-ink-muted: #6E6D68;
+    --claude-terracotta: #D97757;
+    --claude-lavender: #9B8AFB;
+    --claude-amber: #D99B52;
+    --claude-sage: #788C5D;
+    --claude-slate: #6A9BCC;          /* deprecated · 幽灵令牌（0 消费） */
+
+    /* ── 浅色玻璃主题令牌(参考 macOS 毛玻璃文件夹卡 + Intellecta 浅紫仪表盘)──────
+       界面 chrome(顶栏/侧栏/卡片/弹窗/首页)统一从这里取值;组件内不再新造色值。
+       --stage-ink-* 是五阶段文字色在浅底上的可读版本(STAGE_ACCENT 的浅色映射)。 */
+    --glass-page-base: #F1EFF8;
+    /* 纸面画布底（v0.7 V7-D15 白名单扩档登记）：--cv-void 浅档取值。
+       不用 --glass-page-base——薰衣草紫调会干扰泳道色相判断；阅读纸暖色系
+       （#F5F0E8 族，v0.6 §7.5 不动清单）是视图局部 palette，二者都不如独立纸底。 */
+    --paper-light: #FAF9F5;
+    --glass-page-grad: linear-gradient(160deg, #EDEAF7 0%, #F6F4FB 42%, #EFEDEA 100%);
+    --glass-bg: rgba(255, 255, 255, 0.58);
+    --glass-bg-hover: rgba(255, 255, 255, 0.74);
+    --glass-bg-panel: rgba(255, 255, 255, 0.75);
+    --glass-border: rgba(255, 255, 255, 0.75);
+    --glass-hairline: rgba(35, 33, 80, 0.08);
+    /* hover 强化档（合规修复登记）：原 RightInspector/ReaderView hover 用 #26243D/25，
+       归并到同族墨 25%（复合 Δ≤1.5/通道），与 --glass-hairline 同源不新造色系。 */
+    --glass-hairline-strong: rgba(35, 33, 80, 0.25);
+    --glass-blur: 18px;
+    --glass-blur-pop: 24px;
+    --glass-shadow: 0 8px 28px rgba(84, 70, 160, 0.10), 0 2px 6px rgba(84, 70, 160, 0.06);
+    --glass-shadow-pop: 0 18px 48px rgba(84, 70, 160, 0.18);
+    --ink-strong: #26243D;
+    --ink-soft: #5A5779;
+    /* --ink-faint 仅图形（滚动条/分隔线/装饰）与 ≥24px 大字；禁用于 <24px 文字
+       （玻璃上 3.09 违 AA，规范 §3.1；徽标/角标一律 --ink-soft 起步） */
+    --ink-faint: #8D8AA6;
+    --ink-onmuteglass: #6F6C8C;
+
+    /* ── 品牌墨轴（§3.1）────────────────────────────────────────────────
+       澜墨 #112030 一线贯穿：CTA 底 / 一级标线 / 暗 chrome 锚 / 品牌徽底
+       （=gen-icon BG，品牌口径 §4.1；桌面图标本轮不翻新，D14）。 */
+    --ink-anchor: #112030;
+    --paper-on-ink: #F4F8FF;  /* 墨底上的字（主钮字 15.49 ✅） */
+    --paper-dark: #F4F3EE;    /* 暗域纸面（暗画布字/暗域标线，chrome 侧语义名） */
+
+    /* ── 强调＝薰衣草，唯一交互色（§3.1）────────────────────────────────
+       iris 仅描边/焦点外的装饰环/胶囊底（作文字 4.17 不合格，禁）；
+       iris-deep 才可作链接文字与 focus 环（玻璃 4.82 ✅）；
+       iris-ink 用于薰衣草 10% 胶囊底上的激活字（5.41 ✅）。 */
+    --accent-iris: #7C6FD0;
+    --accent-iris-deep: #6D5BD0;
+    --accent-iris-ink: #5E4BC0;
+    /* deprecated 别名一版（现役 tsx 引用 8/4 处，值不变；下一版删除） */
+    --accent-lavender: var(--accent-iris);
+    --accent-violet-ink: var(--accent-iris-deep);
+    --accent-slate-ink: #4A7DAF;
+    --accent-lime: #B9D96B;
+    --accent-lime-chip: #E4F2B8;
+    /* 澜·未读（§3.1/D4）：文字与点核共用单令牌（白 5.74/玻璃 5.34/胶囊底 4.79 全 ✅）；
+       chrome 侧 #D97757/#F76808 未读点引用换入本令牌；画布泳道白名单豁免不换（§7.2） */
+    --accent-wave: #A84A1A;
+    /* 澜·未读·暗底亮档（评审第 1 轮 #7②，§8 AA 冻结门流程新增值）：暗岛底 #17161F 7.13、
+       /90 复合底 #2C2B35 5.55、#121214 7.44——全部 ≥4.5（附录 B 同款脚本实跑，
+       2026-11-13）；供暗域 chrome 的未读文字/进度条/点核使用，浅底仍走 --accent-wave */
+    --accent-wave-bright: #ED8A50;
+    /* 澜青桥（porthole 沿口/空态线稿/画布↔壳层过渡）＋画布 chrome idle 字——
+       均为现役值登记语义名，画布不动清单，本轮不改值（D15） */
+    --canvas-bridge: #DEE6F3;
+    --canvas-ink-idle: #8E8D87;
+    /* deprecated 别名（§3.6 换锚：#17161F→#112030，近黑暗色肉眼无差；下一版删除） */
+    --pill-dark: var(--ink-anchor);
+    --status-green: #3E9B6B;
+    --status-amber: #C99347;
+    --status-red: #C25E4C;
+    --stage-ink-blueprint: #4A7DAF;
+    --stage-ink-plan: #6D5BD0;
+    --stage-ink-decision: #A8762B;
+    --stage-ink-exec: #C25E4C;
+    --stage-ink-deliver: #647A45;
+    --stage-ink-anomaly: #B14A78;
+    /* 六色双层（§3.1/D5）：graphic 原值只作色块/图形（玻璃上 ≥3:1）；
+       文字一律取 -text 深档（玻璃上 ≥4.5，AA 实测值见规范表） */
+    --stage-ink-blueprint-text: #3D6C99;
+    --stage-ink-plan-text: var(--stage-ink-plan);  /* 同值即合格（4.82）；薰衣草胶囊底场景另用 --accent-iris-ink */
+    --stage-ink-decision-text: #8A621E;
+    --stage-ink-exec-text: #A8432F;
+    --stage-ink-deliver-text: #56643A;
+    --stage-ink-anomaly-text: #9C3F68;
+
+    /* ── 动效基座 · 时长/缓动令牌（§3.5 契约）────────────────────────────
+       chrome 侧动效只许复用四档时长与两条缓动，不得各自写死；
+       画布侧例外登记：.anim-spring-pop 340ms（D13，画布闸后并入 --dur-3）、
+       连线电流 linear 1.1s（不动）；详见文件末尾 .anim-* 工具类。 */
+    --dur-1: 120ms;   /* hover / 淡入微动 */
+    --dur-2: 180ms;   /* 标线 / 页签 / 状态位移 */
+    --dur-3: 260ms;   /* 抽屉/面板补位、chrome spring-pop */
+    --dur-pan: 500ms; /* 运镜（现役保留） */
+    /* deprecated 别名一版（D10：160ms→180ms 归档；现役 glass-* 5 处引用不退役） */
+    --dur-fast: var(--dur-2);
+    --ease-spring: cubic-bezier(0.22, 1, 0.36, 1); /* 入场/位移（现役保留） */
+    --ease-fade: cubic-bezier(0.4, 0, 0.2, 1);     /* 交叉淡变（新增） */
+
+    /* ── 字阶七档（§3.2）────────────────────────────────────────────────
+       字重纪律：sans 400/500/600；mono 400/500；700 仅存 serif display 档。
+       数字等宽唯一出口＝.tabular-nums（D9，不新增 .num）。 */
+    --text-micro: 11px;      --lh-micro: 16px;      /* mono 500 大写：章节小标/口径标签 */
+    --text-ui: 12px;         --lh-ui: 18px;         /* 页签、按钮、徽标 */
+    --text-ui-body: 13px;    --lh-ui-body: 20px;    /* 卡片次行、表单、次钮字 */
+    --text-item-title: 14px; --lh-item-title: 20px; /* 列表/卡片题（sans 600，归一 44 处分裂） */
+    --text-read: 17px;       --lh-read: 32px;       /* 阅读正文 1.88 行高（serif 受闸，D3） */
+    --text-title: 22px;      --lh-title: 30px;      /* 文章题/正文 h2（serif 600） */
+    --text-display: 34px;    --lh-display: 44px;    /* 正文 h1/首页问候（serif 700，全应用唯一 700，更具刊物视觉张力） */
+
+    /* ── 间距与尺寸（§3.3）────────────────────────────────────────────── */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --chrome-h: 52px;      /* 顶栏高（舒展 52px 呼吸感，GraphCanvasView 自动消费 var(--chrome-h)） */
+    --ctl-h: 30px;         /* 控件高 */
+    --ctl-h-sm: 26px;      /* 控件高·sm（§4.1 sm 变式 / status-capsule） */
+    --ctl-icon: 32px;      /* 图标钮 32×32（§4.1 icon 形态） */
+    --gutter: 16px;        /* 面板内距 */
+    --measure-read: 714px; /* 阅读量宽＝42 汉字×17px（D7：px 定值，em 单位错不重蹈） */
+
+    /* ── 圆角四档（§3.4；rounded-[4px] 任意值废除并入 --r-ctl）────────── */
+    --r-ctl: 6px;
+    --r-block: 10px;
+    --r-card: 16px;
+    --r-pill: 999px;
+
+    /* ── 组件级令牌（primitives.tsx 消费；值＝规范 §4.1-§4.4 冻结值）─────
+       组件不写字面色：暗色主题将来只换这里，不必触组件。 */
+    --btn-primary-bg: var(--ink-anchor);
+    --btn-primary-bg-hover: #1C2B40;
+    --btn-primary-bg-active: #0A1520;
+    --btn-secondary-bg: rgba(255, 255, 255, 0.70);
+    --btn-secondary-bg-hover: rgba(255, 255, 255, 0.85);
+    --btn-secondary-bg-active: rgba(255, 255, 255, 0.95);
+    --btn-secondary-border: rgba(38, 36, 61, 0.12);
+    --btn-secondary-border-hover: rgba(38, 36, 61, 0.20);
+    --btn-secondary-border-active: rgba(38, 36, 61, 0.24);
+    --btn-ghost-bg-hover: rgba(38, 36, 61, 0.06);
+    --btn-ghost-bg-active: rgba(38, 36, 61, 0.10);
+    --btn-danger-ink: var(--stage-ink-exec-text); /* #A8432F（玻璃 5.57 ✅） */
+    --btn-danger-border: color-mix(in srgb, var(--stage-ink-exec) 45%, transparent);
+    --btn-danger-bg-hover: color-mix(in srgb, var(--stage-ink-exec) 8%, transparent);
+    --btn-danger-bg-active: color-mix(in srgb, var(--stage-ink-exec) 14%, transparent);
+    --btn-icon-bg: rgba(255, 255, 255, 0.55);
+    --btn-icon-bg-hover: rgba(255, 255, 255, 0.80);
+    --btn-icon-bg-active: rgba(255, 255, 255, 0.95);
+    --chip-idle-bg: rgba(255, 255, 255, 0.55);
+    --chip-idle-bg-hover: rgba(255, 255, 255, 0.74);
+    --chip-active-bg: color-mix(in srgb, var(--accent-iris) 10%, transparent);
+    --chip-active-border: color-mix(in srgb, var(--accent-iris) 60%, transparent);
+    --tab-hover-line: rgba(38, 36, 61, 0.20);        /* 页签 hover 发丝下划线（浅色） */
+    --tab-hover-line-dark: rgba(244, 243, 238, 0.20); /* 同上·暗域 */
+
+    /* ── v0.8 三层景深空间令牌（L0 底层画布 / L1 分组容器 / L2 内容实体卡）──────
+       层级由「背景色阶 + 弥散阴影」承担，新表面一律无边框——替代既有 1px 硬边框的
+       统一出口是下方 depth 工具类块（border:none 显式声明）。域纪律：只服务壳层
+       （首页/侧栏/阅读/抽屉），画布组件只消费 --cv-*，depth 表面禁止引用 --cv-*
+       （v0.6 冻结「浅壳+暗舷窗」、v0.7 增补 §1.1，两套令牌域互不串写）。
+       零新增色相/字档/时长：文字走 --ink-strong/--ink-soft/--ink-onmuteglass
+       （--ink-faint 仍禁 <24px）、链接字 --accent-iris-deep；--depth-0-dot 与
+       .glass-page 点阵/--cv-dot 浅档同相位（rgba(35,33,80,0.05) 现役配方）；
+       --depth-1-radius 与 --r-card:16px 同档（分组容器专用名）；两个特征渐变只借
+       --accent-wave(168,74,26)/--accent-iris(124,111,208) 的相位，不成新色相。
+       AA 白名单登记（v0.6 §8 冻结门：新增底值当天同款脚本实跑，不手算；
+       2026-11-15 node 实跑，公式=docs/guanlan/观澜-界面迭代-v0.7/对比度复算.mjs）：
+       #F5F6F8（--depth-0-base）：ink-strong 13.85 / ink-soft 6.32 / onmuteglass 4.62 ✅
+       #ECEEF2（--depth-1-bg）：ink-strong 12.89 / ink-soft 5.88 ✅（onmuteglass 4.30
+       不达 4.5——L1 实底上的次文字一律升 --ink-soft，onmuteglass 限 L0/L2）
+       #FFFFFF（--depth-2-bg）：ink-strong 14.98 / ink-soft 6.83 / onmuteglass 5.00 ✅ */
+    --depth-0-base: #F3F2F8;               /* L0 底层画布/工作区底色（暖冷均衡琉璃底） */
+    --depth-0-dot: rgba(38, 36, 61, 0.055); /* L0 极淡点阵（=.glass-page 点阵同相位） */
+    --depth-1-bg: rgba(235, 234, 245, 0.66); /* L1 磨砂分组托盘（透出下层微光，无硬边框） */
+    --depth-1-bg-soft: rgba(242, 241, 249, 0.84); /* L1 柔和变体（叠渐变/图像时用） */
+    --depth-1-radius: 20px;                /* L1 大圆角分组容器（空间画布质感） */
+    --depth-2-bg: #FFFFFF;                 /* L2 内容实体卡底 */
+    --depth-2-radius: 14px;                /* L2 优雅实体卡圆角 */
+    --depth-2-shadow: 0 2px 10px rgba(32, 28, 66, 0.045), 0 1px 2px rgba(32, 28, 66, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+    --depth-2-shadow-hover: 0 18px 40px -8px rgba(74, 62, 148, 0.14), 0 6px 14px -4px rgba(32, 28, 66, 0.07), inset 0 1px 0 rgba(255, 255, 255, 1);
+    --depth-2-lift: translateY(-4px);      /* L2 hover 轻盈浮起（唯一合法 hover 位移，④零布局位移） */
+    --feature-grad-amber:
+      radial-gradient(360px 200px at 92% 10%, rgba(237, 138, 80, 0.24) 0%, transparent 72%),
+      linear-gradient(135deg, rgba(255, 247, 240, 0.98) 0%, rgba(255, 251, 247, 0.96) 52%, rgba(255, 255, 255, 0.98) 100%);
+    --feature-grad-blue:
+      radial-gradient(360px 200px at 92% 10%, rgba(124, 111, 208, 0.24) 0%, transparent 72%),
+      linear-gradient(135deg, rgba(244, 241, 255, 0.98) 0%, rgba(249, 248, 255, 0.96) 52%, rgba(255, 255, 255, 0.98) 100%);
+
+    /* ── V01 · coss.com/ui 中性精密色阶（浅色默认态）────────────────────────
+       纯白实体表面 + 4% 凹槽 + 8% 极细线 + 澜墨主锚 / 薰衣草品牌交互色，
+       全部文字/语义前景色满足 WCAG AA（≥4.5:1）。 */
+    --radius: 0.625rem;
+    --background: #ffffff;
+    --foreground: #1e202c;
+    --card: #ffffff;
+    --card-foreground: #1e202c;
+    --popover: #ffffff;
+    --popover-foreground: #1e202c;
+    --primary: var(--ink-anchor); /* 观澜澜墨主锚 #112030 */
+    --primary-foreground: var(--paper-on-ink); /* #F4F8FF (15.49:1 AA+) */
+    --secondary: rgba(17, 24, 39, 0.045);
+    --secondary-foreground: #1e202c;
+    --muted: rgba(17, 24, 39, 0.045);
+    --muted-foreground: #5c6070; /* 白底 6.26:1 AA+ */
+    --accent: rgba(17, 24, 39, 0.05);
+    --accent-foreground: #1e202c;
+    --brand: var(--accent-iris-deep); /* 薰衣草唯一交互强调 #6D5BD0 */
+    --brand-foreground: #ffffff;
+    --destructive: #dc2626;
+    --destructive-foreground: #b91c1c;
+    --info: #2563eb;
+    --info-foreground: #1d4ed8;
+    --success: #16a34a;
+    --success-foreground: #15803d;
+    --warning: #d97706;
+    --warning-foreground: #b45309;
+    --border: rgba(17, 24, 39, 0.09);
+    --input: rgba(17, 24, 39, 0.12);
+    --ring: var(--accent-iris-deep);
+    --sidebar: #f8f8fb;
+    --sidebar-foreground: #525566;
+    --sidebar-primary: var(--ink-anchor);
+    --sidebar-primary-foreground: var(--paper-on-ink);
+    --sidebar-accent: rgba(17, 24, 39, 0.045);
+    --sidebar-accent-foreground: #1e202c;
+    --sidebar-border: rgba(17, 24, 39, 0.07);
+    --sidebar-ring: var(--accent-iris-deep);
+    --code: #ffffff;
+    --code-foreground: #1e202c;
+    --code-highlight: rgba(17, 24, 39, 0.045);
+  }
+
+  /* ── V01 · 全局暗夜模式（html.dark）────────────────────────────────────────
+     采用 coss.com/ui 中性阶梯暗面（背景 → 卡面 → 浮层逐级提亮 2%~4%），
+     同步覆写既有观澜壳层令牌，使新旧组件一键协同进入高对比暗夜沉浸态。 */
+  .dark {
+    --background: #101116;
+    --foreground: #f2f3f7;
+    --card: #161820;
+    --card-foreground: #f2f3f7;
+    --popover: #1b1d27;
+    --popover-foreground: #f2f3f7;
+    --primary: #f2f3f7;
+    --primary-foreground: #11131a;
+    --secondary: rgba(255, 255, 255, 0.06);
+    --secondary-foreground: #f2f3f7;
+    --muted: rgba(255, 255, 255, 0.055);
+    --muted-foreground: #9ea3b5; /* 暗底 7.2:1 AA+ */
+    --accent: rgba(255, 255, 255, 0.07);
+    --accent-foreground: #f2f3f7;
+    --brand: #9b8afb;
+    --brand-foreground: #101116;
+    --destructive: #ef4444;
+    --destructive-foreground: #f87171;
+    --info: #3b82f6;
+    --info-foreground: #93c5fd;
+    --success: #22c55e;
+    --success-foreground: #86efac;
+    --warning: #f59e0b;
+    --warning-foreground: #fcd34d;
+    --border: rgba(255, 255, 255, 0.08);
+    --input: rgba(255, 255, 255, 0.11);
+    --ring: #9b8afb;
+    --sidebar: #13151c;
+    --sidebar-foreground: #a5a9bc;
+    --sidebar-primary: #f2f3f7;
+    --sidebar-primary-foreground: #11131a;
+    --sidebar-accent: rgba(255, 255, 255, 0.06);
+    --sidebar-accent-foreground: #f2f3f7;
+    --sidebar-border: rgba(255, 255, 255, 0.07);
+    --sidebar-ring: #9b8afb;
+    --code: #161820;
+    --code-foreground: #f2f3f7;
+    --code-highlight: rgba(255, 255, 255, 0.06);
+
+    /* 同步适配既有观澜壳层语义令牌 */
+    --glass-page-base: #101116;
+    --glass-bg: rgba(22, 24, 32, 0.78);
+    --glass-bg-hover: rgba(30, 33, 44, 0.88);
+    --glass-bg-panel: rgba(22, 24, 32, 0.90);
+    --glass-border: rgba(255, 255, 255, 0.09);
+    --glass-hairline: rgba(255, 255, 255, 0.08);
+    --glass-hairline-strong: rgba(255, 255, 255, 0.22);
+    --ink-strong: #f2f3f7;
+    --ink-soft: #a5a9bc;
+    --ink-faint: #6f7488;
+    --ink-onmuteglass: #9ea3b5;
+    --accent-iris: #9b8afb;
+    --accent-iris-deep: #b2a4ff;
+    --accent-iris-ink: #c8beff;
+    --accent-wave: #ed8a50;
+    --depth-0-base: #101116;
+    --depth-0-dot: rgba(255, 255, 255, 0.05);
+    --depth-1-bg: rgba(255, 255, 255, 0.045);
+    --depth-1-bg-soft: rgba(255, 255, 255, 0.065);
+    --depth-2-bg: #161820;
+    --depth-2-shadow: 0 2px 10px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --depth-2-shadow-hover: 0 18px 40px -8px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.10);
+    --btn-primary-bg: #f2f3f7;
+    --btn-primary-bg-hover: #ffffff;
+    --btn-primary-bg-active: #e2e4ec;
+    --ink-anchor: #f2f3f7;
+    --paper-on-ink: #11131a;
+    --btn-secondary-bg: rgba(255, 255, 255, 0.06);
+    --btn-secondary-bg-hover: rgba(255, 255, 255, 0.11);
+    --btn-secondary-bg-active: rgba(255, 255, 255, 0.16);
+    --btn-secondary-border: rgba(255, 255, 255, 0.11);
+    --btn-secondary-border-hover: rgba(255, 255, 255, 0.20);
+    --btn-secondary-border-active: rgba(255, 255, 255, 0.26);
+    --btn-ghost-bg-hover: rgba(255, 255, 255, 0.07);
+    --btn-ghost-bg-active: rgba(255, 255, 255, 0.12);
+    --btn-icon-bg: rgba(255, 255, 255, 0.06);
+    --btn-icon-bg-hover: rgba(255, 255, 255, 0.12);
+    --btn-icon-bg-active: rgba(255, 255, 255, 0.18);
+    --chip-idle-bg: rgba(255, 255, 255, 0.06);
+    --chip-idle-bg-hover: rgba(255, 255, 255, 0.11);
+    --stage-ink-blueprint-text: #7cb6f0;
+    --stage-ink-plan-text: #b7a8ff;
+    --stage-ink-decision-text: #f3c46c;
+    --stage-ink-exec-text: #f58c7a;
+    --stage-ink-deliver-text: #a5c976;
+    --stage-ink-anomaly-text: #e88bb4;
+    --feature-grad-amber:
+      radial-gradient(360px 200px at 92% 10%, rgba(237, 138, 80, 0.22) 0%, transparent 72%),
+      linear-gradient(135deg, rgba(35, 26, 22, 0.96) 0%, rgba(26, 24, 32, 0.96) 55%, rgba(22, 24, 32, 0.98) 100%);
+    --feature-grad-blue:
+      radial-gradient(360px 200px at 92% 10%, rgba(155, 138, 251, 0.22) 0%, transparent 72%),
+      linear-gradient(135deg, rgba(26, 24, 42, 0.96) 0%, rgba(23, 24, 34, 0.96) 55%, rgba(22, 24, 32, 0.98) 100%);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    margin: 0;
+    padding: 0;
+    /* L0 全局落点（v0.8 评审 #4）：body 底换 --depth-0-base。.glass-page 类本体
+       保留不动——App 根容器与未被本轮触碰的表面仍挂它；已改版表面走 .depth-0-surface。 */
+    background-color: var(--depth-0-base);
+    color: var(--ink-strong);
+  }
+
+  code, pre, .font-mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .font-serif-claude {
+    font-family: var(--font-serif);
+  }
+
+  /* §6.8 全局键盘焦点环（B0）。既有 focus-visible:ring-* 工具类在 utilities 层，
+     优先级更高，不受影响。暗域(.dark-porthole)环色 #9B8AFB 按规范留待
+     画布闸批次（B6）实测后覆写，本批不加。 */
+  :focus-visible {
+    outline: 2px solid var(--accent-iris-deep);
+    outline-offset: 2px;
+  }
+
+  /* 阅读正文档（§3.2 read-body 档：17/32，行高 1.88——阅读优先底线①）。
+     族默认 sans；正文衬线为受闸切换（D3）：html 挂 serif-body-live 才启用，
+     闸门＝win32 1.25x ClearType 截图对比（规范 §8，未执行→保底态衬线只上标题）。 */
+  .read-body {
+    font-size: var(--text-read);
+    line-height: var(--lh-read);
+  }
+
+  html.serif-body-live .read-body {
+    font-family: var(--font-serif);
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.reader-measure {
+  /* §3.3/D7：量宽单一来源＝--measure-read 714px（替换现役 46rem=736px；
+     ReaderView 内联 760 由 B1 批次归一到本令牌） */
+  max-width: var(--measure-read);
+}
+
+/* 夜间阅读模式（ReaderView 切至「深色」时局部作用域令牌覆写）：
+   仅作用于 [data-reader-dark="true"] 子树，零污染浅色壳层与星图舷窗；
+   使阅读顶栏、分段按钮、五阶段 Stepper 与大纲侧栏一键协同进入高对比夜间书房。 */
+[data-reader-dark="true"] {
+  --ink-strong: #F2F1EC;
+  --ink-soft: #A5A3B2;
+  --ink-faint: #6F6D7E;
+  --ink-onmuteglass: #9A98A8;
+  --glass-hairline: rgba(255, 255, 255, 0.09);
+  --glass-hairline-strong: rgba(255, 255, 255, 0.22);
+  --depth-0-base: #101218;
+  --depth-1-bg: rgba(255, 255, 255, 0.075);
+  --depth-2-bg: #1B1E28;
+  --btn-primary-bg: #ECEAE2;
+  --btn-primary-bg-hover: #FFFFFF;
+  --btn-primary-bg-active: #DDDAD0;
+  --paper-on-ink: #13151C;
+  --btn-secondary-bg: rgba(255, 255, 255, 0.07);
+  --btn-secondary-bg-hover: rgba(255, 255, 255, 0.13);
+  --btn-secondary-bg-active: rgba(255, 255, 255, 0.18);
+  --btn-secondary-border: rgba(255, 255, 255, 0.12);
+  --btn-secondary-border-hover: rgba(255, 255, 255, 0.22);
+  --btn-ghost-bg-hover: rgba(255, 255, 255, 0.09);
+  --btn-ghost-bg-active: rgba(255, 255, 255, 0.14);
+  --accent-wave: #EC9367;
+  --accent-iris-deep: #B2A4FF;
+  --accent-iris-ink: #C5BAFF;
+  --status-green: #4ADE80;
+}
+
+/* Subtle custom scrollbars matching the light glass chrome
+   (.dark-porthole 内部由 eventGraph 场景自行维持暗色,不在此覆盖) */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(35, 33, 80, 0.16);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(35, 33, 80, 0.30);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   浅色玻璃工具类——界面 chrome 的统一配方,组件从这些类取形,不再各写各的:
+   · .glass-page    应用根底:薰衣草渐变 + 双侧光晕 + 细点阵
+   · .glass-pop     浮层(下拉/弹窗/popover):更厚 blur + 更深阴影
+   · .glass-input   输入框玻璃底
+   · .dark-porthole 深色舷窗:包裹星图等暗色画布嵌入浅色界面
+   （v0.8 退役：glass-card/glass-card-hover/glass-panel/glass-chip/glass-btn-primary
+     已被三层景深 depth-0/1/2 体系替代，类与退役自证注释见 AtlasView/HomeView/App/TopHeader）
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.glass-page {
+  background-color: var(--glass-page-base);
+  background-image:
+    radial-gradient(1100px 520px at 8% -6%, rgba(155, 138, 251, 0.16), transparent 62%),
+    radial-gradient(900px 480px at 97% 3%, rgba(217, 119, 87, 0.10), transparent 62%),
+    radial-gradient(rgba(35, 33, 80, 0.05) 1px, transparent 1px);
+  background-size: auto, auto, 26px 26px;
+}
+
+.glass-pop {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(38, 36, 61, 0.09);
+  box-shadow:
+    0 24px 60px -12px rgba(24, 20, 56, 0.18),
+    0 8px 20px -6px rgba(24, 20, 56, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(28px) saturate(165%);
+  -webkit-backdrop-filter: blur(28px) saturate(165%);
+}
+
+.glass-input {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--glass-hairline);
+  color: var(--ink-strong);
+  box-shadow: inset 0 1px 2px rgba(35, 33, 80, 0.03);
+}
+
+.glass-input::placeholder {
+  color: var(--ink-faint);
+}
+
+.dark .glass-page {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(900px 440px at 10% -8%, rgba(155, 138, 251, 0.08), transparent 62%),
+    radial-gradient(760px 400px at 96% 4%, rgba(237, 138, 80, 0.05), transparent 62%),
+    radial-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: auto, auto, 26px 26px;
+}
+
+.dark .glass-pop {
+  background: rgba(24, 26, 35, 0.96);
+  border: 1px solid var(--border);
+  box-shadow:
+    0 24px 60px -12px rgba(0, 0, 0, 0.56),
+    0 8px 20px -6px rgba(0, 0, 0, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.dark .glass-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--input);
+  color: var(--foreground);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.22);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v0.8 三层景深空间画布 · 壳层专用，严禁进 .dark-porthole 域
+   ——三级表面类：L0 .depth-0-surface（微光极光底+点阵）/ L1 .depth-1-group（磨砂分组托盘，
+   顶沿高光+环境轮廓，零生硬黑线）/ L2 .depth-2-card（瓷白实体卡，多维弥散阴影）。
+   hover 唯一合法形态（v0.6 硬约束④零布局位移）：--depth-2-lift + 阴影加深，
+   过渡 --dur-2 --ease-spring；禁止 hover 改 width/left/top。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.depth-0-surface {
+  background-color: var(--depth-0-base);
+  background-image:
+    radial-gradient(960px 500px at 6% -10%, rgba(124, 111, 208, 0.16), transparent 64%),
+    radial-gradient(820px 440px at 96% 0%, rgba(237, 138, 80, 0.13), transparent 62%),
+    radial-gradient(680px 420px at 48% 102%, rgba(74, 125, 175, 0.08), transparent 65%),
+    radial-gradient(var(--depth-0-dot) 1px, transparent 1px);
+  background-size: auto, auto, auto, 24px 24px;
+}
+
+.depth-1-group {
+  background: var(--depth-1-bg);
+  border-radius: var(--depth-1-radius);
+  border: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.90),
+    0 2px 6px rgba(38, 36, 61, 0.03),
+    0 0 0 1px rgba(38, 36, 61, 0.045);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.depth-1-group-soft {
+  background: var(--depth-1-bg-soft);
+  border-radius: var(--depth-1-radius);
+  border: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.depth-2-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(252, 251, 255, 0.95) 100%);
+  border-radius: var(--depth-2-radius);
+  border: none;
+  box-shadow: var(--depth-2-shadow), 0 0 0 1px rgba(38, 36, 61, 0.048);
+}
+
+.depth-2-card-hover {
+  transition:
+    transform var(--dur-2) var(--ease-spring),
+    box-shadow var(--dur-2) var(--ease-spring);
+}
+
+.depth-2-card-hover:hover {
+  transform: var(--depth-2-lift);
+  box-shadow: var(--depth-2-shadow-hover), 0 0 0 1px rgba(109, 91, 208, 0.16);
+}
+
+.depth-2-card-featured {
+  /* 专题卡基座：圆角升 L1 档并裁切内部光影与斜叠卡 */
+  border-radius: var(--depth-1-radius);
+  overflow: hidden;
+  box-shadow:
+    0 10px 30px -8px rgba(42, 34, 88, 0.08),
+    0 2px 6px rgba(42, 34, 88, 0.04),
+    0 0 0 1px rgba(38, 36, 61, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+/* V07 · 全局暗夜模式三层景深适配（对齐 coss.com/ui 阶梯暗面，杜绝白卡刺眼） */
+.dark .depth-0-surface {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(920px 460px at 8% -10%, rgba(155, 138, 251, 0.11), transparent 64%),
+    radial-gradient(780px 400px at 95% 0%, rgba(237, 138, 80, 0.08), transparent 62%),
+    radial-gradient(640px 380px at 48% 102%, rgba(74, 125, 175, 0.06), transparent 65%),
+    radial-gradient(var(--depth-0-dot) 1px, transparent 1px);
+  background-size: auto, auto, auto, 24px 24px;
+}
+
+.dark .depth-1-group {
+  background: var(--depth-1-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 2px 8px rgba(0, 0, 0, 0.24),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+
+.dark .depth-1-group-soft {
+  background: var(--depth-1-bg-soft);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.dark .depth-2-card {
+  background: linear-gradient(180deg, rgba(26, 28, 38, 0.96) 0%, rgba(22, 24, 32, 0.98) 100%);
+  box-shadow: var(--depth-2-shadow), 0 0 0 1px rgba(255, 255, 255, 0.075);
+}
+
+.dark .depth-2-card-hover:hover {
+  box-shadow: var(--depth-2-shadow-hover), 0 0 0 1px rgba(155, 138, 251, 0.34);
+}
+
+.dark .depth-2-card-featured {
+  box-shadow:
+    0 12px 32px -8px rgba(0, 0, 0, 0.48),
+    0 2px 8px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* v0.8 浮起降级：撤除声明与上方声明同文件相邻，且 .depth-2-card-hover 双写
+     提高特异性——不依赖源码顺序，也不怕压缩器把与 motion.css §4 登记行同款的
+     transition:none 规则去重合并到文件前部（theme-morphing 块尾 @media 同款防御）。
+     reduce 用户 hover 浮起瞬时完成、无过渡（终态可见）。 */
+  .depth-2-card-hover.depth-2-card-hover {
+    transition: none;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v0.7 全景双主题令牌（设计增补 §1.1-§1.3）：作用域 = .dark-porthole 舷窗
+   （App.tsx 挂 data-canvas-theme；不挂 html——scope 诚实，壳层两主题恒浅玻璃）。
+   · 暗档（默认块）= 现值原样：X-Ray 基线零迁移；两处登记翻值见行内注释
+     （--cv-ink-dim T4 清偿 V7-D1/D2/D3；主钮反白 --cv-on-brand V7-D13）。
+   · 浅档（[data-canvas-theme='xray-light'] 块）= 增补 §1.3 各表值，全量过增补 §5
+     （选择器逐字=canvasThemeStore 枚举值：App:1454 挂 data-canvas-theme={canvasTheme}，
+     attr 词汇与 store/GCV 同源；首轮评审曾裂为 'light' 致浅档永不匹配——契约测试
+     test/canvas-theme.test.ts §3 锁死 attr↔选择器同词汇）
+     附录同款对比度脚本（本会话实跑 63 PASS；证据行见脚本）。
+     定稿复算基准 = 同目录 对比度复算.mjs（二轮定稿 §0 R4：两账并存，以随稿脚本为准）。
+   · 白名单扩档登记（V7-D15，值共享、令牌独立）：泳道浅档 #C2410C/#5B4BC4/
+     #8A621E/#2F5AA8 + 纸底 #FAF9F5 + #B4530A/#7C6FD0/#A8762B/#9A4208/#1F7A45/
+     #C53030/#0E7490/#64646D（TRUNK 暗档 V7-D16 清偿新值）——泳道=文档分类数据编码、
+     iris=交互色、stage-ink=五阶段语义，
+     三轴独立演化，不别名化现役令牌（别名会静默串写编码）。
+   · 超出 §1.3 计数的派生令牌（均为本稿落地必需的登记增补，非新色相）：
+     --cv-on-brand（主钮/阅读钮反白字，暗=void #0D0D0F 即 V7-D13；浅=paper-on-ink）、
+     --cv-line-strong（eventGraph hub 边等价位，增补 §1.3 H 表点名令牌）、
+     --cv-seg-*（§2.1 分段钮两态跨主题取值，组件不感知主题）。
+   ══════════════════════════════════════════════════════════════════════════ */
+.dark-porthole {
+  /* A · 底座与 chrome 面（11）
+     starfix T1 规格冻结：夜航档画布底/展开容器/内部卡片/亮字改字面值（不再走 --claude-*
+     别名）——值=工票冻结（--cv-void #0B0D12、展开容器 --cv-panel #161922、内部卡片
+     --cv-card #1E222D、亮字 --cv-ink #F3F4F6），层级只由底色阶表达：void < panel < card。 */
+  --cv-void: #0B0D12;
+  --cv-panel: #161922; /* 展开容器（深灰半透玻璃底；严禁白条/浅灰卡片） */
+  --cv-card: #1E222D; /* 内部卡片 */
+  --cv-card-selected: #211F29; /* 现役事件卡选中底（≠--claude-bg-card-selected #211F26） */
+  --cv-slot: #222228;
+  --cv-ctl: #1C1C21;
+  --cv-ctl-hover: #25252C;
+  --cv-press: #16161A;
+  --cv-hairline-ink: #FFFFFF;
+  --cv-shadow-ink: #000000;
+  --cv-dot: rgba(255, 255, 255, 0.075);
+  /* B · 文字阶（7） */
+  --cv-ink: #F3F4F6; /* 亮字（starfix T1 冻结；was --claude-ink-primary #F4F3EE，Δ≤2 同亮度带） */
+  --cv-ink-2: #E4E4E7;
+  --cv-ink-3: #D4D3CD;
+  --cv-ink-muted: var(--claude-ink-secondary);
+  --cv-ink-meta: #9AA0A6;
+  --cv-ink-dim: #8E8D87; /* T4 债务清偿（V7-D1/D2/D3）：#787771/#71717A/#6E6D68 并档，card 5.32/panel 5.52 ✅ */
+  --cv-ink-ghost: #52525B; /* 豁免档登记：仅图标/极弱装饰 */
+  /* C · 品牌/强调族（7） */
+  --cv-brand: var(--claude-terracotta);
+  --cv-brand-hover: #C66647;
+  --cv-brand-ink: #E5A985;
+  --cv-lav: var(--claude-lavender);
+  --cv-lav-ink: #C4B5FD;
+  --cv-amber: var(--claude-amber);
+  --cv-amber-ink: #D99B52;
+  /* D · 泳道（4；14-hex 白名单暗档原样） */
+  --cv-lane-md: #F76808;
+  --cv-lane-svg: #8E8AE6;
+  --cv-lane-pdf: #F5D90A;
+  --cv-lane-unknown: #4C8DFF;
+  /* E · 蓝/状态族（10） */
+  --cv-blue-bg: #17202B;
+  --cv-blue-line: #52769E;
+  --cv-blue-ink: #93C5FD;
+  --cv-link: #7A9EC2;
+  --cv-link-hover: #A7C5E8;
+  --cv-read-bg: #19211B;
+  --cv-read-line: #788C5D;
+  --cv-read-ink: #CDE0CD;
+  --cv-read-ink-strong: #84A584;
+  --cv-unread: #E5484D;
+  /* F · 时光机状态（4；V7-D15 白名单同源） */
+  --cv-add: #30A46C;
+  --cv-del: #E5484D;
+  --cv-ref-out: #26C0DB;
+  --cv-trunk: #64646D; /* V7-D16 清偿：原 #232326/void 1.24 FAIL → 3.32 PASS；浅档 3.15 不动
+                          （候选 #606069 3.12 贴地、#6A6A73+ 亮过浅档，均否决）；唯一消费点 DTM 主干脊柱 */
+  /* 派生登记（见块头注释） */
+  --cv-on-brand: var(--cv-void); /* 主钮/阅读钮反白字：暗 6.22/hover 4.99 ✅（V7-D13） */
+  --cv-line-strong: #7D6B54; /* V7-D19 清偿：原 #675245 暗 card 2.42/void 2.65/panel 2.51 FAIL →
+                                3.46/3.79/3.59 PASS；=浅档现值→双主题同值（不选 #8A7761，亮过安静边线档）；
+                                唯一消费点 eventGraph.css hub 身份描边 */
+  /* starfix T3/T1 新增：底部药丸选中态（工票二选一冻结 #3B82F6，备选 #F97316 未启用并在此登记）。
+     只供 .cvw-pill-btn[aria-pressed='true']（底部药丸域），不与 --cv-seg-*（顶栏分段钮语法）串写。
+     反白字取 --cv-void（5.29:1 ✅）而非白（3.68:1 小字 FAIL）——同 --cv-on-brand 先例 */
+  --cv-pill-active-bg: #3B82F6;
+  --cv-pill-active-ink: var(--cv-void);
+  /* starfix T1 新增：事件轴标题框（fan-out 组头胶囊）三件套——暗档值=现渲染式原样收编成令牌
+     （lav 10% panel 底 + lav 描边 + lav-ink 字，视觉零变化）；浅档覆写在 light 块（#FFFFFF+#1F2937） */
+  --cv-axis-title-bg: color-mix(in srgb, var(--cv-lav) 10%, var(--cv-panel));
+  --cv-axis-title-line: color-mix(in srgb, var(--cv-lav) 25%, transparent);
+  --cv-axis-title-ink: var(--cv-lav-ink);
+  --cv-seg-active-bg: var(--cv-ink);
+  --cv-seg-active-ink: var(--cv-void);
+  --cv-seg-idle: var(--cv-ink-muted);
+  --cv-seg-idle-hover: var(--cv-ink-3);
+  /* 悬浮工具栏 / 浮层面板阴影：夜航深影，纸面清爽空气感影（杜绝纸面 75% 紫晕） */
+  --cv-shadow-elevated: 0 16px 40px rgba(0, 0, 0, 0.62), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+  background: var(--cv-void);
+  background-image:
+    radial-gradient(740px 420px at 22% 14%, rgba(155, 138, 251, 0.09), transparent 68%),
+    radial-gradient(620px 380px at 84% 82%, rgba(217, 119, 87, 0.07), transparent 68%);
+  box-shadow:
+    0 14px 44px rgba(38, 36, 61, 0.28),
+    0 3px 10px rgba(38, 36, 61, 0.16);
+}
+
+.dark-porthole[data-canvas-theme='xray-light'] {
+  /* A · starfix T1 规格冻结（纸面档）：画布底 #F7F8FA、展开容器 #F0F2F5（绝不能是黑底！）、
+     内部卡片 #FFFFFF + 柔阴影（--cv-shadow-ink 30% 弥散既有配方承走在用阴影）。
+     层级照旧 void < panel < card，白卡浮在浅灰容器上靠 hairline 描边 + 柔阴影分界。 */
+  --cv-void: #F7F8FA;
+  --cv-panel: #F0F2F5;
+  --cv-card: #FFFFFF;
+  --cv-card-selected: rgba(255, 255, 255, 0.92); /* 选中识别由泳道浅档描边承担 */
+  --cv-slot: rgba(38, 36, 61, 0.06);
+  --cv-ctl: rgba(255, 255, 255, 0.70); /* =壳层 secondary 底 */
+  --cv-ctl-hover: rgba(255, 255, 255, 0.85);
+  --cv-press: rgba(38, 36, 61, 0.10);
+  --cv-hairline-ink: #26243D; /* ≈--glass-hairline 相位（8% 白→墨） */
+  --cv-shadow-ink: #5446A0; /* =--glass-shadow 同相 */
+  --cv-dot: rgba(35, 33, 80, 0.05); /* =.glass-page 点阵配方 */
+  /* B */
+  --cv-ink: var(--ink-strong);
+  --cv-ink-2: var(--ink-strong);
+  --cv-ink-3: var(--ink-soft);
+  --cv-ink-muted: var(--ink-onmuteglass);
+  --cv-ink-meta: var(--ink-onmuteglass);
+  --cv-ink-dim: var(--ink-soft);
+  --cv-ink-ghost: var(--ink-faint);
+  /* C */
+  --cv-brand: #B4530A; /* paper 4.77 文字图形双达标（现值纸 2.96 图形 FAIL，必须换值） */
+  --cv-brand-hover: #9A4208;
+  --cv-brand-ink: var(--accent-wave);
+  --cv-lav: #7C6FD0; /* 值同 --accent-iris，独立令牌（V7-D15） */
+  --cv-lav-ink: var(--accent-iris-ink);
+  --cv-amber: #A8762B; /* 值同 --stage-ink-decision，独立令牌 */
+  --cv-amber-ink: #8A621E; /* 值同 --stage-ink-decision-text，独立令牌 */
+  /* D */
+  --cv-lane-md: #C2410C;
+  --cv-lane-svg: #5B4BC4;
+  --cv-lane-pdf: #8A621E; /* 原值浅底 1.35 一票否决，降到琥珀褐 */
+  --cv-lane-unknown: #2F5AA8;
+  /* E */
+  --cv-blue-bg: rgba(61, 108, 153, 0.08);
+  --cv-blue-line: #52769E; /* V7-D17 清偿：原 rgba(61,108,153,.45) 复合 paper 1.90/blueBg 1.84 FAIL →
+                              paper 4.49/blueBg 4.05 PASS；暗值不动 → 双主题同值（--cv-unread 先例；
+                              不调 #6C93BD——3.05 贴地且新增 hex） */
+  --cv-blue-ink: #3D6C99; /* 值同 blueprint-text，独立令牌 */
+  --cv-link: #3D6C99;
+  --cv-link-hover: #2F5AA8;
+  --cv-read-bg: rgba(62, 155, 107, 0.08);
+  --cv-read-line: #3E9B6B;
+  --cv-read-ink: #56643A;
+  --cv-read-ink-strong: #56643A;
+  --cv-unread: #E5484D; /* 同值：双主题 ≥3 图形级；不并入 --accent-wave（与品牌色相撞） */
+  /* F */
+  --cv-add: #1F7A45;
+  --cv-del: #C53030;
+  --cv-ref-out: #0E7490;
+  --cv-trunk: #8D8AA6; /* paper 图形 3.15（候选 #A5A1B8 2.38 否决） */
+  /* 派生 */
+  --cv-on-brand: var(--paper-on-ink); /* 浅档主钮字 4.71 ✅ */
+  --cv-line-strong: #7D6B54; /* 降饱和暖褐：card 上 5.07 图形级 ✅（实跑） */
+  /* starfix T3/T1 浅档药丸选中态：#1F2937 底白字（14.65:1 ✅）——工票逐字冻结 */
+  --cv-pill-active-bg: #1F2937;
+  --cv-pill-active-ink: #FFFFFF;
+  /* starfix T1 浅档事件轴标题框：#FFFFFF 底 + #1F2937 深灰字（工票冻结值）；描边降为墨色发丝线，
+     与白底卡同族（lav 描边在白底上会发飘） */
+  --cv-axis-title-bg: #FFFFFF;
+  --cv-axis-title-line: color-mix(in srgb, #1F2937 18%, transparent);
+  --cv-axis-title-ink: #1F2937;
+  --cv-seg-active-bg: var(--ink-anchor); /* =壳层控件语法 */
+  --cv-seg-active-ink: var(--paper-on-ink); /* 15.49 ✅ */
+  --cv-seg-idle: var(--ink-soft); /* slot 复合底上 5.79 ✅ */
+  --cv-seg-idle-hover: var(--ink-soft);
+  /* 纸面档悬浮阴影：轻盈冷灰层次，消除旧 68%~75% --cv-shadow-ink 产生的发闷紫云 */
+  --cv-shadow-elevated: 0 10px 28px -4px rgba(38, 36, 61, 0.10), 0 2px 6px rgba(38, 36, 61, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+
+  /* 浅色舷窗外壳（增补 §1.2）：柔光宣纸微渐变 + 玻璃发丝沿口 + 柔影 */
+  background-color: var(--cv-void);
+  background-image:
+    radial-gradient(760px 440px at 14% 8%, rgba(124, 111, 208, 0.065), transparent 65%),
+    radial-gradient(640px 380px at 88% 86%, rgba(237, 138, 80, 0.055), transparent 65%);
+  border: 1px solid var(--glass-hairline);
+  box-shadow: var(--glass-shadow);
+}
+
+/* 泳道光束滤镜按主题切换（增补 §1.4）：暗档强发光（stdDeviation 2.6），
+   浅档换 d3-stream-glow-soft（stdDeviation 1.2，GraphCanvasView defs 内同批新增）——
+   白底白光晕是糊化不是增益。stdDeviation 本体永不量化（勘察 §5.1 红线）。
+   光束元素从 filter 属性改挂本类（SVG 属性不吃主题切换，CSS 引用才能覆写）。 */
+.cv-stream-glow {
+  filter: url(#d3-stream-glow);
+}
+.dark-porthole[data-canvas-theme='xray-light'] .cv-stream-glow {
+  filter: url(#d3-stream-glow-soft);
+}
+/* 纸面主题下弱化背景装饰星芒，防止与浅底卡片边缘视觉相撞 */
+.dark-porthole[data-canvas-theme='xray-light'] .cv-ambient-stars {
+  opacity: 0.22;
+}
+
+/* 主题切换 morph（增补 §2.2）：只在翻转瞬间生效（App 挂 theme-morphing 320ms 后移除）。
+   为什么不是常驻一条 transition——transition 不继承，覆盖全子树必须 `*` 常驻，
+   会给画布所有 hover/瞬时色态永久加渐变，超出本批授权。
+   reduced-motion 撤除见文件尾 @media 块（必须与声明同文件且在其后，
+   否则 motion.css @import 先序 + 同特异性会输掉级联；motion.css §4 块一另留登记行）。 */
+.dark-porthole.theme-morphing,
+.dark-porthole.theme-morphing * {
+  transition:
+    background-color var(--dur-3) var(--ease-fade),
+    color var(--dur-3) var(--ease-fade),
+    border-color var(--dur-3) var(--ease-fade),
+    fill var(--dur-3) var(--ease-fade),
+    stroke var(--dur-3) var(--ease-fade),
+    box-shadow var(--dur-3) var(--ease-fade);
+}
+@media (prefers-reduced-motion: reduce) {
+  .dark-porthole.theme-morphing,
+  .dark-porthole.theme-morphing.theme-morphing,
+  .dark-porthole.theme-morphing.theme-morphing * {
+    /* 切换瞬时完成，无过渡（登记处同步在 motion.css §4 块一）。
+       `.theme-morphing.theme-morphing` 双写是有意提高特异性：(0,3,0) 压过上方 (0,2,0)
+       的 morph 过渡声明（舷窗根与全部后代两路都压住）——不依赖源码顺序，也不怕
+       压缩器把与 motion.css 同款 `transition:none` 规则去重合并到文件前部
+       （本会话 vite build 实证会发生）。 */
+    transition: none;
+  }
+}
+
+/* D3 SVG River & Edge Flow Animations */
+@keyframes guanlan-dash-flow {
+  0% {
+    stroke-dashoffset: 48;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes guanlan-river-pulse {
+  0%, 100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes guanlan-sonar-ripple {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.75;
+  }
+  70% {
+    transform: scale(1.22);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.22);
+    opacity: 0;
+  }
+}
+
+@keyframes guanlan-orbit-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes guanlan-laser-sweep {
+  0% {
+    transform: translateY(0px);
+    opacity: 0.2;
+  }
+  15% {
+    opacity: 0.95;
+  }
+  85% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translateY(520px);
+    opacity: 0.15;
+  }
+}
+
+@keyframes guanlan-chronos-float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-7px) rotate(-0.8deg);
+  }
+}
+
+@keyframes guanlan-chronos-shadow {
+  0%, 100% {
+    transform: scaleX(1) scaleY(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scaleX(0.82) scaleY(0.82);
+    opacity: 0.28;
+  }
+}
+
+@keyframes guanlan-staff-gem {
+  0%, 100% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 1;
+  }
+}
+
+@keyframes guanlan-sand-mote {
+  0% {
+    transform: translateY(10px) scale(0.6);
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translateY(-22px) scale(1.15);
+    opacity: 0;
+  }
+}
+
+.animate-dash-flow {
+  animation: guanlan-dash-flow 2.2s linear infinite;
+}
+
+.animate-dash-flow-fast {
+  animation: guanlan-dash-flow 0.95s linear infinite;
+}
+
+.animate-river-pulse {
+  animation: guanlan-river-pulse 3.6s ease-in-out infinite;
+}
+
+.animate-sonar-ripple {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: guanlan-sonar-ripple 2.6s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.animate-orbit-spin {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: guanlan-orbit-spin 38s linear infinite;
+}
+
+.animate-laser-sweep {
+  animation: guanlan-laser-sweep 5.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-chronos-float {
+  animation: guanlan-chronos-float 3.8s ease-in-out infinite;
+}
+
+.animate-chronos-shadow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: guanlan-chronos-shadow 3.8s ease-in-out infinite;
+}
+
+.animate-staff-gem {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: guanlan-staff-gem 2.1s ease-in-out infinite;
+}
+
+.animate-sand-mote-1 {
+  animation: guanlan-sand-mote 2.4s ease-in-out infinite;
+}
+
+.animate-sand-mote-2 {
+  animation: guanlan-sand-mote 2.4s ease-in-out 0.8s infinite;
+}
+
+.animate-sand-mote-3 {
+  animation: guanlan-sand-mote 2.4s ease-in-out 1.6s infinite;
+}
+
+/* Time Deity Ethereal Wings & Clock Hand Animations */
+@keyframes guanlan-wing-left {
+  0%, 100% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(9deg) scale(1.06);
+  }
+}
+
+@keyframes guanlan-wing-right {
+  0%, 100% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(-9deg) scale(1.06);
+  }
+}
+
+@keyframes guanlan-chronos-cast-wave {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(3.6);
+    opacity: 0;
+  }
+}
+
+/* Celestial Shooting Star / Meteor Streak Animations */
+@keyframes guanlan-meteor-streak {
+  0% {
+    transform: translate3d(20px, 0px, 0) scaleX(0.5);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+    transform: translate3d(-40px, 0px, 0) scaleX(1);
+  }
+  60% {
+    opacity: 0.92;
+    transform: translate3d(-340px, 0px, 0) scaleX(1.08);
+  }
+  85%, 100% {
+    opacity: 0;
+    transform: translate3d(-480px, 0px, 0) scaleX(0.45);
+  }
+}
+
+@keyframes guanlan-star-twinkle {
+  0%, 100% {
+    opacity: 0.22;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.2);
+  }
+}
+
+.animate-wing-left {
+  transform-box: fill-box;
+  transform-origin: right center;
+  animation: guanlan-wing-left 2.6s ease-in-out infinite;
+}
+
+.animate-wing-right {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: guanlan-wing-right 2.6s ease-in-out infinite;
+}
+
+.animate-clock-minute {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: guanlan-orbit-spin 8s linear infinite;
+}
+
+.animate-clock-hour {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: guanlan-orbit-spin 32s linear infinite;
+}
+
+.animate-chronos-cast {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: guanlan-chronos-cast-wave 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-meteor-1 {
+  animation: guanlan-meteor-streak 4.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.animate-meteor-2 {
+  animation: guanlan-meteor-streak 5.4s cubic-bezier(0.22, 1, 0.36, 1) 1.3s infinite;
+}
+
+.animate-meteor-3 {
+  animation: guanlan-meteor-streak 4.8s cubic-bezier(0.22, 1, 0.36, 1) 2.7s infinite;
+}
+
+.animate-meteor-4 {
+  animation: guanlan-meteor-streak 6.0s cubic-bezier(0.22, 1, 0.36, 1) 0.6s infinite;
+}
+
+.animate-meteor-5 {
+  animation: guanlan-meteor-streak 3.9s cubic-bezier(0.22, 1, 0.36, 1) 2.1s infinite;
+}
+
+.animate-meteor-burst {
+  animation: guanlan-meteor-streak 2.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.animate-star-twinkle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: guanlan-star-twinkle 3.2s ease-in-out infinite;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   动效基座（契约）—— 3 条通用 keyframes + 3 个工具类
+   · 只动 transform / opacity / stroke-dashoffset / background-position：
+     全部走合成器或廉价栏，不触发布局（无 width/height/top/left）。
+   · 复用约定：其余三路只组合这里的类名与 :root 令牌（--ease-spring /
+     --dur-fast / --dur-pan），禁止各自新写 keyframes。
+   · 每个工具类都有 prefers-reduced-motion 降级（见文件末尾）。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 3.1 连线电流：stroke-dashoffset 0 → -24。
+   调用方配 stroke-dasharray: 6 18（一轮正好走满一个 dash 周期 = 24）。 */
+@keyframes pulse-flow {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+/* 3.2 弹簧入场：锚点处 opacity 0→1 + scale(0.92)→1 + translateY(6px)→0。
+   交错由调用方叠加 animation-delay（内部子卡片 40ms 递增），
+   配合 animation-fill-mode: both 保证延迟期间不闪出。 */
+@keyframes spring-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 3.3 呼吸波纹：「执行中 / 已同步」状态点的柔和扩散。
+   0.85→1.9 是契约幅度；72%~100% 停在不可见态，形成呼吸间歇而非连续抖动。 */
+@keyframes ripple-ping {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.55;
+  }
+  72% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+/* ── 3.1 连线电流 ────────────────────────────────────────────────────────
+   1.1s 走完 24 个 dash 单位 ≈ 21.8 单位/秒，与既有 .animate-dash-flow
+   （48/2.2s）同速，新旧连线混用不会一快一慢。stroke-dasharray 不在此设，
+   由调用方按线型给 6 18。 */
+.anim-pulse-flow {
+  animation: pulse-flow 1.1s linear infinite;
+}
+
+/* ── 3.2 弹簧入场 ────────────────────────────────────────────────────────
+   340ms 取在 --dur-fast(160ms) 与 --dur-pan(500ms) 之间：叠加 40ms 交错时
+   8 个子卡总时长约 620ms，不拖沓也不生硬。单个节点要变速用 inline
+   style={{ animationDuration }} 覆盖。
+   transform-box: fill-box 让 SVG <g>/<rect> 也绕自身包围盒缩放；
+   锚点用 --spring-origin 覆盖（如 --spring-origin: top left），
+   注意本类已声明 transform-origin，Tailwind 的 origin-* 会被它盖住。 */
+.anim-spring-pop {
+  transform-box: fill-box;
+  transform-origin: var(--spring-origin, center);
+  animation: spring-pop 340ms var(--ease-spring) both;
+}
+
+/* ── 3.3 呼吸波纹 ────────────────────────────────────────────────────────
+   叠在状态点下方的一层纯装饰元素（绝对定位，不参与布局）：
+   scale 0.85→1.9 + opacity .55→0，2.4s 一轮含呼吸间歇。
+   SVG 场景靠 transform-box: fill-box 绕圆心扩散。 */
+.anim-ripple {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ripple-ping 2.4s var(--ease-spring) infinite;
+}
+
+/* ── prefers-reduced-motion 降级 ─────────────────────────────────────────
+   三个工具类一律降为 animation: none（内容保持最终可见态，不藏内容）；
+   波纹层是纯装饰，直接 display: none，避免静止时多出一颗实心圆点。 */
+@media (prefers-reduced-motion: reduce) {
+  .anim-pulse-flow,
+  .anim-spring-pop {
+    animation: none;
+  }
+
+  .anim-ripple {
+    animation: none;
+    display: none;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   D04 · 阅读器锚点反向定位闪烁（决定/批注跳转到达时的「在这里」信号）
+   · 只动 box-shadow / outline-color：合成器或廉价栏，不触发布局。
+   · 两轮脉冲约 1.05s×2，控制器 2.2s 后摘类（state 清零），残影不落 DOM。
+   · reduced-motion：降为单次静态琥珀描边（保留定位信号，不闪动）。
+   ══════════════════════════════════════════════════════════════════════════ */
+@keyframes glx-anchor-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(217, 155, 82, 0);
+    outline-color: rgba(217, 155, 82, 0);
+  }
+  30%,
+  70% {
+    box-shadow: 0 0 0 4px rgba(217, 155, 82, 0.28);
+    outline-color: rgba(217, 155, 82, 0.85);
+  }
+}
+
+.glx-anchor-flash {
+  outline: 2px solid rgba(217, 155, 82, 0);
+  outline-offset: 2px;
+  border-radius: 6px;
+  animation: glx-anchor-flash 1.05s ease-in-out 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glx-anchor-flash {
+    animation: none;
+    outline-color: rgba(217, 155, 82, 0.85);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   B0 · reduced-motion 底册（§6.6/D11；全局兜底留画布闸 B6）
+   原则照旧：停帧＋终态可见，不藏内容；
+   纯装饰层 display:none。默认（未开偏好）渲染零变化——只影响 reduce 用户。
+   划界（规范建议＋逐类落位）：
+   · 画布功能流停帧保终态：dash-flow×2 / river-pulse / orbit-spin（终态＝静态线与静态轨道）
+   · 偶神与时刻停初始帧：chronos-float / chronos-shadow / wing×2 / clock×2 /
+     staff-gem（元素保持可见，只不再动）
+   · 纯装饰层整层隐藏：sonar-ripple / laser-sweep / sand-mote×3 /
+     meteor×6 / star-twinkle / chronos-cast（施法波为一次性装饰层，不播即无残影）
+   · Tailwind animate-pulse（常驻呼吸点）：停帧＝恒亮，B4 批次将废除该常驻循环
+   · animate-spin（Loader2 加载）属功能流保留，本批不动（§6.2）
+   （v0.8 退役：dash-flow-reverse / orbit-spin-reverse / chronos-shimmer×2 /
+     chronos-flicker 类与 keyframes 已随退役面清扫删除，登记行同步撤除）
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  .animate-dash-flow,
+  .animate-dash-flow-fast,
+  .animate-river-pulse,
+  .animate-orbit-spin,
+  .animate-chronos-float,
+  .animate-chronos-shadow,
+  .animate-staff-gem,
+  .animate-wing-left,
+  .animate-wing-right,
+  .animate-clock-minute,
+  .animate-clock-hour,
+  .animate-pulse {
+    animation: none;
+  }
+
+  .animate-sonar-ripple,
+  .animate-laser-sweep,
+  .animate-sand-mote-1,
+  .animate-sand-mote-2,
+  .animate-sand-mote-3,
+  .animate-meteor-1,
+  .animate-meteor-2,
+  .animate-meteor-3,
+  .animate-meteor-4,
+  .animate-meteor-5,
+  .animate-meteor-burst,
+  .animate-star-twinkle,
+  .animate-chronos-cast {
+    animation: none;
+    display: none;
+  }
+}
+
+/* ===== C03 · Ctrl+K 命令面板（Omnibox）=====
+   1) 滚动条落于右侧 padding 槽内：scrollbar-gutter 预留稳定槽位 + 细滚动条，
+      悬浮式窄槽不遮挡命中摘要正文（任务卡 C03 / quiet-md search.rs 口径）； */
+.glx-palette-scroll {
+  scrollbar-gutter: stable;
+}
+.glx-palette-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.glx-palette-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--ink-3, #8892a8) 30%, transparent);
+  border-radius: 4px;
+}
+.glx-palette-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--ink-3, #8892a8) 50%, transparent);
+}
+.glx-palette-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 2) 命中摘要精确控行 ≤2 行（首个命中词始终可见由 buildSnippet 窗口保证，
+      CSS 兜底裁断，二者取交集不破行溢出）； */
+.glx-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ===== D02 · quiet-md 克制空间层级减法（侧栏与列表） =====
+   常规态：结构性分隔线降为极低透明度（--glass-hairline 再混 45% 透明），
+   把高对比度视觉重心留给行动信号（未读点/拍板/聚光灯琥珀描边）；
+   悬停相邻行（.quiet-row:hover）时其上分隔线平滑隐去（:has 相邻选择，
+   Chromium/Tauri WebView2 支持），层级随聚焦浮起而收线。全走令牌，零新裸色。 */
+.quiet-sep {
+  border-color: color-mix(in srgb, var(--glass-hairline) 45%, transparent);
+  transition: border-color var(--dur-2) var(--ease-fade);
+}
+
+.quiet-row {
+  transition: background-color var(--dur-2) var(--ease-fade);
+}
+
+.quiet-sep:has(+ .quiet-row:hover) {
+  border-color: transparent;
+}
+
+/* 分隔线与可悬停行同体（如侧栏行动钮容器）：悬停自身平滑隐去其上分隔线 */
+.quiet-sep.quiet-row:hover {
+  border-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quiet-sep,
+  .quiet-row {
+    transition: none;
+  }
+}

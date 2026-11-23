@@ -1,0 +1,81 @@
+import React from 'react';
+import { GitCompare } from 'lucide-react';
+import { diffSummaryCardOf, formatDiffMetric } from '../utils/diffResultAdapter';
+import type { DiffResult } from '../services/apiTypes';
+
+/**
+ * 语义 Diff 摘要卡（PRD 3.5 / 方案 F7）：Agent 变更提炼——
+ *   「新增交付项 (+2)、关闭未决事项 (+1)、修改接口契约 (3处)」+ 触发该版本的
+ *   Checkpoint ID。数据源=任务队列口径 DiffResult（POST /diff 202 → job result）；
+ *   端点不可用时 error 如实展示（本地 computeMarkdownDiff 快路径不受影响）。
+ */
+
+export interface DiffSummaryCardProps {
+  /** 语义 Diff 结果（null=尚未取得） */
+  result: DiffResult | null;
+  loading: boolean;
+  error: string | null;
+  paperLightMode?: boolean;
+  /** 卡面标题（版本历史区/时光机下钻可自定义） */
+  title?: string;
+}
+
+const DiffSummaryCard: React.FC<DiffSummaryCardProps> = ({
+  result,
+  loading,
+  error,
+  paperLightMode = true,
+  title = '变更摘要',
+}) => {
+  const border = paperLightMode ? 'border-[#E3D9C8]' : 'border-[#3A3730]';
+  const bg = paperLightMode ? 'bg-[#FBF7EF]' : 'bg-[#28241F]';
+  return (
+    <div
+      data-diff-summary-card=""
+      className={`my-3 rounded-lg border ${border} ${bg} px-3.5 py-2.5`}
+      aria-label={title}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <GitCompare className="w-3.5 h-3.5 shrink-0 text-[color:var(--stage-ink-exec)]" />
+        <span className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-medium text-[color:var(--ink-strong)]">
+          {title}
+        </span>
+        {loading && (
+          <span className="text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)]">
+            语义摘要任务执行中（202 → 任务队列）…
+          </span>
+        )}
+        {result && (
+          <span className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-soft)] truncate">
+            {result.summary.headline}
+          </span>
+        )}
+      </div>
+      {error && (
+        <p className="mt-1.5 text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)]" role="status">
+          语义摘要暂不可用：{error}（本地逐行对比不受影响）
+        </p>
+      )}
+      {result && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 tabular-nums">
+          {diffSummaryCardOf(result).metrics.map((metric) => (
+            <span
+              key={metric.label}
+              data-diff-metric={metric.label}
+              className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--stage-ink-exec-text)]"
+            >
+              {formatDiffMetric(metric)}
+            </span>
+          ))}
+          {diffSummaryCardOf(result).checkpointId && (
+            <span className="text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-mono text-[color:var(--ink-soft)]">
+              Checkpoint：{diffSummaryCardOf(result).checkpointId}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default DiffSummaryCard;
