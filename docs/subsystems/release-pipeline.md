@@ -118,6 +118,8 @@ Rust 侧没有嵌入提交哈希。`env!("CARGO_PKG_VERSION")` 只在 MCP 代理
 
 ## CI
 
+**当前状态：GitHub 上的 `ci` 工作流已停用。** 它唯一一次运行（`main` 上）五个作业一个都没启动，注解是「recent account payments have failed or your spending limit needs to be increased」。恢复要处理账户的 Actions 额度或付款方式，然后在仓库的 Actions 页面重新启用这个工作流。在它恢复之前，**验证以本地为准**：`npm run gate -- --full` 就是在 Windows 上跑下面 `rust-desktop` 与 `smoke` 两个作业的命令，`frontend` 与 `rust-core` 的命令用同样的方式手跑（`rust-core` 在 Windows 上跑过；Ubuntu 特有的部分本机没有对应环境）。
+
 `ci.yml` 在推送到 `main`、提 PR 时触发，也可以手动触发，共四个作业：
 
 | 作业 | 系统 | 做什么 |

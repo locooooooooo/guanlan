@@ -117,6 +117,7 @@
   - 桌面应用「一键配置 MCP」写入的宿主配置在应用下次启动后失效：桌面壳每次绑随机端口，配置里的命令 `guanlan` 又不在 `PATH` 上（安装包不改 `PATH`）。
   - README 说「外部网络仅在你显式开启 HTML 允许 HTTPS 外链时访问」，但 `index.html` 会从 Google Fonts 加载三款字体，构建产物里也还在。要么去掉外部字体，要么改说明。
   - 安装包里没有随附许可文件：`tauri.conf.json` 与 `tauri.release.conf.json` 没有配置 `bundle.resources`、`license` 或 `licenseFile`，仓库里的 `LICENSE` 与 `THIRD_PARTY_NOTICES` 都不会装到用户机器上。要不要随安装包带上、以什么形式带，由维护者定。安装包按 `embedBootstrapper` 内嵌了 WebView2 引导程序（微软的安装器，约 1.8 MB），它的再分发条款没有核实过。
+  - GitHub 上的 `ci` 工作流已停用。它唯一一次运行（`main` 上）五个作业一个都没启动，失败注解是「recent account payments have failed or your spending limit needs to be increased」。恢复要处理账户的 Actions 额度或付款方式；恢复之前，验证以本地 `npm run gate -- --full` 为准（见[构建与发布](docs/subsystems/release-pipeline.md#ci)）。
 - **测试没有真正执行的：** 下面这三个在 `npm run gate` 的运行记录里会被点名。CI 的 Rust 作业直接跑 `cargo test`，而 libtest 会截获通过的测试打印的内容，日志里看不到它们。
   - `identity_vectors_from_fixture` 在干净 checkout 上跳过，因为 CI 的 Rust 作业不生成夹具。
   - `domain/triage/tests.rs` 里两个 Node 对拍测试从不执行，因为它们依赖的 `workflow-triage.js` 等源文件不在仓库里。
