@@ -5,7 +5,8 @@
  *  - reader/readerMarkdownModel.ts      纯函数 Markdown 行模型层（零 UI 依赖、可单测）
  *  - reader/useReaderController.tsx     单一行为控制器（state/memo/effect/handler + 行渲染闭包 → ctx）
  *  - reader/readerChromeSections.tsx    浮动 Chrome（返回横幅/新版本告警/双层文件头）
- *  - reader/readerDiffRelationsSections.tsx  diff / relations 子模式面板
+ *  - reader/readerDiffSection.tsx        diff 子模式面板
+ *  - reader/readerRelationsSection.tsx   relations 子模式面板
  *  - reader/readerMarkdownSection.tsx   MD 阅读纸（格式插件层 · markdown）
  *  - reader/readerSvgPdfSections.tsx    SVG / PDF 格式插件层
  *  - reader/readerShared.tsx            共享类型 + CopyIdButton

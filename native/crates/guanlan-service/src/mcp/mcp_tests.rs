@@ -1,7 +1,7 @@
 //! MCP stdio 代理测试（契约 K）：
-//! - 协议面：initialize 回显 / tools/list 四工具逐字序 / 未知方法 -32601 /
+//! - 协议面：initialize 回显 / tools/list 六工具逐字序 / 未知方法 -32601 /
 //!   未知工具 -32602 / 通知无响应 / 解析错误 -32700；
-//! - 四工具转发：mock 后端断言上游 method/path/body 逐字（含 job 有界轮询）；
+//! - 六工具转发：mock 后端断言上游 method/path/body 逐字（含 job 有界轮询）；
 //! - 手写 HTTP 客户端：对真实本地 TcpListener 端到端（Content-Length 与 chunked 两种响应）；
 //! - 端点解析：--endpoint 参数 > GUANLAN_ENDPOINT env > 缺失报错（不猜端口）。
 
@@ -115,7 +115,7 @@ fn initialize_without_client_version_pins_default() {
 }
 
 #[test]
-fn tools_list_is_exactly_four_prd_tools_in_order() {
+fn tools_list_is_exactly_the_six_tools_in_order() {
     let backend = MockBackend::new(|_| unreachable!("tools/list 不发 HTTP"));
     let response = handle_message(&request("tools/list", json!({})), &backend).expect("应有响应");
     let tools = result_payload(&response)["tools"]
@@ -126,7 +126,7 @@ fn tools_list_is_exactly_four_prd_tools_in_order() {
         .iter()
         .map(|t| t["name"].as_str().expect("工具名"))
         .collect();
-    assert_eq!(names, TOOL_NAMES, "PRD 4.3 allowed_mcp_tools 逐字序");
+    assert_eq!(names, TOOL_NAMES, "PRD 4.3 四工具逐字序 + E03/E05 扩展工具");
     for tool in &tools {
         assert!(
             tool["inputSchema"].is_object(),
@@ -180,7 +180,7 @@ fn non_object_message_is_invalid_request() {
     assert_eq!(response["error"]["code"], -32600);
 }
 
-// ---------- 四工具转发 ----------
+// ---------- 六工具转发 ----------
 
 #[test]
 fn commit_checkpoint_forwards_payload_and_returns_201_body() {

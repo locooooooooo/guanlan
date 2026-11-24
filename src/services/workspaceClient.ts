@@ -250,7 +250,8 @@ function networkErrorText(raw: RawResponse): string {
 
 /** POST 请求（与 requestJson 同形：不抛异常，status 0 = 网络层失败）。
  *
- * 批次二起唯一的前端写操作：提交索引任务。契约 §2 要求「立即 202 + job_id」，
+ * 全部前端写操作（索引任务、文件与文件夹操作、拍板回写、草案、checkpoint、挂载……）
+ * 共用的 POST 入口。契约 §2 要求「立即 202 + job_id」，
  * 因此成功判定仍是 2xx 且包络 ok:true。
  */
 async function requestJsonPost(path: string, body: unknown): Promise<RawResponse> {

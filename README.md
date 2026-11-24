@@ -31,22 +31,22 @@
 ```text
 src/                        前端源码（组件 / stores / services / utils）
 test/                       前端与契约回归测试（node:test + tsx）
-server/                     早期 Vite 开发中间件（历史参考，已被 Rust 服务取代）
+server/                     早期 Node 管线；已不再挂载，保留作 Node ↔ Rust 写入对拍的基准与夹具生成器
 public/                     静态资源
-scripts/                    基准、冒烟、种子数据、视觉基线与安装包构建
+scripts/                    冒烟、对拍、基准、种子数据、视觉基线与安装包构建
 native/
   crates/guanlan-core/      领域模型、索引与只读查询
   crates/guanlan-service/   HTTP/SSE/MCP 服务与 guanlan CLI
   crates/guanlan-desktop/   Tauri v2 桌面壳
   docs/                     存储与查询 API 契约
-  testdata/                 测试夹具（由脚本生成，不入库）
+  testdata/                 双端共用的 token / 阶段向量（入库）；其余夹具由脚本生成，不入库
 ```
 
 ## 快速开始
 
 ### 环境要求
 
-- Node.js ≥ 20.19（推荐 22 LTS）与 npm
+- Node.js ≥ 22.13（CI 使用 22 LTS）：`server/` 依赖内置的 `node:sqlite`，Node 20 没有这个模块
 - Rust 1.99.1（由 `native/rust-toolchain.toml` 锁定）
 - Windows 桌面端需要 WebView2（Windows 10/11 通常已内置）
 
@@ -99,14 +99,17 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --locked --workspace
 ```
 
-端到端冒烟与基准（先构建 release CLI）：
+端到端冒烟与基准。`.ts` 脚本经 tsx 运行，都需要先构建 release 版 `guanlan`（在 `native/` 下执行 `cargo build --release --locked -p guanlan-service`）：
 
 ```bash
-node scripts/smoke-v1.ts --exe native/target/release/guanlan.exe
-node scripts/bench-f04-golden-tasks.ts
-node scripts/bench-v1.ts
-node scripts/bench-search-v1.ts
-node scripts/visual-baseline.mjs capture
+npm run seed                                             # 生成冒烟与对拍用的夹具（不入库）
+npx tsx scripts/smoke-v1.ts --exe native/target/release/guanlan.exe
+npx tsx scripts/parity-reconcile.ts --exe native/target/release/guanlan.exe   # Node ↔ Rust 写入对拍
+npx tsx scripts/bench-f04-golden-tasks.ts                # 自带千级夹具
+npx tsx scripts/seed-bench-volume.ts native/testdata/bench/workspace   # 下面两个基准共用的万级夹具
+npx tsx scripts/bench-v1.ts --exe native/target/release/guanlan.exe
+npx tsx scripts/bench-search-v1.ts --exe native/target/release/guanlan.exe
+npm run build && node scripts/visual-baseline.mjs capture   # 视觉基线：需要 dist/ 与 Chrome / Edge
 ```
 
 ## MCP 接入

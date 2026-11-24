@@ -1,6 +1,6 @@
 /* v0.7（设计增补 §1.3 H 表 / V7-D11）：下钻层与时光机色值全表迁 --cv-* 令牌 +
    color-mix（α 原值保留；暗档 = 现值原样或登记归并项，浅档 = light 块令牌值自动跟随）。
-   作用域：本文件唯一导入者 KnowledgeGraph.tsx，恒在 .dark-porthole 内渲染。
+   作用域：本文件唯一导入者 App.tsx（v0.8 总装自 KnowledgeGraph.tsx 上移），恒在 .dark-porthole 内渲染。
    走查签收项（V7-D11，Δ≤50/通道、同亮度带同色相族）：
    · 字族：#f4f3ee→ink、#b2afa9/#ada7a0/#aba298→ink-muted、#aaa4ad/#a79d91/#a9a0b9/#9AA0A6→ink-meta、
      #d0cbc4/#c5b8db→ink-3、#8e8993→ink-dim、#d7baff→lav-ink、#d4a47e/#cba684→brand-ink、#d99b52→amber-ink

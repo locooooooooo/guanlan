@@ -15,7 +15,9 @@
 //! - [`query`]：文件、事件、版本等有界查询（批次一已落地只读实现）
 //! - [`application`]：bootstrap、索引任务、diff、context（批次一已落地
 //!   bootstrap/status；任务、diff、context 属批次二/三）
-//! - [`error`]：统一错误枚举：六个错误码 + NOT_IMPLEMENTED（契约 §0.2/§2）
+//! - [`error`]：统一错误枚举：契约 §0.2 的六个错误码，加本地扩展码
+//!   （NOT_IMPLEMENTED、UNSUPPORTED_CONTENT、BAD_REQUEST、CONFLICT、MOUNT_REJECTED、
+//!   CROSS_WORKSPACE_FORBIDDEN、INTERNAL）
 //! - [`dto`]：各端点响应 DTO（serde 字段名与 contract-query-api.md 逐字对齐；
 //!   前端手工镜像：src/services/apiTypes.ts）
 

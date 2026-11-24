@@ -1,4 +1,5 @@
-//! guanlan-service CLI 入口：`guanlan serve` / `guanlan mcp`（方案 §2 main.rs、§7）。
+//! guanlan-service CLI 入口：`guanlan serve` / `scan` / `audit` / `capsule` / `storage` /
+//! `mcp`（方案 §2 main.rs、§7）。
 //!
 //! 启动流程在库入口 [`guanlan_service::start_readonly_service`]（lib.rs，与桌面壳
 //! 进程内嵌共用同一实现）。本文件只做参数解析与终端输出约定：
@@ -9,7 +10,7 @@
 //!   运行信息入库登记（实例身份/端点/接口版本，方案 §7）延后到批次二——批次一
 //!   对 index.db 零写入，登记口径只经 stderr 与 stdout 端点行承载（代码注释同义）。
 //! - `guanlan mcp`：MCP stdio 代理（契约 K）：手写 JSON-RPC 2.0 over stdio，
-//!   四工具转发到 GUANLAN_ENDPOINT/`--endpoint` 指定的服务；端点缺失 → stderr
+//!   六个工具的调用转发到 GUANLAN_ENDPOINT/`--endpoint` 指定的服务；端点缺失 → stderr
 //!   一行统一错误包络 + 退出码 1（不猜端口）。实现见 mcp/mod.rs。
 //! - `guanlan scan --root <目录>`：跑一轮整库对账（批次二写入侧）。用于命令行
 //!   手动补扫，以及与旧 Node 管线的写入对拍脚本（两侧同一套语义）。

@@ -3,7 +3,7 @@
 //! 路由清单 = contract-query-api.md §1（批次一端点）+ §2（批次二/三端点清单）。
 //! 批次一实现：处理器解析请求参数（query string / path）→ 调 `core::query` /
 //! `core::application` → `Json(响应 DTO)`；错误经 [`ApiError`] 统一转包络
-//! （契约 §0.2 六个错误码，index_generation 按当前代际补齐）。core 不依赖
+//! （契约 §0.2 六个错误码加本地扩展码，index_generation 按当前代际补齐）。core 不依赖
 //! HTTP 框架（方案 §2），故 IntoResponse 在本模块用本地新类型 [`ApiError`]
 //! 实现，而非直接为 `GuanlanError` 实现孤儿规则。
 //!
@@ -16,8 +16,8 @@
 //!
 //! 静态资源：`dist` 目录存在才挂载（`GUANLAN_DIST_DIR` → 可执行文件同级 `dist/`，
 //! 见 runtime::resolve_dist_dir）；未挂载或未知 `/api/*` 路径一律走统一错误包络
-//! 的 404。SSE（/api/v1/stream）与批次三端点维持 501 桩（契约 §2）；
-//! 批次二的索引任务端点（/api/v1/index-jobs、/api/v1/jobs/{job_id}）已交付
+//! 的 404。SSE（/api/v1/stream）已交付；批次三端点里只有 /api/v1/graph 仍是 501 桩
+//! （契约 §2）；批次二的索引任务端点（/api/v1/index-jobs、/api/v1/jobs/{job_id}）已交付
 //! （契约 §2.1）。
 
 mod projects_api;
@@ -203,8 +203,8 @@ where
     })
 }
 
-/// 组装 /api/v1 路由（PRD v2.0 长任务批次端点齐备；仅 search/graph 维持 501 桩；
-/// dist 存在才挂静态资源）。
+/// 组装 /api/v1 路由（PRD v2.0 长任务批次端点齐备；仅 graph 维持 501 桩，
+/// search 已由 C02 交付；dist 存在才挂静态资源）。
 pub fn build_router(state: AppState) -> Router {
     let api: Router<AppState> = Router::new()
         // ===== 批次一端点（契约 §1）=====

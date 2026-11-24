@@ -5,9 +5,10 @@
 //! - 端点 = `--endpoint` 参数或 `GUANLAN_ENDPOINT` env，两者皆缺 → stderr 一行
 //!   统一错误包络 + 退出码 1（不猜端口：serve 缺省 port=0 内核随机分配，端点
 //!   权威值仅在启动 stdout 的 GUANLAN_ENDPOINT 行）；
-//! - 4 工具逐字序（PRD 4.3 allowed_mcp_tools）：`guanlan.read_artifact` /
-//!   `guanlan.propose_revision` / `guanlan.resolve_decision` / `guanlan.commit_checkpoint`，
-//!   全部转发到同一工作区服务的 HTTP 等价端点（B/C/D/E）——代理不开数据库、
+//! - 6 工具：PRD 4.3 四工具逐字序（`guanlan.read_artifact` /
+//!   `guanlan.propose_revision` / `guanlan.resolve_decision` / `guanlan.commit_checkpoint`）
+//!   加 E03 `guanlan.get_context_bundle` 与 E05 `guanlan.search_workspace`，
+//!   全部转发到同一工作区服务的 HTTP 等价端点——代理不开数据库、
 //!   不扫目录、不维护另一套历史（方案 §1）；
 //! - HTTP 客户端同样手写（std::net::TcpStream 阻塞 + Connection: close）：
 //!   端点恒为本地 http（127.0.0.1），无新 crate 依赖（PRD 附则「不新增第三方 crate」）。
@@ -20,7 +21,11 @@
 //!   /revision-proposals（202）→ 有界轮询 /jobs/{id} 至终态，回报 report.proposal；
 //! - resolve_decision：statement_id/decision/confirmer → POST
 //!   /decisions/{id}/resolve（恒 202）→ 轮询至终态，回报 report.writeback（含 CAS）；
-//! - commit_checkpoint：载荷直传 → POST /checkpoints（同步 201）。
+//! - commit_checkpoint：载荷直传 → POST /checkpoints（同步 201）；
+//! - get_context_bundle：path/uri 先解析为 file_id → POST /context（Token 预算感知
+//!   上下文包，与观澜前端预览区同源）；
+//! - search_workspace：q + path_prefix/format/limit → GET /search（path_prefix 经
+//!   沙箱校验，结果里的敏感凭据路径再过滤一遍）。
 //!
 //! 协议面：initialize（回显客户端 protocolVersion，缺省钉 2024-11-05——stdio 传输
 //! 逐行 JSON 与版本无关，回显为最大兼容口径）/ initialized 通知忽略 / tools/list /
@@ -478,7 +483,7 @@ fn dispatch_request(method: &str, params: &Value, id: &Value, backend: &dyn McpB
     }
 }
 
-// ================= 工具定义（PRD 4.3 四工具） =================
+// ================= 工具定义（PRD 4.3 四工具 + E03/E05 扩展工具） =================
 
 fn tool_definitions() -> Vec<Value> {
     vec![

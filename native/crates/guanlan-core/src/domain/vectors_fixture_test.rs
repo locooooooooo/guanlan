@@ -26,7 +26,7 @@ use super::*;
 /// ```
 #[test]
 fn identity_vectors_from_fixture() {
-    // 冻结约束3：identity-vectors.json 被 .gitignore（guanlan/.gitignore:17）且由
+    // 冻结约束3：identity-vectors.json 被仓库根 .gitignore 忽略且由
     // seed-fixture.ts 生成——干净 checkout（无 seed 的 CI cargo 作业）没有该文件。
     // 缺文件时显式降级跳过而非 panic：门禁「cargo test 含无 seed 干净 checkout
     // 能过」是验收命题；身份公式本身由本文件的 SESSION_VECTORS 内嵌向量与

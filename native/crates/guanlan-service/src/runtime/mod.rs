@@ -10,7 +10,8 @@
 //! - [`generate_instance_id`]：服务实例身份（方案 §6 SSE 三元组之一；契约 §1.2
 //!   「批次一生成即可」）。
 //!
-//! 查询/索引有界队列（INDEX_BUSY，契约 §0.2）属批次二索引接入范围，届时扩展本模块。
+//! 查询侧的有界队列与饱和反馈（INDEX_BUSY，契约 §0.2）在
+//! [`crate::http::query_exec`]；写侧的任务队列在 [`crate::index_jobs`]。
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -242,7 +243,6 @@ mod tests {
 
 // ===== SSE 通知中枢（冻结契约 J：hello/workspace-change/心跳）=====
 
-/// SSE 通知中枢：写线程经 `index_jobs::SseNotice` 桥投递，本中枢广播给全部
 /// 计算工作区根目录的稳定 16 位 hex 身份键（与存储层 `default_data_dir` 同源）。
 pub fn workspace_root_key(root: &str) -> Result<String, GuanlanError> {
     guanlan_core::domain::resolve_root(root)
@@ -273,6 +273,7 @@ pub fn read_lock_diagnostics(data_dir: &Path) -> Option<String> {
     None
 }
 
+/// SSE 通知中枢：写线程经 `index_jobs::SseNotice` 桥投递，广播给全部订阅者。
 /// `/api/v1/stream` 订阅者。`notice_seq` 是传输层取号器（与业务 events.seq 无关，
 /// 方案 §6/契约 §6-6：通知传输序号独立于业务序号）。
 #[derive(Clone)]

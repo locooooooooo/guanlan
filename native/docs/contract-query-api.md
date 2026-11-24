@@ -499,24 +499,26 @@ Markdown=PRD 4.3 模式 A `<guanlan_context>` XML；payload=模式 B `guanlan-mc
 
 #### J. GET /api/v1/stream — SSE（契约 J）
 
-`text/event-stream`（axum 默认特性内 Sse+futures-core 直接依赖声明，无 features 变更、依赖树不变）。hello：`{ type:'hello', instance_id, notice_seq, index_generation }`；workspace-change：`{ type:'workspace-change', index_generation, new_events, new_revisions, at, kinds:string[]∈{'watcher','decision_writeback','proposal','l4a','state','task','candidates'(C01),'search'(C02)} }`；心跳 `: ping` 15s。发布点：watcher 提交变更 / 回写完成 / 草案受理 / L4A 完成 / 槽位或状态迁移（写线程经 IndexJobManager 桥回传）。notice_seq 为传输层取号器（独立于业务 events.seq）。监听语义（契约 §6-1）不变：watcher 只作触发核验信号、不作审计日志，版本判定永远由对账做；8s 轮询 + 1500ms 防抖 + mtime/size 增量比对（f64 读，REAL/INTEGER 双存储兼容）。
+`text/event-stream`（axum 默认特性内 Sse+futures-core 直接依赖声明，无 features 变更、依赖树不变）。hello：`{ type:'hello', instance_id, notice_seq, index_generation }`；workspace-change：`{ type:'workspace-change', index_generation, new_events, new_revisions, at, kinds:string[]∈{'watcher','decision_writeback','proposal','l4a','state','task','candidates'(C01),'search'(C02)} }`；心跳 `: ping` 15s。发布点：watcher 提交变更 / 回写完成 / 草案受理 / L4A 完成 / 槽位或状态迁移（写线程经 IndexJobManager 桥回传）。notice_seq 为传输层取号器（独立于业务 events.seq）。监听语义（契约 §6-1）不变：watcher 只作触发核验信号、不作审计日志，版本判定永远由对账做；A03 起为 OS 原生事件驱动（100ms 滑动防抖 + 220ms 合并上限），300s 兜底轮询只做 mtime stat 比对、不哈希。
 
 #### K. MCP stdio（契约 K，已交付：AC-05「外部调用 MCP 回写」承载）
 
-`guanlan mcp` 子命令（契约 K，`mcp/mod.rs`）：手写 JSON-RPC 2.0 over stdio（无 SDK，按行分隔 JSON）；手写最小 HTTP/1.1 客户端（std::net::TcpStream 阻塞 + Connection: close，Content-Length/chunked 双解码——无新 crate 依赖）。endpoint=`--endpoint` 参数或 `GUANLAN_ENDPOINT` env，两者皆缺 → stderr 一行错误包络+退出码 1（不猜端口：serve 缺省 port=0 内核随机分配，端点权威值仅在 stdout GUANLAN_ENDPOINT 行；PRD 4.3 的 39120 仅在显式 `serve --port 39120` 时成立，登记为文档值）。协议面：initialize（回显客户端 protocolVersion，缺省钉 2024-11-05）/initialized 通知忽略/tools/list/tools/call/ping；未知方法 -32601、未知工具 -32602、解析失败 -32700；工具级失败（HTTP 4xx/5xx、路径未命中、任务失败）以 isError 结果回传不断协议。4 工具（PRD 4.3 allowed_mcp_tools 逐字序，全部转发到同一服务的 HTTP 等价端点 B/C/D/E）：
+`guanlan mcp` 子命令（契约 K，`mcp/mod.rs`）：手写 JSON-RPC 2.0 over stdio（无 SDK，按行分隔 JSON）；手写最小 HTTP/1.1 客户端（std::net::TcpStream 阻塞 + Connection: close，Content-Length/chunked 双解码——无新 crate 依赖）。endpoint=`--endpoint` 参数或 `GUANLAN_ENDPOINT` env，两者皆缺 → stderr 一行错误包络+退出码 1（不猜端口：serve 缺省 port=0 内核随机分配，端点权威值仅在 stdout GUANLAN_ENDPOINT 行；PRD 4.3 的 39120 仅在显式 `serve --port 39120` 时成立，登记为文档值）。协议面：initialize（回显客户端 protocolVersion，缺省钉 2024-11-05）/initialized 通知忽略/tools/list/tools/call/ping；未知方法 -32601、未知工具 -32602、解析失败 -32700；工具级失败（HTTP 4xx/5xx、路径未命中、任务失败）以 isError 结果回传不断协议。6 工具（PRD 4.3 四工具逐字序 + E03/E05 两个扩展工具，全部转发到同一服务的 HTTP 等价端点）：
 - `guanlan.read_artifact`：path/uri（guanlan://<相对路径>）→ GET /files?q= 精确匹配 → GET /revisions/{id}/content（md/svg 内联 text；413 超预算回退 raw=1 纯文本；pdf 返回 raw_url 指引）；
 - `guanlan.propose_revision`：content + file_id|path（base 缺省取当前版）→ POST /revision-proposals（202）→ 有界轮询 /jobs/{id}（300ms×33≈10s 封顶）回报 report.proposal；
 - `guanlan.resolve_decision`：POST /decisions/{id}/resolve（恒 202）→ 同轮询回报 report.writeback（含 CAS 分支）；
-- `guanlan.commit_checkpoint`：载荷直传 POST /checkpoints（同步 201）。
-测试：`mcp/mcp_tests.rs` 22 例（协议面/四工具转发逐字断言/HTTP 客户端对真实本地 TCP 服务端到端/端点解析）。
+- `guanlan.commit_checkpoint`：载荷直传 POST /checkpoints（同步 201）；
+- `guanlan.get_context_bundle`（E03）：POST /context，Token 预算感知的上下文包；
+- `guanlan.search_workspace`（E05）：GET /search，敏感凭据路径在代理侧二次过滤。
+测试：`mcp/mcp_tests.rs` 27 例（协议面/六工具转发逐字断言/HTTP 客户端对真实本地 TCP 服务端到端/端点解析）。
 
 ### 2.2.1 A05 身份保真文件操作（已交付）
 
-经唯一写入线程串行同步执行（磁盘操作 + 单 SQLite 写事务原子落账），成功后推进 `index_generation` 并通过 SSE `workspace-change` 广播 `kinds:["file_op","state"]`；写线程繁忙超 15s 返回 `503 INDEX_BUSY`。
+经唯一写入线程串行同步执行（磁盘操作 + 单 SQLite 写事务原子落账），成功后推进 `index_generation` 并通过 SSE `workspace-change` 广播 `kinds:["file_op","state"]`；写线程繁忙时等待回执超时返回 `503 INDEX_BUSY`（单文件操作 5s，文件夹操作 10s，批量操作 15s）。
 
 - `POST /api/v1/files/{file_id}/rename` body `{ new_name }` — 同目录原子重命名；拒绝 `..`/斜杠/盘符/冒号/控制符/点号隐藏名/Windows 保留名及不兼容格式扩展名变更（`400 BAD_REQUEST`），目标已存在返回 `409 CONFLICT`。
 - `POST /api/v1/files/{file_id}/move` body `{ target_dir, new_name? }` — 工作区边界内安全跨目录移动（`target_dir=""` 或 `"."` 为工作区根；缺失子目录在工作区安全边界内自动创建；拒绝逃逸符号链接、点号隐藏目录与 `DEFAULT_EXCLUDED` 排除目录）。
-- `POST /api/v1/files/{file_id}/trash` body `{ confirm: true }` — **仅移入操作系统回收站**（Windows `SHFileOperationW` `FOF_ALLOWUNDO` / macOS Trash / Linux FreeDesktop Trash），强制要求 `confirm: true`（否则 `400 BAD_REQUEST`），严禁任何永久物理删除 API。将 `files.status` 置为 `trashed`；从系统回收站还原后下轮对账经 `files` / `path_aliases` / 同哈希候选自动重连原 `file_id`。
+- `POST /api/v1/files/{file_id}/trash` body `{ confirm: true }` — **仅移入操作系统回收站**（Windows COM `IFileOperation` + `FOFX_RECYCLEONDELETE`，回收站不可用时失败而不永久删除 / macOS Trash / Linux FreeDesktop Trash），强制要求 `confirm: true`（否则 `400 BAD_REQUEST`），严禁任何永久物理删除 API。将 `files.status` 置为 `trashed`；从系统回收站还原后下轮对账经 `files` / `path_aliases` / 同哈希候选自动重连原 `file_id`。
 - **统一响应（`FileMutationResponse`，HTTP 200）**：`{ ok:true, operation:"file_renamed"|"file_moved"|"file_trashed", file_id, old_path, new_path:string|null, title, role, status:"active"|"trashed", event_id, index_generation, trash_recoverable:boolean }`。
 
 ### 2.2.2 B01 全格式查询、存储统计与三档配额策略（已交付）

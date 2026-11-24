@@ -31,7 +31,8 @@ pub struct ServeConfig {
     /// 桌面壳模式：为 Tauri WebView（http(s)://tauri.localhost）与本机开发端口放行
     /// CORS。CLI serve 同源访问不需要，保持默认 false 不改变现有行为。
     pub cors_desktop: bool,
-    /// 后台增量索引（PRD v2.0 §3.4）：启用后启动 File Watcher（轮询 + 1500ms 防抖），
+    /// 后台增量索引（PRD v2.0 §3.4）：启用后启动 File Watcher（OS 原生事件驱动，
+    /// 100ms 滑动防抖 + 220ms 合并上限，见 [`watcher`]），
     /// 并在启动时入队一次整库核验，让「打开即见已存数据、后台并入最新改动」成立。
     ///
     /// 默认 **关闭**，因为它会写库：`guanlan serve` 的既有契约是「打开已有数据零扫描」
@@ -122,7 +123,8 @@ impl Drop for RunningService {
 }
 
 /// 按 [`ServeConfig`] 启动只读/多项目服务（与 `guanlan serve` 同一流程）：
-/// 数据目录解析 → index.db 存在性门禁 → 工作区排他锁 → 只读认领 → 绑定 → 路由。
+/// 数据目录解析 → 工作区排他锁 → 可写库就位（建库或确保 schema 与工作区行）→
+/// 写线程与通知桥 → 只读连接池认领 → 绑定 127.0.0.1 → 路由 → 后台对账入队。
 /// 成功即已开始监听；调用方持有 [`RunningService`] 维持运行。
 pub async fn start_readonly_service(cfg: ServeConfig) -> Result<RunningService, GuanlanError> {
     start_service_with_projects_file(cfg, projects::default_projects_file_path()).await
