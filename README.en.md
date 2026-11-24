@@ -2,7 +2,7 @@
 
 [简体中文](README.md) | **English**
 
-> Find what changed on the timeline. Find out why in the relations. Understand it in the reader.
+> Chronos keeps time. Guanlan reveals the trace. Every change and decision stays accountable.
 
 Guanlan is a **local-first, zero lock-in** file workbench. It builds a traceable timeline and version snapshots for any directory, ties decisions to the evidence behind them with a relation map and evidence anchors, and ships an all-format reader plus an MCP context base for coding agents.
 
@@ -13,12 +13,24 @@ The detailed documentation under `docs/` is written in Chinese, and so is the [C
 ## Features
 
 - **Timeline, calendar, star map and Atlas views** of the same workspace, by when things happened, how active they were and how they relate.
-- **Version time machine**: deduplicated snapshots with SHA-256 content hashes, version chains, diffs, and resuming a document at the version you were reading.
-- **All-format reader**: Markdown, Office (DOCX/XLSX/PPTX), PDF, SVG, images and plain text or code, plus an **HTML sandbox with no same-origin access** (offline CSP; HTTPS links can be allowed on demand).
+- **All-format version time machine**: deduplicated snapshots with SHA-256 content hashes, version chains, format-aware diffs across Markdown, SVG, CSV/TSV, XLSX workbooks and all UTF-8 text/source formats, plus resuming a document at the version you were reading.
+- **All-format reader**: Markdown, Office (DOCX/XLSX/PPTX), PDF, SVG, images and plain text or code, plus an **HTML sandbox with no same-origin access** (offline CSP; HTTPS links can be allowed on demand), wrapped in a compact single-row reader header.
 - **Read / unread and the Reading Island**: recursive unread counts in the folder tree, marking one file or a whole folder as read or unread, a double-ring marker on documents updated since you read them, and bookmarks and annotations that are never lost.
 - **Decisions anchored to evidence**: decisions, evidence pointers, versions and document sections are bound into a causal chain you can audit.
 - **Safe context over MCP**: exposes a restricted set of local context tools to MCP-capable agents over stdio, with no arbitrary path download.
-- **Desktop app**: a single Tauri v2 package (embedded Rust service and CLI sidecar) with Windows MSI and NSIS installers.
+- **Light & dark themes, responsive layout & accessibility**: switchable light/dark themes, keyboard navigation and `Esc` dismissal for overlays, touch-friendly targets (≥ 44px), WCAG AA contrast, and offline / SSE disconnect recovery prompts.
+- **Desktop app & in-app updates**: a single Tauri v2 package (embedded Rust service and CLI sidecar) with Windows NSIS and MSI installers, plus a manual **Settings → About → Check for updates** flow (never polls in the background; see [auto-update](docs/subsystems/release-pipeline.md#自动更新), Chinese).
+
+## Download & install (Windows)
+
+Download installers and checksums from [GitHub Releases](https://github.com/locooooooooo/guanlan/releases):
+
+- `Guanlan_<version>_x64-setup.exe`: NSIS installer; registers the Windows Explorer “Open this folder with Guanlan” context menu (recommended; supports in-app updates once a release update endpoint is configured).
+- `Guanlan_<version>_x64_zh-CN.msi`: MSI installer.
+- `guanlan-cli-<version>-x86_64-pc-windows-msvc.exe`: standalone CLI and MCP stdio proxy; rename to `guanlan.exe` and add to `PATH`.
+- `SHA256SUMS`: SHA-256 checksums for the three binaries above.
+
+> Installers are not code-signed yet, so Windows may show an unknown publisher warning on first run. Windows 10/11 requires WebView2 (usually preinstalled; the installer embeds the bootstrapper).
 
 ## Tech stack
 
@@ -142,7 +154,7 @@ MCP exposes an allow-list of tools only and never reads arbitrary paths; if the 
 - **Nothing is written to your working directory without your confirmation.** Guanlan never writes, renames or moves your files on its own. The exceptions are the operations you trigger explicitly in the UI, or an agent triggers with authorization: rename, move, move to the system recycle bin, writing a resolved decision back into the document, adopting a revision draft, and writing an MCP host config. Each of them has a human confirmation, optimistic concurrency and path validation. The list is in [workspace writes](docs/subsystems/workspace-writes.md) (Chinese).
 - Deletion only moves files to the system recycle bin. There is no permanent deletion.
 - Indexes and snapshots stay in the local data directory. Uninstalling the app does not delete the files in your workspace.
-- No telemetry and no cloud sync. A sandboxed HTML page makes outbound requests only after you explicitly turn on “allow HTTPS links”.
+- No telemetry and no cloud sync. Outbound network requests only happen when you explicitly turn on “allow HTTPS links” inside a sandboxed HTML page, or when you manually click “Check for updates” in About once an update endpoint is configured (production builds ship with no update endpoint configured and do not make update requests).
 
 ## Contracts
 
