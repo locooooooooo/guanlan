@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { ArrowRight, BookMarked, CalendarDays, Check, Hourglass, Layers, Orbit, Sparkles } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BookMarked, CalendarDays, Check, Hourglass, Layers, Orbit, RotateCw } from 'lucide-react';
 import type {
   DecisionAssertion,
   FileFormat,
@@ -38,6 +38,7 @@ import {
 } from '../utils/taskPackages';
 import type { PackageDoc, TaskPackage } from '../utils/taskPackages';
 import { localDay } from '../utils/timeFormat';
+import { BRAND_SLOGAN, BRAND_SLOGAN_NOTE } from '../utils/brandIdentity';
 // v0.6 品牌界面升级 + V07 coss Frame/CardFrame 容器
 import { Button, IconButton } from './ui/primitives';
 import { Badge, CardFrame, Frame, FramePanel } from './ui';
@@ -99,6 +100,11 @@ interface HomeViewProps {
     onOpenCrossDecision: (item: CrossProjectDecisionItemDto) => void;
     onOpenCrossFile: (item: CrossProjectRecentFileDto) => void;
   };
+  /** 后端连接状态与错误重试（断连时诚实显示错误态，绝不伪装成空工作区） */
+  dataSource?: 'loading' | 'real' | 'error';
+  dataError?: string | null;
+  retryingConnection?: boolean;
+  onRetryConnection?: () => void;
 }
 
 /** 当前版本解析：与 AtlasView/RightInspector 同款口径（current_revision_id 优先，缺失取末版） */
@@ -264,6 +270,10 @@ const HomeView: React.FC<HomeViewProps> = ({
   stateOverview,
   systemActions,
   multiProject,
+  dataSource = 'real',
+  dataError = null,
+  retryingConnection = false,
+  onRetryConnection,
 }) => {
   const { greeting, dateLabel } = greetingHeader();
 
@@ -412,43 +422,65 @@ const HomeView: React.FC<HomeViewProps> = ({
   // 「日历看该日」次级入口落点：最近一个有事件的直跳日（无则不渲染入口）
   const calendarJumpDate = useMemo(() => latestJumpableTrendDate(trendBars), [trendBars]);
 
+  if (dataSource === 'error' && files.length === 0) {
+    return (
+      <div className="depth-0-surface relative flex-1 min-h-0 overflow-y-auto">
+        <div className="mx-auto flex min-h-full w-full max-w-2xl items-center justify-center px-4 py-10 sm:px-6">
+          <div
+            role="alert"
+            data-home-error-state=""
+            className="depth-2-card w-full p-6 space-y-4"
+          >
+            <div className="flex items-start gap-3">
+              <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-[var(--r-ctl)] bg-[color:color-mix(in_srgb,var(--stage-ink-exec)_12%,transparent)] text-[color:var(--stage-ink-exec-text)]">
+                <AlertTriangle className="size-4" aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1 space-y-1">
+                <h1 className="text-[length:var(--text-item-title)] font-semibold text-[color:var(--ink-strong)]">
+                  工作区数据暂无法加载
+                </h1>
+                <p className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-soft)] break-words">
+                  {dataError || '无法连接观澜读服务，请检查服务运行状态后重试。'}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {onRetryConnection && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={retryingConnection}
+                  aria-busy={retryingConnection}
+                  onClick={onRetryConnection}
+                >
+                  <RotateCw className={`size-3.5 ${retryingConnection ? 'animate-spin' : ''}`} aria-hidden="true" />
+                  <span>{retryingConnection ? '重试中…' : '重试加载'}</span>
+                </Button>
+              )}
+              <Button variant="secondary" size="sm" onClick={onOpenPanorama}>
+                <Orbit className="size-3.5" aria-hidden="true" />
+                <span>查看全景</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="depth-0-surface relative flex-1 min-h-0 overflow-y-auto">
-      {/* 首页顶部氛围涟漪水印：呼应观澜品牌同心圆波纹，赋予首屏空间纵深感（纯装饰、不阻断交互） */}
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 600 320"
-        fill="none"
-        className="pointer-events-none absolute right-0 top-0 h-[300px] w-[580px] opacity-[0.42] select-none"
-      >
-        <circle cx="470" cy="40" r="240" stroke="url(#guanlan-hero-ring)" strokeWidth="1" strokeDasharray="3 7" className="glx-ripple-breathe-slow" />
-        <circle cx="470" cy="40" r="172" stroke="url(#guanlan-hero-ring)" strokeWidth="1" className="glx-ripple-breathe" />
-        <circle cx="470" cy="40" r="108" stroke="url(#guanlan-hero-ring)" strokeWidth="1" strokeOpacity="0.65" className="glx-ripple-breathe-slow" />
-        <circle cx="470" cy="40" r="46" fill="url(#guanlan-hero-core)" className="glx-ripple-breathe" />
-        <defs>
-          <linearGradient id="guanlan-hero-ring" x1="230" y1="0" x2="580" y2="260" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#7C6FD0" stopOpacity="0.45" />
-            <stop offset="0.55" stopColor="#ED8A50" stopOpacity="0.32" />
-            <stop offset="1" stopColor="#4A7DAF" stopOpacity="0.06" />
-          </linearGradient>
-          <radialGradient id="guanlan-hero-core" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(470 40) rotate(90) scale(46)">
-            <stop stopColor="#7C6FD0" stopOpacity="0.22" />
-            <stop offset="1" stopColor="#7C6FD0" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-      </svg>
-
       {/* V07：对称居中画布（ReadingIsland 已于 V02 收编顶栏，取消右侧多余 pr-16 留白） */}
-      <div className="relative mx-auto w-full max-w-6xl space-y-6 px-6 pb-14 pt-7">
-        {/* 刊物级问候头 + 实时工作区脉搏胶囊 + 双快捷入口 */}
+      <div className="relative mx-auto w-full max-w-6xl space-y-6 px-4 pb-14 pt-6 sm:px-6 sm:pt-7">
+        {/* 问候头 + 工作区状态胶囊 + 快捷入口 */}
         <header
           className="glx-hero-reveal flex flex-wrap items-end justify-between gap-4"
           style={{ '--glx-stagger': 0 } as React.CSSProperties}
         >
-          <div className="min-w-0">
+          <div className="min-w-0 max-w-full">
             <div className="mb-1.5 flex flex-wrap items-center gap-2">
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-card/85 px-3 py-1 text-[11px] leading-none font-medium text-[color:var(--ink-soft)] shadow-xs backdrop-blur">
-                <Sparkles className="size-3 text-[color:var(--accent-iris-deep)]" aria-hidden="true" />
+              <div className="inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-border/80 bg-card px-3 py-1 text-[length:var(--text-micro)] leading-none font-medium text-[color:var(--ink-soft)]">
+                <CalendarDays className="size-3 shrink-0 text-[color:var(--accent-iris-deep)]" aria-hidden="true" />
                 <span className="whitespace-nowrap">{dateLabel}</span>
                 {multiProject && multiProject.projects.length > 1 && (
                   <>
@@ -512,8 +544,16 @@ const HomeView: React.FC<HomeViewProps> = ({
             <h1 className="font-serif-claude text-[length:var(--text-display)] leading-[var(--lh-display)] font-bold tracking-[-0.025em] text-[color:var(--ink-strong)]">
               {greeting}。
             </h1>
+            <p
+              data-brand-slogan=""
+              className="mt-1 text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)] text-[color:var(--ink-soft)]"
+            >
+              <span className="font-medium text-[color:var(--ink-strong)]">{BRAND_SLOGAN}</span>
+              <span aria-hidden="true" className="mx-1.5 opacity-40">·</span>
+              <span>{BRAND_SLOGAN_NOTE}</span>
+            </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {onOpenChronosDigest && (
               <Button
                 variant="secondary"
@@ -654,14 +694,14 @@ const HomeView: React.FC<HomeViewProps> = ({
                           {entry.title}
                         </span>
                         {entry.dirPrefix && (
-                          <span className="block truncate font-mono text-[10.5px] leading-4 text-muted-foreground">
+                          <span className="block truncate font-mono text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-muted-foreground">
                             {entry.dirPrefix}
                           </span>
                         )}
                       </button>
                       <span
                         aria-hidden="true"
-                        className="hidden sm:inline-flex shrink-0 items-center gap-0.5 font-mono text-[10.5px] text-[color:var(--accent-iris-deep)] opacity-0 group-hover:opacity-100 motion-safe:transition-opacity"
+                        className="hidden sm:inline-flex shrink-0 items-center gap-0.5 font-mono text-[length:var(--text-micro)] text-[color:var(--accent-iris-deep)] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 motion-safe:transition-opacity"
                       >
                         续读
                         <ArrowRight className="size-3" />
@@ -744,17 +784,14 @@ const HomeView: React.FC<HomeViewProps> = ({
                 const barCore = (
                   <>
                     <div
-                      className="glx-bar-rise w-full rounded-t-[7px] motion-safe:transition-all group-hover/bar:brightness-110 group-hover/bar:scale-x-105"
+                      className="glx-bar-rise w-full rounded-t-[var(--r-ctl)] motion-safe:transition-opacity group-hover/bar:opacity-90"
                       style={
                         {
                           '--glx-bar-idx': idx,
                           height: `${heightPct}%`,
-                          backgroundImage: isPeak
-                            ? 'linear-gradient(180deg, #ED8A50 0%, #C25E4C 100%)'
-                            : 'linear-gradient(180deg, rgba(124,111,208,0.90) 0%, rgba(74,125,175,0.68) 100%)',
-                          boxShadow: isPeak
-                            ? '0 6px 16px -2px rgba(217, 119, 87, 0.42)'
-                            : undefined,
+                          backgroundColor: isPeak
+                            ? 'var(--accent-wave)'
+                            : 'var(--accent-iris-deep)',
                           opacity: g.count > 0 ? 1 : 0.22,
                         } as React.CSSProperties
                       }

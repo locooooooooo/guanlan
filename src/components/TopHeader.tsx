@@ -34,6 +34,8 @@ import { ShortcutsCheatSheetModal } from './ShortcutsCheatSheetModal';
 import type { ReadingStateMap } from '../utils/readingStateStore';
 import { formatRelativeObservedAt } from '../utils/timeFormat';
 import { formatLabel } from '../utils/formatMeta';
+import { BRAND_NAME, BRAND_SLOGAN } from '../utils/brandIdentity';
+import { BrandMark } from './BrandMark';
 // 存储容错：渲染路径禁止裸读 localStorage（阻止所有 Cookie 等环境首访即抛
 // SecurityError，TopHeader 渲染失败=App 整树白屏）
 import { safeStorageGet } from '../utils/safeStorage';
@@ -143,22 +145,9 @@ interface TopHeaderProps {
   onMarkReadingBaselineFromIsland?: () => Promise<boolean> | void;
 }
 
-/* 品牌徽（品牌口径 方向 C）：与桌面图标同源的涟漪圆徽缩小版——澜墨底＋纸白中心点＋
-   双圈衰减线稿。衰减序列 α 1.0/.59/.31 取自 gen-icon.mjs:13-17（品牌最高触点的既有
-   语法升格，不新造语言）；线稿双圈＝规范 §6.5 空态同款；静态不动画（P1 静——
-   ping 600ms 语法只属于未读/新变化提示，不属品牌位）。 */
-const BrandMark: React.FC = () => (
-  <span
-    aria-hidden="true"
-    className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[color:var(--ink-anchor)] shadow-[0_2px_8px_rgba(17,32,48,0.28),inset_0_1px_0_rgba(255,255,255,0.2)] group-hover:scale-105 motion-safe:transition-transform"
-  >
-    <svg viewBox="0 0 20 20" fill="none" className="size-4" aria-hidden="true">
-      <circle cx="10" cy="10" r="8.6" stroke="var(--paper-on-ink)" strokeOpacity="0.32" strokeWidth="1" />
-      <circle cx="10" cy="10" r="5.6" stroke="var(--paper-on-ink)" strokeOpacity="0.62" strokeWidth="1.1" />
-      <circle cx="10" cy="10" r="2.1" fill="var(--paper-on-ink)" />
-    </svg>
-  </span>
-);
+/* 品牌徽见 ./BrandMark.tsx：与桌面壳图标同源的司辰星盘沙漏徽
+   （银白新月星轨 + 12 点权杖指针 + 暖琥珀流沙漏），由 src/utils/brandIdentity.ts
+   的品牌口径驱动顶栏标题与 Slogan。 */
 
 export const TopHeader: React.FC<TopHeaderProps> = ({
   activeTab,
@@ -293,13 +282,20 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
   useEffect(() => {
     if (!isHelpOpen) return;
+    const handleDocMouseDown = (e: MouseEvent) => {
+      if (helpRootRef.current && !helpRootRef.current.contains(e.target as Node)) {
+        setIsHelpOpen(false);
+      }
+    };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.stopPropagation();
       setIsHelpOpen(false);
     };
+    document.addEventListener('mousedown', handleDocMouseDown);
     document.addEventListener('keydown', handleKeyDown);
     return () => {
+      document.removeEventListener('mousedown', handleDocMouseDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [isHelpOpen]);
@@ -367,27 +363,37 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 label: '未选择目录',
               }
         : dataSource === 'real'
-          ? {
-              stage: fresh || !scannedAt ? 'deliver' : 'decision',
-              dotColor: fresh || !scannedAt ? 'var(--stage-ink-deliver)' : 'var(--stage-ink-decision)',
-              textColor: fresh || !scannedAt ? 'var(--stage-ink-deliver-text)' : 'var(--stage-ink-decision-text)',
-              tintBg:
-                fresh || !scannedAt
-                  ? 'color-mix(in srgb, var(--stage-ink-deliver) 9%, var(--card))'
-                  : 'color-mix(in srgb, var(--stage-ink-decision) 9%, var(--card))',
-              borderTint:
-                fresh || !scannedAt
-                  ? 'color-mix(in srgb, var(--stage-ink-deliver) 28%, transparent)'
-                  : 'color-mix(in srgb, var(--stage-ink-decision) 32%, transparent)',
-              title: `${config.rootPath} · ${scanSummary} · 共 ${config.enumSnapshot.totalCount} 份\n${
-                scannedAt
-                  ? watcherEnabled
-                    ? `最后一次索引：${scannedAt}（${freshnessShort} · 已开启后台监听）`
-                    : `最后一次索引：${scannedAt}（${freshnessShort} · 点击右侧可重扫）`
-                  : '尚未扫描工作区'
-              }`,
-              label: '已同步',
-            }
+          ? isScanning
+            ? {
+                stage: 'decision',
+                dotColor: 'var(--accent-iris-deep)',
+                textColor: 'var(--accent-iris-ink)',
+                tintBg: 'color-mix(in srgb, var(--accent-iris) 10%, var(--card))',
+                borderTint: 'color-mix(in srgb, var(--accent-iris) 30%, transparent)',
+                title: '正在扫描工作区，把最新文档并入索引…',
+                label: '扫描中…',
+              }
+            : {
+                stage: fresh || !scannedAt ? 'deliver' : 'decision',
+                dotColor: fresh || !scannedAt ? 'var(--stage-ink-deliver)' : 'var(--stage-ink-decision)',
+                textColor: fresh || !scannedAt ? 'var(--ink-soft)' : 'var(--stage-ink-decision-text)',
+                tintBg:
+                  fresh || !scannedAt
+                    ? 'transparent'
+                    : 'color-mix(in srgb, var(--stage-ink-decision) 9%, var(--card))',
+                borderTint:
+                  fresh || !scannedAt
+                    ? 'transparent'
+                    : 'color-mix(in srgb, var(--stage-ink-decision) 32%, transparent)',
+                title: `${config.rootPath} · ${scanSummary} · 共 ${config.enumSnapshot.totalCount} 份\n${
+                  scannedAt
+                    ? watcherEnabled
+                      ? `最后一次索引：${scannedAt}（${freshnessShort} · 已开启后台监听）`
+                      : `最后一次索引：${scannedAt}（${freshnessShort} · 点击右侧可重扫）`
+                    : '尚未扫描工作区'
+                }`,
+                label: '已同步',
+              }
           : dataSource === 'error'
             ? {
                 stage: 'exec',
@@ -413,13 +419,44 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
     const isLiveSynced =
       (!desktopGateStatus || desktopGateStatus === 'ready') &&
       dataSource === 'real' &&
+      !isScanning &&
       (fresh || !scannedAt);
+    const isCalmSynced = isLiveSynced;
+
+    if (isCalmSynced) {
+      // 常态已同步保持静默：仅以轻刷新图标 + 极微弱状态点呈现，悬浮可见完整同步详情；
+      // 仅在扫描中/滞后/未连接/异常时展开完整状态标签。
+      return (
+        <Group
+          aria-label="工作区同步状态"
+          data-header-sync-group=""
+          className="h-7 shrink-0 border-0 bg-transparent shadow-none"
+        >
+          <button
+            type="button"
+            onClick={() => onRescan?.()}
+            disabled={rescanDisabled}
+            aria-label="重新扫描"
+            title={`${syncMeta.title}${scannedAt ? `\n最近同步：${freshnessShort}` : ''}\n点击重新扫描工作区`}
+            className="group/refresh relative inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] disabled:cursor-not-allowed disabled:opacity-40 motion-safe:transition-colors"
+          >
+            <RefreshCw className="size-3.5 shrink-0 motion-safe:transition-transform group-hover/refresh:rotate-45" />
+            <span
+              aria-hidden="true"
+              className="absolute right-1.5 top-1.5 size-1.5 rounded-full"
+              style={{ backgroundColor: syncMeta.dotColor }}
+            />
+            <span className="sr-only">{syncMeta.label}</span>
+          </button>
+        </Group>
+      );
+    }
 
     return (
       <Group
         aria-label="工作区同步状态"
         data-header-sync-group=""
-        className="h-7 shrink-0 overflow-hidden rounded-lg border shadow-xs motion-safe:transition-shadow hover:shadow-sm"
+        className="h-7 shrink-0 overflow-hidden rounded-lg border shadow-xs motion-safe:transition-colors hover:shadow-sm"
         style={{
           backgroundColor: syncMeta.tintBg,
           borderColor: syncMeta.borderTint,
@@ -434,7 +471,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         >
           <span
             aria-hidden="true"
-            className={`size-1.5 shrink-0 rounded-full ${isLiveSynced ? 'glx-live-dot' : ''}`}
+            className={`size-1.5 shrink-0 rounded-full ${isScanning ? 'animate-pulse' : ''}`}
             style={{ backgroundColor: syncMeta.dotColor, color: syncMeta.dotColor }}
           />
           <span className="whitespace-nowrap">{syncMeta.label}</span>
@@ -458,11 +495,11 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   };
 
   return (
-    <header className="relative z-30 select-none bg-background/85 dark:bg-background/90 backdrop-blur-2xl text-[color:var(--ink-strong)] border-b border-border/80 shadow-[0_6px_24px_-14px_rgba(38,36,61,0.10)] dark:shadow-[0_6px_24px_-14px_rgba(0,0,0,0.45)]">
-      {/* V07 顶栏紧凑布局（高＝--chrome-h 52px；1280px/1440px 全程零折行） */}
-      <div className="flex items-center justify-between gap-2 px-3.5 h-[var(--chrome-h)] min-w-0">
+    <header className="relative z-30 select-none bg-background dark:bg-background text-[color:var(--ink-strong)] border-b border-border">
+      {/* V07 顶栏紧凑布局（lg 以上单行 --chrome-h 52px；窄屏与 200% 缩放自动折行零裁切） */}
+      <div className="flex flex-wrap lg:flex-nowrap items-center justify-between gap-x-2 gap-y-1.5 px-2.5 sm:px-3.5 py-1.5 lg:py-0 min-h-[var(--chrome-h)] lg:h-[var(--chrome-h)] min-w-0 max-w-full">
         {/* Left Zone: 目录栏开关 + Brand Breadcrumb + 工作区切换 + 工作区页签 */}
-        <div className="flex items-center gap-1.5 min-w-0">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 min-w-0 max-w-full">
           {onToggleSidebar && (
             <IconButton
               label={sidebarCollapsed ? '展开左侧目录栏' : '收起左侧目录栏'}
@@ -470,7 +507,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               aria-pressed={!sidebarCollapsed}
               data-toggle-directory-sidebar=""
               onClick={onToggleSidebar}
-              className="cursor-pointer !size-7 !rounded-[8px] shrink-0"
+              className="cursor-pointer !size-7 !rounded-[var(--r-ctl)] shrink-0"
             >
               {sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
             </IconButton>
@@ -481,25 +518,31 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               e.preventDefault();
               onSelectTab('home');
             }}
-            title="观澜 X-Ray · 返回今日首页"
+            title={`${BRAND_NAME} · ${BRAND_SLOGAN} · 返回今日首页`}
+            aria-label={`${BRAND_NAME}，${BRAND_SLOGAN}，返回今日首页`}
             className="flex items-center gap-1.5 whitespace-nowrap shrink-0 group cursor-pointer"
           >
-            <BrandMark />
-            <span className="text-[13.5px] leading-5 font-semibold tracking-tight text-[color:var(--ink-strong)] group-hover:text-[color:var(--accent-iris-deep)] motion-safe:transition-colors">
-              观澜
+            <BrandMark size="sm" />
+            <span className="flex flex-col leading-none">
+              <span className="whitespace-nowrap text-[length:var(--text-ui-body)] leading-[16px] font-semibold tracking-tight text-[color:var(--ink-strong)] group-hover:text-[color:var(--accent-iris-deep)] motion-safe:transition-colors">
+                {BRAND_NAME}
+              </span>
+              <span className="hidden xl:block whitespace-nowrap text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-medium tracking-tight text-[color:var(--ink-soft)]">
+                {BRAND_SLOGAN}
+              </span>
             </span>
           </a>
 
           {/* A02：当前工作区与多工作区秒切菜单 */}
           {(config.rootPath || desktopWorkspaceSupported) && (
-            <div className="relative shrink-0" ref={workspaceMenuRef}>
+            <div className="relative min-w-0 shrink-0" ref={workspaceMenuRef}>
               <button
                 type="button"
                 data-workspace-switcher
                 aria-expanded={isWorkspaceMenuOpen}
                 onClick={() => setIsWorkspaceMenuOpen((v) => !v)}
                 title={config.rootPath || '管理与切换项目文件夹'}
-                className="flex items-center gap-1 max-w-[144px] h-7 rounded-lg border border-border bg-card/85 hover:bg-card hover:border-ring/40 px-2 text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-strong)] shadow-xs cursor-pointer motion-safe:transition-colors"
+                className="flex items-center gap-1 max-w-[112px] sm:max-w-[144px] h-7 rounded-[var(--r-ctl)] border border-border bg-card hover:border-ring/40 px-2 text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-strong)] cursor-pointer motion-safe:transition-colors overflow-hidden"
               >
                 <FolderOpen className="w-3 h-3 shrink-0 text-[color:var(--accent-iris-deep)]" />
                 <span className="truncate font-medium">
@@ -751,12 +794,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             </div>
           )}
 
-          {/* 工作区页签：首页 / 全景溯源{事件数} / 知识资产库{资料总数+未读橙点}
-              ——Tabs 组件（§4.2 标线为界，去 glass-chip 填充容器；idle 字 soft、
-              标线 --ink-anchor 由组件令牌承担）。
-              未读点不使用 TabItem.dot：title 口径「未读 N 份（…）」是 §7.3 锁定文案，
-              primitives 不在本批三文件范围，故点随 label 由本文件渲染（6px
-              --accent-wave 恒 α1.0，与组件点同语法）。 */}
+          {/* 工作区页签：首页 / 全景溯源 / 知识资产库（去掉 20272 / 5588 等超大常驻数字，悬停 title 查看总量） */}
           <Tabs
             ariaLabel="主视图切换"
             active={activeTab}
@@ -764,22 +802,28 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             className="shrink-0"
             items={[
               { key: 'home', label: <span>首页</span> },
-              { key: 'panorama', label: <span>全景溯源</span>, count: eventCount },
+              {
+                key: 'panorama',
+                label: (
+                  <span title={`全景溯源 · 共 ${eventCount} 条事件`}>
+                    全景溯源
+                  </span>
+                ),
+              },
               {
                 key: 'library',
                 label: (
-                  <>
+                  <span
+                    className="inline-flex items-center"
+                    title={
+                      unreadFilesCount > 0
+                        ? `知识资产库 · 共 ${config.enumSnapshot.totalCount} 份 · 未读 ${unreadFilesCount} 份（${unreadStatusLabel('never_read')} / ${unreadStatusLabel('updated_since_last_read')}）`
+                        : `知识资产库 · 共 ${config.enumSnapshot.totalCount} 份`
+                    }
+                  >
                     <span>知识资产库</span>
-                    {unreadFilesCount > 0 && (
-                      <span
-                        className="ml-1 inline-block size-1.5 rounded-full bg-[color:var(--accent-wave)]"
-                        /* R3：范围说明由 GL-01 三态原文拼出，不再写死「N 处未读」 */
-                        title={`未读 ${unreadFilesCount} 份（${unreadStatusLabel('never_read')} / ${unreadStatusLabel('updated_since_last_read')}）`}
-                      />
-                    )}
-                  </>
+                  </span>
                 ),
-                count: config.enumSnapshot.totalCount,
               },
             ]}
           />
@@ -807,11 +851,11 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         <Toolbar
           aria-label="顶栏操作工具栏"
           data-header-clusters=""
-          className="shrink-0 !gap-1 !rounded-none !border-0 !bg-transparent !p-0 !shadow-none"
+          className="flex flex-wrap lg:flex-nowrap items-center max-w-full lg:shrink-0 !gap-1 !rounded-none !border-0 !bg-transparent !p-0 !shadow-none"
         >
           {/* ── 核心行动组：检索 ⌘K · 未决决策雷达 · 批阅（高频主行动） ── */}
           <div
-            className="flex items-center gap-1"
+            className="flex flex-wrap sm:flex-nowrap items-center gap-1 max-w-full"
             data-header-cluster="primary"
             role="group"
             aria-label="核心行动"
@@ -819,13 +863,13 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             {/* Compact Search Box */}
             <div className="relative">
               <div
-                className={`glass-input flex h-7 items-center rounded-lg px-2 motion-safe:transition-all ${
+                className={`glass-input flex h-7 items-center rounded-[var(--r-ctl)] px-2 focus-within:border-[color:var(--ring)] focus-within:ring-2 focus-within:ring-[color:color-mix(in_srgb,var(--ring)_35%,transparent)] motion-safe:transition-all ${
                   isSearchExpanded || searchQuery
-                    ? 'w-40 border-[color:var(--accent-iris)] ring-2 ring-[color:color-mix(in_srgb,var(--accent-iris)_16%,transparent)]'
-                    : 'w-[92px] xl:w-[108px] hover:border-[color:var(--btn-secondary-border-hover)]'
+                    ? 'w-36 sm:w-40 border-[color:var(--accent-iris)] ring-2 ring-[color:color-mix(in_srgb,var(--accent-iris)_22%,transparent)]'
+                    : 'w-[84px] sm:w-[92px] xl:w-[108px] hover:border-[color:var(--btn-secondary-border-hover)]'
                 }`}
               >
-                <Search className="w-3.5 h-3.5 text-[color:var(--ink-faint)] mr-1 shrink-0" />
+                <Search className="w-3.5 h-3.5 text-[color:var(--ink-soft)] mr-1 shrink-0" />
                 <input
                   type="text"
                   aria-label="搜索文件、内容或编号"
@@ -834,10 +878,10 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                   onBlur={() => setIsSearchExpanded(false)}
                   onChange={(e) => onSearchChange(e.target.value)}
                   placeholder="检索"
-                  className="w-full min-w-0 bg-transparent text-[color:var(--ink-strong)] placeholder-[color:var(--ink-soft)] focus:outline-none text-[12px] leading-4 motion-safe:transition-colors"
+                  className="w-full min-w-0 bg-transparent text-[color:var(--ink-strong)] placeholder-[color:var(--ink-soft)] focus-visible:outline-2 focus-visible:outline-[color:var(--ring)] rounded-[4px] text-[length:var(--text-ui)] leading-[var(--lh-ui)] motion-safe:transition-colors"
                 />
                 {!isSearchExpanded && !searchQuery && (
-                  <Kbd className="hidden sm:inline-flex shrink-0 h-4 min-w-4 px-1 text-[9.5px]">
+                  <Kbd className="hidden sm:inline-flex shrink-0 h-4 min-w-4 px-1 text-[length:var(--text-micro)]">
                     ⌘K
                   </Kbd>
                 )}
@@ -937,7 +981,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             {/* E04：批阅看板入口（待拍板 / 可派发 / 运行中 / 待批阅回执 / 已办结 + 失联孤儿修复） */}
             {onOpenReviewBoard && (
               <Button
-                variant="secondary"
+                variant={reviewBoardAttentionCount > 0 ? 'secondary' : 'ghost'}
                 size="sm"
                 onClick={onOpenReviewBoard}
                 data-topheader-review-board=""
@@ -959,12 +1003,12 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           <span
             aria-hidden="true"
             data-header-divider=""
-            className="mx-0.5 h-4 w-px bg-[color:var(--glass-hairline)] shrink-0"
+            className="hidden lg:inline-block mx-0.5 h-4 w-px bg-[color:var(--glass-hairline)] shrink-0"
           />
 
-          {/* ── 静默工具组：同步状态 Group · 阅读微胶囊 · 证据篮 · [明暗切换 | ? | 设置] 拼接 Group ── */}
+          {/* ── 静默工具组：同步状态 Group · 阅读微胶囊 · 证据篮 · [明暗切换 | ? | 设置] ── */}
           <div
-            className="flex items-center gap-1"
+            className="flex items-center gap-0.5"
             data-header-cluster="utility"
             role="group"
             aria-label="静默工具"
@@ -989,20 +1033,23 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 />
               )}
 
-            {/* 证据篮（零项不显示冗余 (0)，有项时以高亮角标提示） */}
+            {/* 证据篮（零项静默纯图标，有项时以主高亮角标提示） */}
             <Button
-              variant={contextBasketCount > 0 ? 'primary' : 'secondary'}
+              variant={contextBasketCount > 0 ? 'primary' : 'ghost'}
               size="sm"
               onClick={onOpenContextDrawer}
+              aria-label={`证据篮（已收集 ${contextBasketCount} 条上下文）`}
               title={`证据篮（已收集 ${contextBasketCount} 条上下文）`}
-              className="cursor-pointer !h-7 !px-2 !gap-1 whitespace-nowrap"
+              className={`cursor-pointer !h-7 whitespace-nowrap ${
+                contextBasketCount > 0 ? '!px-2 !gap-1' : '!w-7 !px-0 justify-center'
+              }`}
             >
               <ClipboardCopy
                 className={`w-3.5 h-3.5 shrink-0 ${
-                  contextBasketCount > 0 ? 'text-[color:var(--accent-wave-bright)]' : 'text-[color:var(--accent-wave)]'
+                  contextBasketCount > 0 ? 'text-[color:var(--accent-wave-bright)]' : 'text-[color:var(--ink-soft)]'
                 }`}
               />
-              <span>证据篮</span>
+              <span className={contextBasketCount > 0 ? '' : 'sr-only'}>证据篮</span>
               {contextBasketCount > 0 && (
                 <span
                   key={basketPulseSeq > 0 ? `basket-pulse-${basketPulseSeq}` : 'basket-static'}
@@ -1017,11 +1064,11 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               )}
             </Button>
 
-            {/* V07：工具控件紧凑拼接 Group（全站明暗一键切换 | ? 快捷键速查 | 项目设置） */}
+            {/* V07：工具控件静默无框组（全站明暗一键切换 · ? 快捷键速查 · 项目设置） */}
             <Group
               aria-label="外观与系统工具"
               data-header-tool-group=""
-              className="h-7 shrink-0 rounded-lg border border-border bg-card/80 shadow-xs"
+              className="h-7 shrink-0 gap-0.5 rounded-lg border-0 bg-transparent shadow-none"
             >
               <button
                 type="button"
@@ -1031,7 +1078,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 onClick={handleCycleAppTheme}
                 aria-label={`切换全局明暗主题（当前：${appThemeModeLabel(appThemeMode)}，点击切换至${appThemeModeLabel(nextThemeMode)}）`}
                 title={`外观主题：${appThemeModeLabel(appThemeMode)} · 点击切换至${appThemeModeLabel(nextThemeMode)}`}
-                className="inline-flex h-full w-7 cursor-pointer items-center justify-center rounded-s-[7px] text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] motion-safe:transition-colors"
+                className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] motion-safe:transition-colors"
               >
                 {appThemeMode === 'dark' ? (
                   <Moon className="size-3.5 text-[color:var(--accent-iris-deep)]" aria-hidden="true" />
@@ -1041,7 +1088,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                   <Sun className="size-3.5 text-[color:var(--stage-ink-decision)]" aria-hidden="true" />
                 )}
               </button>
-              <GroupSeparator className="h-3.5 self-center" />
               {/* B5 + V11：「?」全站快捷键速查 Dialog（融合工作区快照与 Frame + Kbd 分组速查表） */}
               <div className="relative flex h-full items-center" ref={helpRootRef}>
                 <button
@@ -1050,7 +1096,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                   title="模型、工作区快照与快捷键速查 (?)"
                   aria-expanded={isHelpOpen}
                   onClick={() => setIsHelpOpen((v) => !v)}
-                  className="inline-flex h-full w-7 cursor-pointer items-center justify-center text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] motion-safe:transition-colors"
+                  className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] motion-safe:transition-colors"
                 >
                   <HelpCircle className="size-3.5" aria-hidden="true" />
                 </button>
@@ -1063,14 +1109,13 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                   lastScanAt={lastScanAt}
                 />
               </div>
-              <GroupSeparator className="h-3.5 self-center" />
-              {/* Utility Buttons——紧凑工具拼接组内设置按钮 */}
+              {/* Utility Buttons——静默工具组内设置按钮 */}
               <button
                 type="button"
                 aria-label="项目设置"
                 onClick={onOpenSettings}
                 title="项目扫描范围与快照配额设置"
-                className="inline-flex h-full w-7 cursor-pointer items-center justify-center rounded-e-[7px] text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] motion-safe:transition-colors"
+                className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] motion-safe:transition-colors"
               >
                 <Settings className="size-3.5" aria-hidden="true" />
               </button>

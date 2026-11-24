@@ -108,7 +108,6 @@ import {
   AlertDialogTitle,
   Badge,
   Button as CossButton,
-  Group,
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
@@ -152,6 +151,10 @@ export type SidebarFiltersSnapshot = Readonly<SidebarFilters>;
 // 重置入口已随格式/角色/主题三节一并迁入 FilterDropdown 的 onReset（契约⑩）
 interface LeftSidebarProps {
   files: FileRecord[];
+  /** 数据加载源状态：loading 时展示骨架而非空态文案，error 时展示重连提示 */
+  dataSource?: 'loading' | 'real' | 'error';
+  retryingConnection?: boolean;
+  onRetryConnection?: () => void;
   readingStates: Record<string, ReadingState>;
   /** 批次一调整①：「全部文件」计数来自服务（/api/v1/files total_matched / bootstrap files_total）；
    *  分页未取全时不再用 files.length 冒充全量；未传时回退本地计数 */
@@ -544,7 +547,7 @@ const InlineCreateRow: React.FC<{
         onBlur={() => {
           if (!busy) commit();
         }}
-        className="flex-1 min-w-0 bg-transparent text-[12px] text-[color:var(--ink-strong)] focus:outline-none"
+        className="flex-1 min-w-0 bg-transparent text-[length:var(--text-ui)] text-[color:var(--ink-strong)] focus-visible:outline-2 focus-visible:outline-[color:var(--ring)] rounded-[var(--r-ctl)]"
       />
     </div>
   );
@@ -623,6 +626,8 @@ const SidebarFileLeaf: React.FC<{
   quickFilter?: string;
   /** V06：共享 250ms 延迟 Base UI PreviewCard 句柄（全树单一 Portal，O(1) 内存开销）。 */
   previewHandle?: ReturnType<typeof PreviewCardCreateHandle<FileRecord>>;
+  /** 同级格式不一致时才露出行尾格式词；清一色目录不再刷一列相同的 PNG / MD。 */
+  showFormat?: boolean;
 }> = ({
   file,
   depth,
@@ -644,6 +649,7 @@ const SidebarFileLeaf: React.FC<{
   sharedPrefixLen = 0,
   quickFilter = '',
   previewHandle,
+  showFormat = true,
 }) => {
   const uiMeta = formatUiMeta(file.format);
   const displayTitle = formatMiddleEllipsisName(file.title, sharedPrefixLen, 22);
@@ -701,7 +707,7 @@ const SidebarFileLeaf: React.FC<{
           revisionId: file.current_revision_id,
         });
       }}
-      title={`${file.relative_path} · 单击打开（Space 轻预览）${unreadLabelText}`}
+      title={`${file.relative_path} · ${uiMeta.label} · 单击打开（Space 轻预览）${unreadLabelText}`}
       className={`${FILTER_ROW_BASE} group/row glx-tree-row ${dense ? 'glx-tree-row-dense' : ''} cursor-pointer relative ${
         batchSelected
           ? FILTER_ROW_ACTIVE
@@ -718,24 +724,10 @@ const SidebarFileLeaf: React.FC<{
       {Array.from({ length: depth }).map((_, i) => (
         <span
           key={i}
-          className="w-3 self-stretch shrink-0 border-l border-[color:var(--glass-hairline)] group-hover/row:border-[color:var(--btn-secondary-border-hover)]"
+          className="w-2.5 self-stretch shrink-0 border-l border-[color:var(--glass-hairline)] group-hover/row:border-[color:var(--btn-secondary-border-hover)]"
         />
       ))}
-      {batchMode ? (
-        <BatchCheckbox state={batchSelected ? 'on' : 'off'} />
-      ) : dense ? (
-        // U03 高密目录：格式色点隐去（格式仍由行尾 MD/PDF 标签承载）
-        // → 静息态每行至多一枚语义点，根治百行亮橙点刷屏
-        <span className="w-4 shrink-0 flex items-center justify-center" aria-hidden="true" />
-      ) : (
-        <span className="w-4 shrink-0 flex items-center justify-center">
-          <span
-            aria-hidden="true"
-            className="size-1.5 rounded-full shrink-0"
-            style={{ backgroundColor: uiMeta.dotColor }}
-          />
-        </span>
-      )}
+      {batchMode && <BatchCheckbox state={batchSelected ? 'on' : 'off'} />}
       <span
         className={`flex-1 min-w-0 text-left truncate text-[12px] ${
           active || batchSelected
@@ -748,16 +740,13 @@ const SidebarFileLeaf: React.FC<{
       >
         <HighlightedLabel text={displayTitle} query={quickFilter} />
       </span>
-      {/* U03 未读微点：4px 柔和温琥珀（静息态低透明，悬浮/聚焦提亮）；
-          读后有更新追加双环微晕 glx-unread-updated-dot 区分从未读新件。 */}
-      {!batchMode && unread && (
+      {/* 仅对「读后有更新」显示温琥珀微点提示；常规未读已由深色字重区分，避免千行橙点刷屏 */}
+      {!batchMode && unread && isUpdatedAfterRead && (
         <span
           aria-hidden="true"
           data-sidebar-unread-dot={file.file_id}
-          title={isUpdatedAfterRead ? '读后有更新' : '未读新件'}
-          className={`glx-tree-unread-dot size-1 rounded-full shrink-0 bg-[color:var(--accent-wave)]${
-            isUpdatedAfterRead ? ' glx-unread-updated-dot' : ''
-          }`}
+          title="读后有更新"
+          className="glx-tree-unread-dot size-1.5 rounded-full shrink-0 bg-[color:var(--accent-wave)] glx-unread-updated-dot"
         />
       )}
       {canQuickToggleRead && (
@@ -803,13 +792,15 @@ const SidebarFileLeaf: React.FC<{
           <MoreHorizontal className="w-3.5 h-3.5" />
         </button>
       )}
-      <span
-        className={`shrink-0 font-mono text-[9.5px] text-[color:var(--ink-soft)] group-hover/row:hidden ${
-          file.format === 'md' ? 'opacity-35' : 'opacity-70'
-        }`}
-      >
-        {uiMeta.label}
-      </span>
+      {showFormat && (
+        <span
+          className={`shrink-0 font-mono text-[9.5px] text-[color:var(--ink-soft)] group-hover/row:hidden ${
+            file.format === 'md' ? 'opacity-30' : 'opacity-55'
+          }`}
+        >
+          {uiMeta.label}
+        </span>
+      )}
     </div>
   );
 
@@ -885,6 +876,8 @@ export const FolderTreeRows: React.FC<{
   mutedFolders?: readonly string[];
   quickFilter?: string;
   previewHandle?: ReturnType<typeof PreviewCardCreateHandle<FileRecord>>;
+  /** 仅在「未读」筛选或按未读排序时强调目录行尾未读数字，日常保持单数字静默呈现 */
+  emphasizeUnread?: boolean;
 }> = ({
   nodes,
   depth,
@@ -926,6 +919,7 @@ export const FolderTreeRows: React.FC<{
   mutedFolders = [],
   quickFilter = '',
   previewHandle,
+  emphasizeUnread = false,
 }) => (
   <>
     {nodes.map((node, nodeIdx) => {
@@ -954,11 +948,17 @@ export const FolderTreeRows: React.FC<{
           : active
             ? TREE_ROW_ACTIVE
             : FILTER_ROW_IDLE;
+      const activityDetail =
+        !node.isEmpty && activity
+          ? `${activity.unreadCount > 0 ? ` · 未读 ${activity.unreadCount} 份` : ' · 全部已读'}${
+              activity.active7dCount > 0 ? ` · 近 7 天活跃 ${activity.active7dCount} 份` : ''
+            }`
+          : '';
       const rowTitle = drag?.dropBlocked
         ? `${node.path || '（根目录）'}/ —— 已拦截：不可移入自身、当前父目录或子目录（防成环）`
         : node.isEmpty
           ? `${node.path}/ —— 空文件夹（双击可重命名，悬停可新建文档或子目录）`
-          : `${node.path}/ —— 本级 ${node.direct} 份，含子级共 ${node.total} 份`;
+          : `${node.path}/ —— 本级 ${node.direct} 份，含子级共 ${node.total} 份${activityDetail}`;
 
       let folderBatchState: 'off' | 'partial' | 'on' = 'off';
       if (batchMode && batchSelectedIds) {
@@ -1008,7 +1008,7 @@ export const FolderTreeRows: React.FC<{
             {Array.from({ length: depth }).map((_, i) => (
               <span
                 key={i}
-                className="w-3 self-stretch shrink-0 border-l border-[color:var(--glass-hairline)] group-hover/row:border-[color:var(--btn-secondary-border-hover)]"
+                className="w-2.5 self-stretch shrink-0 border-l border-[color:var(--glass-hairline)] group-hover/row:border-[color:var(--btn-secondary-border-hover)]"
               />
             ))}
             {batchMode && onToggleBatchFolder ? (
@@ -1171,49 +1171,19 @@ export const FolderTreeRows: React.FC<{
                     已静默
                   </Badge>
                 )}
-                {node.isEmpty ? '空' : node.total > 0 ? node.total : ''}
-                {/* U03 未读数字微标：琥珀文字（--accent-wave 5.16:1 / L1 托盘底 4.94:1，
-                    对浅玻璃 AA 达标）＋胶囊底＋前导琥珀点，与文件数在形状/位置/色相上
-                    三重区分；语义不靠颜色独自承载（点 + 数字 + 悬浮说明三重冗余）。 */}
-                {!node.isEmpty && activity && activity.unreadCount > 0 && (
+                {node.isEmpty ? (
+                  '空'
+                ) : emphasizeUnread && activity && activity.unreadCount > 0 ? (
                   <span
                     data-folder-unread={activity.unreadCount}
-                    title={
-                      activity.directUnreadCount !== activity.unreadCount
-                        ? `未读 ${activity.unreadCount} 份（含子目录；本级直接文件 ${activity.directUnreadCount} 份 · 读后有更新 / 尚未建立阅读基线）`
-                        : `未读 ${activity.unreadCount} 份（读后有更新 / 尚未建立阅读基线）`
-                    }
-                    className="inline-flex items-center gap-1 rounded-[var(--r-pill)] px-1.5 py-[0.5px] font-mono text-[length:var(--text-micro)] leading-[var(--lh-micro)] tabular-nums text-[color:var(--accent-wave)] bg-[color:color-mix(in_srgb,var(--accent-wave)_10%,transparent)] border border-[color:color-mix(in_srgb,var(--accent-wave)_22%,transparent)]"
+                    title={`未读 ${activity.unreadCount} 份 / 共 ${node.total} 份`}
+                    className="font-mono text-[10.5px] tabular-nums text-[color:var(--accent-wave)]"
                   >
-                    <span
-                      aria-hidden="true"
-                      className="size-1 rounded-full bg-[color:var(--accent-wave)] shrink-0"
-                    />
                     {activity.unreadCount}
                   </span>
-                )}
-                {!node.isEmpty && node.total > 0 && activity && activity.unreadCount === 0 && (
-                  <span
-                    data-folder-all-read={node.path}
-                    title="本目录全部已读"
-                    className="inline-flex items-center text-[color:var(--stage-ink-deliver-text)] dark:text-[color:var(--success-foreground)] opacity-75"
-                  >
-                    <Check className="w-3 h-3 shrink-0" />
-                  </span>
-                )}
-                {/* U03 近 7 日活跃微点：薰衣草微点（与琥珀未读点色相/形状皆不同） */}
-                {!node.isEmpty && activity && activity.active7dCount > 0 && (
-                  <span
-                    aria-hidden="true"
-                    data-folder-active-dot={activity.active7dCount}
-                    title={
-                      activity.directActive7dCount !== activity.active7dCount
-                        ? `近 7 天活跃 ${activity.active7dCount} 份（含子目录；本级 ${activity.directActive7dCount} 份 · 服务端 last_activity_at 口径）`
-                        : `近 7 天活跃 ${activity.active7dCount} 份（服务端 last_activity_at 口径）`
-                    }
-                    className="size-1 rounded-full shrink-0 bg-[color:var(--accent-iris-deep)]"
-                  />
-                )}
+                ) : node.total > 0 ? (
+                  <span>{node.total}</span>
+                ) : null}
               </span>
             )}
           </div>
@@ -1271,6 +1241,7 @@ export const FolderTreeRows: React.FC<{
                     mutedFolders={mutedFolders}
                     quickFilter={quickFilter}
                     previewHandle={previewHandle}
+                    emphasizeUnread={emphasizeUnread}
                   />
                   <VirtualFileSlice
                     items={node.directFiles}
@@ -1278,6 +1249,10 @@ export const FolderTreeRows: React.FC<{
                     activeKey={activeFileId}
                     renderItem={(file, fileIdx) => (
                       <SidebarFileLeaf
+                        showFormat={
+                          node.directFiles.length > 1 &&
+                          node.directFiles.some((sibling) => sibling.format !== file.format)
+                        }
                         file={file}
                         depth={depth + 1}
                         active={file.file_id === activeFileId}
@@ -1374,13 +1349,13 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
 
   return (
     <div ref={rootRef} className="relative">
-      {/* 顶栏 pill → Button·secondary（§4.1 映射表 #11：形态参数化，不加变体） */}
+      {/* 顶栏筛选入口：空闲时走静默 ghost 无框态，存在激活筛选时提亮为 secondary */}
       <Button
-        variant="secondary"
+        variant={activeFilterCount > 0 ? 'secondary' : 'ghost'}
         size="sm"
         onClick={() => setOpen((v) => !v)}
         title="按文件格式 / 内容角色 / 主题筛选"
-        className="cursor-pointer"
+        className="cursor-pointer !h-7 !px-2 !gap-1"
       >
         <Filter className="w-3.5 h-3.5" />
         <span>筛选</span>
@@ -1549,6 +1524,9 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
 
 export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   files,
+  dataSource = 'real',
+  retryingConnection = false,
+  onRetryConnection,
   readingStates,
   totalCount,
   activeFileId,
@@ -1714,13 +1692,16 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     [agentDraftFileIds, artifactsByFileId, files, nowMs, readingStates]
   );
   const smartViewCounts = useMemo(() => computeSmartViewCounts(smartViewFiles), [smartViewFiles]);
-  const [smartViewsOpen, setSmartViewsOpen] = useState(true);
-  // U03：零值智能视图默认收折为末尾轻胶囊（点击展开）；选中项恒不收折。
-  const [smartViewsZeroExpanded, setSmartViewsZeroExpanded] = useState(false);
+  // 默认折叠「继续阅读」与「智能视图」，将左栏主体空间还给真实项目目录树；
+  // 选中任一智能视图时自动展开以便随时切换或取消。
+  const [smartViewsOpen, setSmartViewsOpen] = useState(false);
+  const [continueReadingOpen, setContinueReadingOpen] = useState(false);
   const smartViewPartition = useMemo(
     () => partitionSmartViewsByCount(smartViewCounts, filters.quickScope),
     [filters.quickScope, smartViewCounts]
   );
+  const isSmartViewActive = isSmartViewScope(filters.quickScope);
+  const showSmartViewsBody = smartViewsOpen || isSmartViewActive;
 
   // 范围联动目录树：切换「未读 / 收藏 / 智能视图」时，左侧目录树同步仅呈现对应范围的文件与祖先目录
   // （「全部」态保留全部真实目录含空文件夹；顶部计数始终基于全量 files 不漂移）
@@ -1769,6 +1750,11 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   // V06：左栏即时目录/文件名快筛 + 三态排序（名称 / 近 7 日活跃 / 未读数）+ 单例 250ms PreviewCard 句柄
   const [treeQuickFilter, setTreeQuickFilter] = useState('');
   const [treeSortMode, setTreeSortMode] = useState<SidebarTreeSortMode>('name');
+  const emphasizeFolderUnread = filters.quickScope === 'unread' || treeSortMode === 'unread';
+  const nextTreeSortMode: SidebarTreeSortMode =
+    treeSortMode === 'name' ? 'active7d' : treeSortMode === 'active7d' ? 'unread' : 'name';
+  const treeSortLabel =
+    treeSortMode === 'name' ? '名称' : treeSortMode === 'active7d' ? '活跃' : '未读';
   const sidebarPreviewHandle = useMemo(() => PreviewCardCreateHandle<FileRecord>(), []);
 
   const sortedBusinessNodes = useMemo(
@@ -1892,8 +1878,18 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   useEffect(() => {
     if (!projectMenuId) return;
     const onPointerDown = () => setProjectMenuId(null);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setProjectMenuId(null);
+      }
+    };
     window.addEventListener('pointerdown', onPointerDown);
-    return () => window.removeEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
   }, [projectMenuId]);
 
   const globalPinnedKeys = useMemo(
@@ -2231,14 +2227,18 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 {
                   id: 'all' as const,
                   label: '全部',
-                  count: totalCount ?? files.length,
+                  // 总量只留在悬停说明里。和「未读」并排两个同样大的数字是侧栏最吵的一行。
+                  count: undefined,
                   title: `全部文档 ${totalCount ?? files.length} 份（点击同时清除目录与状态残留筛选）`,
                   dot: false,
                 },
                 {
                   id: 'unread' as const,
                   label: '未读',
-                  count: unreadCount > 0 ? unreadCount : undefined,
+                  count:
+                    unreadCount > 0 && unreadCount < (totalCount ?? files.length)
+                      ? unreadCount
+                      : undefined,
                   title: `未读 ${unreadCount} 份（业务 ${businessUnreadCount} · 工程 ${systemUnreadCount}；${unreadStatusLabel('never_read')} / ${unreadStatusLabel('updated_since_last_read')}）`,
                   dot: unreadCount > 0,
                 },
@@ -2275,6 +2275,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                   <span>{seg.label}</span>
                   {seg.count !== undefined && (
                     <span
+                      data-sidebar-scope-count={seg.id}
                       className={`font-mono text-[10px] tabular-nums ${
                         active
                           ? 'text-[color:var(--accent-iris-ink)] font-semibold'
@@ -2289,23 +2290,22 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
             })}
           </SegmentedControl>
 
-          {/* 已读进度微卡 + 存量确立已读基线入口（零造数、GPU scaleX 进度轨） */}
-          {totalWorkspaceFiles > 0 && (
+          {/* 已读进度细条 + 存量确立已读基线入口：仅在「未读」筛选态展开，日常浏览「全部」时不重复占高 */}
+          {totalWorkspaceFiles > 0 && filters.quickScope === 'unread' && (
             <div
               data-sidebar-reading-meter=""
-              className="rounded-[10px] px-2 py-1.5 bg-[color:var(--depth-1-bg)] border border-[color:var(--glass-hairline)] space-y-1.5"
+              className="px-0.5 pt-0.5 space-y-1"
             >
               <div className="flex items-center justify-between gap-1.5">
                 {unreadCount > 0 ? (
-                  <span className="text-[10.5px] text-[color:var(--ink-soft)] tabular-nums truncate">
-                    {readWorkspaceCount > 0
-                      ? `已读 ${readProgressPct}% · 待读 ${unreadCount} 份`
-                      : filters.quickScope === 'unread'
-                        ? `当前 ${unreadCount} 份待读`
-                        : unreadCount >= SIDEBAR_DENSE_FOLDER_THRESHOLD
-                          ? `存量未读 ${unreadCount} 份`
-                          : `${unreadCount} 份未读`}
-                  </span>
+                  readWorkspaceCount > 0 ? (
+                    <span className="text-[10.5px] text-[color:var(--ink-soft)] tabular-nums truncate">
+                      {`已读 ${readProgressPct}% · 待读 ${unreadCount} 份`}
+                    </span>
+                  ) : (
+                    // 还没有任何阅读进度时，这句话只是把「未读」页签上的数字又写一遍。
+                    <span className="sr-only">{`待读 ${unreadCount} 份`}</span>
+                  )
                 ) : (
                   <span
                     data-sidebar-all-read=""
@@ -2322,7 +2322,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                     disabled={baselineBusy}
                     onClick={() => setBaselineConfirmOpen(true)}
                     title="一键将当前存量文档推进为已读基线（不改写文件、不伪造阅读进度，8 秒内可一键撤销）"
-                    className="inline-flex items-center gap-1 rounded-[7px] px-1.5 py-0.5 text-[10.5px] font-medium text-[color:var(--accent-iris-ink)] bg-[color:color-mix(in_srgb,var(--accent-iris)_10%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--accent-iris)_18%,transparent)] border border-[color:color-mix(in_srgb,var(--accent-iris)_22%,transparent)] disabled:opacity-50 cursor-pointer transition-colors shrink-0"
+                    className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10.5px] font-medium text-[color:var(--accent-iris-ink)] hover:bg-[color:color-mix(in_srgb,var(--accent-iris)_10%,transparent)] disabled:opacity-50 cursor-pointer transition-colors shrink-0"
                   >
                     <CheckCheck className="w-3 h-3 shrink-0" />
                     <span>确立已读基线</span>
@@ -2335,10 +2335,10 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
               </div>
               <div
                 aria-hidden="true"
-                className="h-[3px] w-full rounded-full overflow-hidden bg-[color:color-mix(in_srgb,var(--ink-soft)_14%,transparent)]"
+                className="h-[2px] w-full rounded-full overflow-hidden bg-[color:color-mix(in_srgb,var(--ink-soft)_12%,transparent)]"
               >
                 <div
-                  className="glx-read-meter-fill h-full w-full rounded-full bg-gradient-to-r from-[color:var(--status-green)] to-[color:var(--stage-ink-deliver)] dark:from-[color:var(--success)] dark:to-[color:var(--success-foreground)]"
+                  className="glx-read-meter-fill h-full w-full rounded-full bg-[color:var(--status-green)] dark:bg-[color:var(--success)]"
                   style={{ transform: `scaleX(${readProgressRatio})` }}
                 />
               </div>
@@ -2410,14 +2410,30 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           </AlertDialog>
         )}
 
-        {/* 2. 继续阅读（有真实阅读进度才出现，紧凑 2 条，带底部进度微轨与 1-click 已读） */}
+        {/* 2. 继续阅读（有真实阅读进度才出现，可一键折叠，带底部进度微轨与 1-click 已读） */}
         {continueReadingFiles.length > 0 && (
           <section className="space-y-0.5">
-            <div className={SECTION_LABEL}>
-              <BookOpen className="w-3 h-3 text-[color:var(--ink-faint)]" />
-              <span>继续阅读</span>
-            </div>
-            <div className="space-y-1">
+            <button
+              type="button"
+              onClick={() => setContinueReadingOpen((v) => !v)}
+              aria-expanded={continueReadingOpen}
+              className={`${SECTION_LABEL} w-full justify-between cursor-pointer hover:text-[color:var(--ink-strong)] py-0.5`}
+              title="点击折叠/展开最近阅读条目"
+            >
+              <span className="flex items-center gap-1.5">
+                <BookOpen className="w-3 h-3 text-[color:var(--ink-faint)]" />
+                <span>继续阅读</span>
+                <span className="font-mono text-[9.5px] tracking-normal text-[color:var(--ink-faint)] tabular-nums">
+                  {continueReadingFiles.length}
+                </span>
+              </span>
+              <ChevronRight
+                className="w-3 h-3 text-[color:var(--ink-faint)] glx-chevron-rot"
+                data-open={continueReadingOpen ? 'true' : 'false'}
+              />
+            </button>
+            {continueReadingOpen && (
+            <div className="space-y-0.5">
               {continueReadingFiles.map((file) => {
                 const st = readingStates[file.file_id];
                 const isSelected = file.file_id === activeFileId;
@@ -2432,6 +2448,11 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                     <button
                       type="button"
                       data-continue-reading-row={file.file_id}
+                      title={
+                        st?.updated_at
+                          ? `${file.title} · ${formatRelativeObservedAt(st.updated_at)}`
+                          : file.title
+                      }
                       onClick={() => onOpenFileToRead(file.file_id, st?.last_section_id)}
                       onKeyDown={(e) => {
                         if ((e.code === 'Space' || e.key === ' ') && onQuickPreview) {
@@ -2468,20 +2489,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                           {pct}%
                         </span>
                       ) : null}
-                      {st?.updated_at ? (
-                        <span
-                          className={`shrink-0 text-[length:var(--text-micro)] leading-[var(--lh-micro)] tabular-nums text-[color:var(--ink-soft)] ${
-                            onMarkFileRead ? 'group-hover/cr:opacity-0 transition-opacity' : ''
-                          }`}
-                        >
-                          {formatRelativeObservedAt(st.updated_at)}
-                        </span>
-                      ) : (
-                        <span
-                          aria-hidden="true"
-                          className="shrink-0 w-1.5 h-1.5 rounded-full bg-[color:var(--accent-wave)]"
-                        />
-                      )}
                     </button>
                     {onMarkFileRead && (
                       <button
@@ -2519,6 +2526,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 );
               })}
             </div>
+            )}
           </section>
         )}
 
@@ -2641,7 +2649,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
               </span>
               <ChevronRight
                 className="w-3 h-3 text-[color:var(--ink-faint)] glx-chevron-rot"
-                data-open={smartViewsOpen ? 'true' : 'false'}
+                data-open={showSmartViewsBody ? 'true' : 'false'}
               />
             </button>
             {sidebarFiltersActive && !undoClearAvailable && (
@@ -2669,9 +2677,9 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
               </button>
             )}
           </div>
-          {smartViewsOpen && (
+          {showSmartViewsBody && (
             <div className="flex flex-wrap gap-1 mt-1" data-smart-views="">
-              {/* U03：非零项横向舒展展示（计数 > 0 恒必显）；零值项收折为末尾轻胶囊 */}
+              {/* 仅展示有内容的智能视图及当前选中项，不再渲染「其余 N 项 (0)」零值占位胶囊 */}
               {smartViewPartition.visible.map((view) => {
                 const active = filters.quickScope === view.id;
                 const count = smartViewCounts[view.id];
@@ -2691,12 +2699,12 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                       }
                       onUpdateFilters({ quickScope: view.id });
                     }}
-                    className={`glx-pill-tactile inline-flex items-center gap-1 rounded-[7px] border px-1.5 py-0.5 text-[10.5px] leading-none cursor-pointer ${
+                    className={`glx-pill-tactile inline-flex items-center gap-1 rounded-[6px] border px-1.5 py-0.5 text-[10.5px] leading-none cursor-pointer ${
                       active
-                        ? 'bg-[color:var(--chip-active-bg)] border-[color:var(--chip-active-border)] text-[color:var(--accent-iris-ink)] font-semibold shadow-[0_2px_6px_rgba(84,70,160,0.12)]'
+                        ? 'bg-[color:var(--chip-active-bg)] border-[color:var(--chip-active-border)] text-[color:var(--accent-iris-ink)] font-semibold'
                         : isZero
-                          ? 'border-transparent bg-card/35 text-[color:var(--ink-soft)] opacity-55 hover:opacity-100 hover:bg-card/85 hover:text-[color:var(--ink-strong)]'
-                          : 'border-[color:var(--glass-hairline)] bg-card/85 text-[color:var(--ink-strong)] hover:bg-card hover:border-[color:var(--btn-secondary-border-hover)] shadow-[0_1px_3px_rgba(38,36,61,0.04)]'
+                          ? 'border-transparent bg-transparent text-[color:var(--ink-soft)] opacity-55 hover:opacity-100 hover:bg-card/80 hover:text-[color:var(--ink-strong)]'
+                          : 'border-transparent bg-[color:var(--depth-1-bg)] text-[color:var(--ink-strong)] hover:bg-card hover:border-[color:var(--glass-hairline)]'
                     }`}
                   >
                     <ViewIcon
@@ -2705,7 +2713,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                       }`}
                     />
                     <span className="truncate">{view.label}</span>
-                    {count > 0 && (
+                    {count > 0 && count < (totalCount ?? files.length) && (
                       <Badge
                         size="sm"
                         variant={active ? 'default' : 'secondary'}
@@ -2717,46 +2725,11 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                   </button>
                 );
               })}
-              {/* U03 零值收折胶囊：末尾轻胶囊「其余 N 项 (0)」，点击展开/收起。
-                  净收益 = N×26 − 26 px（≥3 项时 ≥52px，为下方目录树腾出可视高度）。 */}
-              {smartViewPartition.collapsedZero.length > 0 && (
-                <button
-                  type="button"
-                  data-smart-views-collapsed=""
-                  aria-expanded={smartViewsZeroExpanded}
-                  onClick={() => setSmartViewsZeroExpanded((v) => !v)}
-                  title={`${smartViewPartition.collapsedLabel} —— 点击${smartViewsZeroExpanded ? '收起' : '展开'}零值智能视图（不改变任何计数口径）；收折为下方目录树腾出约 ${estimateSmartViewCollapseGain(smartViewPartition.visible.length, smartViewPartition.collapsedZero.length, width ?? SIDEBAR_WIDTH_DEFAULT)}px 可视高度`}
-                  className="glx-pill-tactile inline-flex items-center gap-1 rounded-full border border-[color:var(--glass-hairline)] bg-card/65 px-2 py-1 text-[11px] leading-none text-[color:var(--ink-soft)] hover:bg-card/90 hover:text-[color:var(--ink-strong)] cursor-pointer shrink-0"
-                >
-                  <ChevronRight
-                    className="w-3 h-3 shrink-0 glx-chevron-rot"
-                    data-open={smartViewsZeroExpanded ? 'true' : 'false'}
-                  />
-                  <span>
-                    {smartViewsZeroExpanded ? '收起零值项' : smartViewPartition.collapsedLabel}
-                  </span>
-                </button>
+              {smartViewPartition.visible.length === 0 && (
+                <span className="px-1 py-0.5 text-[10.5px] text-[color:var(--ink-faint)]">
+                  暂无活跃动态视图
+                </span>
               )}
-              {/* 收折的零值视图（DOM 内保留，默认 hidden；展开时可见） */}
-              {smartViewPartition.collapsedZero.map((view) => {
-                const count = smartViewCounts[view.id];
-                const ViewIcon = SMART_VIEW_ICONS[view.id];
-                return (
-                  <span key={view.id} hidden={!smartViewsZeroExpanded}>
-                    <button
-                      type="button"
-                      data-smart-view={view.id}
-                      aria-pressed={false}
-                      title={`${view.title} —— 当前 ${count} 份`}
-                      onClick={() => onUpdateFilters({ quickScope: view.id })}
-                      className="glx-pill-tactile inline-flex items-center gap-1 rounded-[8px] border border-transparent bg-card/35 px-2 py-1 text-[11px] leading-none text-[color:var(--ink-soft)] opacity-55 hover:opacity-100 hover:bg-card/85 hover:text-[color:var(--ink-strong)] cursor-pointer"
-                    >
-                      <ViewIcon className="w-3 h-3 shrink-0 text-[color:var(--ink-faint)]" />
-                      <span className="truncate">{view.label}</span>
-                    </button>
-                  </span>
-                );
-              })}
             </div>
           )}
         </section>
@@ -2811,6 +2784,18 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 <span>项目</span>
               </button>
             )}
+            {desktopSystemSupported && onImportIntoFolder && !batchMode && (
+              <button
+                type="button"
+                data-import-external-btn=""
+                onClick={() => onImportIntoFolder(filters.folder === 'all' ? '' : filters.folder)}
+                title={`导入外部文件到 ${filters.folder === 'all' ? '工作区根目录' : filters.folder}（也可直接拖入窗口）`}
+                aria-label="导入文件"
+                className="w-5 h-5 rounded-[6px] flex items-center justify-center text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] cursor-pointer transition-colors"
+              >
+                <FolderInput className="w-3.5 h-3.5" />
+              </button>
+            )}
             {batchSupported && (
               <button
                 type="button"
@@ -2855,7 +2840,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           </div>
         </div>
 
-        {/* V06：左栏目录树顶部 coss InputGroup 即时快筛 + Group 三态排序（名称 / 近 7 日活跃 / 未读） */}
+        {/* 左栏目录快筛 + 行内紧凑排序切换（合并原三按钮常驻排序行，为目录树腾出更多高度） */}
         <div className="px-2.5 pb-1 space-y-1 shrink-0">
           <div className="flex items-center gap-1">
             <InputGroup
@@ -2893,41 +2878,22 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 </InputGroupAddon>
               )}
             </InputGroup>
-          </div>
-          <div className="flex items-center justify-between gap-1">
-            <Group
-              aria-label="目录排序方式"
+            <button
+              type="button"
               data-sidebar-sort-group=""
               data-sidebar-sort-mode={treeSortMode}
-              className="w-full"
+              onClick={() => setTreeSortMode(nextTreeSortMode)}
+              aria-label={`目录排序：当前按${treeSortLabel}，点击切换`}
+              title={`目录排序：按${treeSortLabel}（点击切换：名称 → 近7日活跃 → 未读数）`}
+              className={`h-6.5 shrink-0 inline-flex items-center justify-center gap-1 rounded-[7px] px-1.5 text-[10.5px] cursor-pointer transition-colors ${
+                treeSortMode !== 'name'
+                  ? 'bg-[color:var(--chip-active-bg)] text-[color:var(--accent-iris-ink)] font-medium'
+                  : 'text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)]'
+              }`}
             >
-              {(
-                [
-                  { id: 'name' as const, label: '名称', title: '按名称字母/中文序排列目录' },
-                  { id: 'active7d' as const, label: '近7日活跃', title: '按近 7 日活跃文档数降序置顶活跃目录' },
-                  { id: 'unread' as const, label: '未读数', title: '按未读文档数降序置顶待阅目录' },
-                ] as const
-              ).map((opt) => {
-                const active = treeSortMode === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    data-sort-option={opt.id}
-                    aria-pressed={active}
-                    title={opt.title}
-                    onClick={() => setTreeSortMode(opt.id)}
-                    className={`flex-1 h-5 px-1.5 text-[10.5px] font-medium border border-[color:var(--glass-hairline)] cursor-pointer transition-colors ${
-                      active
-                        ? 'bg-[color:var(--chip-active-bg)] text-[color:var(--accent-iris-ink)] border-[color:var(--chip-active-border)] z-[1]'
-                        : 'bg-card/60 text-[color:var(--ink-soft)] hover:text-[color:var(--ink-strong)] hover:bg-card/90'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </Group>
+              <ArrowUpDown className="w-3 h-3 shrink-0" />
+              {treeSortMode !== 'name' && <span>{treeSortLabel}</span>}
+            </button>
           </div>
           {quickFilterActive && (
             <div className="flex items-center justify-between px-0.5 text-[10px] font-mono tabular-nums text-[color:var(--ink-soft)]">
@@ -3147,15 +3113,9 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                         </span>
                       )}
 
-                      {/* 常规态计数与待拍板提示点 */}
-                      {!isRenaming && !menuOpen && (
+                      {/* 多项目或离线时展示计数与状态；单项目激活根行不重复顶部「全部 N」数字 */}
+                      {!isRenaming && !menuOpen && (projects.length > 1 || isOffline) && (
                         <span className="flex items-center gap-1 shrink-0 group-hover/proj:hidden">
-                          {project.pending_decisions_count > 0 && (
-                            <span
-                              title={`${project.pending_decisions_count} 项待拍板`}
-                              className="size-1.5 rounded-full bg-[color:var(--accent-wave)]"
-                            />
-                          )}
                           {isOffline ? (
                             <span className="font-mono text-[10px] text-[color:var(--stage-ink-exec-text)]">
                               离线
@@ -3368,6 +3328,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                             mutedFolders={mutedFolders}
                             quickFilter={treeQuickFilter}
                             previewHandle={sidebarPreviewHandle}
+                            emphasizeUnread={emphasizeFolderUnread}
                           />
                           {(() => {
                             const rootPrefixMap =
@@ -3375,6 +3336,9 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                                 ? computeSiblingSharedPrefixMap(displayRootFiles.map((f) => f.title))
                                 : null;
                             const rootDense = displayRootFiles.length >= SIDEBAR_DENSE_FOLDER_THRESHOLD;
+                            const rootMixedFormat =
+                              displayRootFiles.length > 1 &&
+                              displayRootFiles.some((sibling) => sibling.format !== displayRootFiles[0].format);
                             return (
                               <VirtualFileSlice
                                 items={displayRootFiles}
@@ -3382,6 +3346,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                                 activeKey={activeFileId}
                                 renderItem={(file, fileIdx) => (
                                   <SidebarFileLeaf
+                                    showFormat={rootMixedFormat}
                                     file={file}
                                     depth={0}
                                     active={file.file_id === activeFileId}
@@ -3443,19 +3408,16 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                                   工程与产出物
                                 </button>
                                 <span className={`${ROW_COUNT} flex items-center gap-1`}>
-                                  {displaySystemTotal}
-                                  {displaySystemUnread > 0 && (
+                                  {emphasizeFolderUnread && displaySystemUnread > 0 ? (
                                     <span
                                       data-system-group-unread={displaySystemUnread}
-                                      title={`工程与产出物未读 ${displaySystemUnread} 份`}
-                                      className="inline-flex items-center gap-1 rounded-[var(--r-pill)] px-1.5 py-[0.5px] font-mono text-[length:var(--text-micro)] leading-[var(--lh-micro)] tabular-nums text-[color:var(--accent-wave)] bg-[color:color-mix(in_srgb,var(--accent-wave)_10%,transparent)] border border-[color:color-mix(in_srgb,var(--accent-wave)_22%,transparent)]"
+                                      title={`工程与产出物未读 ${displaySystemUnread} 份 / 共 ${displaySystemTotal} 份`}
+                                      className="font-mono text-[10.5px] tabular-nums text-[color:var(--accent-wave)]"
                                     >
-                                      <span
-                                        aria-hidden="true"
-                                        className="size-1 rounded-full bg-[color:var(--accent-wave)] shrink-0"
-                                      />
                                       {displaySystemUnread}
                                     </span>
+                                  ) : (
+                                    displaySystemTotal
                                   )}
                                 </span>
                               </div>
@@ -3509,6 +3471,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                                   mutedFolders={mutedFolders}
                                   quickFilter={treeQuickFilter}
                                   previewHandle={sidebarPreviewHandle}
+                                  emphasizeUnread={emphasizeFolderUnread}
                                 />
                               )}
                             </>
@@ -3610,6 +3573,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 mutedFolders={mutedFolders}
                 quickFilter={treeQuickFilter}
                 previewHandle={sidebarPreviewHandle}
+                emphasizeUnread={emphasizeFolderUnread}
               />
               {(() => {
                 const rootPrefixMap =
@@ -3617,6 +3581,9 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                     ? computeSiblingSharedPrefixMap(displayRootFiles.map((f) => f.title))
                     : null;
                 const rootDense = displayRootFiles.length >= SIDEBAR_DENSE_FOLDER_THRESHOLD;
+                const rootMixedFormat =
+                  displayRootFiles.length > 1 &&
+                  displayRootFiles.some((sibling) => sibling.format !== displayRootFiles[0].format);
                 return (
                   <VirtualFileSlice
                     items={displayRootFiles}
@@ -3624,6 +3591,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                     activeKey={activeFileId}
                     renderItem={(file, fileIdx) => (
                       <SidebarFileLeaf
+                        showFormat={rootMixedFormat}
                         file={file}
                         depth={0}
                         active={file.file_id === activeFileId}
@@ -3650,13 +3618,42 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 );
               })()}
               {displayBusinessNodes.length === 0 && displayRootFiles.length === 0 && displaySystemNodes.length === 0 && !inlineCreate && (
-                <div className="px-3 py-4 text-center text-[length:var(--text-micro)] text-[color:var(--ink-faint)]">
-                  {quickFilterActive
-                    ? emptyTreeLabel
-                    : filters.quickScope === 'all'
-                      ? '当前工作区暂无目录或文件'
-                      : emptyTreeLabel}
-                </div>
+                dataSource === 'loading' && files.length === 0 ? (
+                  <div
+                    role="status"
+                    aria-busy="true"
+                    aria-label="正在加载目录"
+                    className="px-3 py-3 space-y-2"
+                  >
+                    <div className="h-4 w-3/4 rounded-[var(--r-ctl)] bg-muted motion-safe:animate-pulse" />
+                    <div className="h-4 w-1/2 rounded-[var(--r-ctl)] bg-muted motion-safe:animate-pulse" />
+                    <div className="h-4 w-5/6 rounded-[var(--r-ctl)] bg-muted motion-safe:animate-pulse" />
+                  </div>
+                ) : dataSource === 'error' && files.length === 0 ? (
+                  <div role="alert" className="px-3 py-4 text-center space-y-2">
+                    <div className="text-[length:var(--text-micro)] text-[color:var(--stage-ink-exec-text)]">
+                      读服务未连接，目录暂不可读
+                    </div>
+                    {onRetryConnection && (
+                      <button
+                        type="button"
+                        disabled={retryingConnection}
+                        onClick={onRetryConnection}
+                        className="inline-flex items-center justify-center rounded-[var(--r-ctl)] border border-[color:var(--btn-secondary-border)] bg-[color:var(--btn-secondary-bg)] px-2.5 py-1 text-[length:var(--text-micro)] font-medium text-[color:var(--ink-strong)] hover:bg-[color:var(--btn-secondary-bg-hover)] disabled:opacity-50 cursor-pointer"
+                      >
+                        {retryingConnection ? '重试中…' : '重试连接'}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="px-3 py-4 text-center text-[length:var(--text-micro)] text-[color:var(--ink-soft)]">
+                    {quickFilterActive
+                      ? emptyTreeLabel
+                      : filters.quickScope === 'all'
+                        ? '当前工作区暂无目录或文件'
+                        : emptyTreeLabel}
+                  </div>
+                )
               )}
 
               {displaySystemNodes.length > 0 && (
@@ -3687,19 +3684,16 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                       工程与产出物
                     </button>
                     <span className={`${ROW_COUNT} flex items-center gap-1`}>
-                      {displaySystemTotal}
-                      {displaySystemUnread > 0 && (
+                      {emphasizeFolderUnread && displaySystemUnread > 0 ? (
                         <span
                           data-system-group-unread={displaySystemUnread}
-                          title={`工程与产出物未读 ${displaySystemUnread} 份`}
-                          className="inline-flex items-center gap-1 rounded-[var(--r-pill)] px-1.5 py-[0.5px] font-mono text-[length:var(--text-micro)] leading-[var(--lh-micro)] tabular-nums text-[color:var(--accent-wave)] bg-[color:color-mix(in_srgb,var(--accent-wave)_10%,transparent)] border border-[color:color-mix(in_srgb,var(--accent-wave)_22%,transparent)]"
+                          title={`工程与产出物未读 ${displaySystemUnread} 份 / 共 ${displaySystemTotal} 份`}
+                          className="font-mono text-[10.5px] tabular-nums text-[color:var(--accent-wave)]"
                         >
-                          <span
-                            aria-hidden="true"
-                            className="size-1 rounded-full bg-[color:var(--accent-wave)] shrink-0"
-                          />
                           {displaySystemUnread}
                         </span>
+                      ) : (
+                        displaySystemTotal
                       )}
                     </span>
                   </div>
@@ -3747,6 +3741,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                       mutedFolders={mutedFolders}
                       quickFilter={treeQuickFilter}
                       previewHandle={sidebarPreviewHandle}
+                      emphasizeUnread={emphasizeFolderUnread}
                     />
                   )}
                 </>
@@ -3842,8 +3837,8 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           </div>
         )}
 
-        {/* 底部栏：批量模式切换为 Quiet.md 批量动作条；常规模式保留导入入口 */}
-        {batchMode ? (
+        {/* 底部栏：仅批量整理模式呈现批量动作条（常规导入入口已收编进「项目目录」顶栏图标，释放底部高度） */}
+        {batchMode && (
           <div
             data-batch-action-bar=""
             className="px-2.5 py-2 border-t border-[color:var(--glass-hairline)] bg-card/75 flex items-center justify-between gap-1 shrink-0"
@@ -3895,28 +3890,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
               </button>
             </div>
           </div>
-        ) : (
-          desktopSystemSupported &&
-          onImportIntoFolder && (
-            <div
-              data-drop-folder={filters.folder === 'all' ? '' : filters.folder}
-              className="px-2.5 py-2 border-t border-[color:var(--glass-hairline)] quiet-sep quiet-row shrink-0"
-            >
-              <Button
-                variant="ghost"
-                size="sm"
-                fullWidth
-                data-import-external-btn=""
-                onClick={() => onImportIntoFolder(filters.folder === 'all' ? '' : filters.folder)}
-                title={`选择外部文件导入到 ${filters.folder === 'all' ? '工作区根目录' : filters.folder}（或直接拖入窗口）`}
-              >
-                <FolderInput className="w-3.5 h-3.5 shrink-0 text-[color:var(--accent-iris-deep)]" />
-                <span className="truncate">
-                  导入文件{filters.folder !== 'all' ? ` → ${filters.folder.split('/').pop()}` : ''}
-                </span>
-              </Button>
-            </div>
-          )
         )}
       </div>
 

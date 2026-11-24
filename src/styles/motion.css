@@ -244,34 +244,17 @@
   animation-delay: calc(var(--glx-bar-idx, 0) * 18ms);
 }
 
-/* 3.9 专题卡悬停扫光（纯粹伪元素 transform + opacity，零布局位移）：
-   鼠标划过专题橱窗卡时掠过一道克制的琉璃折射高光。 */
+/* 3.9 专题卡容器（保留类名供结构定位，去除装饰性扫光渐变） */
 .glx-sheen-card {
   position: relative;
 }
 
 .glx-sheen-card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    108deg,
-    transparent 26%,
-    rgba(255, 255, 255, 0.55) 48%,
-    rgba(255, 255, 255, 0.14) 54%,
-    transparent 70%
-  );
-  opacity: 0;
-  transform: translateX(-115%);
-  transition:
-    transform 680ms var(--ease-spring),
-    opacity var(--dur-2) var(--ease-fade);
+  content: none;
 }
 
 .glx-sheen-card:hover::after {
-  opacity: 1;
-  transform: translateX(115%);
+  content: none;
 }
 
 /* 3.10 斜叠微缩卡悬停展扇（纯 transform 过渡，悬停时前后纸片轻柔展角与上浮） */

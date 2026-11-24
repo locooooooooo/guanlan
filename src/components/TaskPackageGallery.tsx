@@ -440,8 +440,7 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
                       data-gallery-cover=""
                       className="relative flex h-[132px] w-full shrink-0 flex-col justify-between overflow-hidden border-b border-border/60 p-3"
                       style={{
-                        backgroundImage: `radial-gradient(var(--depth-0-dot) 1px, transparent 1px), linear-gradient(140deg, color-mix(in srgb, ${stageAccent} 10%, var(--card)) 0%, var(--card) 100%)`,
-                        backgroundSize: '14px 14px, 100% 100%',
+                        backgroundColor: `color-mix(in srgb, ${stageAccent} 5%, var(--card))`,
                       }}
                     >
                       <span className="relative z-[1] flex items-center justify-between gap-2 min-w-0">

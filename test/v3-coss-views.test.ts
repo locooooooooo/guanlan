@@ -218,8 +218,8 @@ test('V07 · appThemeStore 三态轮换（light→dark→system→light）与 To
   assert.equal(nextAppThemeMode('light'), 'dark');
   assert.equal(nextAppThemeMode('dark'), 'system');
   assert.equal(nextAppThemeMode('system'), 'light');
-  assert.equal(appThemeModeLabel('light'), '浅色精密');
-  assert.equal(appThemeModeLabel('dark'), '暗夜沉浸');
+  assert.equal(appThemeModeLabel('light'), '浅色');
+  assert.equal(appThemeModeLabel('dark'), '深色');
   assert.equal(appThemeModeLabel('system'), '跟随系统');
 
   // 应用切换并验证立即生效（随后复原 light，避免污染后续测试）
@@ -789,10 +789,11 @@ test('V09 · 时光机 ≥360px 防截断 + 星图首尾安全区/预览卡 + �
     new URL('../src/components/eventGraph.css', import.meta.url),
     'utf8'
   );
-  assert.ok(tmSrc.includes("preserveAspectRatio={paneOpen ? 'xMinYMid meet' : 'xMidYMid meet'}"));
+  // 统一右侧检查/对比栏已从悬浮覆盖升级为独立网格列（画布居中且 ≥420px，零压盖截断）
+  assert.ok(tmSrc.includes('preserveAspectRatio="xMidYMid meet"') && tmSrc.includes('data-machine-unified-inspector=""'));
   assert.ok(tmSrc.includes('data-slot="toolbar"') && tmSrc.includes('data-slot="segmented-control"'));
   assert.ok(diffPaneSrc.includes('calc(100% - 360px)'), 'DiffSidePane 必须为左栏版本链保留 ≥360px 可视宽度');
-  assert.ok(egCss.includes('minmax(360px, 1fr)'), 'eventGraph.css 必须锁定版本链列 ≥360px');
+  assert.ok(egCss.includes('minmax(420px, 1fr)'), 'eventGraph.css 必须锁定版本链列 ≥420px（超越原 360px 底线）');
   assert.ok(egCss.includes('box-sizing: border-box; overflow: hidden;'));
 
   // 2. 星图 4 处版面精修锚点

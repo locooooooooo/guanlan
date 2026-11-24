@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { AlertTriangle, FolderOpen, RefreshCw, RotateCcw, ShieldCheck, X } from 'lucide-react';
 import type { DesktopSessionState } from '../services/desktopBridge';
+import { BRAND_NAME, BRAND_SLOGAN, BRAND_SLOGAN_NOTE } from '../utils/brandIdentity';
+import { BrandMark } from './BrandMark';
 import { Button } from './ui/primitives';
 
 interface WorkspaceGateModalProps {
@@ -44,29 +46,27 @@ export const WorkspaceGateModal: React.FC<WorkspaceGateModalProps> = ({
       data-workspace-gate={session.status}
       className="depth-0-surface flex-1 min-h-0 flex items-center justify-center p-6 overflow-y-auto"
     >
-      <div className="glass-pop glx-modal-in relative w-full max-w-xl rounded-[20px] overflow-hidden p-7 space-y-5">
+      <div className="glass-pop glx-modal-in relative w-full max-w-xl rounded-[var(--r-card)] overflow-hidden p-7 space-y-5">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 h-1"
+          className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
           style={{
-            background:
-              isConflict || isError
-                ? 'linear-gradient(90deg, var(--stage-ink-decision) 0%, var(--accent-wave) 100%)'
-                : 'linear-gradient(90deg, var(--accent-iris) 0%, var(--accent-wave) 100%)',
+            backgroundColor:
+              isConflict || isError ? 'var(--stage-ink-decision)' : 'var(--accent-iris-deep)',
           }}
         />
         <div className="flex items-start gap-4">
           <div
-            className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+            className={`w-11 h-11 flex items-center justify-center shrink-0 ${
               isConflict || isError
-                ? 'bg-[color:color-mix(in_srgb,var(--stage-ink-decision)_14%,transparent)] text-[color:var(--stage-ink-decision-text)]'
-                : 'bg-[color:var(--chip-active-bg)] text-[color:var(--accent-iris-ink)]'
+                ? 'rounded-2xl bg-[color:color-mix(in_srgb,var(--stage-ink-decision)_14%,transparent)] text-[color:var(--stage-ink-decision-text)]'
+                : ''
             }`}
           >
             {isConflict || isError ? (
               <AlertTriangle className="w-5 h-5" />
             ) : (
-              <FolderOpen className="w-5 h-5" />
+              <BrandMark size="lg" />
             )}
           </div>
           <div className="min-w-0 flex-1 space-y-1.5">
@@ -75,14 +75,14 @@ export const WorkspaceGateModal: React.FC<WorkspaceGateModalProps> = ({
                 ? '工作区正被另一个观澜实例占用（ROOT_IN_USE）'
                 : isError
                   ? '无法接入工作区'
-                  : '欢迎使用观澜 · 选择本地工作区'}
+                  : `欢迎使用${BRAND_NAME}`}
             </h1>
             <p className="text-[length:var(--text-ui-body)] leading-[1.6] text-[color:var(--ink-soft)]">
               {isConflict
                 ? '同一工作区同一时刻只允许一个写入实例持有排他锁，以防止 SQLite 索引与版本快照竞争。请关闭另一实例后重试，或选择其他目录。'
                 : isError
                   ? err?.message || '工作区服务启动失败，请确认目录存在并可读取后重试。'
-                  : '选择任意本地项目或资料文件夹即可开始时空索引与版本回溯——所有索引与快照都保存在本机数据目录，绝不向你的业务目录写入隐藏文件。'}
+                  : `${BRAND_SLOGAN} · ${BRAND_SLOGAN_NOTE}。选择任意本地项目或资料文件夹即可开始时空索引与版本回溯——所有索引与快照都保存在本机数据目录，绝不向你的业务目录写入隐藏文件。`}
             </p>
           </div>
         </div>

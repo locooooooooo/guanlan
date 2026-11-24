@@ -1364,7 +1364,7 @@ test('U03 纯函数：目录活跃摘要——未读走 GL-01 单一出口，近
   assert.equal(ids.size, summary.unreadCount, '文件级未读集合与目录级未读计数同源');
 });
 
-test('U03 渲染：智能视图零值收折为末尾轻胶囊（其余 3 项 (0)），选中零值项恒可见不失踪', () => {
+test('U03 渲染：智能视图默认折叠让位目录树，激活态仅显非零与选中项且无「其余 N 项 (0)」噪点', () => {
   const files = [makeSidebarFile('f_a', '01-方案文档'), makeSidebarFile('f_b', '01-方案文档')];
   const readingStates: Record<string, import('../src/types/guanlan').ReadingState> = {
     f_a: makeReadingState('f_a', 'rev_old_f_a'),
@@ -1387,40 +1387,26 @@ test('U03 渲染：智能视图零值收折为末尾轻胶囊（其余 3 项 (0)
       })
     );
 
-  // ① 非零项（读后有更新 / 近 7 天活跃）横向舒展展示；零值三项收折为末尾胶囊
+  // ① 默认「全部」态：智能视图折叠，不挤压下方目录树
   const html = render();
-  const text = html.replace(/<!-- -->/g, '');
-  assert.ok(html.includes('data-smart-views'), '智能视图区仍在');
-  assert.ok(html.includes('data-smart-views-collapsed'), '零值收折胶囊存在');
-  assert.ok(text.includes('其余 3 项 (0)'), '收折胶囊文案逐字「其余 3 项 (0)」');
-  assert.ok(
-    /data-smart-views-collapsed=""[^>]*aria-expanded="false"/.test(html),
-    '收折胶囊默认收起态（aria-expanded=false）'
-  );
-  // 非零项必显（各自带计数徽标）
-  assert.ok(html.includes('data-smart-view="updated_after_read"'), '非零项一：读后有更新 必显');
-  assert.ok(html.includes('data-smart-view="recent_active"'), '非零项二：近 7 天活跃 必显');
-  // 零值项：DOM 内保留（SSR 可见文本不被删改）但默认 hidden（呈现层收折，不改计数口径）
-  for (const id of ['awaiting_decision', 'agent_drafts', 'unassigned']) {
-    assert.ok(html.includes(`data-smart-view="${id}"`), `零值项 ${id} 仍在 DOM 内（口径不变）`);
-  }
-  assert.ok(
-    /<span hidden=""><button type="button" data-smart-view="awaiting_decision"/.test(html),
-    '零值项默认 hidden 收折'
-  );
+  assert.ok(!html.includes('data-smart-views'), '默认态智能视图折叠让位目录树');
+  assert.ok(!html.includes('data-smart-views-collapsed'), '不再渲染「其余 N 项 (0)」零值占位胶囊');
 
-  // ② 当前选中的零值项恒可见（不收折、不失踪）
+  // ② 当前选中的零值项恒可见（自动展开、不失踪），同时展示非零项且绝无「其余 N 项 (0)」
   const activeHtml = render('agent_drafts');
+  const activeText = activeHtml.replace(/<!-- -->/g, '');
+  assert.ok(activeHtml.includes('data-smart-views'), '选中智能视图时自动展开');
   assert.ok(
     /data-smart-view="agent_drafts"[^>]*aria-pressed="true"/.test(activeHtml) ||
       /aria-pressed="true"[^>]*data-smart-view="agent_drafts"/.test(activeHtml),
     '选中的零值视图必须可见且处于激活态'
   );
-  const activeText = activeHtml.replace(/<!-- -->/g, '');
-  assert.ok(activeText.includes('其余 2 项 (0)'), '选中项移出折叠区后收折胶囊计数相应减一');
+  assert.ok(activeHtml.includes('data-smart-view="updated_after_read"'), '非零项一：读后有更新 可见');
+  assert.ok(activeHtml.includes('data-smart-view="recent_active"'), '非零项二：近 7 天活跃 可见');
+  assert.ok(!activeText.includes('其余 2 项 (0)'), '彻底去除零值收折占位文案');
 });
 
-test('U03 渲染：高密目录视觉减噪——格式色点隐去、4px 温琥珀未读点、目录行尾未读数字与近 7 日活跃微点', () => {
+test('U03 渲染：目录树视觉极简化——去重复格式色点、仅读后有更新亮微点、行尾单数字静默且按需强调未读', () => {
   const denseFiles = Array.from({ length: SIDEBAR_DENSE_FOLDER_THRESHOLD + 4 }, (_, i) =>
     makeSidebarFile(`d_${i}`, '01-方案文档')
   );
@@ -1448,6 +1434,7 @@ test('U03 渲染：高密目录视觉减噪——格式色点隐去、4px 温琥
   const nowMs = Date.now();
   const readingStates: Record<string, import('../src/types/guanlan').ReadingState> = {
     s_a: makeReadingState('s_a', 'rev_s_a'),
+    s_b: makeReadingState('s_b', 'rev_old_s_b'),
   };
   const artifactsByFileId = new Map<string, import('../src/services/apiTypes').ArtifactStateView>([
     ['d_0', makeArtifact('d_0', { last_activity_at: new Date(nowMs - 3600_000).toISOString() })],
@@ -1457,6 +1444,11 @@ test('U03 渲染：高密目录视觉减噪——格式色点隐去、4px 温琥
     artifactsByFileId,
     nowMs,
   });
+  const unreadReasonByFileId = new Map<string, 'up_to_date' | 'never_read' | 'updated_since_last_read'>([
+    ['s_a', 'up_to_date'],
+    ['s_b', 'updated_since_last_read'],
+    ...denseFiles.map((f) => [f.file_id, 'never_read'] as const),
+  ]);
 
   const html = renderToString(
     createElement(FolderTreeRows, {
@@ -1470,39 +1462,48 @@ test('U03 渲染：高密目录视觉减噪——格式色点隐去、4px 温琥
       onOpenFileToRead: () => {},
       folderActivity: summaries,
       unreadFileIds: collectUnreadFileIds([...denseFiles, ...sparseFiles], readingStates),
+      unreadReasonByFileId,
     })
   );
 
-  // ① 高密目录：文件行不再渲染亮橙格式色点（根治百行橙点刷屏）
-  const denseSection = html.slice(0, html.indexOf('02-评审'));
-  assert.ok(!denseSection.includes('F76808'), '高密目录文件行零亮橙格式点');
-  // 稀疏目录保留格式色点（低密目录观感不变）
-  assert.ok(html.includes('F76808'), '稀疏目录仍保留格式色点');
+  // ① 文件行彻底去除左侧冗余格式色点；同目录格式一致时行尾也不再刷一列相同扩展名
+  assert.ok(!html.includes('F76808'), '文件行不再重复渲染左侧亮橙格式色点');
+  assert.ok(!html.includes('>MD<'), '清一色目录不重复格式词');
 
-  // ② 未读行渲染 4px 柔和温琥珀点（--accent-wave），静息降噪 + 悬浮提亮由动效类承担
+  // ② 仅「读后有更新」文件渲染温琥珀双环微点，普通从未读文件不再满屏亮橙点
   const unreadDots = (html.match(/data-sidebar-unread-dot/g) ?? []).length;
-  assert.equal(unreadDots, denseFiles.length + 1, '未读文件（24 高密 + 1 稀疏）各一枚未读点');
-  assert.ok(html.includes('glx-tree-unread-dot'), '未读点携带降噪动效类');
-  assert.ok(html.includes('size-1 rounded-full shrink-0 bg-[color:var(--accent-wave)]'), '未读点为 4px 温琥珀');
+  assert.equal(unreadDots, 1, '仅读后有更新文件（s_b）渲染 1 枚提醒微点');
+  assert.ok(html.includes('data-sidebar-unread-dot="s_b"'), 's_b 带读后有更新微点');
+  assert.ok(html.includes('glx-unread-updated-dot'), '读后有更新带双环提醒动效类');
 
-  // ②b 高密目录：文件行挂「静置留白」标记（未读微点静息态隐去，悬浮/聚焦才浮现）
-  assert.ok(html.includes('glx-tree-row-dense'), '高密目录文件行挂静息降噪标记');
-  const motionCssU03 = readFileSync(
-    fileURLToPath(new URL('../src/styles/motion.css', import.meta.url)),
-    'utf8'
+  // ③ 常规态目录行尾仅显示单静默数字，不再堆砌未读橙框、绿勾与紫色活跃点
+  assert.ok(!html.includes('data-folder-active-dot'), '目录行尾不再渲染紫色 7 天活跃点');
+  assert.ok(!html.includes('data-folder-unread='), '常规「全部」态不叠放额外未读橙框');
+
+  // ④ 切入「未读」筛选/排序态（emphasizeUnread=true）时，行尾精准切换为琥珀未读数字
+  const unreadEmphasisHtml = renderToString(
+    createElement(FolderTreeRows, {
+      nodes: nodes as never,
+      depth: 0,
+      selected: 'all',
+      activeFileId: 's_a',
+      expanded: new Set(['01-方案文档', '02-评审']),
+      onToggle: () => {},
+      onSelect: () => {},
+      onOpenFileToRead: () => {},
+      folderActivity: summaries,
+      unreadFileIds: collectUnreadFileIds([...denseFiles, ...sparseFiles], readingStates),
+      unreadReasonByFileId,
+      emphasizeUnread: true,
+    })
   );
   assert.ok(
-    motionCssU03.includes('.glx-tree-row-dense .glx-tree-unread-dot'),
-    'motion.css 声明高密目录静息态隐去未读微点'
+    unreadEmphasisHtml.includes(`data-folder-unread="${denseFiles.length}"`),
+    '未读态目录行尾精准呈现未读数字'
   );
+  assert.ok(unreadEmphasisHtml.includes('text-[color:var(--accent-wave)]'), '未读数字走琥珀语义色');
 
-  // ③ 目录行尾：未读数字微标 + 近 7 日活跃微点
-  assert.ok(html.includes(`data-folder-unread="${denseFiles.length}"`), '高密目录行尾显示未读数字');
-  assert.ok(html.includes('data-folder-active-dot="1"'), '目录行尾显示近 7 日活跃微点');
-  assert.ok(html.includes('text-[color:var(--accent-wave)]'), '未读数字走琥珀语义色（AA 达标）');
-  assert.ok(html.includes('bg-[color:var(--accent-iris-deep)]'), '活跃微点走薰衣草深档（图形 ≥3:1）');
-
-  // ④ 交错微过渡：稀疏目录行有入场动效类；高密目录整目录瞬时落位（不做数百行同帧淡入）
+  // ⑤ 交错微过渡保留
   assert.ok(html.includes('glx-tree-row-in'), '目录行携带展开交错微过渡类');
   assert.ok(html.includes('--glx-tree-idx'), '交错行序写入 --glx-tree-idx');
 });

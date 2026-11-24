@@ -17,40 +17,61 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
     deliveredInitiative, deliveredInitiatives, initiativeLifecycle, runInitiativeLifecycle,
     activeInitiative, changeNotice, refreshEvents, silentMergeNewEvents, silentMergingEvents,
     dataSource, files, dataError, activeTab,
+    networkOffline, streamDisconnected, retryingConnection, handleRetryConnection,
   } = ctx;
   const [dismissedNoticeKey, setDismissedNoticeKey] = useState<string | null>(null);
   const changeNoticeKey = changeNotice ? `${changeNotice.at}:${changeNotice.count}` : null;
+  // 新事件分页并入条仅作用于全景溯源（星图/日历/时间线）；
+  // 在知识资产库阅读文档或首页时不弹出通栏横幅打断阅读。
   const visibleChangeNotice =
-    changeNotice && changeNoticeKey !== dismissedNoticeKey ? changeNotice : null;
+    activeTab === 'panorama' && changeNotice && changeNoticeKey !== dismissedNoticeKey
+      ? changeNotice
+      : null;
+  const showConnectionAlert =
+    networkOffline || streamDisconnected || dataSource === 'error';
+  const connectionAlertText = networkOffline
+    ? '当前网络已断开，操作暂无法同步，请恢复网络后重试'
+    : streamDisconnected
+      ? '与本地读服务的实时连接已中断，正在等待重连或手动重试'
+      : dataError || '无法连接观澜读服务，工作区数据暂不可用';
   return (
     <>
-      {/* 批次二：手动重扫进度提示（扫描中 / 完成 / 失败）。
-          语义与 L4A 沉淀横幅独立：这里说的是「用户手动触发的整库核验是否已并入索引」。
-          建议更正（PRD §2.2）：本地服务具备后台增量通路（watcher 轮询 + L4A 沉淀队列，
-          各自有独立进度展示），本横幅不再是「扫描是唯一能推进索引的动作」的宣言，
-          而降级为手动触发兜底的如实回声——文案照旧只说这一轮扫描本身。 */}
-      {rescanState !== 'idle' && (
+      {/* 全局断网 / 服务不可用告警条（role="alert" + 可点击重试，防重提交） */}
+      {showConnectionAlert && (
         <div
-          className="px-4 py-1 bg-[color:color-mix(in_srgb,var(--stage-ink-decision)_10%,transparent)] backdrop-blur-md border-b border-[color:color-mix(in_srgb,var(--stage-ink-decision)_40%,transparent)] text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--stage-ink-decision-text)] flex items-center gap-2 shrink-0 tabular-nums"
-          role="status"
+          data-connection-alert=""
+          role="alert"
+          className="px-4 py-1.5 bg-[color:color-mix(in_srgb,var(--stage-ink-exec)_10%,var(--card))] border-b border-[color:color-mix(in_srgb,var(--stage-ink-exec)_34%,transparent)] text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--stage-ink-exec-text)] flex flex-wrap items-center justify-between gap-2 shrink-0 tabular-nums"
         >
-          <span
-            className={`w-1.5 h-1.5 rounded-full bg-[color:var(--stage-ink-decision)] ${
-              rescanState === 'running' ? 'animate-pulse' : ''
-            }`}
-          />
-          <span>
-            {rescanState === 'running'
-              ? '正在扫描工作区，把最新文档并入索引…'
-              : rescanState === 'done'
-                ? '扫描完成，索引已更新'
-                : `扫描失败：${rescanError || '未知原因'}`}
-          </span>
-          {rescanState === 'error' && (
-            <Button variant="secondary" size="sm" onClick={() => void handleRescan()}>
-              重试
-            </Button>
-          )}
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="size-1.5 rounded-full bg-[color:var(--stage-ink-exec)] shrink-0" aria-hidden="true" />
+            <span className="break-words">{connectionAlertText}</span>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={retryingConnection}
+            aria-busy={retryingConnection}
+            data-retry-connection=""
+            onClick={() => void handleRetryConnection()}
+          >
+            {retryingConnection ? '重试中…' : '重试连接'}
+          </Button>
+        </div>
+      )}
+
+      {/* 手动重扫进度已收编入 TopHeader 右上角同步胶囊（「扫描中…」+ 旋转图标），
+          不再弹出通栏横幅挤压正文/画布高度；仅在扫描失败时呈现可重试告警横幅。 */}
+      {rescanState === 'error' && (
+        <div
+          className="px-4 py-1.5 bg-[color:color-mix(in_srgb,var(--stage-ink-exec)_10%,var(--card))] border-b border-[color:color-mix(in_srgb,var(--stage-ink-exec)_36%,transparent)] text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--stage-ink-exec-text)] flex flex-wrap items-center gap-2 shrink-0 tabular-nums"
+          role="alert"
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-[color:var(--stage-ink-exec)] shrink-0" aria-hidden="true" />
+          <span className="break-words">{`扫描失败：${rescanError || '请检查服务连接后重试'}`}</span>
+          <Button variant="secondary" size="sm" onClick={() => void handleRescan()}>
+            重试扫描
+          </Button>
         </div>
       )}
 
@@ -76,7 +97,7 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
                   className="h-1 w-20 overflow-hidden rounded-full bg-[color:color-mix(in_srgb,var(--accent-iris)_14%,transparent)] shrink-0"
                 >
                   <span
-                    className="block h-full rounded-full bg-gradient-to-r from-[color:var(--accent-iris)] to-[color:var(--accent-iris-deep)] motion-safe:transition-all"
+                    className="block h-full rounded-full bg-[color:var(--accent-iris-deep)] motion-safe:transition-all"
                     style={{ width: `${Math.max(4, Math.min(100, l4aProgress.percent))}%` }}
                   />
                 </span>
@@ -119,7 +140,7 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
                 data-silent-merge-events=""
                 onClick={() => void silentMergeNewEvents()}
                 className="!h-[22px] !px-2.5 !text-[11px] !rounded-full cursor-pointer"
-                title="无痛并入新事件，保持当前滚动位与已加载分页不动"
+                title="静默并入新事件，保持当前滚动位与已加载分页不动"
               >
                 {silentMergingEvents ? '静默并入中…' : '静默并入（保持当前位置）'}
               </Button>
@@ -242,10 +263,17 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
           静态玻璃条，motion.css §3.29）；role="status" 与两句诚实文案原样保留，
           骨架只是视觉占位，不吞任何真实错误态（dataError 分支整块不渲染骨架）。 */}
       {dataSource === 'loading' && files.length === 0 && !dataError && activeTab === 'home' && (
-        <div className="flex-1 flex items-center justify-center p-8" role="status">
+        <div
+          className="flex-1 flex items-center justify-center p-8"
+          role="status"
+          aria-busy="true"
+          aria-live="polite"
+        >
           <div className="flex flex-col items-center gap-4 text-center">
             <ChronosLineArt className="size-12 opacity-80" />
-            <GlassSkeleton lines={3} className="w-64" />
+            <div role="progressbar" aria-label="正在读取工作区快照" className="w-64">
+              <GlassSkeleton lines={3} className="w-full" />
+            </div>
             <p className="text-sm text-[color:var(--ink-soft)]">
               正在读取工作区快照…
             </p>

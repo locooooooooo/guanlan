@@ -32,9 +32,18 @@ import { AppMainViews } from './components/app/AppMainViews';
 import { AppLibraryStage } from './components/app/AppLibraryStage';
 import { AppModalsStack } from './components/app/AppModalsStack';
 import { GlobalDirectorySidebar } from './components/app/GlobalDirectorySidebar';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { AnchoredToastProvider, ToastProvider } from './components/ui/toast';
 
 export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  );
+}
+
+function AppContent() {
   const ctx = useWorkspaceStore();
   const {
     activeTab,
@@ -150,10 +159,14 @@ export default function App() {
         }}
         helpOpen={isHelpOpen}
         onHelpOpenChange={setIsHelpOpen}
-        sidebarCollapsed={ctx.dirShell.sidebarCollapsed}
+        sidebarCollapsed={
+          activeTab === 'panorama' ? !ctx.dirShell.panoramaSidebarOpen : ctx.dirShell.sidebarCollapsed
+        }
         onToggleSidebar={() => {
           if (typeof window !== 'undefined' && window.innerWidth < 1024) {
             ctx.setIsMobileLeftOpen((v) => !v);
+          } else if (activeTab === 'panorama') {
+            ctx.dirShell.togglePanoramaSidebar();
           } else {
             ctx.dirShell.toggleSidebarCollapsed();
           }

@@ -48,19 +48,38 @@ export function MountManagerPanel(props: MountManagerPanelProps): React.ReactEle
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const submitInFlightRef = useRef(false);
+
   useEffect(() => {
     if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !busy) {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, busy, onClose]);
 
   if (!isOpen) return null;
 
   const submit = async (): Promise<void> => {
     const path = inputValue.trim();
-    if (!path || busy) return;
+    if (!path || busy || submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
     setBusy(true);
-    const ok = await onMount(path);
-    setBusy(false);
-    if (ok) setInputValue('');
+    try {
+      const ok = await onMount(path);
+      if (ok) setInputValue('');
+    } finally {
+      submitInFlightRef.current = false;
+      setBusy(false);
+    }
   };
 
   return (

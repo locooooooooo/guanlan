@@ -69,6 +69,8 @@ export function useDirectoryShell({
   showToast,
 }: UseDirectoryShellOptions) {
   const [sidebarPrefs, setSidebarPrefs] = useState(() => loadSidebarShellPrefs());
+  // 画布/全景视图默认收起左侧目录栏（为星图与版本时光机让出空间），用户可随时一键展开
+  const [panoramaSidebarOpen, setPanoramaSidebarOpen] = useState(false);
   const [realFolders, setRealFolders] = useState<string[]>([]);
   const [pinnedFileIds, setPinnedFileIds] = useState<string[]>(() =>
     loadPinnedFileIds(workspaceScopeKey)
@@ -113,10 +115,14 @@ export function useDirectoryShell({
     });
   }, []);
 
+  const togglePanoramaSidebar = useCallback(() => {
+    setPanoramaSidebarOpen((v) => !v);
+  }, []);
+
   const refreshWorkspaceFolders = useCallback(async () => {
     if (!enabled) return;
     const res = await fetchWorkspaceFolders();
-    if (res.ok && res.data) {
+    if (res.ok && res.data && Array.isArray(res.data.folders)) {
       setRealFolders(res.data.folders);
     }
   }, [enabled]);
@@ -349,6 +355,9 @@ export function useDirectoryShell({
   return {
     sidebarWidth: sidebarPrefs.width,
     sidebarCollapsed: sidebarPrefs.collapsed,
+    panoramaSidebarOpen,
+    setPanoramaSidebarOpen,
+    togglePanoramaSidebar,
     setSidebarWidth,
     setSidebarCollapsed,
     toggleSidebarCollapsed,

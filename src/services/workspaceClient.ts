@@ -1092,11 +1092,19 @@ export interface WorkspaceChangeNotice {
  * EventSource.onmessage 仅接收未命名事件，因此必须显式注册 `workspace-change` / `hello` 监听器。
  */
 export function subscribeWorkspaceStream(
-  onNotice: (notice: WorkspaceChangeNotice) => void
+  onNotice: (notice: WorkspaceChangeNotice) => void,
+  onConnectionChange?: (connected: boolean) => void
 ): () => void {
   if (typeof EventSource === 'undefined') return () => {};
   const source = new EventSource(`${apiBase}/api/v1/stream`);
+  const handleOpen = () => {
+    onConnectionChange?.(true);
+  };
+  const handleError = () => {
+    onConnectionChange?.(false);
+  };
   const handleMessage = (event: MessageEvent) => {
+    onConnectionChange?.(true);
     try {
       const parsed = JSON.parse(String(event.data)) as WorkspaceChangeNotice;
       if (parsed.newEvents === undefined && typeof parsed.new_events === 'number') {
@@ -1110,10 +1118,14 @@ export function subscribeWorkspaceStream(
       /* 忽略无法解析的心跳 */
     }
   };
+  source.addEventListener('open', handleOpen);
+  source.addEventListener('error', handleError);
   source.addEventListener('hello', handleMessage as EventListener);
   source.addEventListener('workspace-change', handleMessage as EventListener);
   source.onmessage = handleMessage;
   return () => {
+    source.removeEventListener('open', handleOpen);
+    source.removeEventListener('error', handleError);
     source.removeEventListener('hello', handleMessage as EventListener);
     source.removeEventListener('workspace-change', handleMessage as EventListener);
     source.close();

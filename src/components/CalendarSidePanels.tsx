@@ -592,7 +592,7 @@ export function CalendarSidePanels({
                         {m.total} · {m.activeDays}天
                       </span>
                     </div>
-                    <div className="mb-1 grid grid-cols-7 gap-1 text-center font-mono text-[9px] text-[color:var(--ink-faint)]">
+                    <div className="mb-1 grid grid-cols-7 gap-1 text-center font-mono text-[length:var(--text-micro)] text-[color:var(--ink-soft)]">
                       {WEEKDAY_LABELS.map((w) => (
                         <span key={w}>{w}</span>
                       ))}

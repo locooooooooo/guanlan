@@ -127,6 +127,18 @@ export const FileOpsModal: React.FC<FileOpsModalProps> = ({
     }
   }, [request]);
 
+  useEffect(() => {
+    if (!request) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !submitting) {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [request, submitting, onClose]);
+
   const currentDir = request ? parentDirOf(request.relativePath) : '';
   const currentBase = request ? fileNameOf(request.relativePath) : '';
 

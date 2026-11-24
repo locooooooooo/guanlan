@@ -436,7 +436,7 @@ test('U10 动效契约：两文件引用的 glx-* 类全部「声明 + reduce �
     // (?<!-)：排除 --glx-stagger / --glx-bar-idx 等交错延迟自定义属性（非类名）
     for (const m of src.matchAll(/(?<![-\w])glx-[a-z0-9-]+/g)) used.add(m[0]);
   }
-  assert.ok(used.size >= 8, `应覆盖既有共享动效类（实收 ${used.size} 类）`);
+  assert.ok(used.size >= 5, `应覆盖既有共享动效类（实收 ${used.size} 类）`);
   // glx-fan-stage 是纯父级 hover 触发器（自身无动画/过渡），子层 glx-fan-front/back
   // 已逐类降级——登记豁免，与 motion.css §4 块一「逐类降级」口径一致。
   const parentTriggerOnly = new Set(['glx-fan-stage']);
@@ -811,21 +811,34 @@ function islandStates(): { files: FileRecord[]; states: Record<string, ReadingSt
   };
 }
 
-test('U11 岛收起态 SSR：三环全部接入描边生长，悬停微亮 group 接线，收起态零面板', () => {
+test('U11 岛收起态 SSR：inline 态三环描边生长，header 态走极简静默图标，收起态零面板', () => {
   const { files, states } = islandStates();
-  const html = renderToStaticMarkup(
+  const inlineHtml = renderToStaticMarkup(
     createElement(ReadingIsland, {
+      placement: 'inline',
       files,
       readingStates: states,
       quota: { usedTotalMiB: 12, maxTotalMiB: 50 } as WorkspaceConfig['quota'],
       onOpenDoc: () => {},
     })
   );
-  assert.equal((html.match(/glx-ring-draw/g) ?? []).length, 3, '已读/未读/已落盘三环全部描边生长');
-  assert.ok(html.includes('group/island-pill'), '胶囊挂 group/island-pill（微亮触发器）');
-  assert.ok(html.includes('aria-expanded="false"'), '收起态语义不变');
-  assert.equal(html.split('data-island-panel').length - 1, 0, '收起态不渲染面板');
-  assert.equal(html.split('data-island-ring').length - 1, 3, '三环锚点不回退');
+  assert.equal((inlineHtml.match(/glx-ring-draw/g) ?? []).length, 3, 'inline 态三环全部描边生长');
+  assert.ok(inlineHtml.includes('group/island-pill'), '胶囊挂 group/island-pill（微亮触发器）');
+  assert.ok(inlineHtml.includes('aria-expanded="false"'), '收起态语义不变');
+  assert.equal(inlineHtml.split('data-island-panel').length - 1, 0, '收起态不渲染面板');
+  assert.equal(inlineHtml.split('data-island-ring').length - 1, 3, '三环锚点在位');
+
+  const headerHtml = renderToStaticMarkup(
+    createElement(ReadingIsland, {
+      placement: 'header',
+      files,
+      readingStates: states,
+      quota: { usedTotalMiB: 12, maxTotalMiB: 50 } as WorkspaceConfig['quota'],
+      onOpenDoc: () => {},
+    })
+  );
+  assert.ok(headerHtml.includes('data-island-pill=""'), '顶栏触发器在位');
+  assert.equal(headerHtml.split('data-island-ring').length - 1, 0, '顶栏精简为静默单图标，不再堆砌三环');
 });
 
 test('U11 展开面板 SSR：glx-t-panel 两段式弹簧滑出（anim-spring-pop 退役）；琉璃材质与既有锚点不回退', () => {
@@ -1042,7 +1055,7 @@ test('U11/V02 阅读岛挂载：收编入 TopHeader 静默工具组零遮挡（A
     })
   );
   assert.ok(readyHeaderHtml.includes('data-island-pill'), '数据就绪后顶栏微胶囊出现（零右缘遮挡）');
-  assert.ok(readyHeaderHtml.includes('data-island-ring="已读"'), '三环锚点随挂载可触达');
+  assert.ok(readyHeaderHtml.includes('阅读与存档'), '顶栏静默触发器带完整可读说明');
   assert.ok(readyHeaderHtml.includes('aria-expanded="false"'), '默认收起态');
 });
 

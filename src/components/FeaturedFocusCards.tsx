@@ -173,28 +173,17 @@ const FeaturedFocusCards: React.FC<FeaturedFocusCardsProps> = ({
   const coverImage = activePackage?.cover?.dataUri ?? null;
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      {/* 卡 A：待拍板决策（暖珀聚光玻璃专题卡）。数字锚点 data-feature-count="decision" */}
+      {/* 卡 A：待拍板决策（简洁实体专题卡）。数字锚点 data-feature-count="decision" */}
       <section
         data-feature-card="decision"
-        className="group glx-sheen-card glx-fan-stage depth-2-card depth-2-card-featured relative p-5 sm:p-6"
-        style={{ backgroundImage: 'var(--feature-grad-amber)' }}
+        className="group glx-sheen-card glx-fan-stage depth-2-card depth-2-card-featured relative p-5 sm:p-6 bg-card"
       >
-        {/* 柔光装饰晕，增强纵深光影感 */}
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-10 -top-10 size-40 rounded-full opacity-55 blur-2xl"
-          style={{ background: 'radial-gradient(circle, rgba(237,138,80,0.34), transparent 70%)' }}
-        />
         <div className="relative flex items-center justify-between gap-4">
           <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <span
                 aria-hidden="true"
-                className="inline-flex size-8 shrink-0 items-center justify-center rounded-[10px] shadow-[0_4px_12px_-2px_rgba(168,74,26,0.22),inset_0_1px_0_rgba(255,255,255,0.85)]"
-                style={{
-                  background: 'linear-gradient(135deg, rgba(237,138,80,0.26) 0%, rgba(168,74,26,0.12) 100%)',
-                  color: 'var(--accent-wave)',
-                }}
+                className="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--r-ctl)] bg-[color:color-mix(in_srgb,var(--accent-wave)_12%,transparent)] text-[color:var(--accent-wave)]"
               >
                 <Scale className="size-4" />
               </span>
@@ -254,24 +243,13 @@ const FeaturedFocusCards: React.FC<FeaturedFocusCardsProps> = ({
         aria-label={
           activePackage ? `打开任务包看板：${activePackage.name}` : '打开任务包看板'
         }
-        className="group glx-sheen-card glx-fan-stage depth-2-card depth-2-card-featured depth-2-card-hover relative flex w-full cursor-pointer items-center justify-between gap-4 p-5 sm:p-6 text-left"
-        style={{ backgroundImage: 'var(--feature-grad-blue)' }}
+        className="group glx-sheen-card glx-fan-stage depth-2-card depth-2-card-featured depth-2-card-hover relative flex w-full cursor-pointer items-center justify-between gap-4 p-5 sm:p-6 text-left bg-card"
       >
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-10 -top-10 size-40 rounded-full opacity-55 blur-2xl"
-          style={{ background: 'radial-gradient(circle, rgba(124,111,208,0.34), transparent 70%)' }}
-        />
-
         <span className="relative flex min-w-0 flex-1 flex-col justify-between gap-3">
           <span className="flex items-center gap-2.5">
             <span
               aria-hidden="true"
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-[10px] shadow-[0_4px_12px_-2px_rgba(109,91,208,0.22),inset_0_1px_0_rgba(255,255,255,0.85)]"
-              style={{
-                background: 'linear-gradient(135deg, rgba(124,111,208,0.26) 0%, rgba(109,91,208,0.12) 100%)',
-                color: 'var(--accent-iris-deep)',
-              }}
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--r-ctl)] bg-[color:color-mix(in_srgb,var(--accent-iris)_12%,transparent)] text-[color:var(--accent-iris-deep)]"
             >
               {activePackage ? <Layers className="size-4" /> : <Compass className="size-4" />}
             </span>
@@ -313,23 +291,15 @@ const FeaturedFocusCards: React.FC<FeaturedFocusCardsProps> = ({
           </span>
         </span>
 
-        {/* 右侧精致微缩图纸/档案扇叠舞台（活跃态呈现徽标 + 资产量 + 精雕内容骨架 + 五段进度轨，明暗双态自适应） */}
+        {/* 右侧微缩专项卡（呈现真实徽标、资产量与五段进度轨，无假占位条） */}
         <span className="relative h-[120px] w-[184px] shrink-0 hidden sm:block" aria-hidden="true">
-          <span className="glx-fan-back absolute right-1 top-5 flex h-[92px] w-[132px] flex-col justify-between rounded-[12px] border border-border/75 bg-card/75 p-2.5 shadow-sm">
-            <span className="h-1.5 w-10 rounded-full bg-[color:color-mix(in_srgb,var(--accent-iris)_26%,transparent)]" />
-            <span className="space-y-1.5">
-              <span className="block h-1 w-full rounded-full bg-muted" />
-              <span className="block h-1 w-4/5 rounded-full bg-muted" />
-              <span className="block h-1 w-2/3 rounded-full bg-muted" />
-            </span>
-          </span>
-          <span className="glx-fan-front absolute right-8 top-2 flex h-[98px] w-[148px] flex-col justify-between overflow-hidden rounded-[12px] border border-border/85 bg-card/95 p-2.5 shadow-md">
+          <span className="glx-fan-front absolute right-2 top-2 flex h-[100px] w-[164px] flex-col justify-between overflow-hidden rounded-[var(--r-block)] border border-border bg-card p-3 shadow-xs">
             {coverImage ? (
               <img
                 src={coverImage}
                 alt=""
                 loading="lazy"
-                className="h-full w-full rounded-lg object-contain"
+                className="h-full w-full rounded-[var(--r-ctl)] object-contain"
               />
             ) : activePackage ? (
               <>
@@ -337,35 +307,28 @@ const FeaturedFocusCards: React.FC<FeaturedFocusCardsProps> = ({
                   {activePackage.badgeLine ? (
                     <span className={STAGE_BADGE_PILL_CLASS}>{activePackage.badgeLine}</span>
                   ) : (
-                    <span className="font-mono text-[10px] font-medium text-[color:var(--accent-iris-ink)]">
+                    <span className="font-mono text-[length:var(--text-micro)] font-medium text-[color:var(--accent-iris-ink)]">
                       {activePackage.stage}
                     </span>
                   )}
-                  <span className="shrink-0 font-mono text-[9.5px] font-medium tabular-nums text-[color:var(--ink-soft)]">
-                    ×{activePackage.docCount}
+                  <span className="shrink-0 font-mono text-[length:var(--text-micro)] font-medium tabular-nums text-[color:var(--ink-soft)]">
+                    {activePackage.docCount} 份
                   </span>
                 </span>
-                <span className="space-y-1.5">
-                  <span className="block truncate text-[11px] font-semibold leading-tight text-[color:var(--ink-strong)]">
-                    {activePackage.name}
-                  </span>
-                  <span className="block h-1 w-full rounded-full bg-muted" />
-                  <span className="block h-1 w-3/4 rounded-full bg-muted" />
+                <span className="block truncate text-[length:var(--text-ui)] font-semibold leading-tight text-[color:var(--ink-strong)]">
+                  {activePackage.name}
                 </span>
                 <FiveStageRail stage={activePackage.stage} />
               </>
             ) : (
               <>
                 <span className="flex items-center justify-between">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[color:color-mix(in_srgb,var(--accent-iris)_12%,transparent)] px-2 py-0.5 font-mono text-[10px] font-medium text-[color:var(--accent-iris-ink)]">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[color:color-mix(in_srgb,var(--accent-iris)_12%,transparent)] px-2 py-0.5 font-mono text-[length:var(--text-micro)] font-medium text-[color:var(--accent-iris-ink)]">
                     档案全览
                   </span>
-                  <span className="size-1.5 rounded-full bg-[color:var(--accent-iris)] opacity-60" />
                 </span>
-                <span className="space-y-1.5">
-                  <span className="block h-1.5 w-16 rounded-full bg-muted" />
-                  <span className="block h-1 w-full rounded-full bg-muted" />
-                  <span className="block h-1 w-3/4 rounded-full bg-muted" />
+                <span className="text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)]">
+                  查看全部专项与进度
                 </span>
                 <span className="flex items-center gap-1">
                   {STAGE_SLOT_ORDER.map((role) => (

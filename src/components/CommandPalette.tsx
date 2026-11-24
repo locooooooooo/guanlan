@@ -965,10 +965,11 @@ export function CommandPalette(props: CommandPaletteProps): React.ReactElement |
                         ) : null}
                         {item.sourceWorkspace ? (
                           <span
-                            className="max-w-[160px] truncate rounded bg-[color:color-mix(in_srgb,var(--accent-iris)_10%,transparent)] px-1.5 py-[1px] text-[10px] text-muted-foreground"
+                            className="inline-flex items-center gap-1 max-w-[160px] truncate rounded-[var(--r-ctl)] bg-[color:color-mix(in_srgb,var(--accent-iris)_10%,transparent)] px-1.5 py-[1px] text-[length:var(--text-micro)] text-muted-foreground"
                             title={`来源参考工作区：${item.sourceWorkspace.name}（${item.sourceWorkspace.rootKey.slice(0, 8)}）`}
                           >
-                            📁 {item.sourceWorkspace.name}
+                            <FolderOpen className="size-3 shrink-0" aria-hidden="true" />
+                            <span className="truncate">{item.sourceWorkspace.name}</span>
                           </span>
                         ) : null}
                         {cleanSubtitle ? (

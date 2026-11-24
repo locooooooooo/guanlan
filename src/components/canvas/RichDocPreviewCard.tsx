@@ -100,9 +100,9 @@ export default function RichDocPreviewCard({
         </span>
       </span>
 
-      {/* 💡核心结论行（clamp 2）——SVG 文档卡同样保留结论文本（图形文字检索摘要） */}
+      {/* 核心结论行（clamp 2）——SVG 文档卡同样保留结论文本（图形文字检索摘要） */}
       <span className="cvw-rich-conclusion">
-        {hasConclusion ? `💡 ${conclusion}` : `💡 ${EMPTY_CONCLUSION}`}
+        {hasConclusion ? conclusion : EMPTY_CONCLUSION}
       </span>
 
       {/* 主体三态：SVG=缩略图直出；变更章节行；正文前 3 行；全空=诚实空态 */}

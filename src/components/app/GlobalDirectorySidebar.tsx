@@ -44,6 +44,9 @@ export function GlobalDirectorySidebar({ ctx }: { ctx: WorkspaceStoreCtx }) {
     dirShell,
     multiProjects,
     sidebarInlineAction,
+    dataSource,
+    retryingConnection,
+    handleRetryConnection,
   } = ctx;
 
   const [resizing, setResizing] = useState(false);
@@ -74,6 +77,9 @@ export function GlobalDirectorySidebar({ ctx }: { ctx: WorkspaceStoreCtx }) {
     <LeftSidebar
       width={dirShell.sidebarWidth}
       files={files}
+      dataSource={dataSource}
+      retryingConnection={retryingConnection}
+      onRetryConnection={() => void handleRetryConnection()}
       realFolders={dirShell.realFolders}
       readingStates={readingStates}
       totalCount={filesTotal || undefined}
@@ -205,10 +211,13 @@ export function GlobalDirectorySidebar({ ctx }: { ctx: WorkspaceStoreCtx }) {
     />
   );
 
+  const desktopCollapsed =
+    activeTab === 'panorama' ? !dirShell.panoramaSidebarOpen : dirShell.sidebarCollapsed;
+
   return (
     <>
-      {/* 桌面常驻侧栏 + Quiet.md 可拖拽调宽把手 */}
-      {!dirShell.sidebarCollapsed && (
+      {/* 桌面常驻侧栏（全景/画布视图默认让位收起，可随时一键展开）+ Quiet.md 可拖拽调宽把手 */}
+      {!desktopCollapsed && (
         <div className="hidden lg:flex h-full shrink-0 relative z-20">
           {sidebarElement}
           <div

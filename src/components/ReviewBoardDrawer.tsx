@@ -306,6 +306,18 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
     }
   }, [board]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const items = board?.items ?? [];
@@ -313,6 +325,7 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
   const visibleCards = filtered.filter(
     (card) => !settledHidden.includes(card.initiative_id)
   );
+
   const counts = board?.counts ?? {
     pending_decision: 0,
     dispatchable: 0,
@@ -335,6 +348,9 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
       data-esc-layer="open"
       data-review-board-drawer=""
       className="glx-backdrop-in fixed inset-0 z-50 bg-[color:var(--ink-anchor)]/38 dark:bg-black/62 backdrop-blur-sm flex justify-end p-2 sm:p-3"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       {/* V08：coss Sheet (variant="inset") 悬浮抽屉材质 + U08 glx-t-panel 弹簧双轨入场 */}
       <div
@@ -591,7 +607,7 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
                               data-board-ack-btn={stmt.statement_id}
                               onClick={() => onAcknowledgeStatement(stmt)}
                               className="cursor-pointer"
-                              title="将此条以「已知悉」写回原 .md、扣减未决计数并自动解锁下游"
+                                title="将此条以「已知悉」写回原 .md、扣减未决计数并解除下游阻塞"
                             >
                               <Check className="w-3 h-3" />
                               <span>{isBusy ? '写回中…' : '已知悉'}</span>

@@ -199,8 +199,8 @@ test('V12-08 · 全局主题三态循环（light → dark → system → light�
   assert.equal(resolveEffectiveAppTheme('light', true), 'light');
   assert.equal(resolveEffectiveAppTheme('system', true), 'dark');
   assert.equal(resolveEffectiveAppTheme('system', false), 'light');
-  assert.equal(appThemeModeLabel('light'), '浅色精密');
-  assert.equal(appThemeModeLabel('dark'), '暗夜沉浸');
+  assert.equal(appThemeModeLabel('light'), '浅色');
+  assert.equal(appThemeModeLabel('dark'), '深色');
   assert.equal(appThemeModeLabel('system'), '跟随系统');
 });
 

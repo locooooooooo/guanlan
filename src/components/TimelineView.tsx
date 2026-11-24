@@ -775,7 +775,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                     <span aria-hidden="true" className="opacity-40">·</span>
                   )}
                   {showVer && (
-                    <span className="shrink-0 text-[color:var(--ink-faint)]">{verText}</span>
+                    <span className="shrink-0 text-[color:var(--ink-soft)]">{verText}</span>
                   )}
                 </div>
               );
@@ -893,7 +893,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
               )}
               {sections.length > 0 && (
                 <div className="mt-2.5 pt-2 border-t border-[color:var(--glass-hairline)] flex flex-wrap items-center gap-1.5 text-[length:var(--text-micro)] font-mono text-[color:var(--ink-soft)]">
-                  <span className="text-[color:var(--ink-faint)]">变更</span>
+                  <span className="text-[color:var(--ink-soft)]">变更</span>
                   {sections.map((sec) => (
                     <span
                       key={sec}

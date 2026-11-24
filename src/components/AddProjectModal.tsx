@@ -47,6 +47,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
   const [activate, setActivate] = useState(false);
   const [picking, setPicking] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const submitInFlightRef = useRef(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -54,9 +55,22 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
     setName('');
     setReadonly(false);
     setActivate(false);
+    submitInFlightRef.current = false;
     const id = setTimeout(() => inputRef.current?.focus(), 20);
     return () => clearTimeout(id);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !busy) {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, busy, onClose]);
 
   const suggestedRecents = useMemo(() => {
     const existing = new Set(projects.map((p) => normKey(p.root_path)));
@@ -80,13 +94,18 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!rootPath.trim() || busy) return;
-    await onSubmit({
-      rootPath: rootPath.trim(),
-      name: name.trim() || undefined,
-      readonly,
-      activate,
-    });
+    if (!rootPath.trim() || busy || submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
+    try {
+      await onSubmit({
+        rootPath: rootPath.trim(),
+        name: name.trim() || undefined,
+        readonly,
+        activate,
+      });
+    } finally {
+      submitInFlightRef.current = false;
+    }
   };
 
   return (

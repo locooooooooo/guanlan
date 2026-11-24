@@ -317,7 +317,7 @@ const DecisionResolveCard: React.FC<DecisionResolveCardProps> = ({
           title={
             !statement
               ? '未匹配到服务端陈述（statement），无法写回源文件'
-              : '以「已知悉（人工确认放行）」原位写回 .md、扣减未决计数并自动解锁下游事项'
+              : '以「已知悉（人工确认放行）」原位写回 .md、扣减未决计数并解除下游事项阻塞'
           }
           className={`rounded-md border px-3 py-1.5 text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-medium transition-colors ${
             canAcknowledge

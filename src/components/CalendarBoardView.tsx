@@ -2616,15 +2616,15 @@ export function SlotDayList({
         {/* 高密日（>6 份）内置轻检索框，百份文档一秒定位 */}
         {items.length > 6 && (
           <div className="shrink-0 border-b border-border/70 bg-card/75 px-2.5 py-1.5">
-            <div className="flex items-center gap-1.5 rounded-[8px] border border-border bg-card/90 px-2 py-1 focus-within:border-[color:var(--accent-iris)]">
-              <Search className="w-3 h-3 text-[color:var(--ink-faint)] shrink-0" aria-hidden="true" />
+            <div className="flex items-center gap-1.5 rounded-[var(--r-ctl)] border border-border bg-card px-2 py-1 focus-within:border-[color:var(--ring)] focus-within:ring-2 focus-within:ring-[color:color-mix(in_srgb,var(--ring)_35%,transparent)]">
+              <Search className="w-3 h-3 text-[color:var(--ink-soft)] shrink-0" aria-hidden="true" />
               <input
                 type="text"
                 value={filterText}
                 onChange={(e) => setFilterText(e.target.value)}
                 placeholder={`筛选当日 ${items.length} 份文档…`}
                 aria-label="筛选当日文档"
-                className="w-full min-w-0 bg-transparent text-[11px] text-[color:var(--ink-strong)] placeholder:text-[color:var(--ink-faint)] outline-none"
+                className="w-full min-w-0 bg-transparent text-[length:var(--text-micro)] text-[color:var(--ink-strong)] placeholder:text-[color:var(--ink-soft)] focus-visible:outline-none"
               />
               {filterText && (
                 <button

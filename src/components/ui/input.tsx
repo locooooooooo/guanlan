@@ -30,7 +30,7 @@ export function Input({
     >
       <InputPrimitive
         className={cn(
-          'w-full min-w-0 rounded-[inherit] bg-transparent px-2.5 text-foreground placeholder:text-muted-foreground/75 outline-none',
+          'w-full min-w-0 rounded-[inherit] bg-transparent px-2.5 text-foreground placeholder:text-muted-foreground/85 focus-visible:outline-2 focus-visible:outline-[color:var(--ring)] focus-visible:outline-offset-[-1px]',
           size === 'sm' && 'h-7 px-2 text-xs',
           size === 'default' && 'h-8 text-[13px]',
           size === 'lg' && 'h-9 px-3 text-sm',

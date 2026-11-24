@@ -386,12 +386,12 @@ const FileCard = React.memo(function FileCard({
       {isUpdatedAfterRead && (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-[color:var(--accent-wave)] via-[color:color-mix(in_srgb,var(--accent-wave)_65%,transparent)] to-transparent"
+          className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-[color:var(--accent-wave)]"
         />
       )}
       {showFloatingActions && (
         <div
-          className="absolute right-1.5 bottom-1.5 z-10 flex items-center gap-0.5 rounded-md bg-card/95 backdrop-blur-md px-1 py-0.5 shadow-sm border border-[color:var(--glass-hairline)] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+          className="absolute right-1.5 bottom-1.5 z-10 flex items-center gap-0.5 rounded-[var(--r-ctl)] bg-card px-1 py-0.5 shadow-xs border border-[color:var(--glass-hairline)] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity"
           onClick={(e) => e.stopPropagation()}
         >
           {canQuickToggleRead && (

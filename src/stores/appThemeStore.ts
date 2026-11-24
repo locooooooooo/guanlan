@@ -23,9 +23,9 @@ export function nextAppThemeMode(mode: AppThemeMode): AppThemeMode {
 
 /** V07 · 全站主题中文展示标签（单一语义源）。 */
 export function appThemeModeLabel(mode: AppThemeMode): string {
-  if (mode === 'dark') return '暗夜沉浸';
+  if (mode === 'dark') return '深色';
   if (mode === 'system') return '跟随系统';
-  return '浅色精密';
+  return '浅色';
 }
 
 function isAppThemeMode(value: unknown): value is AppThemeMode {

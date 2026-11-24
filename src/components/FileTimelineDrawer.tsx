@@ -266,6 +266,18 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
     };
   }, [previewRevisionId, history]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const isPdf = history?.file.format === 'pdf';

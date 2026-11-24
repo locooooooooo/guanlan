@@ -388,17 +388,19 @@ test('U04 浮层避让：面板展开时卡面右缘让出遮挡带（角标/比
     '越界越深避让越宽（单调不减）',
   );
 
-  // ③ 接线：避让量收窄卡面渲染宽度（foreignObject 宽），几何常量 NODE_W 一字未改
+  // ③ 接线：Diff 面板与右侧检查器合流为独立网格列（data-machine-unified-inspector），
+  //    不再悬浮压盖画布，故卡面避让传 false 保持完整宽（零截断），NODE_W/NODE_H 几何常量不变
   const tsx = readSrc('components/DocumentTimeMachineView.tsx');
-  assert.ok(tsx.includes('machinePaneReserve(TRUNK_X + NODE_W / 2, paneOpen)'), '版本卡按右缘算避让量');
-  assert.ok(tsx.includes('machinePaneReserve(TRUNK_X + 93, paneOpen)'), 'hub 卡按右缘算避让量');
+  assert.ok(tsx.includes('data-machine-unified-inspector=""'), '版本对比与检查器合流为单一右侧栏');
+  assert.ok(tsx.includes('machinePaneReserve(TRUNK_X + NODE_W / 2, false)'), '统一右栏不再覆盖画布，版本卡零收窄截断');
+  assert.ok(tsx.includes('machinePaneReserve(TRUNK_X + 93, false)'), 'hub 卡保持完整宽度不被硬切');
   assert.ok(
     tsx.includes('<foreignObject width={NODE_W - nodeReserve} height={NODE_H}>'),
-    '版本卡渲染宽度随避让量收窄（卡面整条落在面板左缘之前）',
+    '版本卡渲染宽度公式保留',
   );
   assert.ok(
     tsx.includes('<foreignObject x={TRUNK_X - 93} y={20} width={186 - hubReserve} height={76}>'),
-    'hub 卡渲染宽度随避让量收窄（标题不被浮层硬切）',
+    'hub 卡渲染宽度公式保留',
   );
   assert.ok(tsx.includes('const NODE_W = 150;'), 'NODE_W 几何常量一字未改（只改渲染宽度）');
   assert.ok(tsx.includes('const NODE_H = 56;'), 'NODE_H 几何常量一字未改');

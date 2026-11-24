@@ -46,6 +46,7 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
     spotlightEnabled, spotlightItems, spotlightDimmedFileIds, spotlightCursor,
     handleSpotlightToggle, handleSpotlightCursor,
     multiProjects,
+    retryingConnection, handleRetryConnection,
   } = ctx;
 
   // 日历主板 ↔ 右侧迷你月历联动状态（悬停驱动纵贯光束，点击锁定聚焦卡并可一键飞向司辰星图）
@@ -113,8 +114,8 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
               onClick={() => setPanoramaDomain(opt.id)}
               className={
                 inCanvasBar
-                  ? 'gap-1 rounded-full px-2 text-[11px] whitespace-nowrap text-[color:var(--cv-seg-idle)] hover:text-[color:var(--cv-seg-idle-hover)] aria-[pressed=true]:text-[color:var(--cv-seg-active-ink)]'
-                  : 'gap-1 px-2 text-[11px] whitespace-nowrap'
+                  ? 'gap-1 rounded-full px-2 text-[length:var(--text-micro)] whitespace-nowrap text-[color:var(--cv-seg-idle)] hover:text-[color:var(--cv-seg-idle-hover)] aria-[pressed=true]:bg-[color:var(--cv-seg-active-bg)] aria-[pressed=true]:text-[color:var(--cv-seg-active-ink)]'
+                  : 'gap-1 px-2 text-[length:var(--text-micro)] whitespace-nowrap'
               }
             >
               <span>{opt.label}</span>
@@ -162,6 +163,10 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
             summary={workspaceSummary}
             eventDays={eventDays}
             recentItems={recentItems}
+            dataSource={dataSource}
+            dataError={dataError}
+            retryingConnection={retryingConnection}
+            onRetryConnection={() => void handleRetryConnection()}
             // v0.8 总装-4：专题卡 A 数据面——decisions 原始数组进 HomeView，卡内按
             // DecisionRadar 同口径过滤取前 2（FeaturedFocusCards 组件自身零造数）；
             // 斜叠决策卡点击复用决策引用跳证据原文链路

@@ -151,13 +151,12 @@
     --glass-hairline-strong: rgba(35, 33, 80, 0.25);
     --glass-blur: 18px;
     --glass-blur-pop: 24px;
-    --glass-shadow: 0 8px 28px rgba(84, 70, 160, 0.10), 0 2px 6px rgba(84, 70, 160, 0.06);
-    --glass-shadow-pop: 0 18px 48px rgba(84, 70, 160, 0.18);
+    --glass-shadow: 0 2px 8px rgba(17, 24, 39, 0.06);
+    --glass-shadow-pop: 0 8px 24px -6px rgba(17, 24, 39, 0.14);
     --ink-strong: #26243D;
     --ink-soft: #5A5779;
-    /* --ink-faint 仅图形（滚动条/分隔线/装饰）与 ≥24px 大字；禁用于 <24px 文字
-       （玻璃上 3.09 违 AA，规范 §3.1；徽标/角标一律 --ink-soft 起步） */
-    --ink-faint: #8D8AA6;
+    /* --ink-faint 深档（白底 5.87:1 / 浅底 5.13:1，满足 WCAG AA 4.5:1） */
+    --ink-faint: #64627B;
     --ink-onmuteglass: #6F6C8C;
 
     /* ── 品牌墨轴（§3.1）────────────────────────────────────────────────
@@ -298,22 +297,18 @@
        #ECEEF2（--depth-1-bg）：ink-strong 12.89 / ink-soft 5.88 ✅（onmuteglass 4.30
        不达 4.5——L1 实底上的次文字一律升 --ink-soft，onmuteglass 限 L0/L2）
        #FFFFFF（--depth-2-bg）：ink-strong 14.98 / ink-soft 6.83 / onmuteglass 5.00 ✅ */
-    --depth-0-base: #F3F2F8;               /* L0 底层画布/工作区底色（暖冷均衡琉璃底） */
-    --depth-0-dot: rgba(38, 36, 61, 0.055); /* L0 极淡点阵（=.glass-page 点阵同相位） */
-    --depth-1-bg: rgba(235, 234, 245, 0.66); /* L1 磨砂分组托盘（透出下层微光，无硬边框） */
-    --depth-1-bg-soft: rgba(242, 241, 249, 0.84); /* L1 柔和变体（叠渐变/图像时用） */
-    --depth-1-radius: 20px;                /* L1 大圆角分组容器（空间画布质感） */
+    --depth-0-base: #F5F5F8;               /* L0 底层工作区底色（克制纯底，无装饰极光） */
+    --depth-0-dot: rgba(38, 36, 61, 0.04); /* L0 极淡点阵（保留变量兼容） */
+    --depth-1-bg: #EFEFF4;                 /* L1 分组托盘实底（克制高对比层级） */
+    --depth-1-bg-soft: #F3F3F8;            /* L1 柔和变体 */
+    --depth-1-radius: var(--r-card);       /* L1 分组容器圆角（与 --r-card 16px 统一） */
     --depth-2-bg: #FFFFFF;                 /* L2 内容实体卡底 */
-    --depth-2-radius: 14px;                /* L2 优雅实体卡圆角 */
-    --depth-2-shadow: 0 2px 10px rgba(32, 28, 66, 0.045), 0 1px 2px rgba(32, 28, 66, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.95);
-    --depth-2-shadow-hover: 0 18px 40px -8px rgba(74, 62, 148, 0.14), 0 6px 14px -4px rgba(32, 28, 66, 0.07), inset 0 1px 0 rgba(255, 255, 255, 1);
-    --depth-2-lift: translateY(-4px);      /* L2 hover 轻盈浮起（唯一合法 hover 位移，④零布局位移） */
-    --feature-grad-amber:
-      radial-gradient(360px 200px at 92% 10%, rgba(237, 138, 80, 0.24) 0%, transparent 72%),
-      linear-gradient(135deg, rgba(255, 247, 240, 0.98) 0%, rgba(255, 251, 247, 0.96) 52%, rgba(255, 255, 255, 0.98) 100%);
-    --feature-grad-blue:
-      radial-gradient(360px 200px at 92% 10%, rgba(124, 111, 208, 0.24) 0%, transparent 72%),
-      linear-gradient(135deg, rgba(244, 241, 255, 0.98) 0%, rgba(249, 248, 255, 0.96) 52%, rgba(255, 255, 255, 0.98) 100%);
+    --depth-2-radius: 12px;                /* L2 内容卡片圆角（统一卡片规格） */
+    --depth-2-shadow: 0 1px 2px rgba(17, 24, 39, 0.05);
+    --depth-2-shadow-hover: 0 4px 12px rgba(17, 24, 39, 0.08);
+    --depth-2-lift: translateY(-1px);      /* L2 hover 轻微反馈（零布局位移） */
+    --feature-grad-amber: none;
+    --feature-grad-blue: none;
 
     /* ── V01 · coss.com/ui 中性精密色阶（浅色默认态）────────────────────────
        纯白实体表面 + 4% 凹槽 + 8% 极细线 + 澜墨主锚 / 薰衣草品牌交互色，
@@ -412,7 +407,7 @@
     --glass-hairline-strong: rgba(255, 255, 255, 0.22);
     --ink-strong: #f2f3f7;
     --ink-soft: #a5a9bc;
-    --ink-faint: #6f7488;
+    --ink-faint: #8F94AA;
     --ink-onmuteglass: #9ea3b5;
     --accent-iris: #9b8afb;
     --accent-iris-deep: #b2a4ff;
@@ -423,8 +418,8 @@
     --depth-1-bg: rgba(255, 255, 255, 0.045);
     --depth-1-bg-soft: rgba(255, 255, 255, 0.065);
     --depth-2-bg: #161820;
-    --depth-2-shadow: 0 2px 10px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-    --depth-2-shadow-hover: 0 18px 40px -8px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.10);
+    --depth-2-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+    --depth-2-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.36);
     --btn-primary-bg: #f2f3f7;
     --btn-primary-bg-hover: #ffffff;
     --btn-primary-bg-active: #e2e4ec;
@@ -449,12 +444,8 @@
     --stage-ink-exec-text: #f58c7a;
     --stage-ink-deliver-text: #a5c976;
     --stage-ink-anomaly-text: #e88bb4;
-    --feature-grad-amber:
-      radial-gradient(360px 200px at 92% 10%, rgba(237, 138, 80, 0.22) 0%, transparent 72%),
-      linear-gradient(135deg, rgba(35, 26, 22, 0.96) 0%, rgba(26, 24, 32, 0.96) 55%, rgba(22, 24, 32, 0.98) 100%);
-    --feature-grad-blue:
-      radial-gradient(360px 200px at 92% 10%, rgba(155, 138, 251, 0.22) 0%, transparent 72%),
-      linear-gradient(135deg, rgba(26, 24, 42, 0.96) 0%, rgba(23, 24, 34, 0.96) 55%, rgba(22, 24, 32, 0.98) 100%);
+    --feature-grad-amber: none;
+    --feature-grad-blue: none;
   }
 
   body {
@@ -515,7 +506,7 @@
 [data-reader-dark="true"] {
   --ink-strong: #F2F1EC;
   --ink-soft: #A5A3B2;
-  --ink-faint: #6F6D7E;
+  --ink-faint: #8E8C9E;
   --ink-onmuteglass: #9A98A8;
   --glass-hairline: rgba(255, 255, 255, 0.09);
   --glass-hairline-strong: rgba(255, 255, 255, 0.22);
@@ -537,6 +528,12 @@
   --accent-iris-deep: #B2A4FF;
   --accent-iris-ink: #C5BAFF;
   --status-green: #4ADE80;
+  --stage-ink-blueprint-text: #7CB6F0;
+  --stage-ink-plan-text: #B7A8FF;
+  --stage-ink-decision-text: #F3C46C;
+  --stage-ink-exec-text: #F28B77;
+  --stage-ink-deliver-text: #A5C976;
+  --stage-ink-anomaly-text: #E88BB4;
 }
 
 /* Subtle custom scrollbars matching the light glass chrome
@@ -568,51 +565,32 @@
 
 .glass-page {
   background-color: var(--glass-page-base);
-  background-image:
-    radial-gradient(1100px 520px at 8% -6%, rgba(155, 138, 251, 0.16), transparent 62%),
-    radial-gradient(900px 480px at 97% 3%, rgba(217, 119, 87, 0.10), transparent 62%),
-    radial-gradient(rgba(35, 33, 80, 0.05) 1px, transparent 1px);
-  background-size: auto, auto, 26px 26px;
 }
 
 .glass-pop {
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(38, 36, 61, 0.09);
-  box-shadow:
-    0 24px 60px -12px rgba(24, 20, 56, 0.18),
-    0 8px 20px -6px rgba(24, 20, 56, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(28px) saturate(165%);
-  -webkit-backdrop-filter: blur(28px) saturate(165%);
+  background: var(--popover);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px -6px rgba(17, 24, 39, 0.12), 0 2px 6px rgba(17, 24, 39, 0.06);
 }
 
 .glass-input {
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid var(--glass-hairline);
+  background: var(--card);
+  border: 1px solid var(--input);
   color: var(--ink-strong);
-  box-shadow: inset 0 1px 2px rgba(35, 33, 80, 0.03);
 }
 
 .glass-input::placeholder {
-  color: var(--ink-faint);
+  color: var(--ink-soft);
 }
 
 .dark .glass-page {
   background-color: var(--background);
-  background-image:
-    radial-gradient(900px 440px at 10% -8%, rgba(155, 138, 251, 0.08), transparent 62%),
-    radial-gradient(760px 400px at 96% 4%, rgba(237, 138, 80, 0.05), transparent 62%),
-    radial-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px);
-  background-size: auto, auto, 26px 26px;
 }
 
 .dark .glass-pop {
-  background: rgba(24, 26, 35, 0.96);
+  background: var(--popover);
   border: 1px solid var(--border);
-  box-shadow:
-    0 24px 60px -12px rgba(0, 0, 0, 0.56),
-    0 8px 20px -6px rgba(0, 0, 0, 0.36),
-    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  box-shadow: 0 10px 28px -6px rgba(0, 0, 0, 0.44), 0 2px 8px rgba(0, 0, 0, 0.28);
 }
 
 .dark .glass-input {
@@ -632,79 +610,56 @@
 
 .depth-0-surface {
   background-color: var(--depth-0-base);
-  background-image:
-    radial-gradient(960px 500px at 6% -10%, rgba(124, 111, 208, 0.16), transparent 64%),
-    radial-gradient(820px 440px at 96% 0%, rgba(237, 138, 80, 0.13), transparent 62%),
-    radial-gradient(680px 420px at 48% 102%, rgba(74, 125, 175, 0.08), transparent 65%),
-    radial-gradient(var(--depth-0-dot) 1px, transparent 1px);
-  background-size: auto, auto, auto, 24px 24px;
 }
 
 .depth-1-group {
   background: var(--depth-1-bg);
   border-radius: var(--depth-1-radius);
-  border: none;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.90),
-    0 2px 6px rgba(38, 36, 61, 0.03),
-    0 0 0 1px rgba(38, 36, 61, 0.045);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
 }
 
 .depth-1-group-soft {
   background: var(--depth-1-bg-soft);
   border-radius: var(--depth-1-radius);
-  border: none;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--border);
 }
 
 .depth-2-card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(252, 251, 255, 0.95) 100%);
+  background: var(--depth-2-bg);
   border-radius: var(--depth-2-radius);
-  border: none;
-  box-shadow: var(--depth-2-shadow), 0 0 0 1px rgba(38, 36, 61, 0.048);
+  border: 1px solid var(--border);
+  box-shadow: var(--depth-2-shadow);
 }
 
 .depth-2-card-hover {
   transition:
     transform var(--dur-2) var(--ease-spring),
-    box-shadow var(--dur-2) var(--ease-spring);
+    box-shadow var(--dur-2) var(--ease-spring),
+    border-color var(--dur-1) var(--ease-fade);
 }
 
 .depth-2-card-hover:hover {
   transform: var(--depth-2-lift);
-  box-shadow: var(--depth-2-shadow-hover), 0 0 0 1px rgba(109, 91, 208, 0.16);
+  box-shadow: var(--depth-2-shadow-hover);
+  border-color: color-mix(in srgb, var(--accent-iris-deep) 35%, var(--border));
 }
 
 .depth-2-card-featured {
-  /* 专题卡基座：圆角升 L1 档并裁切内部光影与斜叠卡 */
+  /* 专题卡基座：与卡片规格统一，克制描边与轻阴影 */
   border-radius: var(--depth-1-radius);
   overflow: hidden;
-  box-shadow:
-    0 10px 30px -8px rgba(42, 34, 88, 0.08),
-    0 2px 6px rgba(42, 34, 88, 0.04),
-    0 0 0 1px rgba(38, 36, 61, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--border);
+  box-shadow: var(--depth-2-shadow);
 }
 
 /* V07 · 全局暗夜模式三层景深适配（对齐 coss.com/ui 阶梯暗面，杜绝白卡刺眼） */
 .dark .depth-0-surface {
   background-color: var(--background);
-  background-image:
-    radial-gradient(920px 460px at 8% -10%, rgba(155, 138, 251, 0.11), transparent 64%),
-    radial-gradient(780px 400px at 95% 0%, rgba(237, 138, 80, 0.08), transparent 62%),
-    radial-gradient(640px 380px at 48% 102%, rgba(74, 125, 175, 0.06), transparent 65%),
-    radial-gradient(var(--depth-0-dot) 1px, transparent 1px);
-  background-size: auto, auto, auto, 24px 24px;
 }
 
 .dark .depth-1-group {
   background: var(--depth-1-bg);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 2px 8px rgba(0, 0, 0, 0.24),
-    0 0 0 1px rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--border);
 }
 
 .dark .depth-1-group-soft {
@@ -1346,6 +1301,58 @@
     animation: none;
     display: none;
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   触控与无障碍人体工学（pointer: coarse / hover: none）
+   - 触控模式下将交互控件最小热区抬升至 44×44px，避免误触；
+   - 无悬停设备上让所有 group-hover 隐显按钮常驻可见，确保零纯悬停依赖。
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (pointer: coarse) {
+  button:not([data-compact-hit="true"]),
+  [role="button"]:not([data-compact-hit="true"]),
+  [role="tab"],
+  [role="menuitem"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  select,
+  summary,
+  input:not([type="checkbox"]):not([type="radio"]) {
+    min-height: 44px;
+  }
+
+  header button,
+  header a,
+  nav button,
+  nav a,
+  [role="toolbar"] button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  a[href] {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .glx-touch-visible,
+  [class*="group-hover:opacity-100"],
+  [class*="hover:opacity-100"] {
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+}
+
+/* 键盘焦点可见性兜底：确保任何带焦点环容器与原生输入在键盘聚焦时都有清晰环 */
+.dark-porthole :focus-visible {
+  outline: 2px solid var(--cv-lav);
+  outline-offset: 2px;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

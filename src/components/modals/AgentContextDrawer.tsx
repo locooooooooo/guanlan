@@ -262,11 +262,23 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
     onMountPointers(presetPointers);
   }, [isOpen, presetPointers, onMountPointers]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const effectiveServerContext = initialServerContext ?? serverContext;
   const serverItemById = new Map(
-    (effectiveServerContext?.preset.items ?? []).map((it) => [it.file_id, it])
+    (effectiveServerContext?.preset?.items ?? []).map((it) => [it.file_id, it])
   );
   const upstreamSnippets = effectiveServerContext?.upstream_snippets ?? [];
   const redactedSecretsCount = effectiveServerContext?.redacted_secrets_count ?? 0;
@@ -289,14 +301,15 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
       sizeBytes: p.sizeBytes ?? null,
     }))
   );
-  const budgetView = effectiveServerContext
+  const serverBudget = effectiveServerContext?.token_budget;
+  const budgetView = serverBudget
     ? {
-        selected: effectiveServerContext.token_budget.selected,
-        estChars: effectiveServerContext.token_budget.est_chars ?? localBudgetView.estChars ?? 0,
-        estTokens: effectiveServerContext.token_budget.est_tokens,
-        threshold: effectiveServerContext.token_budget.threshold,
-        overThreshold: effectiveServerContext.token_budget.over_threshold,
-        downgradeSuggestions: effectiveServerContext.token_budget.downgrade_suggestions,
+        selected: serverBudget.selected,
+        estChars: serverBudget.est_chars ?? localBudgetView.estChars ?? 0,
+        estTokens: serverBudget.est_tokens,
+        threshold: serverBudget.threshold,
+        overThreshold: serverBudget.over_threshold,
+        downgradeSuggestions: serverBudget.downgrade_suggestions ?? [],
       }
     : localBudgetView;
 
@@ -419,9 +432,12 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="复制给智能体的上下文清单"
+      aria-label="证据篮（证道阁上下文包）"
       data-esc-layer="open"
       className="glx-backdrop-in fixed inset-0 z-50 bg-[color:var(--ink-anchor)]/38 dark:bg-black/62 backdrop-blur-sm flex justify-end p-2 sm:p-3"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       {/* V08：coss Sheet (variant="inset") 悬浮抽屉材质，明暗双态自适应 */}
       <div

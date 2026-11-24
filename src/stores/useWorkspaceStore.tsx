@@ -191,6 +191,7 @@ import {
   initiativeArchiveWarn,
 } from '../utils/initiativeLifecycle';
 import { basenameOf } from '../utils/documentIdentity';
+import { isTimeMachineFormat } from '../utils/formatMeta';
 // v0.7：画布主题（舷窗局部，非全局）——评审第 2 轮起换出 React state：活值住
 // canvasThemeStore，App 只做舷窗 DOM 命令式直写（见 handleCanvasThemeChange）
 import {
@@ -502,6 +503,19 @@ export function useWorkspaceStore() {
   const [rescanState, setRescanState] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [rescanError, setRescanError] = useState<string>('');
   const [activeJobId, setActiveJobId] = useState<string>('');
+  // 同步防重锁：在慢网 / 4x CPU 限速下阻止连点并发提交多个异步请求
+  const rescanInFlightRef = useRef(false);
+  const lifecycleInFlightRef = useRef(false);
+  const silentMergeInFlightRef = useRef(false);
+  const retryInFlightRef = useRef(false);
+  // 断网与 SSE 断连可恢复状态
+  const [networkOffline, setNetworkOffline] = useState<boolean>(() =>
+    typeof navigator !== 'undefined' && navigator.onLine === false
+  );
+  const [streamDisconnected, setStreamDisconnected] = useState<boolean>(false);
+  const streamEverConnectedRef = useRef(false);
+  const streamDisconnectedRef = useRef(false);
+  const [retryingConnection, setRetryingConnection] = useState<boolean>(false);
   // 轮询节拍：任务未结束时 +1 触发下一次轮询（effect 依赖它）
   const [pollTick, setPollTick] = useState(0);
   // bootstrap 世代号：+1 触发一次完整重新取数（对账完成后用）
@@ -1117,16 +1131,19 @@ export function useWorkspaceStore() {
       const status = await fetchIndexJobStatus(activeJobId);
       if (cancelled) return;
       if (!status.ok) {
+        rescanInFlightRef.current = false;
         setRescanState('error');
         setRescanError(status.error || '索引任务状态查询失败');
         return;
       }
       const job = status.data;
       if (job.state === 'completed') {
+        rescanInFlightRef.current = false;
         setRescanState('done');
         setRescanError('');
         setBootstrapNonce((n) => n + 1);
       } else if (job.state === 'failed') {
+        rescanInFlightRef.current = false;
         setRescanState('error');
         setRescanError(job.error || '索引任务失败');
       } else {
@@ -1140,18 +1157,65 @@ export function useWorkspaceStore() {
     };
   }, [activeJobId, hasActiveBackend, pollTick, rescanState, workspaceEpoch]);
 
-  // ── 批次二：手动重新扫描 ────────────────────────────────────────────────
+  // ── 批次二：手动重新扫描（同步 ref 锁，防止慢网/4x CPU 连点重复提交） ──
   const handleRescan = useCallback(async () => {
-    if (rescanState === 'running') return;
+    if (rescanInFlightRef.current || rescanState === 'running') return;
+    rescanInFlightRef.current = true;
     setRescanState('running');
     setRescanError('');
     const accepted = await startIndexJob('verify_all');
     if (!accepted.ok) {
+      rescanInFlightRef.current = false;
       setRescanState('error');
-      setRescanError(accepted.error || '索引任务提交失败');
+      setRescanError(accepted.error || '索引任务提交失败，请检查网络连接后重试');
       return;
     }
     setActiveJobId(accepted.data.job_id);
+  }, [rescanState]);
+
+  // 浏览器离线/在线监听：中途断网即时反馈，恢复在线自动重试同步
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleOffline = () => setNetworkOffline(true);
+    const handleOnline = () => {
+      setNetworkOffline(false);
+      setStreamDisconnected(false);
+      setBootstrapNonce((n) => n + 1);
+    };
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, []);
+
+  // 手动重试连接（断网恢复 / 读服务报错后点击重试，防重提交）
+  const handleRetryConnection = useCallback(async () => {
+    if (retryInFlightRef.current) return;
+    retryInFlightRef.current = true;
+    setRetryingConnection(true);
+    try {
+      const status = await fetchWorkspaceStatus();
+      if (!status.ok) {
+        setDataError(status.error || '读服务暂时不可用，请确认服务已启动后重试');
+        setDataSource('error');
+        return;
+      }
+      setNetworkOffline(false);
+      setStreamDisconnected(false);
+      setDataError(null);
+      setRescanError('');
+      if (rescanState === 'error') {
+        rescanInFlightRef.current = false;
+        setRescanState('idle');
+      }
+      setServiceStatus(status.data);
+      setBootstrapNonce((n) => n + 1);
+    } finally {
+      retryInFlightRef.current = false;
+      setRetryingConnection(false);
+    }
   }, [rescanState]);
 
   // 扫描完成的提示短暂驻留后收起（不长期占位一条横幅）
@@ -1849,6 +1913,20 @@ export function useWorkspaceStore() {
           if (br.ok) setReviewBoard(br.data);
         })();
       }
+    }, (connected) => {
+      if (connected) {
+        const wasDisconnected = streamEverConnectedRef.current && streamDisconnectedRef.current;
+        streamEverConnectedRef.current = true;
+        streamDisconnectedRef.current = false;
+        setStreamDisconnected(false);
+        setNetworkOffline(false);
+        if (wasDisconnected) {
+          setBootstrapNonce((n) => n + 1);
+        }
+      } else if (streamEverConnectedRef.current) {
+        streamDisconnectedRef.current = true;
+        setStreamDisconnected(true);
+      }
     });
   }, [hasActiveBackend, pushDecisionChangeNote, workspaceEpoch]);
 
@@ -1922,7 +2000,7 @@ export function useWorkspaceStore() {
           });
         } else {
           const latency = typeof wb?.elapsed_ms === 'number' ? ` · ${wb.elapsed_ms}ms` : '';
-          const unlocked = wb?.unlocked_downstream ? ' · 下游事项已解锁' : '';
+          const unlocked = wb?.unlocked_downstream ? ' · 下游事项已解除阻塞' : '';
           setReviewBoardNotice({
             kind: 'ok',
             message: `已原位写回 ${stmt.path} 并同步 SQLite 与看板${unlocked}${latency}`,
@@ -3320,70 +3398,72 @@ export function useWorkspaceStore() {
     useState<InitiativeLifecycleState | null>(null);
   const runInitiativeLifecycle = useCallback(
     async (initiativeId: string, action: 'archive' | 'reopen') => {
-      if (initiativeLifecycle?.phase === 'running') return;
+      if (lifecycleInFlightRef.current || initiativeLifecycle?.phase === 'running') return;
+      lifecycleInFlightRef.current = true;
       const actionLabel = action === 'archive' ? '归档' : '重开';
       setInitiativeLifecycle({ initiativeId, action, phase: 'running', message: '' });
-      const accepted =
-        action === 'archive'
-          ? await postInitiativeArchive(initiativeId)
-          : await postInitiativeReopen(initiativeId);
-      if (!accepted.ok) {
-        setInitiativeLifecycle({
-          initiativeId,
-          action,
-          phase: 'error',
-          message: accepted.error || `${actionLabel}请求提交失败`,
-        });
-        return;
+      try {
+        const accepted =
+          action === 'archive'
+            ? await postInitiativeArchive(initiativeId)
+            : await postInitiativeReopen(initiativeId);
+        if (!accepted.ok) {
+          setInitiativeLifecycle({
+            initiativeId,
+            action,
+            phase: 'error',
+            message: accepted.error || `${actionLabel}请求提交失败`,
+          });
+          return;
+        }
+        const settled = await pollJobUntilSettled(accepted.data.job_id);
+        if (!settled.ok) {
+          setInitiativeLifecycle({
+            initiativeId,
+            action,
+            phase: 'error',
+            message: settled.error || `${actionLabel}任务轮询失败`,
+          });
+          return;
+        }
+        const job = settled.data;
+        if (job.state !== 'completed') {
+          setInitiativeLifecycle({
+            initiativeId,
+            action,
+            phase: 'error',
+            message: job.error || `${actionLabel}任务失败`,
+          });
+          return;
+        }
+        const warn = action === 'archive' ? initiativeArchiveWarn(job.result) : null;
+        if (warn) {
+          console.warn(`[guanlan] ${actionLabel}完成但服务端提示：${warn}`);
+        }
+        setInitiativeLifecycle(null);
+        const nextState = action === 'archive' ? 'archived' : 'draft';
+        setStateOverview((prev) =>
+          prev
+            ? {
+                ...prev,
+                initiatives: prev.initiatives.map((initiative) =>
+                  initiative.initiative_id === initiativeId
+                    ? {
+                        ...initiative,
+                        state: nextState,
+                      }
+                    : initiative
+                ),
+              }
+            : prev
+        );
+        const overview = await fetchStateOverview();
+        if (overview.ok) setStateOverview(overview.data);
+      } finally {
+        lifecycleInFlightRef.current = false;
       }
-      const settled = await pollJobUntilSettled(accepted.data.job_id);
-      if (!settled.ok) {
-        setInitiativeLifecycle({
-          initiativeId,
-          action,
-          phase: 'error',
-          message: settled.error || `${actionLabel}任务轮询失败`,
-        });
-        return;
-      }
-      const job = settled.data;
-      if (job.state !== 'completed') {
-        setInitiativeLifecycle({
-          initiativeId,
-          action,
-          phase: 'error',
-          message: job.error || `${actionLabel}任务失败`,
-        });
-        return;
-      }
-      const warn = action === 'archive' ? initiativeArchiveWarn(job.result) : null;
-      if (warn) {
-        // 服务端已完成归档但提示「当前非已交付态」（提示与实际状态存在竞态）：
-        // 如实记录，不阻塞状态刷新。
-        console.warn(`[guanlan] ${actionLabel}完成但服务端提示：${warn}`);
-      }
-      setInitiativeLifecycle(null);
-      // 乐观更新提示源，避免等待网络期间横幅残留；随后以服务端响应为准。
-      const nextState = action === 'archive' ? 'archived' : 'draft';
-      setStateOverview((prev) =>
-        prev
-          ? {
-              ...prev,
-              initiatives: prev.initiatives.map((initiative) =>
-                initiative.initiative_id === initiativeId
-                  ? {
-                      ...initiative,
-                      state: nextState,
-                    }
-                  : initiative
-              ),
-            }
-          : prev
-      );
-      const overview = await fetchStateOverview();
-      if (overview.ok) setStateOverview(overview.data);
     },
-    [initiativeLifecycle]
+    [initiativeLifecycle?.phase]
   );
 
   // ── A02：桌面壳多工作区切换与彻底隔离重置 ─────────────────────────────────
@@ -3692,7 +3772,8 @@ export function useWorkspaceStore() {
    * - 仅将新增 event_id 增量合入 events 与 eventPage，并静默更新当日统计后清除提示条。
    */
   const silentMergeNewEvents = async () => {
-    if (silentMergingEvents) return;
+    if (silentMergeInFlightRef.current || silentMergingEvents) return;
+    silentMergeInFlightRef.current = true;
     setSilentMergingEvents(true);
     const dq = dayQueryRef.current;
     try {
@@ -3731,6 +3812,7 @@ export function useWorkspaceStore() {
           : '已同步最新增量事件（当前浏览位置未变）'
       );
     } finally {
+      silentMergeInFlightRef.current = false;
       setSilentMergingEvents(false);
     }
   };
@@ -4429,7 +4511,6 @@ export function useWorkspaceStore() {
   });
 
   // ---------- D05 · 全局无鼠快捷键分发层（Enter 深读 / D 版本对比 / C 加入上下文篮 / Ctrl+Z·Shift+Z Undo·Redo） ----------
-  const TIME_MACHINE_DIFF_FORMATS = new Set(['svg', 'csv', 'tsv', 'xlsx']);
   const resolveFocusedFileForShortcut = (): {
     file: FileRecord;
     revisionId: string;
@@ -4489,7 +4570,11 @@ export function useWorkspaceStore() {
         return true;
       }
       if (action === 'toggle-left-sidebar') {
-        dirShell.setSidebarCollapsed(!dirShell.sidebarCollapsed);
+        if (activeTab === 'panorama') {
+          dirShell.togglePanoramaSidebar();
+        } else {
+          dirShell.setSidebarCollapsed(!dirShell.sidebarCollapsed);
+        }
         return true;
       }
       if (action === 'toggle-right-inspector') {
@@ -4541,7 +4626,7 @@ export function useWorkspaceStore() {
           );
           return true;
         }
-        if (TIME_MACHINE_DIFF_FORMATS.has(target.file.format)) {
+        if (isTimeMachineFormat(target.file.format)) {
           if (activeTab !== 'panorama' || panoramaMode !== 'canvas') {
             pushCurrentNavSource({ enteredTimeMachine: true });
             trailEnteredFromStackRef.current = true;
@@ -4869,6 +4954,7 @@ export function useWorkspaceStore() {
     rescanState, rescanError, serviceStatus, stateOverview, setStateOverview,
     agentDraftFileIds, l4aProgress, eventDataReady, workspaceSummary, eventRange, dateFilter,
     handleRescan,
+    networkOffline, streamDisconnected, retryingConnection, handleRetryConnection,
     // 导航与选中
     activeTab, setActiveTab, handleSelectPrimaryTab, panoramaMode, setPanoramaMode, portholeRef, handleCanvasThemeChange,
     libraryMode, setLibraryMode, eventTrail, setEventTrail,

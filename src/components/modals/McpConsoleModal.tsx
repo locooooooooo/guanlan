@@ -119,6 +119,18 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
     toolFetchFailed,
   ]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   // P0-4 提示文本治理：弹层与 TopHeader 入口钮同键门控（guanlan.debug.mcp），
@@ -200,6 +212,9 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
       aria-label="MCP 工具契约与错误边界调试台"
       data-esc-layer="open"
       className="glx-backdrop-in fixed inset-0 z-50 bg-[color:var(--ink-anchor)]/38 dark:bg-black/62 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         data-dialog-nested-stack=""

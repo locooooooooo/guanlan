@@ -334,7 +334,7 @@ export function GraphViewSettings({ ctx }: { ctx: GraphCanvasCtx }) {
             : 'text-[color:var(--cv-ink-dim)] hover:text-[color:var(--cv-ink-3)]'
         }`}
       >
-        <span className="text-[11px] leading-none">🌠</span>
+        <Orbit className="w-3 h-3 shrink-0" aria-hidden="true" />
         <span>流星雨 {meteorShowerEnabled ? '开' : '关'}</span>
       </button>
 

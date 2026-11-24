@@ -182,7 +182,7 @@ export const InitiativeCandidatePanel: React.FC<InitiativeCandidatePanelProps> =
                   onClick={() => void handleExclude(item, member)}
                   disabled={busyId === item.candidate_id}
                   title="剔出候选（误聚项；重扫不反弹）"
-                  className="shrink-0 rounded p-1 text-[color:var(--ink-soft)] opacity-0 transition-opacity hover:bg-[color:color-mix(in_srgb,var(--stage-ink-anomaly)_10%,transparent)] hover:text-[color:var(--stage-ink-anomaly-text)] group-hover:opacity-100 disabled:opacity-40 cursor-pointer"
+                  className="shrink-0 rounded-[var(--r-ctl)] p-1 text-[color:var(--ink-soft)] opacity-0 transition-opacity hover:bg-[color:color-mix(in_srgb,var(--stage-ink-anomaly)_10%,transparent)] hover:text-[color:var(--stage-ink-anomaly-text)] group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 [@media(pointer:coarse)]:opacity-100 disabled:opacity-40 cursor-pointer"
                 >
                   <X className="w-3 h-3" />
                 </button>

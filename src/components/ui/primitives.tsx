@@ -60,28 +60,28 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const BUTTON_BASE = cx(
   'inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer',
-  'h-[var(--ctl-h)] rounded-[8px] px-3.5',
+  'h-[var(--ctl-h)] rounded-[var(--r-ctl)] px-3.5',
   'text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)] font-medium',
   '[&>svg]:size-3.5 [&>svg]:shrink-0',
   INTERACTIVE_TRANSITION,
   DISABLED_STATES,
 );
 
-const BUTTON_SIZE_SM = 'h-[var(--ctl-h-sm)] rounded-[7px] px-2.5 text-[length:var(--text-ui)] leading-[var(--lh-ui)]';
+const BUTTON_SIZE_SM = 'h-[var(--ctl-h-sm)] rounded-[var(--r-ctl)] px-2.5 text-[length:var(--text-ui)] leading-[var(--lh-ui)]';
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  /* 主：澜墨实心 + 顶沿微光 + 悬停柔和发光浮影 */
+  /* 主：澜墨实心，克制阴影与明确四态 */
   primary: cx(
     'bg-[color:var(--btn-primary-bg)] text-[color:var(--paper-on-ink)]',
-    '[box-shadow:0_2px_8px_rgba(17,32,48,0.20),inset_0_1px_0_rgba(255,255,255,0.16)]',
-    'enabled:hover:bg-[color:var(--btn-primary-bg-hover)] enabled:hover:[box-shadow:0_8px_20px_-4px_rgba(17,32,48,0.34),inset_0_1px_0_rgba(255,255,255,0.22)] enabled:hover:[transform:translateY(-1px)]',
+    'shadow-xs',
+    'enabled:hover:bg-[color:var(--btn-primary-bg-hover)]',
     'enabled:active:bg-[color:var(--btn-primary-bg-active)] enabled:active:[transform:translateY(0.5px)]',
   ),
-  /* 次：瓷白玻璃描边 + 微影 */
+  /* 次：中性实底描边，克制阴影与明确四态 */
   secondary: cx(
     'border bg-[color:var(--btn-secondary-bg)] border-[color:var(--btn-secondary-border)] text-[color:var(--ink-strong)]',
-    '[box-shadow:0_1px_2px_rgba(38,36,61,0.04),inset_0_1px_0_rgba(255,255,255,0.9)]',
-    'enabled:hover:bg-[color:var(--btn-secondary-bg-hover)] enabled:hover:border-[color:var(--btn-secondary-border-hover)] enabled:hover:[box-shadow:0_4px_12px_rgba(38,36,61,0.08)] enabled:hover:[transform:translateY(-1px)]',
+    'shadow-2xs',
+    'enabled:hover:bg-[color:var(--btn-secondary-bg-hover)] enabled:hover:border-[color:var(--btn-secondary-border-hover)]',
     'enabled:active:bg-[color:var(--btn-secondary-bg-active)] enabled:active:border-[color:var(--btn-secondary-border-active)] enabled:active:[transform:translateY(0.5px)]',
   ),
   /* 幽灵：透明无边；hover 浮墨底＋字升 strong */
