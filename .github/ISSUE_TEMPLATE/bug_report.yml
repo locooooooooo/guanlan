@@ -1,0 +1,77 @@
+name: 缺陷报告
+description: 观澜的某处没有按预期工作
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 观澜版本
+      description: 「设置 → 关于观澜」里的版本号与提交短哈希；从源码运行的写提交哈希。
+      placeholder: v1.2.0（8d8e4ab）
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: 在哪里遇到的
+      options:
+        - 桌面安装包
+        - 从源码运行的桌面壳
+        - 浏览器 + guanlan serve
+        - 命令行 guanlan
+        - MCP（guanlan mcp）
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+
+  - type: input
+    id: workspace
+    attributes:
+      label: 工作区的大致情况
+      description: 可选。文件数量级、主要格式、是不是一个 git 仓库，有帮助时再写。
+      placeholder: 约 3,000 个文件，以 Markdown 和 Office 为主
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 发生了什么
+      description: 实际看到的结果，以及你期望的结果。
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 最小的一组操作。能附一个自己造的最小工作区更好。
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 错误原文或日志
+      description: 贴出确切的错误文字。需要更多材料时可以运行 guanlan storage diag，生成的诊断包会自动脱敏。
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交之前
+      options:
+        - label: 我没有附上工作区里的真实文件、密钥或个人路径。
+          required: true
+        - label: 我搜过已打开的 Issue，没有看到同样的报告。
+          required: false

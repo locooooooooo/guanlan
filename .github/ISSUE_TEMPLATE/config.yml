@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 怎么贡献
+    url: https://github.com/locooooooooo/guanlan/blob/main/docs/contributors.md
+    about: PR 要带什么、评审先查什么、怎么署名。
+  - name: 使用与排错的参考
+    url: https://github.com/locooooooooo/guanlan/blob/main/docs/reference.md
+    about: 命令行、退出码、环境变量、数据目录与 MCP 接入。

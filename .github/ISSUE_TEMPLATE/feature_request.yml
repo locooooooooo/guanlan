@@ -1,0 +1,23 @@
+name: 功能请求
+description: 希望观澜能做某件事
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: want
+    attributes:
+      label: 你想做成什么
+      description: 写要达到的结果，不用写实现方式。
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: 现在你是怎么做的
+      description: 没有这个功能时你用什么办法绕过去，哪里最别扭。
+
+  - type: input
+    id: version
+    attributes:
+      label: 观澜版本（可选）
+      placeholder: v1.2.0（8d8e4ab）

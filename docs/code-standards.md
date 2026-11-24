@@ -126,7 +126,7 @@ index: 定向对账的文件再次保存时不再丢第二次改动
 
 提交前先建分支，不直接提交到 `main`。
 
-领域词表：`index`、`storage`、`query`、`http`、`mcp`、`desktop`、`web`、`scripts`、`ci`、`release`、`docs`。
+领域词表：`index`、`storage`、`query`、`http`、`mcp`、`desktop`、`web`、`scripts`、`ci`、`release`、`docs`、`community`（Issue 表单、PR 模板、贡献者规则）。
 
 ## 发布
 
