@@ -237,7 +237,7 @@ test('V12-12 · isFolderMuted：精确匹配目标目录与所有嵌套子目录
 
 // ===== 5. V05 5,500 份资产域分类守恒与日历零碰撞矩阵 =====
 
-test('V12-13 · 5,500 份混合资产域分类守恒（business + code === total，耗时 < 40ms）', () => {
+test('V12-13 · 5,500 份混合资产域分类守恒（business + code === total，耗时 < 120ms）', () => {
   const files: FileRecord[] = [];
   for (let i = 0; i < 2100; i += 1) {
     files.push(makeDummyFile(`b_${i}`, `01-业务文档/doc_${i}.md`, 'md'));

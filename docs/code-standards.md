@@ -28,7 +28,7 @@
 | 测试不碰网络。 | 外部服务用回环桩或录下来的字节。 | **预防性规则**。本仓目前的测试都用回环桩（`MockBackend`、本地 `TcpListener`、`http.createServer` 绑 `127.0.0.1:0`），没有守卫测试。 |
 | 测试用真实输入。 | 夹具要像真实请求、真实序列化输出、真实磁盘文件，包括缺字段、空值与默认值。 | **本仓事故**。`token-vectors.json` 与 `stage-vectors.json` 是实测向量；`file_row_reads_real_and_integer_mtime` 来自真实库里 REAL 与 INTEGER 混存的事实；PDF 的回归测试用的是出事的 CAD 打印 PDF 的形状。 |
 | 测试断言行为，不断言实现。 | 断言用户或调用方需要的东西。格式调整与内部重构不该弄坏测试。 | **本仓现状**。约三分之一的测试文件把源码当字符串读出来做子串或正则断言，因为 node:test 没有 DOM，点击与滚动的接线只能这样守。这类断言要写明它替的是哪条接线；一旦有办法做行为测试，就换成行为测试。 |
-| 测试的名字要与它守的东西一致。 | 名字、断言消息、标题里写的数字，都要和断言一致。 | **本仓事故**。MCP 代理的 `tools/list` 测试原名里写着「四个」，断言的一直是 6 个工具。`v12-release-parity.test.ts` 里一个用例标题写「耗时 < 40ms」，断言的是 `dt < 120`。 |
+| 测试的名字要与它守的东西一致。 | 名字、断言消息、标题里写的数字，都要和断言一致。 | **本仓事故**。MCP 代理的 `tools/list` 测试原名里写着「四个」，断言的一直是 6 个工具。`v12-release-parity.test.ts` 里一个用例的标题曾写「耗时 < 40ms」，断言的却是 `dt < 120`。两处现在都已改成一致。 |
 | 在 `main` 上失败的检查是现在就要修的问题。 | 「在 main 上也一样失败」不是基线，「整套跑才失败、单跑能过」也不是。修到根上，或者开一个写明原因的 Issue。 | **本仓现状**。建立这套规范时的基线跑了一次：`npm run build` 首跑在 `@tailwindcss/oxide` 的 `boundary.rs` panic，重跑三次都通过。这是一个已知的偶发失败，尚未定位。 |
 | 被跳过的测试不算通过。 | 跑完看输出里有没有 `[skip]`、`ignored` 或直接返回的用例。 | **本仓事故**。`identity_vectors_from_fixture` 在没有 `identity-vectors.json` 时打印 `[skip]` 并返回，所以干净 checkout 上的 `cargo test` 从没验证过夹具身份。`domain/triage/tests.rs` 里两个对拍测试因为依赖的 JS 源文件不在仓库里，从不执行，其中一个连提示都不打印。 |
 | 测试不碰真实机器。 | 测试用临时目录、临时数据目录。绝不读写用户真实的数据目录、配置或工作区。 | **本仓事故**。不设 `GUANLAN_DATA_DIR` 时 `cargo test --workspace` 会写 `%LOCALAPPDATA%\Guanlan\workspaces\`，和已安装的观澜用的是同一个目录。项目表与 `desktop.json` 已经有 `cfg(test)` 或显式临时路径的隔离，工作区数据目录还没有。`npm run gate` 会替 Rust 步骤设好临时的 `GUANLAN_DATA_DIR`；直接跑 `cargo test` 时要自己设。`scripts/seed-volume.ts` 与 `scripts/v04-reconcile-once.ts` 会直接写真实数据目录。 |

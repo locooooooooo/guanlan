@@ -17,9 +17,10 @@
 //! - **generation 缓存**：阻塞任务内先轻量刷新（单行 SELECT）缓存 index_generation，
 //!   错误包络取缓存值——异步线程不再同步抢数据库锁。
 //!
-//! 容量回收纪律：查询结束（含失败/取消）总是先归还连接再释放许可；任务 panic
-//! 是唯一的连接泄漏路径（许可随 panic 释放、连接随任务消失，池渐进缩容——
-//! 极端异常下的退化，不做连接重建）。
+//! 容量回收纪律：查询结束（含失败/取消）总是先归还连接再释放许可。查询体的 panic
+//! 由 `catch_unwind` 接住（issue #36）：连接被丢弃、重建并重新认领工作区后再入池，
+//! 不再随任务消失。剩下的唯一泄漏路径是任务级的 JoinError（`catch_unwind` 之外的
+//! 极端情形，如 OOM）：连接随任务消失，池缩容，不做连接重建。
 
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};

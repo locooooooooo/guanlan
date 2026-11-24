@@ -7,7 +7,10 @@
 //!   1. `record_hash`：对该 `events` 关键载荷（workspace_id/event_id/kind/subject/revision/
 //!      timestamps/headline/detail/payload_json）的规范 SHA-256 摘要；
 //!   2. `prev_hash`：上一条链节点的 `chain_hash`（首条为 64 个 `'0'` 创世哈希）；
-//!   3. `chain_hash`：`SHA-256("chain_v1|" + prev_hash + "|" + record_hash + "|" + event_id + "|" + event_kind)`；
+//!   3. `chain_hash`：对域前缀 `guanlan_ledger_chain_v1|` 与四个长度前缀字段（`prev_hash`、
+//!      `record_hash`、`event_id`、`event_kind`）做 SHA-256；`record_hash` 同理，域前缀是
+//!      `guanlan_ledger_rec_v1|`。字段带长度前缀，消除字段边界碰撞。实现见
+//!      [`compute_event_record_hash`] 与 [`compute_chain_hash`]，改编码会让既有库的链全部失配；
 //! - 并在 `meta` 表原子推进 `ledger_chain_head_hash` 与 `ledger_chain_head_seq` 链头锚点，
 //!   防止连同尾部链行与事件行一并截断；
 //! - 只读审计函数 [`verify_decision_ledger`] 可由 `GET /api/v1/audit/ledger` 与 CLI 诊断命令
