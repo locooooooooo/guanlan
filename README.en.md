@@ -97,6 +97,7 @@ npm run lint       # TypeScript type check (tsc --noEmit)
 npm test           # frontend regression tests
 npm run gate       # run before committing: type check, frontend tests, build, packaging config, cargo fmt / clippy / test
 npm run preflight  # check that the version number agrees everywhere in the repository
+npm run notices    # regenerate the third-party notices index after a dependency or version change
 npm run seed       # generate test fixtures
 ```
 
@@ -161,4 +162,4 @@ All of these are written in Chinese.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). The third-party components distributed with the Windows desktop app, and their licenses, are listed in [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) (Chinese, with a short English summary at the top). It is an index, not the full license texts, and `npm run notices` generates it.

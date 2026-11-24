@@ -13,6 +13,7 @@
     "gate": "node scripts/gate.mjs",
     "gate:full": "node scripts/gate.mjs --full",
     "preflight": "node scripts/release-preflight.mjs",
+    "notices": "node scripts/gen-third-party-notices.mjs",
     "seed": "tsx scripts/seed-fixture.ts"
   },
   "dependencies": {

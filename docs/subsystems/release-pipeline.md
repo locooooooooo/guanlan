@@ -14,6 +14,7 @@
 | 发布流水线 | [`.github/workflows/release.yml`](../../.github/workflows/release.yml) | 预检、产物核对、资产计数；见下文「发布」 |
 | 工具链 | [`native/rust-toolchain.toml`](../../native/rust-toolchain.toml) 锁定 1.99.1 | CI 与发布的 Rust 作业都从这份文件解析 `channel` 后显式安装 |
 | CI | [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | f03 测试断言其中有 `--check-only` 这一行 |
+| 第三方许可索引 | [`THIRD_PARTY_NOTICES`](../../THIRD_PARTY_NOTICES)，由 [`scripts/gen-third-party-notices.mjs`](../../scripts/gen-third-party-notices.mjs) 生成 | `test/third-party-notices.test.ts` 随 `npm test` 核对它与两份锁文件、与它自己的两张表是否对得上 |
 
 ## 版本号
 
@@ -27,7 +28,8 @@
 1. 改 `package.json` 的 `version`，再把 `native/Cargo.toml` 的 `[workspace.package] version`、`native/crates/guanlan-desktop/tauri.conf.json` 的 `version`，以及上面列的字面量改成同一个值。
 2. 让两份锁文件跟上。在仓库根目录执行 `npm install --package-lock-only --legacy-peer-deps`，在 `native/` 下执行 `cargo metadata --format-version 1 > /dev/null`。两条命令都只改版本字段，不动任何已解析的依赖版本，这一点在临时副本上核对过。
    - npm 那条要带 `--legacy-peer-deps`，是因为仓库现在有一个同伴依赖冲突（`esbuild ^0.25` 对 vite 8 的可选同伴依赖 `^0.27 || ^0.28`），不带它 `npm install` 会直接报 `ERESOLVE`。冲突本身要另行修掉。
-3. 跑 `npm run preflight`。它一次列出所有没对上的地方；`npm test` 里也有同样的检查。
+3. 跑 `npm run notices` 重新生成第三方许可索引。两份锁文件里都有版本号，索引记着它们的 SHA-256，不重新生成的话 `npm test` 会红。
+4. 跑 `npm run preflight`。它一次列出所有没对上的地方；`npm test` 里也有同样的检查。
 
 ## 构建身份
 
@@ -59,6 +61,18 @@ Rust 侧没有嵌入提交哈希。`env!("CARGO_PKG_VERSION")` 只在 MCP 代理
 `--check-only` 只做配置校验：两个配置文件与右键菜单钩子存在、`bundle.targets` 同时含 `nsis` 与 `msi`、挂了安装钩子、release 配置里有 `externalBin` 的 `binaries/guanlan`、图标齐备、钩子源码含六个关键指令。`--stage-only` 走完前两步就停。
 
 安装包**没有代码签名**，也没有配置自动更新。`tauri.conf.json` 的 `bundle.windows.webviewInstallMode` 是 `embedBootstrapper`。图标源图由 `gen-icon.mjs` 生成，再经 `tauri icon` 产出全套尺寸。
+
+安装包里也**没有随附许可文件**。`tauri.conf.json` 与 `tauri.release.conf.json` 没有配置 `bundle.resources`、`license` 或 `licenseFile`，所以仓库里的 `LICENSE` 与 `THIRD_PARTY_NOTICES` 都不会装到用户机器上。
+
+## 第三方许可索引
+
+`THIRD_PARTY_NOTICES` 是一份许可索引，不是完整的声明：不含各许可证的全文，许可一栏照抄各组件自己声明的许可表达式，组件内部以别的许可捆绑的素材只在注明处提及（现在只有 SQLite 一处）。取法与各自的局限写在生成器的头注释和文件自身里，要点：
+
+- 前端以生产构建为准。生成器在内存里跑一遍 `vite.config.ts` 所用的构建（不写 `dist/`），取模块出现在 JS 产物里的 npm 包。另有三类不是模块图节点、却要把包列进来的：由包里的文件原样发出的资源、Tailwind 生成的样式表（`tailwindcss` 包里的 preflight 与主题变量整段进了 `dist` 的 CSS）、应用代码按名字导入但自己没有代码进产物的包（`d3` 只做转发）。不按 `package-lock.json` 的 `dev` 标记取，那个标记会把打包器和各平台的原生二进制都算进去。
+- Rust 取 `cargo tree` 在 `x86_64-pc-windows-msvc` 目标上、沿普通依赖与构建依赖数出来的 crate，不含只在测试里用的开发依赖和本仓库自己的 crate。其中有一部分只在构建时参与，一并列出。
+- 任何一项取不到（包不在锁文件里、没有声明许可、打包器没给出模块清单）都报错停下，不生成文件。
+
+锁文件变了就要重新生成，见上文「版本号」第 3 步。`npm test` 守着的是「索引与当前依赖是否对得上」，不是「索引是否完整」：它核对文件末尾两份锁文件的 SHA-256 与两张表各自的 SHA-256，再把每个包与 `package-lock.json`、`native/Cargo.lock` 逐个对上。它不重新生成，所以**不改锁文件却让产物多带一个包**（例如从 `src/` 里导入一个已经是开发依赖的包）它发现不了，要靠 `node scripts/gen-third-party-notices.mjs --check` 重新生成一遍来比对。
 
 ## 发布
 
@@ -137,6 +151,7 @@ Rust 侧没有嵌入提交哈希。`env!("CARGO_PKG_VERSION")` 只在 MCP 代理
 npm run gate                                        # 对应 CI 的 frontend 与 rust-desktop 作业
 npm run gate -- --full                              # 再加 smoke 作业的几步，需要能做 release 构建
 npm run preflight                                   # 17 处版本号是否一致；加 --tag vX.Y.Z --require-on-main 核对标签
+node scripts/gen-third-party-notices.mjs --check    # 第三方许可索引是否与重新生成的结果一致；需要 node_modules 与 cargo
 node scripts/build-windows-installer.mjs --check-only
 node native/crates/guanlan-desktop/gen-icon.mjs   # 只在改了图标样式时
 ```

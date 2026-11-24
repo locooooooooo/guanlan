@@ -95,6 +95,7 @@ npm run lint       # TypeScript 类型检查（tsc --noEmit）
 npm test           # 前端回归测试
 npm run gate       # 提交前跑：类型检查、前端测试、构建、安装包配置校验、cargo fmt / clippy / test
 npm run preflight  # 核对版本号在仓库各处是否一致
+npm run notices    # 依赖有变化或升了版本号之后，重新生成第三方许可索引
 npm run seed       # 生成测试夹具
 ```
 
@@ -157,4 +158,4 @@ MCP 只暴露白名单工具，且不提供任意路径读取；端点缺失时�
 
 ## 许可证
 
-[MIT](LICENSE)
+[MIT](LICENSE)。随观澜 Windows 桌面版一同分发的第三方组件及其许可，列在 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) 里；它是许可索引，不含各许可证的全文，由 `npm run notices` 生成。

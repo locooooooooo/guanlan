@@ -144,7 +144,7 @@ function findOnPath(name) {
 }
 
 /** cargo 的位置：PATH 上优先，其次 $CARGO_HOME/bin 与 ~/.cargo/bin。找不到时 file 为 null。 */
-function findCargo() {
+export function findCargo() {
   const onPath = findOnPath('cargo');
   if (onPath) return { file: onPath, onPath: true };
   const binDir = process.env.CARGO_HOME

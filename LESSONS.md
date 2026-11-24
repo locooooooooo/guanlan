@@ -114,6 +114,7 @@
   - 桌面应用「一键配置 MCP」写入的宿主配置在应用下次启动后失效：桌面壳每次绑随机端口，配置里的命令 `guanlan` 又不在 `PATH` 上（安装包不改 `PATH`）。
   - README 说「外部网络仅在你显式开启 HTML 允许 HTTPS 外链时访问」，但 `index.html` 会从 Google Fonts 加载三款字体，构建产物里也还在。要么去掉外部字体，要么改说明。
   - `npm install` 在干净环境会因同伴依赖冲突失败（`ERESOLVE`）：顶层的 `esbuild ^0.25` 不满足 vite 8 的 `^0.27 || ^0.28`，而仓库里没有任何代码直接用 esbuild。按锁文件安装的 `npm ci` 不受影响。
+  - 安装包里没有随附许可文件：`tauri.conf.json` 与 `tauri.release.conf.json` 没有配置 `bundle.resources`、`license` 或 `licenseFile`，仓库里的 `LICENSE` 与 `THIRD_PARTY_NOTICES` 都不会装到用户机器上。要不要随安装包带上、以什么形式带，由维护者定。安装包按 `embedBootstrapper` 内嵌了 WebView2 引导程序（微软的安装器，约 1.8 MB），它的再分发条款没有核实过。
 - **测试没有真正执行的：**
   - `identity_vectors_from_fixture` 在干净 checkout 上跳过，因为 CI 的 Rust 作业不生成夹具。
   - `domain/triage/tests.rs` 里两个 Node 对拍测试从不执行，因为它们依赖的 `workflow-triage.js` 等源文件不在仓库里。现在它们跳过时至少会打印 `[skip]`。
