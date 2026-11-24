@@ -1,0 +1,169 @@
+name: release
+
+# 推送 vX.Y.Z 标签：在 Windows 上构建 NSIS 与 MSI 安装包、取出命令行 guanlan.exe、算出
+# SHA256SUMS，作为 GitHub Release 发布。手动触发（workflow_dispatch）时只构建，并把产物
+# 上传为 workflow artifact，不创建 Release——打第一个标签之前，先用它演练一遍整条流水线。
+#
+# 构建之前 scripts/release-preflight.mjs 会核对：标签等于 v<版本>；版本号在仓库里每一处
+# 都一致；标签打在 main 上。任何一项不过就不构建。
+# 构建复用 scripts/build-windows-installer.mjs，和本地构建是同一个脚本。
+# 更新说明取上一个标签以来在 main 上的提交标题，所以提交标题要写用户看得到的变化
+# （docs/code-standards.md 的「提交」一节）。
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# 发布不并发：前一个标签的发布跑完之前，后一个标签的发布排队等着。
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+# 构建只需要读仓库；创建 Release 的权限只在 publish 作业里申请。
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (windows)
+    runs-on: windows-latest
+    timeout-minutes: 120
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 预检要判断标签是否在 main 上，更新说明要取上一个标签以来的提交：需要完整历史与标签
+          fetch-depth: 0
+      - name: Resolve the pinned toolchain
+        id: toolchain
+        shell: bash
+        # 每个多行脚本都显式 set -euo pipefail：不依赖 runner 给 bash 的默认选项。
+        # 预检失败必须让这一步失败，否则后面的 echo 会把退出码盖成 0，构建照常进行。
+        run: |
+          set -euo pipefail
+          echo "channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' native/rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.toolchain.outputs.channel }}
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: "Preflight: versions agree; on a tag also that the tag matches the version and is on main"
+        id: meta
+        shell: bash
+        env:
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ -n "$TAG" ]; then args=(--tag "$TAG" --require-on-main); fi
+          node scripts/release-preflight.mjs "${args[@]}"
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Build installers (the same script as a local build)
+        timeout-minutes: 90
+        run: node scripts/build-windows-installer.mjs
+      - name: Stage release assets and checksums
+        shell: bash
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          out=dist-release
+          mkdir -p "$out"
+          cp "native/target/release/bundle/nsis/Guanlan_${VERSION}_x64-setup.exe" "$out/"
+          cp "native/target/release/bundle/msi/Guanlan_${VERSION}_x64_zh-CN.msi" "$out/"
+          cp native/target/release/guanlan.exe "$out/guanlan-cli-${VERSION}-x86_64-pc-windows-msvc.exe"
+          ( cd "$out" && sha256sum Guanlan_* guanlan-cli-* > SHA256SUMS )
+          ls -l "$out"
+      - name: Verify the staged assets (files, sizes, checksums)
+        shell: bash
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: node scripts/release-preflight.mjs --assets dist-release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: guanlan-${{ steps.meta.outputs.version }}-windows
+          path: dist-release
+          if-no-files-found: error
+
+  publish:
+    name: publish
+    needs: build
+    # 手动触发是演练：产物已经作为 artifact 上传，不创建 Release
+    if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: guanlan-${{ needs.build.outputs.version }}-windows
+          path: dist-release
+      # 下载下来的产物再核对一遍，不把残缺的 artifact 发出去
+      - name: Verify the downloaded assets
+        run: node scripts/release-preflight.mjs --assets dist-release
+      - name: Release notes from commit subjects since the previous tag
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          prev=$(git tag --list 'v*' --sort=-v:refname | grep -vx "$TAG" | head -1 || true)
+          range="$TAG"
+          if [ -n "$prev" ] && git merge-base --is-ancestor "$prev" "$TAG"; then range="$prev..$TAG"; else prev=""; fi
+          {
+            echo "## 更新内容"
+            echo
+            if [ -n "$prev" ]; then echo "自 $prev 以来的提交："; else echo "首个版本的提交："; fi
+            echo
+            git log --no-merges --format='- %s (`%h`)' "$range" | head -200
+            echo
+            echo "## 安装"
+            echo
+            echo "- \`Guanlan_${VERSION}_x64-setup.exe\`：NSIS 安装包，装完有「用观澜打开此文件夹」右键菜单。"
+            echo "- \`Guanlan_${VERSION}_x64_zh-CN.msi\`：MSI 安装包。"
+            echo "- \`guanlan-cli-${VERSION}-x86_64-pc-windows-msvc.exe\`：命令行与 MCP 代理，改名为 \`guanlan.exe\` 并加入 PATH 后可用。"
+            echo
+            echo "安装包没有代码签名，首次运行会出现系统的未知发布者提示。文件完整性见 \`SHA256SUMS\`。"
+          } > dist-release/NOTES.md
+          cat dist-release/NOTES.md
+      - name: Publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # 只有最高的 v* 标签才标成 Latest：补发或重跑一个旧标签时不能把 Latest 抢走
+          top=$(git tag --list 'v*' | sort -V | tail -1)
+          latest=--latest=false
+          if [ "$top" = "$TAG" ]; then latest=--latest; fi
+          assets=(dist-release/Guanlan_* dist-release/guanlan-cli-* dist-release/SHA256SUMS)
+          # 重跑时 Release 可能已经存在：改说明、覆盖上传，而不是报错退出
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "观澜 Guanlan $TAG" --notes-file dist-release/NOTES.md "$latest"
+            gh release upload "$TAG" "${assets[@]}" --clobber
+          else
+            gh release create "$TAG" "${assets[@]}" --verify-tag --title "观澜 Guanlan $TAG" --notes-file dist-release/NOTES.md "$latest"
+          fi
+          n=$(gh release view "$TAG" --json assets -q '.assets | length')
+          echo "$TAG has $n assets"
+          [ "$n" -eq 4 ]

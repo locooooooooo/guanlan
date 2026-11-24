@@ -1,29 +1,33 @@
 # 构建与发布
 
-一个观澜版本由四处版本号、一份编译期注入的构建身份和一个 Windows 安装包组成。这一页讲它们各自在哪、谁在检查它们一致、以及从源码到安装包要经过哪些命令。
+一个观澜版本由散落在仓库里的版本号、一份编译期注入的构建身份和一个 Windows 安装包组成。这一页讲它们各自在哪、谁在检查它们一致、从源码到安装包要经过哪些命令，以及推送一个标签之后发生什么。
 
 ## 职责与事实来源
 
 | 部分 | 事实来源 | 谁在检查 |
 | --- | --- | --- |
-| 版本号 | `package.json` 的 `version`、`native/Cargo.toml` 的 `[workspace.package] version`（三个 crate 用 `version.workspace = true` 继承）、`tauri.conf.json` 的 `version` | `test/v12-release-parity.test.ts` 的 V12-01 到 V12-03 把三处与字面量 `1.2.0` 比对；`test/f03-installer-migration.test.ts` 比对 `tauri.conf.json` 与 `package.json` |
+| 版本号 | `package.json` 的 `version` 是参照；另外 16 处见下文「版本号」 | `test/release-preflight.test.ts` 随 `npm test` 把 16 处逐一与它比对；`test/v12-release-parity.test.ts` 与 `test/f03-installer-migration.test.ts` 另有自己的断言 |
+| 发版预检 | [`scripts/release-preflight.mjs`](../../scripts/release-preflight.mjs)：版本号、标签、构建产物三组检查 | `test/release-preflight.test.ts` |
 | 前端构建身份 | `vite.config.ts` 的 `define`，运行时由 [`appBuildInfo.ts`](../../src/utils/appBuildInfo.ts) 读取 | V12-04、V12-06、V12-07 |
 | 安装包配置 | [`tauri.conf.json`](../../native/crates/guanlan-desktop/tauri.conf.json) 与 [`tauri.release.conf.json`](../../native/crates/guanlan-desktop/tauri.release.conf.json) | `build-windows-installer.mjs --check-only`，以及 f03 测试 |
-| 安装包构建 | [`scripts/build-windows-installer.mjs`](../../scripts/build-windows-installer.mjs) | 无自动测试，只有 `--check-only` |
-| 工具链 | [`native/rust-toolchain.toml`](../../native/rust-toolchain.toml) 锁定 1.99.1 | CI 的三个 Rust 作业都从这份文件解析 `channel` 后显式安装 |
+| 安装包构建 | [`scripts/build-windows-installer.mjs`](../../scripts/build-windows-installer.mjs) | 本地只自动测到 `--check-only`；真正的构建只在发布流水线里跑 |
+| 发布流水线 | [`.github/workflows/release.yml`](../../.github/workflows/release.yml) | 预检、产物核对、资产计数；见下文「发布」 |
+| 工具链 | [`native/rust-toolchain.toml`](../../native/rust-toolchain.toml) 锁定 1.99.1 | CI 与发布的 Rust 作业都从这份文件解析 `channel` 后显式安装 |
 | CI | [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | f03 测试断言其中有 `--check-only` 这一行 |
 
 ## 版本号
 
-升一个版本要动的地方：
+版本号一共出现在 17 处。`package.json` 是参照，其余 16 处必须与它相同：
 
-1. `package.json` 的 `version`（`package-lock.json` 由 npm 自己同步）。
-2. `native/Cargo.toml` 的 `[workspace.package] version`（`Cargo.lock` 里三个 crate 的版本由 cargo 同步）。
-3. `native/crates/guanlan-desktop/tauri.conf.json` 的 `version`。
-4. `src/utils/appBuildInfo.ts` 与 `vite.config.ts` 里的兜底字面量——它们只在 Vite 的 `define` 缺席时生效，但测试会断言 `APP_BUILD_INFO.version`。
-5. `test/v12-release-parity.test.ts` 里写死的 `'1.2.0'`，以及 `scripts/visual-baseline.mjs` 里「关于观澜」的版本断言。
+- 清单与锁文件：`package-lock.json`（顶层与 `packages[""]` 各一处）、`native/Cargo.toml` 的 `[workspace.package] version`、`native/Cargo.lock` 里三个 crate、`tauri.conf.json`。
+- 写死的字面量：`src/utils/appBuildInfo.ts` 的兜底值、`vite.config.ts` 的两处兜底值、`test/v12-release-parity.test.ts` 里断言版本的四处、`scripts/visual-baseline.mjs` 里断言「关于观澜」版本的一处。
 
-**没有任何测试比对 `Cargo.lock`、`package-lock.json` 和那些兜底字面量**，升版本时只能靠人记得。
+升一个版本的步骤：
+
+1. 改 `package.json` 的 `version`，再把 `native/Cargo.toml` 的 `[workspace.package] version`、`native/crates/guanlan-desktop/tauri.conf.json` 的 `version`，以及上面列的字面量改成同一个值。
+2. 让两份锁文件跟上。在仓库根目录执行 `npm install --package-lock-only --legacy-peer-deps`，在 `native/` 下执行 `cargo metadata --format-version 1 > /dev/null`。两条命令都只改版本字段，不动任何已解析的依赖版本，这一点在临时副本上核对过。
+   - npm 那条要带 `--legacy-peer-deps`，是因为仓库现在有一个同伴依赖冲突（`esbuild ^0.25` 对 vite 8 的可选同伴依赖 `^0.27 || ^0.28`），不带它 `npm install` 会直接报 `ERESOLVE`。冲突本身要另行修掉。
+3. 跑 `npm run preflight`。它一次列出所有没对上的地方；`npm test` 里也有同样的检查。
 
 ## 构建身份
 
@@ -56,10 +60,46 @@ Rust 侧没有嵌入提交哈希。`env!("CARGO_PKG_VERSION")` 只在 MCP 代理
 
 安装包**没有代码签名**，也没有配置自动更新。`tauri.conf.json` 的 `bundle.windows.webviewInstallMode` 是 `embedBootstrapper`。图标源图由 `gen-icon.mjs` 生成，再经 `tauri icon` 产出全套尺寸。
 
+## 发布
+
+发布由 `release.yml` 完成，分两个作业。
+
+**`build`（Windows）**，推送 `v*` 标签或手动触发时运行：
+
+1. 预检。有标签时要求：标签等于 `v<版本>`，版本号 17 处一致，标签所指的提交是 `main` 的祖先。手动触发没有标签，只查版本号。预检不过，这一步就失败，不往下构建。
+2. `node scripts/build-windows-installer.mjs`，和本地构建是同一个脚本。
+3. 暂存四个文件到 `dist-release/` 并算出 `SHA256SUMS`：两个安装包、改名后的命令行 `guanlan-cli-<版本>-x86_64-pc-windows-msvc.exe`、校验和文件。
+4. 核对暂存的产物：文件齐、不为空、没有多余的文件、校验和与内容一致。
+5. 上传为 workflow artifact。
+
+**`publish`（Ubuntu）**，只在推送标签时运行：
+
+1. 下载 artifact，再核对一遍产物，不把残缺的东西发出去。
+2. 生成更新说明：取上一个标签以来在 `main` 上的提交标题。**所以提交标题就是用户看到的更新内容**，要按[代码规范](../code-standards.md#提交)写。
+3. 创建 Release，标题是「观澜 Guanlan vX.Y.Z」，带四个资产。只有最高的 `v*` 标签才标成 Latest；补发或重跑一个旧标签不会把 Latest 抢走。重跑时 Release 已经存在，就改说明并覆盖上传，不报错。
+4. 数一遍资产，不是四个就让这一步失败。
+
+**手动触发是演练。** 它跑完 `build` 作业并把产物留成 artifact，不创建 Release。打第一个标签之前，先用它把整条流水线走一遍。
+
+### 发布判定
+
+一次发布算数，要同时满足：
+
+- 标签在 `main` 上，并且是 `origin/main` 的祖先。
+- 标签所在的提交（或之后包含它的提交）有一次完整跑完并且全绿的 `ci`。被下一次推送取消的运行不算。
+- Release 带齐四个资产，`SHA256SUMS` 与文件一致。
+- 它是最高的版本，并且带着 Latest 标记。
+
+**标签不等于 Release。** 打完标签要看 Release 真的存在、资产齐全。构建失败的标签要记下来，不能让下一个标签把它盖过去。打标签之前先看 `git tag` 里下一个空闲的版本号，两个人或两个会话同时打标签会撞车。
+
+### 权限
+
+工作流整体只有 `contents: read`，只有 `publish` 作业申请 `contents: write`。如果仓库设置把 `GITHUB_TOKEN` 的默认权限限制为只读，并且不允许工作流自行提升，`publish` 作业创建 Release 时会得到 403；那时要么放开这个限制，要么改用专用的令牌。
+
 ## 工具链与构建配置
 
 - `native/rust-toolchain.toml` 锁定 1.99.1 并要求 `rustfmt`、`clippy` 两个组件。理由写在文件里：不锁定就无法保证「本地通过等于 CI 通过」。只有 `cargo` 在 `native/` 目录下执行时 rustup 才会读这个文件。
-- `native/.cargo/config.toml` 设了 `jobs = 2`。这是针对一台开发机上 release 优化阶段偶发崩溃的缓解措施，它随仓库提交，在 CI 上同样生效。
+- `native/.cargo/config.toml` 设了 `jobs = 2`。这是针对一台开发机上 release 优化阶段偶发崩溃的缓解措施，它随仓库提交，在 CI 与发布的构建里同样生效。
 - `native/Cargo.toml` 的 release profile 是 `opt-level = 3` 加 `strip = true`，**刻意不开 LTO 与 `codegen-units = 1`**：本机 rustc 在 Tauri 依赖集的 thin-LTO 终码生成阶段确定性崩溃，复现过两次。
 
 ## CI
@@ -81,22 +121,23 @@ Rust 侧没有嵌入提交哈希。`env!("CARGO_PKG_VERSION")` 只在 MCP 代理
 - **每个 cargo 步骤有自己的超时**，卡住的步骤不会占满整个作业的时限。
 - `smoke` 作业的注释里说明：夹具、期望结果与身份向量都在 `.gitignore` 里，从干净 checkout 用 `seed-fixture.ts` 重建。
 
-CI 上**从不构建真正的安装包**，也不上传任何产物。本地的统一入口是 `npm run gate`，见下文「验证」。
+`ci.yml` 从不构建安装包，也不上传产物；安装包在 `release.yml` 里构建。本地的统一入口是 `npm run gate`，见下文「验证」。
 
 ## 约束
 
-- 版本号三处不一致时 `npm test` 会失败，但 `Cargo.lock` 与兜底字面量没有守卫。
 - 安装包只支持 Windows x64。`GUANLAN_TARGET_TRIPLE` 可以改 sidecar 的名字，但产物文件名里的 `x64` 是写死的。
 - 右键菜单只由 NSIS 安装包注册，见[桌面壳](desktop-shell.md)。
 - release 构建不要为了体积或几个百分点的性能去开 LTO，除非先确认那个崩溃已经不存在。
+- 产物的文件名同时写在三个地方：`build-windows-installer.mjs`（安装包）、`release.yml`（暂存时的改名）、`release-preflight.mjs` 的 `expectedAssetNames`（核对）。改名要三处一起改，`test/release-preflight.test.ts` 钉着预检那一处。
 
 ## 验证
 
 ```sh
 npm run gate                                        # 对应 CI 的 frontend 与 rust-desktop 作业
 npm run gate -- --full                              # 再加 smoke 作业的几步，需要能做 release 构建
+npm run preflight                                   # 17 处版本号是否一致；加 --tag vX.Y.Z --require-on-main 核对标签
 node scripts/build-windows-installer.mjs --check-only
 node native/crates/guanlan-desktop/gen-icon.mjs   # 只在改了图标样式时
 ```
 
-[`scripts/gate.mjs`](../../scripts/gate.mjs) 是本地的统一入口，步骤与 CI 的对应关系写在它的头注释里。
+[`scripts/gate.mjs`](../../scripts/gate.mjs) 是本地的统一入口，步骤与 CI 的对应关系写在它的头注释里。发布流水线没法在本地触发；它里面的每段 shell 都抽出来在本机演练过，做法记在引入它的提交说明里。
