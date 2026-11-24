@@ -27,6 +27,8 @@ import {
 import type { StorageStatsResponse } from '../../services/apiTypes';
 import type { WorkspaceConfig } from '../../types/guanlan';
 import { APP_BUILD_INFO, formatBuildTimestamp } from '../../utils/appBuildInfo';
+import { BRAND_NAME, BRAND_NAME_EN, BRAND_SLOGAN, BRAND_SLOGAN_NOTE } from '../../utils/brandIdentity';
+import { BrandMark } from '../BrandMark';
 import {
   checkDesktopUpdate,
   installDesktopUpdate,
@@ -530,16 +532,26 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
                     关于观澜（Guanlan）
                   </div>
                   <FramePanel className="space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[14px] font-semibold text-foreground">观澜 · 司辰时空文档中枢</span>
-                      <Badge
-                        variant="brand"
-                        size="sm"
-                        data-about-version={APP_BUILD_INFO.version}
-                        className="font-mono tabular-nums"
-                      >
-                        {APP_BUILD_INFO.versionTag}
-                      </Badge>
+                    <div className="flex items-center gap-2.5">
+                      <BrandMark size="md" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[14px] font-semibold text-foreground">
+                            {BRAND_NAME} · {BRAND_SLOGAN}
+                          </span>
+                          <Badge
+                            variant="brand"
+                            size="sm"
+                            data-about-version={APP_BUILD_INFO.version}
+                            className="font-mono tabular-nums"
+                          >
+                            {APP_BUILD_INFO.versionTag}
+                          </Badge>
+                        </div>
+                        <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+                          {BRAND_NAME_EN} · {BRAND_SLOGAN_NOTE}
+                        </p>
+                      </div>
                     </div>
                     <p className="text-muted-foreground leading-relaxed">
                       本地优先、只读安全边界与双时间语义护栏：所有索引、版本快照、决策溯源与静默清单均落盘于本机私有数据目录，绝不向用户业务目录写入无关配置文件。
