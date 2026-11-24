@@ -5,13 +5,25 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { DiffSidePane } from '../src/components/timemachine/DiffSidePane';
-import { MdHumanDiffPanel } from '../src/components/timemachine/MdHumanDiffPanel';
+import { LineDiffView, MdHumanDiffPanel } from '../src/components/timemachine/MdHumanDiffPanel';
 import { SvgComparePanel } from '../src/components/timemachine/SvgComparePanel';
 import { TableDiffPanel } from '../src/components/timemachine/TableDiffPanel';
-import { buildMarkdownHumanDiff, buildSvgDiff, buildTableDiff, buildXlsxDiff } from '../src/utils/multimodalDiff';
+import { EventLevel } from '../src/components/KnowledgeGraph';
+import { EventTimelineCanvas } from '../src/components/EventTimelineCanvas';
+import { canOpenTimeMachine } from '../src/components/reader/readerChromeSections';
+import { isTimeMachineFormat } from '../src/utils/formatMeta';
+import {
+  buildMarkdownHumanDiff,
+  buildSvgDiff,
+  buildTableDiff,
+  buildXlsxDiff,
+  computeLineDiffRows,
+} from '../src/utils/multimodalDiff';
+import type { FileRecord } from '../src/types/guanlan';
 
 const MD_OLD = [
   '# 登录方案',
@@ -165,4 +177,156 @@ test('XLSX 面板：工作表 tab/新增删除名单/诚实拒绝文案', () => 
   );
   assert.ok(refusedHtml.includes('诚实拒绝'));
   assert.ok(refusedHtml.includes('绝不以当前文件冒充历史版本'));
+});
+
+test('时光机格式单一事实源：.mjs 等源码与纯文本格式进入时光机，pdf/位图/svgz 保持排除', () => {
+  for (const fmt of ['md', 'mjs', 'js', 'ts', 'tsx', 'py', 'rs', 'json', 'txt', 'html', 'svg', 'csv', 'tsv', 'xlsx']) {
+    assert.equal(isTimeMachineFormat(fmt), true, `${fmt} 应可进入版本时光机`);
+    assert.equal(canOpenTimeMachine(fmt), true, `canOpenTimeMachine('${fmt}') 应与 isTimeMachineFormat 同口径`);
+  }
+  for (const fmt of ['pdf', 'png', 'jpg', 'docx', 'zip', 'mp4', 'svgz', 'bin']) {
+    assert.equal(isTimeMachineFormat(fmt), false, `${fmt} 不应进入文本/表格版本时光机`);
+    assert.equal(canOpenTimeMachine(fmt), false, `canOpenTimeMachine('${fmt}') 应返回 false`);
+  }
+});
+
+test('星图下钻路由：.mjs 文件进入文档版本时光机（不再掉入旧事件目录/事件链空态），pdf 仍走事件图谱', () => {
+  const makeStubFile = (id: string, name: string, format: string): FileRecord => ({
+    file_id: id,
+    folder: '04-智能体代码/server',
+    title: name,
+    relative_path: `04-智能体代码/server/${name}`,
+    format,
+    current_revision_id: `${id}_r4`,
+    coverage: 'full_text',
+    revisions: [
+      {
+        revision_id: `${id}_r4`,
+        versionNumber: 4,
+        observed_at: '2026-11-24T10:00:00+08:00',
+        content_sha256: 'abc',
+        sizeBytes: 1024,
+        snapshotAvailable: true,
+        summaryNote: '',
+      },
+    ],
+  } as unknown as FileRecord);
+
+  const mjsFile = makeStubFile('f_mjs', 'futian-server.mjs', 'mjs');
+  const pdfFile = makeStubFile('f_pdf', 'spec.pdf', 'pdf');
+
+  const baseGraph = {
+    visible: true,
+    files: [mjsFile, pdfFile],
+    events: [],
+    decisions: [],
+    relations: [],
+    readingStates: {},
+    selectedFileId: '',
+    onSelectFile: () => {},
+    onOpenReaderModal: () => {},
+    onOpenDecisionModal: () => {},
+    onAddEvidencePointer: () => {},
+    indexGeneration: 1,
+    panoramaMode: 'canvas' as const,
+    onPanoramaModeChange: () => {},
+    onCanvasThemeChange: () => {},
+    eventDays: null,
+    activeDate: undefined,
+    onSelectDate: () => {},
+    granularity: 'day' as const,
+    onGranularityChange: () => {},
+    onDrillToBucket: () => {},
+    onOpenDayInTimeline: () => {},
+    selectedEventId: undefined,
+    onSelectEvent: () => {},
+  };
+
+  const mjsFrame = { fileId: 'f_mjs', revisionId: 'f_mjs_r4', name: 'futian-server.mjs' };
+  const mjsHtml = renderToStaticMarkup(
+    React.createElement(EventLevel, {
+      active: true,
+      frame: mjsFrame,
+      trail: [mjsFrame],
+      root: 'H:\\proj',
+      file: mjsFile,
+      graph: baseGraph,
+      onGo: () => {},
+      onBack: () => {},
+      onRead: () => {},
+    })
+  );
+  assert.ok(mjsHtml.includes('aria-label="文档版本时光机"'), '.mjs 下钻应渲染文档版本时光机');
+  assert.ok(mjsHtml.includes('MJS · 版本时光机'), '.mjs 轴头应标注 MJS · 版本时光机');
+  assert.ok(!mjsHtml.includes('事件链 · 0 项'), '.mjs 不得再掉入旧三栏空事件链');
+
+  const pdfFrame = { fileId: 'f_pdf', revisionId: 'f_pdf_r4', name: 'spec.pdf' };
+  const pdfHtml = renderToStaticMarkup(
+    React.createElement(EventLevel, {
+      active: true,
+      frame: pdfFrame,
+      trail: [pdfFrame],
+      root: 'H:\\proj',
+      file: pdfFile,
+      graph: baseGraph,
+      onGo: () => {},
+      onBack: () => {},
+      onRead: () => {},
+    })
+  );
+  assert.ok(pdfHtml.includes('aria-label="文档事件图谱"'), 'pdf 仍走事件图谱三栏');
+});
+
+test('源码行 Diff 面板（LineDiffView）：渲染 .mjs 增删行、换行符无实质改动与超预算诚实拒绝', () => {
+  const diff = computeLineDiffRows(
+    'import http from "node:http";\nconst port = 3000;\nconsole.log(port);',
+    'import http from "node:http";\nconst port = 8788;\nconst host = "127.0.0.1";\nconsole.log(port);'
+  );
+  const html = renderToStaticMarkup(
+    React.createElement(LineDiffView, { lineDiff: diff, variant: 'text', ariaLabel: 'MJS 源码行 Diff' })
+  );
+  assert.ok(html.includes('data-machine-text-diff=""'));
+  assert.ok(html.includes('+2/-1'));
+  assert.ok(html.includes('+ const port = 8788;'));
+  assert.ok(html.includes('- const port = 3000;'));
+
+  const eolOnly = computeLineDiffRows('a\nb', 'a\nb');
+  const eolHtml = renderToStaticMarkup(
+    React.createElement(LineDiffView, { lineDiff: eolOnly, lineEndingOnly: true, variant: 'text' })
+  );
+  assert.ok(eolHtml.includes('仅换行符差异'));
+
+  const refusedHtml = renderToStaticMarkup(
+    React.createElement(LineDiffView, {
+      lineDiff: { ok: false, code: 'DIFF_TOO_LARGE', message: '对比规模超出预算' },
+      variant: 'text',
+    })
+  );
+  assert.ok(refusedHtml.includes('对比规模超出预算'));
+});
+
+test('EventTimelineCanvas 双主题契约：零裸 hex/rgba，容器与空态文案走 --cv-* 令牌（纸面不再出黑块）', () => {
+  const src = readFileSync(new URL('../src/components/EventTimelineCanvas.tsx', import.meta.url), 'utf8');
+  const rules = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  assert.deepEqual(rules.match(/#[0-9a-fA-F]{3,6}\b/g) ?? [], [], 'EventTimelineCanvas 不得残留裸 hex');
+  assert.deepEqual(rules.match(/rgba?\(/g) ?? [], [], 'EventTimelineCanvas 不得残留裸 rgba');
+
+  const html = renderToStaticMarkup(
+    React.createElement(EventTimelineCanvas, {
+      active: true,
+      title: 'spec.pdf',
+      subtitle: 'PDF · 文档时间轴',
+      nodes: [],
+      offset: 0,
+      total: 0,
+      selected: undefined,
+      links: [],
+      onSelect: () => {},
+      onLink: () => {},
+      onNext: () => {},
+      onRead: () => {},
+    })
+  );
+  assert.ok(html.includes('fill:var(--cv-card)'), '事件链容器应走 --cv-card 令牌（随纸面/夜航切换）');
+  assert.ok(html.includes('fill:var(--cv-ink-meta)'), '空态提示文字应走 --cv-ink-meta 令牌');
 });

@@ -226,9 +226,62 @@ export const NonLegacyFilePreviewPanel: React.FC<NonLegacyFilePreviewPanelProps>
   const textLineCount = textBody !== null ? textBody.split('\n').length : null;
   const versionDateLabel = `v${currentRev.versionNumber} · ${currentRev.observed_at.slice(0, 10)}`;
 
-  const renderActionButtons = () => (
+  const renderFloatingQuickActions = () => {
+    const hasPrimary =
+      (mode === 'text' && textBody !== null) ||
+      (mode === 'image' && Boolean(rawUrl) && !imageFailed);
+    if (!hasPrimary && !onAddEvidencePointer) return null;
+    const floatBtnCls = `inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium cursor-pointer transition-colors ${
+      paperLightMode
+        ? 'bg-white/90 text-[#26243D] border border-[#E5E3DD]/90 hover:border-[color:var(--accent-iris)] shadow-xs'
+        : 'bg-[#1D1D20]/90 text-[#E6E5E0] border border-[#343439] hover:border-[color:var(--accent-iris)] shadow-xs'
+    }`;
+    return (
+      <div
+        data-preview-floating-actions=""
+        className="absolute right-3 top-2.5 z-10 flex items-center gap-1.5 opacity-75 hover:opacity-100 focus-within:opacity-100 transition-opacity"
+      >
+        {mode === 'text' && textBody !== null && (
+          <button
+            type="button"
+            onClick={() => void handleCopyText()}
+            className={floatBtnCls}
+            title="复制全文内容"
+          >
+            {copiedText ? <Check className="w-3 h-3 text-[#2E8B57]" /> : <Copy className="w-3 h-3" />}
+            <span>{copiedText ? '已复制' : '复制'}</span>
+          </button>
+        )}
+        {mode === 'image' && rawUrl && !imageFailed && (
+          <a
+            href={rawUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={floatBtnCls}
+            title="在新窗口查看原图"
+            aria-label="查看原图"
+          >
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        )}
+        {onAddEvidencePointer && (
+          <button
+            type="button"
+            onClick={handleAddPointer}
+            className={floatBtnCls}
+            title="将当前文件加入证据篮"
+            aria-label={copiedEvidence ? '已入证据篮' : '加入证据篮'}
+          >
+            <ClipboardCopy className="w-3 h-3" />
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  const renderActionButtons = (includeSystemActions = true) => (
     <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-      {mode === 'text' && textBody !== null && (
+      {includeSystemActions && mode === 'text' && textBody !== null && (
         <button
           type="button"
           onClick={() => void handleCopyText()}
@@ -239,7 +292,7 @@ export const NonLegacyFilePreviewPanel: React.FC<NonLegacyFilePreviewPanelProps>
           <span>{copiedText ? '已复制' : '复制'}</span>
         </button>
       )}
-      {mode === 'image' && rawUrl && !imageFailed && (
+      {includeSystemActions && mode === 'image' && rawUrl && !imageFailed && (
         <a
           href={rawUrl}
           target="_blank"
@@ -251,7 +304,7 @@ export const NonLegacyFilePreviewPanel: React.FC<NonLegacyFilePreviewPanelProps>
           <span>查看原图</span>
         </a>
       )}
-      {systemActions?.onOpenWithDefaultApp && (
+      {includeSystemActions && systemActions?.onOpenWithDefaultApp && (
         <button
           type="button"
           onClick={() => systemActions.onOpenWithDefaultApp?.(activeFile.relative_path)}
@@ -261,7 +314,7 @@ export const NonLegacyFilePreviewPanel: React.FC<NonLegacyFilePreviewPanelProps>
           <span>默认应用打开</span>
         </button>
       )}
-      {systemActions?.onRevealInExplorer && (
+      {includeSystemActions && systemActions?.onRevealInExplorer && (
         <button
           type="button"
           onClick={() => systemActions.onRevealInExplorer?.(activeFile.relative_path)}
@@ -271,7 +324,7 @@ export const NonLegacyFilePreviewPanel: React.FC<NonLegacyFilePreviewPanelProps>
           <span>在目录中定位</span>
         </button>
       )}
-      {onAddEvidencePointer && (
+      {(includeSystemActions || mode === 'html') && onAddEvidencePointer && (
         <button
           type="button"
           onClick={handleAddPointer}
@@ -288,9 +341,9 @@ export const NonLegacyFilePreviewPanel: React.FC<NonLegacyFilePreviewPanelProps>
           aria-expanded={metaExpanded}
           onClick={() => setMetaExpanded((v) => !v)}
           title={metaExpanded ? '收起技术元数据与快照策略' : '展开完整路径、SHA-256 指纹与快照策略'}
-          className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[11.5px] cursor-pointer transition-colors hover:border-[color:var(--accent-iris)] ${
-            metaExpanded ? 'border-[color:var(--accent-iris)] text-[color:var(--accent-iris-deep)]' : mutedCls
-          } ${chipBgCls}`}
+          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[11px] cursor-pointer transition-colors hover:text-[color:var(--accent-iris-deep)] ${
+            metaExpanded ? 'text-[color:var(--accent-iris-deep)] font-medium' : mutedCls
+          }`}
         >
           <span>详情</span>
           {metaExpanded ? (
@@ -303,11 +356,13 @@ export const NonLegacyFilePreviewPanel: React.FC<NonLegacyFilePreviewPanelProps>
     </div>
   );
 
-  const renderMetadataGrid = (compact = false) => (
+  const renderMetadataGrid = (compact = false, borderSide: 'top' | 'bottom' = 'bottom') => (
     <div
       data-preview-meta-drawer=""
       className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-x-4 gap-y-2 text-xs ${
-        compact ? `px-3.5 py-2.5 border-b ${borderCls}` : `pt-3 border-t ${borderCls}`
+        compact
+          ? `px-3.5 py-2.5 ${borderSide === 'top' ? 'border-t' : 'border-b'} ${borderCls} ${barBgCls}`
+          : `pt-3 border-t ${borderCls}`
       }`}
     >
       <div className="sm:col-span-2 lg:col-span-5 min-w-0">
@@ -343,41 +398,70 @@ export const NonLegacyFilePreviewPanel: React.FC<NonLegacyFilePreviewPanelProps>
         </div>
       </div>
       {compact && (
-        <div className={`sm:col-span-2 lg:col-span-12 text-[11px] ${mutedCls}`}>
-          快照策略：{tierInfo.title}
+        <div className={`sm:col-span-2 lg:col-span-12 flex flex-wrap items-center justify-between gap-2 text-[11px] ${mutedCls}`}>
+          <span>快照策略：{tierInfo.title}</span>
+          {(systemActions?.onOpenWithDefaultApp || systemActions?.onRevealInExplorer) && (
+            <div className="flex items-center gap-1.5">
+              {systemActions?.onOpenWithDefaultApp && (
+                <button
+                  type="button"
+                  onClick={() => systemActions.onOpenWithDefaultApp?.(activeFile.relative_path)}
+                  className={actionBtnCls}
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>默认应用打开</span>
+                </button>
+              )}
+              {systemActions?.onRevealInExplorer && (
+                <button
+                  type="button"
+                  onClick={() => systemActions.onRevealInExplorer?.(activeFile.relative_path)}
+                  className={actionBtnCls}
+                >
+                  <FolderSearch className="w-3 h-3" />
+                  <span>在目录中定位</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 
-  // 内容优先单行工具条：把原 156px 技术元数据大卡片收折为 ~38px 单行条，首屏直接呈现文档/代码/图像主体
-  const renderCompactHeaderBar = (withBottomBorder: boolean) => (
+  // 极轻状态条：文本/图像模式沉底作为 28px 底部脚标（让正文顶格首屏直出，消除顶部第三层工具条），
+  // HTML/Office 模式保留为简洁单行条；重复的系统打开/定位操作收进「详情」或文件头 ··· 菜单。
+  const renderCompactHeaderBar = (
+    edge: 'bottom' | 'top' | 'none',
+    opts?: { includeSystemActions?: boolean }
+  ) => (
     <div
       data-preview-compact-bar=""
-      className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-3.5 py-2 text-xs shrink-0 ${
-        withBottomBorder ? `border-b ${barBgCls}` : ''
+      className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3.5 py-1.5 text-[11px] shrink-0 ${
+        edge === 'bottom'
+          ? `border-b ${barBgCls}`
+          : edge === 'top'
+            ? `border-t ${barBgCls}`
+            : ''
       }`}
     >
       <div className={`flex items-center gap-2 min-w-0 flex-1 ${paperLightMode ? '' : 'dark'}`}>
-        <span
-          className={`inline-flex items-center px-1.5 py-0.5 rounded-md font-mono text-[11px] font-semibold shrink-0 ${uiMeta.badgeClass}`}
-        >
-          {uiMeta.label}
-        </span>
-        <span
-          className={`text-[11px] px-1.5 py-0.5 rounded-md border shrink-0 ${snapshotBadgeCls}`}
-          title={tierInfo.title}
-        >
-          {currentRev.snapshotAvailable ? '已保存去重快照' : 'L0 仅元数据入库'}
-        </span>
-        <span
-          className={`font-mono text-[11.5px] truncate min-w-0 ${mutedCls}`}
-          title={activeFile.relative_path}
-        >
-          {activeFile.relative_path}
-        </span>
-        <span className={`inline-flex items-center gap-1.5 font-mono text-[11px] tabular-nums shrink-0 ${mutedCls}`}>
-          <span aria-hidden="true">·</span>
+        {mode !== 'image' && (
+          <span
+            className={`inline-flex items-center px-1.5 py-px rounded font-mono text-[10.5px] font-semibold shrink-0 ${uiMeta.badgeClass}`}
+          >
+            {uiMeta.label}
+          </span>
+        )}
+        {!currentRev.snapshotAvailable && (
+          <span
+            className={`text-[10.5px] px-1.5 py-px rounded border shrink-0 ${snapshotBadgeCls}`}
+            title={tierInfo.title}
+          >
+            仅元数据
+          </span>
+        )}
+        <span className={`inline-flex items-center gap-1.5 font-mono text-[10.5px] tabular-nums shrink-0 ${mutedCls}`}>
           <span>{formatByteSize(currentRev.sizeBytes)}</span>
           {textLineCount !== null && (
             <>
@@ -390,35 +474,33 @@ export const NonLegacyFilePreviewPanel: React.FC<NonLegacyFilePreviewPanelProps>
         </span>
       </div>
 
-      {renderActionButtons()}
+      {renderActionButtons(opts?.includeSystemActions ?? false)}
     </div>
   );
 
-  // ── 文本 / 源码模式：单框满高呈现正文（无嵌套双滚动条、无顶部大卡片挤占） ──
+  // ── 文本 / 源码模式：正文顶格首屏呈现（无顶部重复工具条），快捷复制/入篮轻浮右上角，技术元数据沉底 ──
   if (mode === 'text') {
     return (
-      <div className="flex-1 min-h-0 flex flex-col overflow-hidden px-4 py-2.5">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden px-4 py-2">
         <div
           className={`max-w-[1280px] mx-auto w-full flex-1 min-h-0 flex flex-col rounded-xl border overflow-hidden ${cardCls}`}
         >
-          {renderCompactHeaderBar(true)}
-          {metaExpanded && renderMetadataGrid(true)}
-
           {textLoading && (
-            <div className={`p-6 flex items-center gap-2 text-xs ${mutedCls}`}>
+            <div className={`flex-1 p-6 flex items-center gap-2 text-xs ${mutedCls}`}>
               <Loader2 className="w-4 h-4 animate-spin" />
               <span>正在从去重快照仓读取正文…</span>
             </div>
           )}
           {textError && !textLoading && (
-            <div className={`p-5 flex items-center gap-2 text-xs ${mutedCls}`}>
+            <div className={`flex-1 p-5 flex items-center gap-2 text-xs ${mutedCls}`}>
               <ShieldAlert className="w-4 h-4 text-[#D99B52] shrink-0" />
               <span>{textError}</span>
             </div>
           )}
           {displaySlice !== null && !textLoading && (
-            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-              <pre className="flex-1 min-h-0 p-4 overflow-auto font-mono text-[13px] leading-[1.65] whitespace-pre">
+            <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+              {renderFloatingQuickActions()}
+              <pre className="flex-1 min-h-0 px-4 py-3.5 overflow-auto font-mono text-[13px] leading-[1.65] whitespace-pre">
                 <code>{displaySlice}</code>
               </pre>
               {isTruncated && (
@@ -428,70 +510,69 @@ export const NonLegacyFilePreviewPanel: React.FC<NonLegacyFilePreviewPanelProps>
               )}
             </div>
           )}
+          {metaExpanded && renderMetadataGrid(true, 'top')}
+          {renderCompactHeaderBar('top')}
         </div>
       </div>
     );
   }
 
-  // ── 图片模式：单框满高画布，图像直出首屏 ──
+  // ── 图片模式：图像顶格满高画布，技术元数据沉底 ──
   if (mode === 'image') {
     return (
-      <div className="flex-1 min-h-0 flex flex-col overflow-hidden px-4 py-2.5">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden px-4 py-2">
         <div
           className={`max-w-[1280px] mx-auto w-full flex-1 min-h-0 flex flex-col rounded-xl border overflow-hidden ${cardCls}`}
         >
-          {renderCompactHeaderBar(true)}
-          {metaExpanded && renderMetadataGrid(true)}
-
-          {rawUrl && !imageFailed ? (
-            <div className={`flex-1 min-h-0 flex items-center justify-center p-4 overflow-auto ${paperLightMode ? 'bg-[#F8F7F3]' : 'bg-[#151518]'}`}>
-              <img
-                key={`${rawUrl}#${imageRetrySeq}`}
-                src={rawUrl}
-                alt={activeFile.title}
-                onError={() => setImageFailed(true)}
-                className="max-w-full max-h-full object-contain rounded"
-              />
-            </div>
-          ) : (
-            <div className="p-6 flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-3 min-w-0">
-                <ShieldAlert className="w-4 h-4 text-[#D99B52] shrink-0" />
-                <span className={mutedCls}>
-                  该图片快照未能被浏览器直接解码，可点击重试或通过右上角「默认应用打开」调用系统看图程序查看。
-                </span>
+          <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+            {renderFloatingQuickActions()}
+            {rawUrl && !imageFailed ? (
+              <div className={`flex-1 min-h-0 flex items-center justify-center p-4 overflow-auto ${paperLightMode ? 'bg-[#F8F7F3]' : 'bg-[#151518]'}`}>
+                <img
+                  key={`${rawUrl}#${imageRetrySeq}`}
+                  src={rawUrl}
+                  alt={activeFile.title}
+                  onError={() => setImageFailed(true)}
+                  className="max-w-full max-h-full object-contain rounded"
+                />
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setImageFailed(false);
-                  setImageRetrySeq((seq) => seq + 1);
-                }}
-                className={actionBtnCls}
-              >
-                <span>重新加载</span>
-              </button>
-            </div>
-          )}
+            ) : (
+              <div className="flex-1 p-6 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-3 min-w-0">
+                  <ShieldAlert className="w-4 h-4 text-[#D99B52] shrink-0" />
+                  <span className={mutedCls}>
+                    该图片快照未能被浏览器直接解码，可点击重试或通过「详情 → 默认应用打开」调用系统看图程序查看。
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImageFailed(false);
+                    setImageRetrySeq((seq) => seq + 1);
+                  }}
+                  className={actionBtnCls}
+                >
+                  <span>重新加载</span>
+                </button>
+              </div>
+            )}
+          </div>
+          {metaExpanded && renderMetadataGrid(true, 'top')}
+          {renderCompactHeaderBar('top')}
         </div>
       </div>
     );
   }
 
-  // ── HTML / Office 模式：顶部紧凑单行条 + 主内容直达 ──
+  // ── HTML / Office 模式：主内容直出首屏，技术元数据条沉底（消除顶部双层工具条叠加） ──
   if (mode === 'html' || mode === 'office') {
     return (
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-2.5">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-2">
         <div
           className={`${
             mode === 'html' && htmlFullWidth ? 'max-w-none' : 'max-w-6xl'
           } mx-auto w-full space-y-2.5`}
         >
-          <div className={`rounded-xl border overflow-hidden ${cardCls}`}>
-            {renderCompactHeaderBar(metaExpanded)}
-            {metaExpanded && renderMetadataGrid(true)}
-          </div>
-
           {mode === 'html' && (
             <HtmlReaderView
               activeFile={activeFile}
@@ -516,6 +597,11 @@ export const NonLegacyFilePreviewPanel: React.FC<NonLegacyFilePreviewPanelProps>
               onAddEvidencePointer={onAddEvidencePointer}
             />
           )}
+
+          <div className={`rounded-xl border overflow-hidden ${cardCls}`}>
+            {metaExpanded && renderMetadataGrid(true, 'bottom')}
+            {renderCompactHeaderBar('none', { includeSystemActions: false })}
+          </div>
         </div>
       </div>
     );

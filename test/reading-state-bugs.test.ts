@@ -588,8 +588,8 @@ test('视觉升级 · LeftSidebar：阅读进度条、全已读态、继续阅�
     },
   };
 
-  // 1. 混合态：阅读进度微卡 + 继续阅读 1-click 已读 + 有更新徽标
-  const htmlMixed = renderToStaticMarkup(
+  // 1. 「全部」态保持清静：不重复占高展示进度条；「继续阅读」默认折叠为单行标题
+  const htmlAll = renderToStaticMarkup(
     React.createElement(LeftSidebar, {
       files,
       readingStates,
@@ -603,13 +603,63 @@ test('视觉升级 · LeftSidebar：阅读进度条、全已读态、继续阅�
       onMarkFileUnread: () => {},
     })
   );
-  assert.ok(htmlMixed.includes('data-sidebar-reading-meter=""'), '渲染顶部已读进度微卡');
-  assert.ok(htmlMixed.includes('glx-read-meter-fill'), '进度微卡使用 GPU scaleX 动效类');
-  assert.ok(htmlMixed.includes('data-mark-baseline-trigger=""'), '保留确立已读基线入口');
-  assert.ok(htmlMixed.includes('data-continue-mark-read="f_upd"'), '继续阅读行提供 1-click 标为已读');
-  assert.ok(htmlMixed.includes('有更新'), '读后有更新条目在继续阅读中标出「有更新」');
+  assert.ok(!htmlAll.includes('data-sidebar-reading-meter=""'), '「全部」态不重复展示已读进度条');
+  assert.ok(htmlAll.includes('继续阅读'), '「继续阅读」以折叠标题保留可达');
+  assert.ok(!htmlAll.includes('data-continue-mark-read="f_upd"'), '「继续阅读」默认折叠不挤占目录树');
+  assert.ok(!htmlAll.includes('data-sidebar-scope-count="all"'), '「全部」不把总量再印在页签上');
+  assert.ok(htmlAll.includes('data-sidebar-scope-count="unread"'), '未读只是子集时仍显示差额');
+  assert.ok(htmlAll.includes('全部文档 3 份'), '总量留在悬停说明里');
 
-  // 2. 全已读态：展示全部已读徽记与目录全已读勾
+  const piled = [makeFile('pile_a', '甲', 'shots', 'ra'), makeFile('pile_b', '乙', 'shots', 'rb')];
+  const htmlPiled = renderToStaticMarkup(
+    React.createElement(LeftSidebar, {
+      files: piled,
+      readingStates: {},
+      activeFileId: '',
+      filters: { quickScope: 'all', folder: 'all', format: 'all', role: 'all', topic: 'all' },
+      onUpdateFilters: () => {},
+      onResetFilters: () => {},
+      onOpenFileToRead: () => {},
+      onMarkReadingBaseline: () => {},
+    })
+  );
+  assert.ok(!htmlPiled.includes('data-sidebar-scope-count'), '未读等于全部时不再并排两个相同大数');
+  assert.ok(!htmlPiled.includes('>MD<'), '清一色目录不重复格式词');
+  const htmlPiledUnread = renderToStaticMarkup(
+    React.createElement(LeftSidebar, {
+      files: piled,
+      readingStates: {},
+      activeFileId: '',
+      filters: { quickScope: 'unread', folder: 'all', format: 'all', role: 'all', topic: 'all' },
+      onUpdateFilters: () => {},
+      onResetFilters: () => {},
+      onOpenFileToRead: () => {},
+      onMarkReadingBaseline: () => {},
+    })
+  );
+  assert.ok(htmlPiledUnread.includes('sr-only">待读 2 份'), '零进度时待读句只留给读屏，不再占一行');
+  assert.ok(!htmlPiledUnread.includes('存量未读'), '零进度不再写「存量未读 N 份」');
+
+  // 1b. 「未读」筛选态：展开已读进度细条与「确立已读基线」入口
+  const htmlUnread = renderToStaticMarkup(
+    React.createElement(LeftSidebar, {
+      files,
+      readingStates,
+      activeFileId: '',
+      filters: { quickScope: 'unread', folder: 'all', format: 'all', role: 'all', topic: 'all' },
+      onUpdateFilters: () => {},
+      onResetFilters: () => {},
+      onOpenFileToRead: () => {},
+      onMarkReadingBaseline: () => {},
+      onMarkFileRead: () => {},
+      onMarkFileUnread: () => {},
+    })
+  );
+  assert.ok(htmlUnread.includes('data-sidebar-reading-meter=""'), '「未读」态展示已读进度细条');
+  assert.ok(htmlUnread.includes('glx-read-meter-fill'), '进度条使用 GPU scaleX 动效类');
+  assert.ok(htmlUnread.includes('data-mark-baseline-trigger=""'), '「未读」态提供确立已读基线入口');
+
+  // 2. 全已读态（「未读」tab）：展示「全部已读」完成微条，目录树不堆砌绿勾
   const allReadStates: ReadingStateMap = {
     f_read: readingStates.f_read,
     f_upd: { ...readingStates.f_upd, last_read_revision_id: 'r_upd_v2' },
@@ -628,15 +678,15 @@ test('视觉升级 · LeftSidebar：阅读进度条、全已读态、继续阅�
       files,
       readingStates: allReadStates,
       activeFileId: '',
-      filters: { quickScope: 'all', folder: 'all', format: 'all', role: 'all', topic: 'all' },
+      filters: { quickScope: 'unread', folder: 'all', format: 'all', role: 'all', topic: 'all' },
       onUpdateFilters: () => {},
       onResetFilters: () => {},
       onOpenFileToRead: () => {},
       onMarkReadingBaseline: () => {},
     })
   );
-  assert.ok(htmlAllRead.includes('data-sidebar-all-read=""'), '全已读态展示「全部已读」完成微卡');
-  assert.ok(htmlAllRead.includes('data-folder-all-read="docs"'), '已读完目录行尾展示柔和鼠尾草勾');
+  assert.ok(htmlAllRead.includes('data-sidebar-all-read=""'), '全已读态展示「全部已读」完成微条');
+  assert.ok(!htmlAllRead.includes('data-folder-all-read="docs"'), '已读目录不再堆砌绿勾噪点');
 
   // 3. 树内文件行：updated_since_last_read 带 glx-unread-updated-dot + 悬停 1-click 切换按钮
   const { nodes } = buildMergedFolderTree(files);

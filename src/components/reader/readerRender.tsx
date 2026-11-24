@@ -228,9 +228,9 @@ export function useReaderRender({
             onClick={onOpenAnnotations}
             data-block-annotation-badge={lineAnnotations.length}
             title={`本行有 ${lineAnnotations.length} 条本地批注，点击打开批注清单`}
-            className="shrink-0 self-center flex items-center gap-0.5 text-[11px] font-sans px-1.5 py-0.5 rounded text-[#9A6A45] dark:text-[#E5A96A] bg-[#FBF3E4] dark:bg-[#3A322A] opacity-80 hover:opacity-100 transition-opacity"
+            className="shrink-0 self-center flex items-center gap-0.5 text-[length:var(--text-micro)] font-sans px-1.5 py-0.5 rounded-[var(--r-ctl)] text-[#7A5130] dark:text-[#E5A96A] bg-[#FBF3E4] dark:bg-[#3A322A] opacity-90 hover:opacity-100 transition-opacity"
           >
-            ✎ {lineAnnotations.length}
+            批注 {lineAnnotations.length}
           </button>
         )}
         {excerptForCopy && excerptForCopy.length > 8 && (
@@ -238,10 +238,10 @@ export function useReaderRender({
             <button
               type="button"
               onClick={() => onAnnotateBlock(lineNum, excerptForCopy)}
-              className={`opacity-0 group-hover:opacity-100 transition-opacity text-[11px] font-sans px-2 py-0.5 rounded shrink-0 ${
+              className={`opacity-0 group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity text-[length:var(--text-micro)] font-sans px-2 py-0.5 rounded-[var(--r-ctl)] shrink-0 ${
                 paperLightMode
-                  ? 'bg-[#EFE4D5] text-[#9A6A45] hover:bg-[#E8DCC8]'
-                  : 'bg-[#3A322A] text-[#D99B52]'
+                  ? 'bg-[#EFE4D5] text-[#6B4728] hover:bg-[#E8DCC8]'
+                  : 'bg-[#3A322A] text-[#E5B372]'
               }`}
               title="为该段落添加本地批注（按版本哈希绑定，不改原文）"
             >
@@ -257,10 +257,10 @@ export function useReaderRender({
                   `行段引用 L${lineNum}`
                 )
               }
-              className={`opacity-0 group-hover:opacity-100 transition-opacity text-[11px] font-sans px-2 py-0.5 rounded shrink-0 ${
+              className={`opacity-0 group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity text-[length:var(--text-micro)] font-sans px-2 py-0.5 rounded-[var(--r-ctl)] shrink-0 ${
                 paperLightMode
-                  ? 'bg-[#EFE4D5] text-[#9A6A45] hover:bg-[#E8DCC8]'
-                  : 'bg-[#3A322A] text-[#D99B52]'
+                  ? 'bg-[#EFE4D5] text-[#6B4728] hover:bg-[#E8DCC8]'
+                  : 'bg-[#3A322A] text-[#E5B372]'
               }`}
               title="将该段落加入复制给智能体的上下文清单"
             >
@@ -450,12 +450,12 @@ export function useReaderRender({
               }
               className={`text-xs font-normal ${
                 paperLightMode
-                  ? 'text-[#8A857C] hover:text-[#9A6A45]'
-                  : 'text-[#6E6D68] hover:text-[#D99B52]'
+                  ? 'text-[#5E5A52] hover:text-[#3A342C]'
+                  : 'text-[#A8A6A0] hover:text-[#E5B372]'
               }`}
             >
               {readingState?.last_section_id === block.title
-                ? '✓ 已读到这里'
+                ? '已读到这里'
                 : '标记已读到这里'}
             </button>
           </div>,

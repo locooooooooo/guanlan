@@ -11,9 +11,8 @@
 import React, { useEffect, useState } from 'react';
 import {
   AlertTriangle,
-  ChevronDown,
-  ChevronRight,
   ExternalLink,
+  FileText,
   Maximize2,
   Minimize2,
   PlusCircle,
@@ -54,9 +53,10 @@ export function ReaderSvgSection({ ctx }: { ctx: ReaderCtx }) {
     annotateFromSvgRegion,
     flashAnnotationId,
   } = ctx;
+  const extractedTexts = currentRev.svgExtractedTexts ?? [];
   return (
     <div
-      className={`flex-1 overflow-y-auto p-6 space-y-5 ${
+      className={`flex-1 overflow-y-auto px-4 py-3 space-y-2.5 ${
         paperLightMode
           ? 'bg-[#FAF9F5] text-[#1F1E1D]'
           : 'bg-[#1A1917] text-[#F4F3EE]'
@@ -65,99 +65,97 @@ export function ReaderSvgSection({ ctx }: { ctx: ReaderCtx }) {
       <div
         className={`${
           svgFullWidth ? 'max-w-full' : 'max-w-[var(--measure-read)]'
-        } mx-auto space-y-4`}
+        } mx-auto space-y-2.5`}
       >
-        {/* SVG Toolbar（§4.1：图标钮＝IconButton，开合钮＝Button primary/ghost） */}
-        <div className="px-1 py-2 flex flex-wrap items-center justify-between gap-4 text-xs">
-          <div className="flex items-center gap-3">
-            <span
-              className={`font-semibold ${
-                paperLightMode ? 'text-[#1F1E1D]' : 'text-[#F4F3EE]'
-              }`}
-            >
-              受限安全矢量预览（已禁用脚本、事件处理与外部资源）
-            </span>
-            <span
-              aria-hidden="true"
-              className={paperLightMode ? 'text-[#8A857C]' : 'text-[#6E6D68]'}
-            >
-              ·
-            </span>
-            <span
-              className={`${
-                paperLightMode ? 'text-[#6E6A61]' : 'text-[#A1A09A]'
-              }`}
-            >
-              {currentRev.svgExtractedTexts &&
-              currentRev.svgExtractedTexts.length > 0
-                ? `可提取文字节点：${currentRev.svgExtractedTexts.length} 项（已加入全文检索）`
-                : '无内嵌 <text> 节点 · 仅文件名可检索'}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 tabular-nums">
+        {/* 精简 SVG 控制条：安全隔离默认静默保障，不在画布顶/底堆砌工程说明与 coverage 键值 */}
+        <div
+          data-svg-toolbar=""
+          className="flex flex-wrap items-center justify-end gap-1.5 text-xs tabular-nums"
+        >
+          <div className="inline-flex items-center gap-0.5">
             <IconButton
               label="缩小 SVG"
               onClick={() => setSvgZoom((z) => Math.max(50, z - 25))}
             >
               <ZoomOut />
             </IconButton>
-            <span
-              className={`px-2 ${
-                paperLightMode ? 'text-[#1F1E1D]' : 'text-[#F4F3EE]'
+            <button
+              type="button"
+              onClick={() => setSvgZoom(100)}
+              title={svgZoom === 100 ? '当前 100% 原尺寸' : '点击恢复 100% 原尺寸'}
+              className={`min-w-[44px] h-7 px-1.5 rounded-md text-xs font-mono text-center cursor-pointer transition-colors ${
+                paperLightMode
+                  ? 'text-[#1F1E1D] hover:bg-black/[0.05]'
+                  : 'text-[#F4F3EE] hover:bg-white/[0.08]'
               }`}
             >
               {svgZoom}%
-            </span>
+            </button>
             <IconButton
               label="放大 SVG"
               onClick={() => setSvgZoom((z) => Math.min(200, z + 25))}
             >
               <ZoomIn />
             </IconButton>
-            <Button variant="secondary" size="sm" onClick={() => setSvgZoom(100)}>
-              100% 原尺寸
-            </Button>
-            <Button
-              variant={svgFullWidth ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setSvgFullWidth((v) => !v)}
-            >
-              {svgFullWidth ? (
-                <>
-                  <Minimize2 className="w-3.5 h-3.5" />
-                  <span>常规宽度</span>
-                </>
-              ) : (
-                <>
-                  <Maximize2 className="w-3.5 h-3.5" />
-                  <span>全宽模式</span>
-                </>
-              )}
-            </Button>
-            <Button
-              variant={showSvgSourceDiff ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setShowSvgSourceDiff((v) => !v)}
-            >
-              {showSvgSourceDiff ? '返回图像预览' : '查看 SVG 源文本'}
-            </Button>
-            {/* D04：框选批注开合（叠加层 crosshair；保存区域恒百分比定位，原图字节零改动） */}
-            <Button
-              variant={svgAnnotateMode ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setSvgAnnotateMode((v) => !v)}
-              data-svg-annotate-toggle
-            >
-              {svgAnnotateMode ? '退出框选批注' : '框选批注'}
-            </Button>
           </div>
+          <span
+            aria-hidden="true"
+            className="mx-0.5 h-3.5 w-px bg-[color:var(--glass-hairline)]"
+          />
+          <Button
+            variant={svgFullWidth ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={() => setSvgFullWidth((v) => !v)}
+            title={svgFullWidth ? '恢复常规阅读宽度' : '横向铺满视口'}
+          >
+            {svgFullWidth ? (
+              <>
+                <Minimize2 className="w-3.5 h-3.5" />
+                <span>适宽</span>
+              </>
+            ) : (
+              <>
+                <Maximize2 className="w-3.5 h-3.5" />
+                <span>全宽</span>
+              </>
+            )}
+          </Button>
+          <Button
+            variant={showSvgSourceDiff ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={() => setShowSvgSourceDiff((v) => !v)}
+            title={showSvgSourceDiff ? '返回矢量图像预览' : '查看 SVG 源文本'}
+          >
+            {showSvgSourceDiff ? '图像' : '源码'}
+          </Button>
+          {/* D04：框选批注开合（叠加层 crosshair；保存区域恒百分比定位，原图字节零改动） */}
+          <Button
+            variant={svgAnnotateMode ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={() => setSvgAnnotateMode((v) => !v)}
+            data-svg-annotate-toggle
+          >
+            {svgAnnotateMode ? '退出批注' : '框选批注'}
+          </Button>
+          {extractedTexts.length > 0 && (
+            <Button
+              variant={svgTextsExpanded ? 'primary' : 'ghost'}
+              size="sm"
+              data-svg-extracted-texts-toggle=""
+              aria-expanded={svgTextsExpanded}
+              onClick={() => setSvgTextsExpanded((v) => !v)}
+              title="展开图中提取的文字节点，点击可加入证据篮"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>文字 ({extractedTexts.length})</span>
+            </Button>
+          )}
         </div>
 
         {/* Restricted Image Rendering via Data URI (Never injecting arbitrary SVG into DOM) */}
         {!showSvgSourceDiff ? (
           <div
-            className={`rounded-lg border p-6 overflow-auto flex items-center justify-center min-h-[380px] ${
+            className={`rounded-xl border p-4 overflow-auto flex items-center justify-center min-h-[420px] ${
               paperLightMode
                 ? 'bg-white border-[#DDD9CF]'
                 : 'bg-[#262524] border-[#383633]'
@@ -179,7 +177,7 @@ export function ReaderSvgSection({ ctx }: { ctx: ReaderCtx }) {
                     alt={activeFile.title}
                     referrerPolicy="no-referrer"
                     style={{ width: `${svgZoom}%`, maxWidth: 'none' }}
-                    className="block rounded shadow-lg transition-all"
+                    className="block rounded shadow-sm transition-all"
                   />
                   <SvgAnnotationOverlay
                     annotations={svgAnnotations}
@@ -194,7 +192,7 @@ export function ReaderSvgSection({ ctx }: { ctx: ReaderCtx }) {
           </div>
         ) : (
           <pre
-            className={`p-4 rounded-lg font-mono text-[13px] leading-[1.6] overflow-x-auto border ${
+            className={`p-4 rounded-xl font-mono text-[13px] leading-[1.6] overflow-x-auto border ${
               paperLightMode
                 ? 'bg-[#F0EEE6] text-[#1F1E1D] border-[#DDD9CF]'
                 : 'bg-[#262524] text-[#C9C5BD] border-[#383633]'
@@ -204,90 +202,51 @@ export function ReaderSvgSection({ ctx }: { ctx: ReaderCtx }) {
           </pre>
         )}
 
-        {/* Extracted Text Nodes Panel（契约⑧⑤：默认折叠为一行头部，点击展开原气泡墙） */}
-        <div
-          className={`pt-3 border-t space-y-2 ${
-            paperLightMode ? 'border-[#E3E0D8]' : 'border-[#383633]'
-          }`}
-        >
-          <button
-            type="button"
-            onClick={() => setSvgTextsExpanded((v) => !v)}
-            className={`w-full text-xs font-semibold flex items-center justify-between gap-2 ${
-              paperLightMode ? 'text-[#1F1E1D]' : 'text-[#F4F3EE]'
+        {/* 按需展开的 SVG 可引用文字列表（默认零占位，仅点击工具栏「文字」后呈现） */}
+        {svgTextsExpanded && extractedTexts.length > 0 && (
+          <div
+            data-svg-extracted-texts-panel=""
+            className={`pt-2.5 border-t space-y-2 ${
+              paperLightMode ? 'border-[#E3E0D8]' : 'border-[#383633]'
             }`}
           >
-            <span>
-              SVG 可提取文字检索层（
-              {currentRev.svgExtractedTexts?.length ?? 0} 项 ·{' '}
-              {svgTextsExpanded ? '点击收起' : '点击展开'}）
-            </span>
-            <span className="flex items-center gap-2 shrink-0">
-              <span
-                className={`font-mono ${
-                  paperLightMode ? 'text-[#8A857C]' : 'text-[#6E6D68]'
-                }`}
-              >
-                coverage={activeFile.coverage}
-              </span>
-              {svgTextsExpanded ? (
-                <ChevronDown className="w-3.5 h-3.5" />
-              ) : (
-                <ChevronRight className="w-3.5 h-3.5" />
-              )}
-            </span>
-          </button>
-          {svgTextsExpanded && (
-            <>
-              {currentRev.svgExtractedTexts &&
-              currentRev.svgExtractedTexts.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {currentRev.svgExtractedTexts.map((txt, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() =>
-                        onAddEvidencePointer({
-                          file_id: activeFile.file_id,
-                          revision_id: currentRev.revision_id,
-                          relative_path: activeFile.relative_path,
-                          content_sha256: currentRev.content_sha256,
-                          locator: { kind: 'svg_text', fragment: txt },
-                          evidence_kind: 'svg_label',
-                          index_generation: indexGeneration,
-                          observed_at: currentRev.observed_at,
-                          coverage: 'svg_text',
-                          stale: false,
-                          excerpt: `SVG 节点文本：「${txt}」`,
-                        })
-                      }
-                      className={`px-3 py-1.5 rounded border text-xs flex items-center gap-1.5 transition-colors ${
-                        paperLightMode
-                          ? 'bg-white/60 border-[#E3E0D8] hover:border-[#9A6A45] text-[#4A463F]'
-                          : 'bg-white/60 border-[color:var(--glass-hairline)] hover:border-[#D99B52] text-[color:var(--ink-strong)]'
-                      }`}
-                    >
-                      <span>{txt}</span>
-                      <PlusCircle
-                        className={`w-3 h-3 ${
-                          paperLightMode ? 'text-[#9A6A45]' : 'text-[#D99B52]'
-                        }`}
-                      />
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div
-                  className={`text-xs ${
-                    paperLightMode ? 'text-[#9A6A45]' : 'text-[#D99B52]'
+            <div className="flex flex-wrap gap-1.5">
+              {extractedTexts.map((txt, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() =>
+                    onAddEvidencePointer({
+                      file_id: activeFile.file_id,
+                      revision_id: currentRev.revision_id,
+                      relative_path: activeFile.relative_path,
+                      content_sha256: currentRev.content_sha256,
+                      locator: { kind: 'svg_text', fragment: txt },
+                      evidence_kind: 'svg_label',
+                      index_generation: indexGeneration,
+                      observed_at: currentRev.observed_at,
+                      coverage: 'svg_text',
+                      stale: false,
+                      excerpt: `SVG 节点文本：「${txt}」`,
+                    })
+                  }
+                  className={`px-2.5 py-1 rounded-md border text-xs flex items-center gap-1.5 cursor-pointer transition-colors ${
+                    paperLightMode
+                      ? 'bg-white/80 border-[#E3E0D8] hover:border-[#9A6A45] text-[#4A463F]'
+                      : 'bg-[#232220] border-[#383633] hover:border-[#D99B52] text-[#E6E5E0]'
                   }`}
                 >
-                  仅文件名可检索：当前 SVG 仅包含矢量路径 (&lt;path&gt; / &lt;circle&gt;)，无内嵌文本层，观澜不承诺图形语义猜测。
-                </div>
-              )}
-            </>
-          )}
-        </div>
+                  <span>{txt}</span>
+                  <PlusCircle
+                    className={`w-3 h-3 shrink-0 ${
+                      paperLightMode ? 'text-[#9A6A45]' : 'text-[#D99B52]'
+                    }`}
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -326,58 +285,28 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
     const cleaned = text.replace(/\s+/g, ' ').trim();
     setPdfSelectionQuote(cleaned.length >= 2 ? cleaned.slice(0, 480) : '');
   };
+  const pdfPages = currentRev.pdfPages ?? [];
+  const hasPdfPageList = pdfPages.length > 0;
+  const pdfIndexWarning =
+    activeFile.pdfStatus === 'unindexed'
+      ? '正文尚未索引'
+      : activeFile.pdfStatus && activeFile.pdfStatus !== 'page_indexed'
+        ? '字符提取受限'
+        : null;
   return (
     <div
-      className={`flex-1 overflow-y-auto p-6 space-y-5 ${
+      className={`flex-1 overflow-y-auto px-4 py-3 space-y-2.5 ${
         paperLightMode
           ? 'bg-[#EDEBE5] text-[#1F1E1D]'
           : 'bg-[#262524] text-[#F4F3EE]'
       }`}
     >
-      <div className="max-w-[var(--measure-read)] mx-auto space-y-4">
-        {/* PDF Capability & Index Separation Status Banner */}
-        <div className="px-1 py-2 flex flex-wrap items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-xs font-semibold">
-              <span
-                className={paperLightMode ? 'text-[#1F1E1D]' : 'text-[#F4F3EE]'}
-              >
-                阅读能力：内嵌阅读器可用 + 原文件入口就绪
-              </span>
-              <span
-                aria-hidden="true"
-                className={paperLightMode ? 'text-[#8A857C]' : 'text-[#6E6D68]'}
-              >
-                ·
-              </span>
-              <span
-                className={
-                  activeFile.pdfStatus === 'page_indexed'
-                    ? paperLightMode
-                      ? 'text-emerald-600'
-                      : 'text-emerald-400'
-                    : paperLightMode
-                      ? 'text-[color:var(--stage-ink-decision-text)]'
-                      : 'text-amber-400'
-                }
-              >
-                检索索引状态：
-                {activeFile.pdfStatus === 'page_indexed'
-                  ? '已按需抽取文本层（含页码来源）'
-                  : activeFile.pdfStatus === 'unindexed'
-                    ? '正文尚未索引（初始仅检索文件名和已知元数据）'
-                    : '字符提取失败（中文提取失败不直接判定为扫描件）'}
-              </span>
-            </div>
-            <p
-              className={`text-xs ${
-                paperLightMode ? 'text-[#6E6A61]' : 'text-[#A1A09A]'
-              }`}
-            >
-              {activeFile.pdfStatusReason}
-            </p>
-          </div>
-
+      <div className="max-w-[var(--measure-read)] mx-auto space-y-2.5">
+        {/* 精简 PDF 顶条：常态隐藏冗长索引说明，仅异常/未索引时以轻提示诚实告知 */}
+        <div
+          data-pdf-toolbar=""
+          className="flex flex-wrap items-center justify-between gap-2 text-xs"
+        >
           <div className="flex items-center gap-2">
             {/* B04：原版版式 / 页级文本双视图切换（pdfAnchor 到达时自动切页级文本） */}
             <div
@@ -395,7 +324,7 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
                   key={mode}
                   type="button"
                   onClick={() => setPdfViewMode(mode)}
-                  className={`px-3 py-1.5 cursor-pointer transition-colors ${
+                  className={`px-2.5 py-1 cursor-pointer transition-colors ${
                     pdfViewMode === mode
                       ? paperLightMode
                         ? 'bg-[#EDE4D7] text-[#1F1E1D] font-medium'
@@ -409,8 +338,40 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
                 </button>
               ))}
             </div>
+            {pdfIndexWarning && (
+              <span
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] ${
+                  paperLightMode
+                    ? 'bg-amber-50 text-[color:var(--stage-ink-decision-text)]'
+                    : 'bg-amber-500/12 text-amber-300'
+                }`}
+                title={activeFile.pdfStatusReason || pdfIndexWarning}
+              >
+                <AlertTriangle className="w-3 h-3 shrink-0" />
+                <span>{pdfIndexWarning}</span>
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {currentRev.snapshotAvailable && (
+              <a
+                href={revisionRawUrl(currentRev.revision_id)}
+                target="_blank"
+                rel="noreferrer"
+                title="在新窗口打开此版本原 PDF"
+                className={`inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs transition-colors ${
+                  paperLightMode
+                    ? 'text-[#6E6A61] hover:bg-black/[0.05] hover:text-[#1F1E1D]'
+                    : 'text-[#A1A09A] hover:bg-white/[0.08] hover:text-[#F4F3EE]'
+                }`}
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>新窗口打开</span>
+              </a>
+            )}
             <Button
-              variant="primary"
+              variant="ghost"
               size="sm"
               onClick={() =>
                 handleAddSectionToContext(
@@ -422,11 +383,11 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
               }
             >
               <PlusCircle className="w-3.5 h-3.5" />
-              <span>引用当前页给智能体</span>
+              <span>引用此页</span>
             </Button>
             {/* D04：本页批注入口（选中页内文字后也可经浮条带摘录批注） */}
             <Button
-              variant="secondary"
+              variant="ghost"
               size="sm"
               onClick={() => annotateFromPdfPage(activePdfPage, pdfSelectionQuote)}
               data-pdf-annotate-page
@@ -438,67 +399,58 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
         </div>
 
         {/* Embedded PDF Page Viewer —— v0.3 真实原页渲染 */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-          <div className="lg:col-span-1 space-y-2">
-            <div
-              className={`text-xs font-semibold ${
-                paperLightMode ? 'text-[#6E6A61]' : 'text-[#A1A09A]'
-              }`}
-            >
-              版本与本地文件入口
-            </div>
-
-            {/* 批次一：任意路径直读（/api/workspace/file）已随旧插件移除（契约 §4），
-                「打开原 PDF」一律按版本快照直读（/api/v1/revisions/<id>/content?raw=1） */}
-            <a
-              href={revisionRawUrl(currentRev.revision_id)}
-              target="_blank"
-              rel="noreferrer"
-              className={`w-full text-left p-2.5 rounded border text-xs flex items-center justify-between transition-colors ${
-                paperLightMode
-                  ? 'text-[#9A6A45] border-[#D8B79B] hover:bg-[#F5F0E8]'
-                  : 'text-[#D99B52] border-[#8A6A4F] hover:bg-[#232220]'
-              }`}
-            >
-              <span>在新窗口打开原 PDF</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
-
-            {(currentRev.pdfPages || []).map((p) => (
-              <button
-                key={p.pageNumber}
-                type="button"
-                onClick={() => setActivePdfPage(p.pageNumber)}
-                className={`w-full text-left p-2.5 rounded border text-xs transition-colors ${
-                  activePdfPage === p.pageNumber
-                    ? paperLightMode
-                      ? 'bg-[#EDE4D7] border-[#9A6A45]/50 text-[#1F1E1D]'
-                      : 'bg-[#2E2B27] border-[#D99B52]/50 text-[#D99B52]'
-                    : paperLightMode
-                      ? 'bg-white border-[#E3E0D8] text-[#6E6A61] hover:text-[#1F1E1D]'
-                      : 'bg-[#232220] border-[#383633] text-[#A1A09A] hover:text-[#F4F3EE]'
+        <div
+          className={`grid grid-cols-1 ${
+            hasPdfPageList ? 'lg:grid-cols-4' : ''
+          } gap-3`}
+        >
+          {hasPdfPageList && (
+            <div className="lg:col-span-1 space-y-1.5">
+              <div
+                className={`text-[11px] font-medium px-1 ${
+                  paperLightMode ? 'text-[#6E6A61]' : 'text-[#A1A09A]'
                 }`}
               >
-                <div
-                  className={`font-mono font-semibold ${
+                页面目录
+              </div>
+              {pdfPages.map((p) => (
+                <button
+                  key={p.pageNumber}
+                  type="button"
+                  onClick={() => setActivePdfPage(p.pageNumber)}
+                  className={`w-full text-left px-2.5 py-2 rounded-lg border text-xs cursor-pointer transition-colors ${
                     activePdfPage === p.pageNumber
                       ? paperLightMode
-                        ? 'text-[#9A5B33]'
-                        : 'text-[#D99B52]'
+                        ? 'bg-[#EDE4D7] border-[#9A6A45]/50 text-[#1F1E1D]'
+                        : 'bg-[#2E2B27] border-[#D99B52]/50 text-[#D99B52]'
                       : paperLightMode
-                        ? 'text-[#6E6A61]'
-                        : 'text-[#A1A09A]'
+                        ? 'bg-white border-[#E3E0D8] text-[#6E6A61] hover:text-[#1F1E1D]'
+                        : 'bg-[#232220] border-[#383633] text-[#A1A09A] hover:text-[#F4F3EE]'
                   }`}
                 >
-                  Page {p.pageNumber}
-                </div>
-                <div className="truncate mt-0.5">{p.heading}</div>
-              </button>
-            ))}
-          </div>
+                  <div
+                    className={`font-mono font-semibold ${
+                      activePdfPage === p.pageNumber
+                        ? paperLightMode
+                          ? 'text-[#9A5B33]'
+                          : 'text-[#D99B52]'
+                        : paperLightMode
+                          ? 'text-[#6E6A61]'
+                          : 'text-[#A1A09A]'
+                    }`}
+                  >
+                    第 {p.pageNumber} 页
+                  </div>
+                  {p.heading && <div className="truncate mt-0.5">{p.heading}</div>}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div
-            className={`lg:col-span-3 rounded-lg border overflow-hidden min-h-[480px] flex flex-col ${
+            className={`${
+              hasPdfPageList ? 'lg:col-span-3' : ''
+            } rounded-xl border overflow-hidden min-h-[540px] flex flex-col ${
               // D04：决定 pdfAnchor 到达时整卡闪两轮琥珀描边（flashPdfPage，2.2s 自动摘除）
               flashPdfPage !== undefined ? 'glx-anchor-flash' : ''
             } ${
@@ -507,26 +459,16 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
                 : 'bg-[#262524] border-[#383633]'
             }`}
           >
-            <div
-              className={`px-3 py-2 border-b text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-mono flex items-center justify-between tabular-nums ${
-                paperLightMode
-                  ? 'border-[#E3E0D8] text-[#8A857C]'
-                  : 'border-[#383633] text-[#6E6D68]'
-              }`}
-            >
-              <span className="truncate">{activeFile.relative_path}</span>
-              <span className="text-emerald-400 font-sans">
-                真实 PDF 原页 · 按版本 {currentRev.revision_id} 快照直读
-              </span>
-            </div>
             {/* D04：当前页批注 chips（本页有批注才渲染；定位闪烁逐条消费） */}
-            <div className="px-3 pt-2">
-              <PdfPageAnnotations
-                annotations={pdfAnnotationsByPage.get(activePdfPage) ?? []}
-                flashAnnotationId={flashAnnotationId}
-                paperLightMode={paperLightMode}
-              />
-            </div>
+            {(pdfAnnotationsByPage.get(activePdfPage)?.length ?? 0) > 0 && (
+              <div className="px-3 pt-2">
+                <PdfPageAnnotations
+                  annotations={pdfAnnotationsByPage.get(activePdfPage) ?? []}
+                  flashAnnotationId={flashAnnotationId}
+                  paperLightMode={paperLightMode}
+                />
+              </div>
+            )}
             {currentRev.snapshotAvailable && pdfViewMode === 'structured' ? (
               /* B04：页级文本结构化视图（/revisions/{id}/pdf）——
                  页码导航、扫描页诚实标注、pdfAnchor 直达高亮与 #page=N 引用。

@@ -72,9 +72,27 @@
    ——色值出处：14-hex 白名单暗档（原样，见 index.css .dark-porthole 默认块）；
    v0.7 V7-D15 白名单扩档登记：浅档 #2F5AA8（SELECT，值同 --cv-lane-unknown）等逐项
    在 index.css light 块；时光机状态色消费点在 DocumentTimeMachineView.tsx 走同款令牌 */
-.event-stage.event-stage-machine { grid-template-columns: minmax(360px, 1fr) 300px; }
-@media (max-width: 940px) { .event-stage.event-stage-machine { grid-template-columns: minmax(360px, 1fr) 245px; } }
-@media (max-width: 680px) { .event-stage.event-stage-machine { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(230px, 1fr) minmax(110px, 34%); } }
+.event-stage.event-stage-machine { grid-template-columns: minmax(420px, 1fr) clamp(380px, 34vw, 460px); }
+.event-stage.event-stage-machine.is-inspector-collapsed { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 1080px) { .event-stage.event-stage-machine { grid-template-columns: minmax(320px, 1fr) 360px; } }
+@media (max-width: 680px) { .event-stage.event-stage-machine { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(230px, 1fr) minmax(180px, 42%); } }
+.event-inspector-machine { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.machine-inspector-head { padding: 12px 14px 0; border-bottom: 1px solid color-mix(in srgb, var(--cv-hairline-ink) 12%, transparent); flex-shrink: 0; }
+.machine-inspector-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.machine-inspector-title-row h2 { margin: 0; font-size: 15px; line-height: 1.35; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.machine-collapse-btn { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; color: var(--cv-ink-meta); flex-shrink: 0; }
+.machine-collapse-btn:hover { background: var(--cv-slot); color: var(--cv-ink); }
+.machine-inspector-meta-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; font-family: var(--font-mono); font-size: 10.5px; color: var(--cv-ink-meta); }
+.machine-cta-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 8px; }
+.machine-cta-row .event-read { flex: 1; margin: 0; padding: 6px 10px; }
+.machine-secondary-btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 6px 11px; border-radius: 7px; font-size: 12px; color: var(--cv-ink-3); background: var(--cv-slot); border: 1px solid color-mix(in srgb, var(--cv-hairline-ink) 16%, transparent); white-space: nowrap; }
+.machine-secondary-btn:hover { color: var(--cv-ink); border-color: color-mix(in srgb, var(--cv-lav) 45%, transparent); }
+.machine-inspector-tabs { display: flex; align-items: center; gap: 14px; margin-top: 4px; }
+.machine-inspector-tab { display: inline-flex; align-items: center; gap: 5px; padding: 6px 2px 7px; font-size: 12px; font-weight: 500; color: var(--cv-ink-meta); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.machine-inspector-tab:hover { color: var(--cv-ink-3); }
+.machine-inspector-tab[aria-selected='true'] { color: var(--cv-ink); border-bottom-color: var(--cv-brand); }
+.machine-tab-meta { font-style: normal; font-family: var(--font-mono); font-size: 10px; color: var(--cv-ink-meta); }
+.machine-inspector-body { flex: 1; min-height: 0; overflow-y: auto; padding: 11px 14px 14px; }
 .machine-node { padding: 6px 9px; gap: 1px; box-sizing: border-box; overflow: hidden; }
 .machine-node small { min-width: 0; overflow: hidden; }
 .machine-node small span { display: inline-flex; gap: 5px; min-width: 0; }

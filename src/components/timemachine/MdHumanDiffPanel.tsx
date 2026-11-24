@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
-import { CircleDot, ListTree } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ChevronRight, CircleDot, ListTree } from 'lucide-react';
 import type {
   DecisionChange,
   DiffRow,
+  LineDiffResult,
   MdHumanDiffResult,
   OutlineRow,
   TodoChange,
@@ -54,17 +55,43 @@ export function MdHumanDiffPanel({ result, mode, onJumpLine }: MdHumanDiffPanelP
 // ---------- 标题结构 ----------
 
 function OutlineBlock({ outline, onJumpLine }: { outline: OutlineRow[]; onJumpLine?: (line: number) => void }) {
-  const changedCount = outline.filter((row) => row.changeKind).length;
+  const [showUnchanged, setShowUnchanged] = useState(false);
+  const changedRows = outline.filter((row) => Boolean(row.changeKind));
+  const unchangedCount = outline.length - changedRows.length;
+  const canFoldUnchanged = changedRows.length > 0 && unchangedCount > 0;
+  const visibleRows = canFoldUnchanged && !showUnchanged ? changedRows : outline;
+
   return (
     <section aria-label="标题结构对比">
-      <h4 className="mb-1 flex items-center gap-1.5 font-mono text-[10px]" style={{ color: 'var(--cv-ink-meta)' }}>
-        <ListTree size={12} /> 标题结构 · {outline.length} 章 · {changedCount} 章有变
-      </h4>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <h4 className="flex items-center gap-1.5 font-mono text-[10px]" style={{ color: 'var(--cv-ink-meta)' }}>
+          <ListTree size={12} /> 标题结构 · {outline.length} 章 · {changedRows.length} 章有变
+        </h4>
+        {canFoldUnchanged && (
+          <button
+            type="button"
+            data-outline-unchanged-toggle=""
+            aria-expanded={showUnchanged}
+            onClick={() => setShowUnchanged((v) => !v)}
+            className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 font-mono text-[10px] hover:underline"
+            style={{ color: 'var(--cv-ink-meta)' }}
+          >
+            <ChevronRight
+              size={11}
+              style={{
+                transform: showUnchanged ? 'rotate(90deg)' : undefined,
+                transition: 'transform 120ms ease',
+              }}
+            />
+            <span>{showUnchanged ? `收起 ${unchangedCount} 未变` : `其余 ${unchangedCount} 章未变`}</span>
+          </button>
+        )}
+      </div>
       {outline.length === 0 ? (
         <p style={{ color: 'var(--cv-ink-meta)' }}>新版没有可识别的标题结构。</p>
       ) : (
         <ul className="space-y-0.5">
-          {outline.map((row) => (
+          {visibleRows.map((row) => (
             <li key={row.line} className="flex items-baseline gap-2">
               {row.changeKind ? (
                 <span
@@ -105,23 +132,31 @@ function ElementChangesBlock({ result, onJumpLine }: { result: MdHumanDiffResult
   const decisions = result.decisionChanges;
   const todos = result.todoChanges;
   const empty = decisions.length === 0 && todos.length === 0;
+  if (empty) {
+    return (
+      <div
+        data-element-changes-empty=""
+        className="flex items-center gap-1.5 font-mono text-[10px]"
+        style={{ color: 'var(--cv-ink-meta)' }}
+      >
+        <CircleDot size={11} />
+        <span>决定 / 待办无变化</span>
+      </div>
+    );
+  }
   return (
     <section aria-label="决定与待办变化">
       <h4 className="mb-1 flex items-center gap-1.5 font-mono text-[10px]" style={{ color: 'var(--cv-ink-meta)' }}>
         <CircleDot size={12} /> 决定 / 待办变化 · {decisions.length + todos.length} 处
       </h4>
-      {empty ? (
-        <p style={{ color: 'var(--cv-ink-meta)' }}>决定与待办无变化。</p>
-      ) : (
-        <ul className="space-y-1">
-          {decisions.map((change) => (
-            <DecisionRow key={`d-${change.kind}-${change.line}-${change.title}`} change={change} onJumpLine={onJumpLine} />
-          ))}
-          {todos.map((change) => (
-            <TodoRow key={`t-${change.kind}-${change.line}-${change.text}`} change={change} onJumpLine={onJumpLine} />
-          ))}
-        </ul>
-      )}
+      <ul className="space-y-1">
+        {decisions.map((change) => (
+          <DecisionRow key={`d-${change.kind}-${change.line}-${change.title}`} change={change} onJumpLine={onJumpLine} />
+        ))}
+        {todos.map((change) => (
+          <TodoRow key={`t-${change.kind}-${change.line}-${change.text}`} change={change} onJumpLine={onJumpLine} />
+        ))}
+      </ul>
     </section>
   );
 }
@@ -197,7 +232,12 @@ function KeySegmentsBlock({ result }: { result: MdHumanDiffResult }) {
       ) : (
         <div className="space-y-2">
           {segments.map((window, i) => (
-            <div key={`seg-${i}`} className="overflow-hidden rounded border" data-machine-md-hunk="">
+            <div
+              key={`seg-${i}`}
+              className="overflow-hidden rounded-lg border"
+              style={{ borderColor: 'color-mix(in srgb, var(--cv-hairline-ink) 16%, transparent)' }}
+              data-machine-md-hunk=""
+            >
               <div
                 className="border-b px-2 py-0.5 font-mono text-[10px]"
                 style={{
@@ -249,10 +289,25 @@ function RowLine({ row }: { row: DiffRow }) {
   );
 }
 
-// ---------- 源码行 Diff ----------
+// ---------- 源码行 Diff（MD 源码模式与纯文本/代码时光机共用） ----------
 
-function SourceRows({ result, onJumpLine }: { result: MdHumanDiffResult; onJumpLine?: (line: number) => void }) {
-  const { lineDiff } = result;
+export interface LineDiffViewProps {
+  lineDiff: LineDiffResult;
+  /** 仅换行符（CRLF/LF）差异但规范化后逐行一致时展示诚实说明 */
+  lineEndingOnly?: boolean;
+  onJumpLine?: (line: number) => void;
+  ariaLabel?: string;
+  /** MD 源码模式保留 data-machine-md-source，文本/源码格式传 'text' 挂 data-machine-text-diff */
+  variant?: 'md' | 'text';
+}
+
+export function LineDiffView({
+  lineDiff,
+  lineEndingOnly = false,
+  onJumpLine,
+  ariaLabel = '源码行 Diff',
+  variant = 'md',
+}: LineDiffViewProps) {
   const rendered = useMemo(
     () => (lineDiff.ok ? collapseUnchangedRuns(lineDiff.rows) : []),
     [lineDiff]
@@ -260,10 +315,21 @@ function SourceRows({ result, onJumpLine }: { result: MdHumanDiffResult; onJumpL
   if (!lineDiff.ok) {
     return <p role="status" className="text-[12px]" style={{ color: 'var(--cv-ink-meta)' }}>{lineDiff.message}</p>;
   }
+  const summary =
+    lineDiff.added === 0 && lineDiff.removed === 0
+      ? lineEndingOnly
+        ? `共 ${lineDiff.rows.length} 行 · 仅换行符差异（内容未变）`
+        : `共 ${lineDiff.rows.length} 行 · +0/-0（内容无变化）`
+      : `共 ${lineDiff.rows.length} 行 · +${lineDiff.added}/-${lineDiff.removed}`;
   return (
-    <div className="font-mono text-[11px]" data-machine-md-source="" aria-label="源码行 Diff">
+    <div
+      className="font-mono text-[11px]"
+      data-machine-md-source={variant === 'md' ? '' : undefined}
+      data-machine-text-diff={variant === 'text' ? '' : undefined}
+      aria-label={ariaLabel}
+    >
       <p className="mb-1 text-[10px]" style={{ color: 'var(--cv-ink-meta)' }}>
-        共 {lineDiff.rows.length} 行 · +{lineDiff.added}/-{lineDiff.removed}
+        {summary}
       </p>
       {rendered.map((item, i) =>
         item.kind === 'rows' ? (
@@ -283,6 +349,10 @@ function SourceRows({ result, onJumpLine }: { result: MdHumanDiffResult; onJumpL
       )}
     </div>
   );
+}
+
+function SourceRows({ result, onJumpLine }: { result: MdHumanDiffResult; onJumpLine?: (line: number) => void }) {
+  return <LineDiffView lineDiff={result.lineDiff} onJumpLine={onJumpLine} variant="md" />;
 }
 
 type RenderItem =

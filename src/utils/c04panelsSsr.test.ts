@@ -139,16 +139,12 @@ function renderSidebar(
   );
 }
 
-test('LeftSidebar：五类智能视图行 + 计数徽标渲染；清空/撤销结构按需出现', () => {
+test('LeftSidebar：智能视图默认折叠让位目录树，激活态自动展开；清空/撤销结构按需出现', () => {
   const html = renderSidebar();
-  assert.ok(html.includes('data-smart-views'), '智能视图区存在');
-  assert.ok(html.includes('读后有更新'), '视图一：读后有更新');
-  assert.ok(html.includes('等我拍板'), '视图二：等我拍板');
-  assert.ok(html.includes('近 7 天活跃'), '视图三：近 7 天活跃');
-  assert.ok(html.includes('Agent 待审草案'), '视图四：Agent 待审草案');
-  assert.ok(html.includes('游离未归属'), '视图五：游离未归属');
+  assert.ok(html.includes('智能视图'), '智能视图折叠标题在位');
+  assert.ok(!html.includes('data-smart-views'), '默认态智能视图折叠，不挤压下方目录树');
   assert.ok(!html.includes('data-clear-all-filters'), '无激活筛选 → 清空行不渲染');
-  // 激活智能视图：清空行出现 + 该视图 aria-pressed
+  // 激活智能视图：自动展开胶囊区 + 清空行出现 + 该视图 aria-pressed
   const active = renderSidebar({
     filters: {
       quickScope: 'agent_drafts',
@@ -158,10 +154,12 @@ test('LeftSidebar：五类智能视图行 + 计数徽标渲染；清空/撤销�
       topic: 'all',
     },
   });
+  assert.ok(active.includes('data-smart-views'), '激活智能视图时自动展开视图区');
   assert.ok(
     active.includes('data-smart-view="agent_drafts"'),
     '智能视图行携带视图 id'
   );
+  assert.ok(active.includes('Agent 待审草案'), '当前激活智能视图可见');
   assert.ok(active.includes('data-clear-all-filters'), '激活筛选 → 清空全部筛选行出现');
   assert.ok(!active.includes('data-undo-clear-filters'), '未清空前撤销行不渲染');
 });

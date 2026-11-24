@@ -161,7 +161,7 @@ export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
                   </div>
                   {isChangedSinceRead && (
                     <div className="text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--accent-wave)] mt-0.5">
-                      ★ 上次读后有改动
+                      上次读后有改动
                     </div>
                   )}
                 </button>
@@ -231,8 +231,11 @@ export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
                     : 'bg-[#262320] border-[#383633]'
                 }`}
               >
-                <span className="font-medium">
-                  原文显式提要段落（首版忠实提取原文段落，不把标题命中当作已执行状态）
+                <span
+                  className="font-medium"
+                  title="提取自原文显式提要段落，仅作导航与引用入口"
+                >
+                  文档提要
                 </span>
                 <span className="shrink-0 text-[length:var(--text-ui)] leading-[var(--lh-ui)] tabular-nums text-[#D99B52]">
                   {outline.filter((s) => s.isExplicitCallout).length} 条提要 ·{' '}

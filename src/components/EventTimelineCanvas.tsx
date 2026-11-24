@@ -75,8 +75,8 @@ export function EventTimelineCanvas({ title, subtitle, nodes, offset, total, sel
   return <div className="event-plot">
     <svg ref={svgRef} viewBox="0 0 794 640" className="event-svg" aria-label="文档事件时间轴">
       <g ref={worldRef}>
-        {['#D97757','#9B8AFB','#D99B52','#8A99AD'].map((color, i) =>
-          <path key={color} d={`M ${trunkX - 5 + i * 3} 91 Q ${trunkX - 10 + i * 3} 260 ${trunkX - 5 + i * 3} ${trunkEnd}`} fill="none" stroke={color} strokeWidth={3} opacity=".78"/>)}
+        {['var(--cv-brand)', 'var(--cv-lav)', 'var(--cv-amber)', 'var(--cv-link)'].map((color, i) =>
+          <path key={color} d={`M ${trunkX - 5 + i * 3} 91 Q ${trunkX - 10 + i * 3} 260 ${trunkX - 5 + i * 3} ${trunkEnd}`} fill="none" style={{ stroke: color }} strokeWidth={3} opacity=".78"/>)}
         <foreignObject x={trunkX - 93} y={20} width={186} height={76}>
           <button className="event-hub" onClick={onRead} title={title}>
             <small>{subtitle}</small><strong>{title}</strong>
@@ -87,12 +87,12 @@ export function EventTimelineCanvas({ title, subtitle, nodes, offset, total, sel
             caption={total ? '沿轴查看下一事件' : '文件关联'} onClickCycleTime={onNext}
             onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} />}
         </g>
-        <path d={curve(175,188,185)} stroke="#D99B52" strokeDasharray="4 7" fill="none" opacity=".5"/>
+        <path d={curve(175,188,185)} style={{ stroke: 'var(--cv-amber)' }} strokeDasharray="4 7" fill="none" opacity=".5"/>
         {links.slice(0,3).map((link, i) => {
           const key = 'link-' + link.fileId;
           const p = position(key, 57, 365 + i * 65);
           return <g key={key}>
-            <path d={curve(p.y - 22, p.x + 158, p.y + 22)} stroke="#8A99AD" strokeDasharray="4 5" opacity=".55" fill="none"/>
+            <path d={curve(p.y - 22, p.x + 158, p.y + 22)} style={{ stroke: 'var(--cv-link)' }} strokeDasharray="4 5" opacity=".55" fill="none"/>
             <g data-plot-node={key} transform={`translate(${p.x} ${p.y})`}>
               <foreignObject width={158} height={52}><button className="event-link-card" title={link.title} onClick={() => onLink(link.fileId)}>
                 <small>{link.label}</small><strong>{link.title}</strong>
@@ -100,8 +100,11 @@ export function EventTimelineCanvas({ title, subtitle, nodes, offset, total, sel
             </g>
           </g>;
         })}
+        {/* 全部色值走 .dark-porthole --cv-* 令牌并挂 style（SVG 表现属性不吃 var()），
+            避免纸面（xray-light）主题下容器渲染成半透明黑灰块导致按钮文字不可读 */}
         <rect x={355} y={111} width={415} height={collapsed ? 43 : Math.max(90, 55 + Math.ceil(nodes.length / 2) * 92)}
-          rx={13} fill="#18161e" fillOpacity=".52" stroke="#645980" strokeDasharray="4 4"/>
+          rx={13} fillOpacity=".78" strokeDasharray="4 4"
+          style={{ fill: 'var(--cv-card)', stroke: 'color-mix(in srgb, var(--cv-lav) 48%, var(--cv-trunk))' }}/>
         <foreignObject x={367} y={117} width={390} height={29}>
           <button className="event-group-button" aria-expanded={!collapsed} onClick={() => setCollapsed(!collapsed)}>
             <span>事件链 · {total} 项</span><span>{collapsed ? '展开' : '收起'}</span>
@@ -113,11 +116,11 @@ export function EventTimelineCanvas({ title, subtitle, nodes, offset, total, sel
           const key = 'event-' + node.line;
           const p = position(key, 368 + (i % 2) * 195, 154 + row * 92);
           const isSelected = selected === node.line;
-          const color = isSelected ? '#D97757' : '#9B8AFB';
+          const color = isSelected ? 'var(--cv-brand)' : 'var(--cv-lav)';
           return <g key={key} pointerEvents="none">
-            <path d={curve(y + (i % 2) * 9, p.x, p.y + 35)} fill="none" stroke={color} opacity={isSelected ? .9 : .42} strokeWidth={isSelected ? 2.5 : 1.4}/>
-            <circle cx={trunkX} cy={y + (i % 2) * 9} r={3.5} fill={color}/>
-            {i % 2 === 0 && <text x={trunkX - 13} y={y + 4} textAnchor="end" fill="#9d94a9" fontSize={10} fontFamily="var(--font-mono)">
+            <path d={curve(y + (i % 2) * 9, p.x, p.y + 35)} fill="none" style={{ stroke: color }} opacity={isSelected ? .9 : .42} strokeWidth={isSelected ? 2.5 : 1.4}/>
+            <circle cx={trunkX} cy={y + (i % 2) * 9} r={3.5} style={{ fill: color }}/>
+            {i % 2 === 0 && <text x={trunkX - 13} y={y + 4} textAnchor="end" style={{ fill: 'var(--cv-ink-meta)' }} fontSize={10} fontFamily="var(--font-mono)">
               {node.date ?? ('L' + node.line)}
             </text>}
           </g>;
@@ -138,7 +141,7 @@ export function EventTimelineCanvas({ title, subtitle, nodes, offset, total, sel
               </foreignObject>
           </g>;
         })}
-        {!nodes.length && !collapsed && <text x={375} y={176} fill="#a49da9" fontSize={12}>此处可查看原文与关联资料</text>}
+        {!nodes.length && !collapsed && <text x={375} y={176} style={{ fill: 'var(--cv-ink-meta)' }} fontSize={12}>此处可查看原文与关联资料</text>}
       </g>
     </svg>
     <div className="event-zoom">

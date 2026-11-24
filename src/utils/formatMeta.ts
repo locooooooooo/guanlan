@@ -393,6 +393,20 @@ export function isUtf8TextFormat(format: string | null | undefined): boolean {
   return cls === 'spreadsheet' && (token === 'csv' || token === 'tsv');
 }
 
+/**
+ * 是否可进入「文档版本时光机」（含版本演化轴与按格式分派的对比面板）。
+ * - 全部第一档 UTF-8 文本格式（Markdown / 纯文本 / 源码配置如 .mjs/.ts/.py/.json / SVG / CSV / TSV），
+ *   后端 `/revisions/{id}/content` 均返回 UTF-8 快照正文（排除 gzip 压缩的 `svgz`）；
+ * - 结构化工作簿 `xlsx`（走 `/revisions/{id}/office` 结构化对比）。
+ * PDF / 图片 / 音视频 / 归档 / 未知二进制不走文本或工作簿对比，返回 false。
+ */
+export function isTimeMachineFormat(format: string | null | undefined): boolean {
+  const token = normalizeFormatToken(format);
+  if (token === 'xlsx') return true;
+  if (token === 'svgz') return false;
+  return isUtf8TextFormat(token);
+}
+
 export function isStructuredOfficeFormat(format: string | null | undefined): boolean {
   const token = normalizeFormatToken(format);
   return (

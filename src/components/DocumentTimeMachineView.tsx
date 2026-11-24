@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { CSSProperties } from 'react';
 import * as d3 from 'd3';
-import { ArrowLeft, BookOpen, ChevronRight, Loader2, Minus, Plus, RotateCcw } from 'lucide-react';
+import { ArrowLeft, BookOpen, ChevronRight, Loader2, Minus, PanelRightClose, PanelRightOpen, Plus, RotateCcw, Sparkles } from 'lucide-react';
 import { ChronosMascotNode } from './ChronosMascotNode';
 import type { EventFrame } from './KnowledgeGraph';
 import { documentLinks } from '../utils/documentLinks';
@@ -35,13 +35,14 @@ import {
   buildSvgDiff,
   buildTableDiff,
   buildXlsxDiff,
+  computeLineDiffRows,
+  type LineDiffResult,
   type MdHumanDiffResult,
   type SvgDiffResult,
   type TableDiffResult,
   type XlsxDiffResult,
 } from '../utils/multimodalDiff';
-import { DiffSidePane } from './timemachine/DiffSidePane';
-import { MdHumanDiffPanel, type MdDiffPanelMode } from './timemachine/MdHumanDiffPanel';
+import { LineDiffView, MdHumanDiffPanel, type MdDiffPanelMode } from './timemachine/MdHumanDiffPanel';
 import { SvgComparePanel } from './timemachine/SvgComparePanel';
 import { TableDiffPanel } from './timemachine/TableDiffPanel';
 
@@ -97,6 +98,7 @@ type PaneModel =
   | { kind: 'unavailable'; note: string }
   | { kind: 'baseline'; note: string }
   | { kind: 'md'; result: MdHumanDiffResult }
+  | { kind: 'text'; result: LineDiffResult; lineEndingOnly?: boolean }
   | { kind: 'svg'; result: SvgDiffResult; oldSvg: string; newSvg: string }
   | { kind: 'table'; result: TableDiffResult }
   | { kind: 'xlsx'; result: XlsxDiffResult };
@@ -417,12 +419,13 @@ export function DocumentTimeMachineView({
     applyCanvasTheme(next);
   };
 
-  // ---- D03 多模态 Diff：格式分派（md 走既有章节级 Diff；svg/表格/工作簿走对比面板）----
+  // ---- D03 多模态 Diff：格式分派（md 走既有章节级 Diff；svg/表格/工作簿/源码纯文本走对比面板）----
   const isMd = file.format === 'md';
   const isSvg = file.format === 'svg';
   const isXlsx = file.format === 'xlsx';
   const isTable = file.format === 'csv' || file.format === 'tsv';
-  const isMultimodal = isSvg || isTable || isXlsx;
+  const isTextSource = !isMd && !isSvg && !isXlsx && !isTable;
+  const isMultimodal = isSvg || isTable || isXlsx || isTextSource;
 
   const [history, setHistory] = useState<FileHistory | null>(null);
   const [loading, setLoading] = useState(false);
@@ -434,8 +437,10 @@ export function DocumentTimeMachineView({
   // D03：XLSX 走 B03 office 端点（结构化 rows），不走正文文本通道（二进制无内联 text）
   const [officeByRev, setOfficeByRev] = useState<Record<string, OfficeContentResponse>>({});
   const [officeFailed, setOfficeFailed] = useState<Record<string, boolean>>({});
-  // D03 对比面板：受控开合（数据到位自动展开；收起后右缘把手可重开）
-  const [paneOpen, setPaneOpen] = useState(false);
+  // 统一右侧检查/对比面板：合并原悬浮 DiffSidePane 与右栏，消除四栏挤压与卡面截断；
+  // 面板可一键收起让出全幅画布，内部以「版本对比 / 关联资料」两 Tab 分流。
+  const [paneOpen, setPaneOpen] = useState(true);
+  const [inspectorTab, setInspectorTab] = useState<'diff' | 'context'>('diff');
   const [mdPaneMode, setMdPaneMode] = useState<MdDiffPanelMode>('human');
   // wf_3 左栏上游依据折叠态：taskPackage id → 是否展开（展开态成员卡 title 才透出完整路径）
   const [expandedRefs, setExpandedRefs] = useState<Record<string, boolean>>({});
@@ -608,30 +613,6 @@ export function DocumentTimeMachineView({
     };
   }, [selectedNode, prevNode, selContent, selFailed, prevContent, prevFailed, isMultimodal, isXlsx, officeFailed]);
 
-  // ---- U04 · 版本增量口径（单一事实源）----
-  // 版本节点卡的 +/- 行数必须与右侧 Diff 面板 / 检查器「相对上一版」同口径（章节级
-  // computeSectionDiff 统计）——历史事件 payload 的 added_lines 是另一套口径，两套数字
-  // 同屏出现且未标注来源即构成误导（任务卡停机条件：诚实边界）。
-  // 故：只认章节级 diff 统计；选中版实时取、已访问版缓存（切版后仍留痕）。
-  const [chapterDeltaByRev, setChapterDeltaByRev] = useState<Record<string, { added: number; removed: number }>>({});
-  useEffect(() => {
-    if (!selectedNode || selView.state !== 'diff') return;
-    const added = selView.totalAdded;
-    const removed = selView.totalRemoved;
-    setChapterDeltaByRev((prev) => {
-      const cur = prev[selectedNode.revisionId];
-      if (cur && cur.added === added && cur.removed === removed) return prev;
-      return { ...prev, [selectedNode.revisionId]: { added, removed } };
-    });
-  }, [selectedNode, selView]);
-  /** 某版本的章节级增量统计（无章节级 diff 真相时 undefined → 卡面留空槽，绝不伪造） */
-  const chapterDeltaOf = (revisionId: string): { added: number; removed: number } | undefined => {
-    if (selectedNode && revisionId === selectedNode.revisionId && selView.state === 'diff') {
-      return { added: selView.totalAdded, removed: selView.totalRemoved };
-    }
-    return chapterDeltaByRev[revisionId];
-  };
-
   // ---- D03：多模态对比面板数据派发（全部纯函数、有界预算内，<100ms 停机口径）----
   const paneModel = useMemo<PaneModel>(() => {
     if (!selectedNode) return { kind: 'hidden' };
@@ -645,14 +626,34 @@ export function DocumentTimeMachineView({
       if (selView.state !== 'diff' || selContent === undefined || prevContent === undefined) return { kind: 'hidden' };
       return { kind: 'md', result: buildMarkdownHumanDiff(prevContent, selContent) };
     }
-    if (isSvg || isTable) {
-      if (selView.state === 'unavailable') return { kind: 'unavailable', note: '快照已淘汰，仅保留版本元数据——绝不以当前文件冒充历史版本。' };
+    if (isSvg || isTable || isTextSource) {
+      if (selView.state === 'unavailable') {
+        return {
+          kind: 'unavailable',
+          note: !selectedNode.snapshotAvailable
+            ? '快照已淘汰，仅保留版本元数据——绝不以当前文件冒充历史版本。'
+            : '此版本正文读取失败或超出内联上限，暂不可对比——绝不以当前文件冒充历史版本。',
+        };
+      }
       if (selView.state === 'pending') return { kind: 'pending', note: '正在读取版本正文…' };
       if (selContent === undefined) return { kind: 'hidden' };
-      if (!prevNode) return { kind: 'baseline', note: `初始基线 · ${(isSvg ? '图元' : '数据行')}结构将作为后续版本对比基线` };
+      if (!prevNode) {
+        if (isTextSource) {
+          const lineCount = selContent === '' ? 0 : selContent.split(/\r?\n/).length;
+          return { kind: 'baseline', note: `初始基线 · 共 ${lineCount} 行（无上一版可对比）` };
+        }
+        return { kind: 'baseline', note: `初始基线 · ${(isSvg ? '图元' : '数据行')}结构将作为后续版本对比基线` };
+      }
       if (!prevNode.snapshotAvailable) return { kind: 'unavailable', note: '上一版快照已淘汰，对比基线不可用。' };
       if (prevFailed) return { kind: 'unavailable', note: '上一版正文读取失败，暂不可对比。' };
       if (prevContent === undefined) return { kind: 'pending', note: '正在读取上一版正文…' };
+      if (isTextSource) {
+        const normalizedPrev = prevContent.replace(/\r\n/g, '\n');
+        const normalizedSel = selContent.replace(/\r\n/g, '\n');
+        const result = computeLineDiffRows(normalizedPrev, normalizedSel);
+        const lineEndingOnly = prevContent !== selContent && normalizedPrev === normalizedSel;
+        return { kind: 'text', result, lineEndingOnly };
+      }
       return isSvg
         ? { kind: 'svg', result: buildSvgDiff(prevContent, selContent), oldSvg: prevContent, newSvg: selContent }
         : { kind: 'table', result: buildTableDiff(prevContent, selContent, file.format === 'tsv' ? '\t' : ',') };
@@ -678,7 +679,45 @@ export function DocumentTimeMachineView({
       return { kind: 'xlsx', result: buildXlsxDiff(prev.xlsx, cur.xlsx) };
     }
     return { kind: 'hidden' };
-  }, [selectedNode, prevNode, selView, selContent, prevContent, prevFailed, isMd, isSvg, isTable, isXlsx, file.format, officeByRev]);
+  }, [selectedNode, prevNode, selView, selContent, prevContent, prevFailed, isMd, isSvg, isTable, isTextSource, isXlsx, file.format, officeByRev, officeFailed]);
+
+  // ---- U04 · 版本增量口径（单一事实源）----
+  // 版本节点卡的 +/- 行数必须与右侧 Diff 面板 / 检查器「相对上一版」同口径（MD 走章节级
+  // computeSectionDiff 统计，纯文本/源码走 computeLineDiffRows 统计）——历史事件 payload 的
+  // added_lines 是另一套口径，两套数字同屏出现且未标注来源即构成误导（任务卡停机条件：诚实边界）。
+  // 故：只认右侧对比同源 diff 统计；选中版实时取、已访问版缓存（切版后仍留痕）。
+  const [chapterDeltaByRev, setChapterDeltaByRev] = useState<Record<string, { added: number; removed: number }>>({});
+  useEffect(() => {
+    if (!selectedNode) return;
+    let added: number;
+    let removed: number;
+    if (selView.state === 'diff') {
+      added = selView.totalAdded;
+      removed = selView.totalRemoved;
+    } else if (paneModel.kind === 'text' && paneModel.result.ok) {
+      added = paneModel.result.added;
+      removed = paneModel.result.removed;
+    } else {
+      return;
+    }
+    setChapterDeltaByRev((prev) => {
+      const cur = prev[selectedNode.revisionId];
+      if (cur && cur.added === added && cur.removed === removed) return prev;
+      return { ...prev, [selectedNode.revisionId]: { added, removed } };
+    });
+  }, [selectedNode, selView, paneModel]);
+  /** 某版本的同源增量统计（无 diff 真相时 undefined → 卡面留空槽，绝不伪造） */
+  const chapterDeltaOf = (revisionId: string): { added: number; removed: number } | undefined => {
+    if (selectedNode && revisionId === selectedNode.revisionId) {
+      if (selView.state === 'diff') {
+        return { added: selView.totalAdded, removed: selView.totalRemoved };
+      }
+      if (paneModel.kind === 'text' && paneModel.result.ok) {
+        return { added: paneModel.result.added, removed: paneModel.result.removed };
+      }
+    }
+    return chapterDeltaByRev[revisionId];
+  };
 
   // 数据到位/切版本自动展开对比面板；用户收起后经右缘把手重开（受控，不劫持）
   const paneSignature = `${selectedId ?? ''}|${paneModel.kind}`;
@@ -806,14 +845,9 @@ export function DocumentTimeMachineView({
     const start = timeMachineTrunkPointAtY(y1, trunkEnd);
     return `M ${start.x} ${start.y} C ${TRUNK_X + (x2 - TRUNK_X) * .48} ${y1}, ${x2 - (x2 - TRUNK_X) * .3} ${y2}, ${x2} ${y2}`;
   };
-  // U04 · 浮层遮挡避让：Diff 面板展开时，轴列卡面（版本卡 / hub 卡）整体收窄到
-  // 面板左缘之前（面板左缘在 viewBox 单位 = 画布右侧 62%），让出量含 3 单位呼吸。
-  // 不避让的后果：卡面右 22% 被浮层压住——「当前/初始基线」角标 100% 不可见、
-  // 卡内文字被浮层硬切（无省略号兜底）、底部增删比例条右端被切；
-  // 门禁按 scrollWidth 口径判不出此类 overlay 遮挡，只能靠几何避让根治。
-  // 收窄的是「渲染宽度」（foreignObject 宽），NODE_W/NODE_H 等几何常量一字未改。
-  const nodeReserve = machinePaneReserve(TRUNK_X + NODE_W / 2, paneOpen);
-  const hubReserve = machinePaneReserve(TRUNK_X + 93, paneOpen);
+  // 统一右侧检查/对比面板位于独立网格列（不再覆盖画布），版本卡与 hub 卡保持完整宽度（零截断）
+  const nodeReserve = machinePaneReserve(TRUNK_X + NODE_W / 2, false);
+  const hubReserve = machinePaneReserve(TRUNK_X + 93, false);
   const groupKey = chain.map((node) => node.revisionId).join(',') + '|' + selectedId + '|' +
     (outbound ? outbound.length : -1) + '|' + inbound.length + '|' + selView.state +
     '|' + Object.entries(expandedRefs).filter(([, v]) => v).map(([k]) => k).join(',');
@@ -919,13 +953,13 @@ export function DocumentTimeMachineView({
       {/* U04 · 纸面 / 夜航双主题分段钮（与星图同源 canvasThemeStore；主题值不入 React state） */}
       <MachineThemeSegmented onChange={handleMachineThemeChange} />
     </div>
-    <div className="event-stage event-stage-machine">
+    <div className={`event-stage event-stage-machine${paneOpen ? '' : ' is-inspector-collapsed'}`}>
       <div className="event-center">
         <div className="event-plot" data-machine-left-min-width="360">
           <svg
             ref={svgRef}
             viewBox="0 0 794 640"
-            preserveAspectRatio={paneOpen ? 'xMinYMid meet' : 'xMidYMid meet'}
+            preserveAspectRatio="xMidYMid meet"
             className="event-svg"
             aria-label="文档版本时光机画布"
           >
@@ -990,7 +1024,9 @@ export function DocumentTimeMachineView({
                       onClick={() => setSelectedId(node.revisionId)}
                       title={node.label + ' · ' + nodeDate +
                         (node.occurredAt ? ' · ' + node.timeBasis : '') +
-                        (delta?.hasData ? ` · ${delta.label} 行（章节级变更行数，相对上一版）` : '')}>
+                        (delta?.hasData
+                          ? ` · ${delta.label} 行（${isMd ? '章节级变更行数，相对上一版' : '源码行变更数，相对上一版'}）`
+                          : '')}>
                       <small>
                         <span className="machine-version-pill">{node.label}</span>
                         <span className="machine-node-badges">
@@ -1001,13 +1037,13 @@ export function DocumentTimeMachineView({
                       </small>
                       <strong className="machine-node-conclusion">
                         {nodeConclusion
-                          ? `💡 ${nodeConclusion}`
+                          ? nodeConclusion
                           : `${nodeDate}${node.occurredAt && node.precisionDay ? ' · 仅日期' : ''}`}
                       </strong>
                       <em>
                         {delta?.hasData && (
                           <span className="machine-node-delta" data-machine-delta={node.revisionId}
-                            title="章节级变更行数（相对上一版）· 与右侧检查器「相对 vN」同口径">
+                            title={`${isMd ? '章节级变更行数（相对上一版）' : '源码行变更数（相对上一版）'}· 与右侧检查器「相对 vN」同口径`}>
                             {delta.label}
                           </span>
                         )}
@@ -1041,7 +1077,7 @@ export function DocumentTimeMachineView({
                   <g data-plot-node={key} transform={`translate(${p.x} ${p.y})`}>
                     <foreignObject width={CARD_W} height={CONC_H}>
                       <div className="event-node machine-node" title={conclusion}>
-                        <small><span style={{ color: MUTED_COLOR }}>💡 核心结论</span><span>{selectedNode.label}</span></small>
+                        <small><span style={{ color: MUTED_COLOR }}>核心结论</span><span>{selectedNode.label}</span></small>
                         <strong style={{ WebkitLineClamp: 3 }}>{conclusion}</strong>
                       </div>
                     </foreignObject>
@@ -1159,151 +1195,251 @@ export function DocumentTimeMachineView({
             <span>{Math.round(scale * 100)}%</span><button aria-label="放大画布" onClick={() => zoomBy(1.15)}><Plus size={14}/></button>
             <button aria-label="重置画布" onClick={reset}><RotateCcw size={13}/></button>
           </div>
-          {/* D03 · 多模态对比面板：停靠 .event-plot（position:relative 既有锚）右缘，
-              覆盖 MD 专属 Diff 卡区（多模态格式该区本就为空）。普通 HTML 层不入 d3.zoom 事件路径 */}
-          {paneModel.kind !== 'hidden' && selectedNode && (() => {
-            const subtitle = prevNode
-              ? `v${prevNode.seq} → v${selectedNode.seq}`
-              : `${selectedNode.label} · 初始基线`;
-            const title = paneModel.kind === 'md'
-              ? (mdPaneMode === 'human' ? '人类可读对比 · 标题结构 / 决定与待办 / 关键增删段' : '源码行 Diff')
-              : paneModel.kind === 'svg' ? '图纸对比 · 叠影 / 擦除'
-              : paneModel.kind === 'table' ? '表格数值对比 · 增删行列与单元格变化'
-              : paneModel.kind === 'xlsx' ? '工作簿数值对比 · 逐表逐格'
-              : '多模态对比';
-            return <DiffSidePane
-              badge={file.format.toUpperCase()}
-              subtitle={subtitle}
-              title={title}
-              open={paneOpen}
-              onToggle={() => setPaneOpen((v) => !v)}
+          {!paneOpen && (
+            <button
+              type="button"
+              data-machine-diff-pane="collapsed"
+              onClick={() => setPaneOpen(true)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex flex-col items-center gap-1 rounded-lg border px-2 py-2"
+              style={{
+                background: 'var(--cv-panel)',
+                borderColor: 'color-mix(in srgb, var(--cv-hairline-ink) 22%, transparent)',
+                color: 'var(--cv-ink-3)',
+              }}
+              title="展开版本对比与关联资料面板"
+              aria-label="展开版本对比与关联资料面板"
             >
-              {/* U04 · 切版淡变：内容层挂 .glx-fade-in（纯 opacity，--dur-1 --ease-fade），
-                  key 随「选中版 + 面板态」变化 → 点击版本切换时右侧多模态 Diff 面板柔和淡变衔接 */}
-              <div className="glx-fade-in" key={paneSignature} data-machine-pane-fade="">
-              {paneModel.kind === 'md' && <>
-                <div className="mb-2 flex gap-1.5" role="tablist" aria-label="对比视图切换">
-                  {(['human', 'source'] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      role="tab"
-                      aria-selected={mdPaneMode === mode}
-                      data-machine-md-mode={mode}
-                      onClick={() => setMdPaneMode(mode)}
-                      className="rounded px-2 py-0.5 text-[11px]"
-                      style={{
-                        background: mdPaneMode === mode ? 'var(--cv-card)' : 'transparent',
-                        color: mdPaneMode === mode ? 'var(--cv-ink-3)' : 'var(--cv-ink-meta)',
-                        border: `1px solid ${mdPaneMode === mode ? 'color-mix(in srgb, var(--cv-lav) 40%, transparent)' : 'transparent'}`,
-                      }}
-                    >
-                      {mode === 'human' ? '人类视图' : '源码行 Diff'}
-                    </button>
-                  ))}
-                </div>
-                <MdHumanDiffPanel result={paneModel.result} mode={mdPaneMode} onJumpLine={(line) => openOriginal(line)}/>
-              </>}
-              {paneModel.kind === 'svg' && (
-                <SvgComparePanel
-                  oldSvg={paneModel.oldSvg}
-                  newSvg={paneModel.newSvg}
-                  diff={paneModel.result}
-                  oldLabel={prevNode ? `v${prevNode.seq}` : '旧版'}
-                  newLabel={`v${selectedNode.seq}`}
-                />
-              )}
-              {paneModel.kind === 'table' && (
-                <TableDiffPanel result={paneModel.result} format={file.format === 'tsv' ? 'tsv' : 'csv'}/>
-              )}
-              {paneModel.kind === 'xlsx' && <TableDiffPanel result={paneModel.result} format="xlsx"/>}
-              {(paneModel.kind === 'pending' || paneModel.kind === 'unavailable' || paneModel.kind === 'baseline') && (
-                <p role="status" className="text-[12px]" style={{ color: 'var(--cv-ink-meta)' }}>{paneModel.note}</p>
-              )}
-              </div>
-            </DiffSidePane>;
-          })()}
+              <PanelRightOpen size={14} />
+              <span className="font-mono text-[10px]">
+                {file.format.toUpperCase()} · 对比
+              </span>
+            </button>
+          )}
         </div>
       </div>
-      <aside className="event-panel event-inspector" aria-label="版本依据">
-        <small>已选中 · 层级 {trail.length}</small>
-        <h2>{file.title}</h2>
-        <div className="event-location">{`任务包 · ${myPkg.name}`}</div>
-        {selectedNode && <>
-          <div className="event-meta">
-            <span>{file.format.toUpperCase()} · {selectedNode.label}</span>
-            <span>{`阶段 · ${stageOfPath(file.relative_path)}`}</span>
-            <span>{selectedNode.occurredAt ? selectedNode.observedAtLabel + (selectedNode.precisionDay ? ' · 仅日期' : '') : '日期待考'}</span>
-            {selectedNode.occurredAt && <span>{selectedNode.timeBasis}</span>}
-            <span style={selectedNode.snapshotAvailable ? undefined : { color: EVICT_COLOR }}>
-              {selectedNode.snapshotAvailable ? '快照可用' : '快照已淘汰'}
-            </span>
-          </div>
-          <p className="machine-diff-summary">
-            {selView.state === 'diff' && prevNode &&
-              `相对 v${prevNode.seq}：${selView.changes.length} 个章节变更 (+${selView.totalAdded}/-${selView.totalRemoved} 行)`}
-            {selView.state === 'baseline' && `初始基线 · ${selView.sections.length} 个章节`}
-            {selView.state === 'ready' && multimodalCaption(paneModel, selectedNode.seq)}
-            {(selView.state === 'unavailable' || (selView.state === 'prev-unavailable' && selView.reason === 'evicted')) &&
-              '差异不可用（快照已淘汰）'}
-            {selView.state === 'prev-unavailable' && selView.reason === 'fetch-failed' && '差异不可用（正文读取失败）'}
-            {selView.state === 'pending' && '正在读取版本正文…'}
-          </p>
-          {/* 语义 Diff 摘要（PRD 3.5 / 方案 F7）：选中版与其父版的任务队列口径摘要——
-              三指标 + Checkpoint；端点未落地时卡片内如实提示，本地章节对比不受影响 */}
-          {isMd && selectedNode.snapshotAvailable && prevNode?.snapshotAvailable && (
-            <div className="space-y-1">
-              <button
-                className="event-read"
-                data-machine-diff-summary=""
-                onClick={() => requestSemanticDiff(selectedNode, prevNode)}
-              >
-                语义变更摘要（{prevNode.label} → {selectedNode.label}）
-              </button>
-              {semanticDiff && semanticDiff.label === `${prevNode.label} → ${selectedNode.label}` && (
-                <DiffSummaryCard
-                  result={semanticDiff.result}
-                  loading={semanticDiff.loading}
-                  error={semanticDiff.error}
-                  title={`变更摘要 ${semanticDiff.label}`}
-                />
+      {paneOpen && (() => {
+        const downstreamTotal = downstreamGroups.reduce((n, g) => n + g.items.length, 0);
+        const contextCount = downstreamTotal + fileDecisions.length;
+        const hasDiffTab = paneModel.kind !== 'hidden' && Boolean(selectedNode);
+        const activeTab = hasDiffTab ? inspectorTab : 'context';
+        const compareSubtitle = selectedNode
+          ? prevNode
+            ? `v${prevNode.seq} → v${selectedNode.seq}`
+            : `${selectedNode.label} · 初始基线`
+          : '';
+        const stageLabel = stageOfPath(file.relative_path);
+        const canSemanticDiff = Boolean(isMd && selectedNode?.snapshotAvailable && prevNode?.snapshotAvailable);
+        const diffSummaryLine = !selectedNode
+          ? ''
+          : selView.state === 'diff' && prevNode
+            ? `+${selView.totalAdded}/-${selView.totalRemoved} 行`
+            : selView.state === 'baseline'
+              ? `基线 ${selView.sections.length} 章`
+              : selView.state === 'ready'
+                ? multimodalCaption(paneModel, selectedNode.seq)
+                : '';
+
+        return (
+          <aside
+            className="event-panel event-inspector event-inspector-machine"
+            data-machine-unified-inspector=""
+            data-machine-diff-pane="open"
+            aria-label="版本对比与依据"
+          >
+            <div className="machine-inspector-head">
+              <div className="machine-inspector-title-row">
+                <h2 title={file.title}>{file.title}</h2>
+                <button
+                  type="button"
+                  data-machine-diff-pane-close=""
+                  onClick={() => setPaneOpen(false)}
+                  className="machine-collapse-btn"
+                  title="收起右侧面板（全幅查看版本画布）"
+                  aria-label="收起右侧面板"
+                >
+                  <PanelRightClose size={14} />
+                </button>
+              </div>
+              <div className="machine-inspector-meta-line">
+                <span>{file.format.toUpperCase()}{selectedNode ? ` · ${selectedNode.label}` : ''}</span>
+                {selectedNode?.occurredAt && (
+                  <span>{selectedNode.observedAtLabel}{selectedNode.precisionDay ? ' · 仅日期' : ''}</span>
+                )}
+                <span>{myPkg.name}</span>
+                {stageLabel && stageLabel !== '待分类' && <span>{stageLabel}</span>}
+                {diffSummaryLine && <span>{diffSummaryLine}</span>}
+                {selectedNode && !selectedNode.snapshotAvailable && (
+                  <span style={{ color: EVICT_COLOR }}>快照已淘汰</span>
+                )}
+              </div>
+
+              {/* 1 主 1 次单行行动条：消除原双饱和亮橙大按钮互斥抢焦点 */}
+              <div className="machine-cta-row">
+                <button className="event-read" onClick={() => openOriginal()}>
+                  <BookOpen size={14} /> 打开原文
+                </button>
+                {canSemanticDiff && selectedNode && prevNode && (
+                  <button
+                    type="button"
+                    className="machine-secondary-btn"
+                    data-machine-diff-summary=""
+                    onClick={() => requestSemanticDiff(selectedNode, prevNode)}
+                    title={`生成 ${prevNode.label} → ${selectedNode.label} 语义变更摘要`}
+                  >
+                    <Sparkles size={13} />
+                    <span>语义摘要</span>
+                  </button>
+                )}
+              </div>
+
+              {canSemanticDiff && selectedNode && prevNode && semanticDiff &&
+                semanticDiff.label === `${prevNode.label} → ${selectedNode.label}` && (
+                <div className="mt-2">
+                  <DiffSummaryCard
+                    result={semanticDiff.result}
+                    loading={semanticDiff.loading}
+                    error={semanticDiff.error}
+                    title={`变更摘要 ${semanticDiff.label}`}
+                  />
+                </div>
+              )}
+
+              {/* 单一右栏两态分流：版本对比 | 关联资料与决策 */}
+              <div className="machine-inspector-tabs" role="tablist" aria-label="右侧面板视图">
+                {hasDiffTab && (
+                  <button
+                    type="button"
+                    role="tab"
+                    data-machine-inspector-tab="diff"
+                    aria-selected={activeTab === 'diff'}
+                    className="machine-inspector-tab"
+                    onClick={() => setInspectorTab('diff')}
+                  >
+                    <span>版本对比</span>
+                    {compareSubtitle && <em className="machine-tab-meta">{compareSubtitle}</em>}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  role="tab"
+                  data-machine-inspector-tab="context"
+                  aria-selected={activeTab === 'context'}
+                  className="machine-inspector-tab"
+                  onClick={() => setInspectorTab('context')}
+                >
+                  <span>关联资料</span>
+                  {contextCount > 0 && <em className="machine-tab-meta">{contextCount}</em>}
+                </button>
+              </div>
+            </div>
+
+            <div className="machine-inspector-body">
+              {activeTab === 'diff' && hasDiffTab && selectedNode ? (
+                <div className="glx-fade-in" key={paneSignature} data-machine-pane-fade="">
+                  {paneModel.kind === 'md' && (
+                    <>
+                      <div className="mb-2.5 flex items-center justify-between gap-2">
+                        <div className="flex gap-1" role="tablist" aria-label="对比视图切换">
+                          {(['human', 'source'] as const).map((mode) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              role="tab"
+                              aria-selected={mdPaneMode === mode}
+                              data-machine-md-mode={mode}
+                              onClick={() => setMdPaneMode(mode)}
+                              className="rounded px-2 py-0.5 text-[11px]"
+                              style={{
+                                background: mdPaneMode === mode ? 'var(--cv-slot)' : 'transparent',
+                                color: mdPaneMode === mode ? 'var(--cv-ink)' : 'var(--cv-ink-meta)',
+                                border: `1px solid ${mdPaneMode === mode ? 'color-mix(in srgb, var(--cv-lav) 38%, transparent)' : 'transparent'}`,
+                              }}
+                            >
+                              {mode === 'human' ? '人类视图' : '源码行 Diff'}
+                            </button>
+                          ))}
+                        </div>
+                        <span className="font-mono text-[10px]" style={{ color: 'var(--cv-ink-meta)' }}>
+                          {compareSubtitle}
+                        </span>
+                      </div>
+                      <MdHumanDiffPanel result={paneModel.result} mode={mdPaneMode} onJumpLine={(line) => openOriginal(line)} />
+                    </>
+                  )}
+                  {paneModel.kind === 'text' && (
+                    <LineDiffView
+                      lineDiff={paneModel.result}
+                      lineEndingOnly={paneModel.lineEndingOnly}
+                      variant="text"
+                      ariaLabel={`${file.format.toUpperCase()} 源码行 Diff`}
+                      onJumpLine={(line) => openOriginal(line)}
+                    />
+                  )}
+                  {paneModel.kind === 'svg' && (
+                    <SvgComparePanel
+                      oldSvg={paneModel.oldSvg}
+                      newSvg={paneModel.newSvg}
+                      diff={paneModel.result}
+                      oldLabel={prevNode ? `v${prevNode.seq}` : '旧版'}
+                      newLabel={`v${selectedNode.seq}`}
+                    />
+                  )}
+                  {paneModel.kind === 'table' && (
+                    <TableDiffPanel result={paneModel.result} format={file.format === 'tsv' ? 'tsv' : 'csv'} />
+                  )}
+                  {paneModel.kind === 'xlsx' && <TableDiffPanel result={paneModel.result} format="xlsx" />}
+                  {(paneModel.kind === 'pending' || paneModel.kind === 'unavailable' || paneModel.kind === 'baseline') && (
+                    <p role="status" className="text-[12px]" style={{ color: 'var(--cv-ink-meta)' }}>{paneModel.note}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {fileDecisions.length > 0 && (
+                    <div>
+                      <h3>相关决策 · {fileDecisions.length}</h3>
+                      {fileDecisions.map((d) => (
+                        <div key={d.decision_id + d.evidences[0]?.lineStart} className="event-doc-link">
+                          {d.question}<em>{d.status}</em>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {downstreamGroups.length > 0 ? (
+                    <div>
+                      <h3>{`同任务包资料 · ${downstreamTotal} 篇`}</h3>
+                      <div className="machine-siblings">
+                        {downstreamGroups.map((group) => (
+                          <details
+                            key={group.pkgId}
+                            open={openDownstream[group.pkgId] ?? (group.pkgId === myPkg.id && group.items.length <= 6)}
+                            onToggle={(e) => {
+                              const detail = e.currentTarget as HTMLDetailsElement | null;
+                              const nextOpen = detail ? detail.open : !(openDownstream[group.pkgId] ?? false);
+                              setOpenDownstream((prev) => ({ ...prev, [group.pkgId]: nextOpen }));
+                            }}
+                          >
+                            <summary>{group.pkgName}</summary>
+                            {group.items.map((it) => (
+                              <button key={it.file.file_id} className="event-doc-link" onClick={() => onGo(it.file)}>
+                                {basenameOf(it.file.relative_path)}
+                                <em style={it.referenced ? { color: REF_IN_COLOR } : undefined}>
+                                  {it.referenced ? '被引用' : it.file.format.toUpperCase()}
+                                </em>
+                              </button>
+                            ))}
+                          </details>
+                        ))}
+                      </div>
+                    </div>
+                  ) : fileDecisions.length === 0 ? (
+                    <p className="text-[12px]" style={{ color: 'var(--cv-ink-meta)' }}>暂无同任务包关联资料或决策。</p>
+                  ) : null}
+                </div>
               )}
             </div>
-          )}
-        </>}
-        <button className="event-read" onClick={() => openOriginal()}><BookOpen size={14}/> 打开原文</button>
-        {fileDecisions.length > 0 && <><h3>相关决策</h3>{fileDecisions.map((d) =>
-          <div key={d.decision_id + d.evidences[0]?.lineStart} className="event-doc-link">{d.question}<em>{d.status}</em></div>)}</>}
-        {downstreamGroups.length > 0 && <>
-          <h3>{`同任务包资料 · ${downstreamGroups.reduce((n, g) => n + g.items.length, 0)} 篇`}</h3>
-          <div className="machine-siblings">
-            {downstreamGroups.map((group) => (
-                <details key={group.pkgId}
-                  open={openDownstream[group.pkgId] ?? (group.pkgId === myPkg.id && group.items.length <= 6)}
-                  onToggle={(e) => {
-                    // React 在事件派发结束即把 currentTarget 置 null，而 setState 的 updater
-                    // 可能延后到渲染期才执行——在 updater 内读 e.currentTarget.open 会抛
-                    // TypeError 并连带整棵树崩成白屏（实机复现：星图下钻单文档时光机）。
-                    // 修法：派发内同步取 open 真值，updater 只消费布尔量（语义不变）。
-                    const detail = e.currentTarget as HTMLDetailsElement | null;
-                    const nextOpen = detail ? detail.open : !(openDownstream[group.pkgId] ?? false);
-                    setOpenDownstream((prev) => ({ ...prev, [group.pkgId]: nextOpen }));
-                  }}>
-
-                <summary>{group.pkgName}</summary>
-                {group.items.map((it) => (
-                  <button key={it.file.file_id} className="event-doc-link" onClick={() => onGo(it.file)}>
-                    {basenameOf(it.file.relative_path)}
-                    <em style={it.referenced ? { color: REF_IN_COLOR } : undefined}>
-                      {it.referenced ? '被引用' : it.file.format.toUpperCase()}
-                    </em>
-                  </button>
-                ))}
-              </details>
-            ))}
-          </div>
-        </>}
-      </aside>
+          </aside>
+        );
+      })()}
     </div>
   </section>;
 }
@@ -1313,6 +1449,14 @@ function multimodalCaption(model: PaneModel, seq: number): string {
   switch (model.kind) {
     case 'md':
       return `v${seq} · ${model.result.stats.sectionsChanged} 章变更 · ${model.result.decisionChanges.length} 决定 · ${model.result.todoChanges.length} 待办`;
+    case 'text':
+      return model.result.ok
+        ? model.result.added === 0 && model.result.removed === 0
+          ? model.lineEndingOnly
+            ? `v${seq} · 仅换行符差异`
+            : `v${seq} · 源码内容无变化`
+          : `v${seq} · +${model.result.added} / -${model.result.removed} 行`
+        : '源码对比超预算，诚实拒绝';
     case 'svg':
       return model.result.ok
         ? `SVG · +${model.result.added} -${model.result.removed} ~${model.result.changed} 图元`

@@ -2,8 +2,8 @@
  * D01-a 拆解 · 阅读器浮动 Chrome 层（任务卡 D01-a ②）。
  *
  * 从 ReaderView.tsx（原 2653-3093）原样迁入：返回面包屑横幅、新版本告警横幅、
- * 紧凑双层文件头（Row1 文档身份+阅读操作+文件菜单 / Row2 查看模式分段+所属专项
- * 五阶段 Stepper）。迁移纪律：JSX 与类名逐字一致（像素回归护栏）。
+ * 紧凑单行文件头（文档身份 + 查看模式分段 + 所属专项五阶段胶囊 + 阅读操作与文件菜单）。
+ * 迁移纪律：JSX 与类名逐字一致（像素回归护栏）。
  *
  * ── U05（长任务卡 v1.1 §4）增补 ─────────────────────────────────────────
  *  ① 顶栏减密：CopyIdButton 与超长相对路径移入「标题轻悬浮信息卡 / ··· 菜单」，
@@ -16,12 +16,13 @@
  *  本文件所有新增计算均为无 DOM 依赖的纯函数（测试直接 import）。
  */
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
   Bookmark,
   CheckCircle2,
+  ChevronDown,
   FileCode,
   FileSpreadsheet,
   FileText,
@@ -34,6 +35,7 @@ import {
   Network,
   PanelLeft,
   Sun,
+  X,
 } from 'lucide-react';
 // v0.6 品牌界面升级（B1/B2）：阅读器 chrome 走字阶令牌与基础件——
 // 控件开合（墨实心）＝Button primary/ghost 双态（§4.3 #8/#9/#10），图标钮＝IconButton（§4.1）
@@ -41,14 +43,14 @@ import { Button } from '../ui/primitives';
 import { Group, GroupSeparator, Toolbar } from '../ui';
 import { FileSystemActionBar } from '../FileContextMenu';
 // 契约⑧①：observed_at 相对时间（「X 分钟前/今天 HH:mm」）——单一事实源在 utils/timeFormat.ts
-import { formatRelativeObservedAt } from '../../utils/timeFormat';
+import { formatLocalClock, formatRelativeObservedAt } from '../../utils/timeFormat';
 import {
   DOC_STATE_LABEL,
   docStatePillClass,
   initiativeStateBadgeLine,
   revisionVersionLabel,
 } from '../../utils/stateProjection';
-import { formatUiMeta } from '../../utils/formatMeta';
+import { formatUiMeta, isTimeMachineFormat } from '../../utils/formatMeta';
 import { STAGE_STEPS } from './readerMarkdownModel';
 import { CopyIdButton } from './readerShared';
 import type { ReaderCtx } from './useReaderController';
@@ -192,8 +194,8 @@ export function resolveZenToggle(input: ZenToggleInput): ZenToggleResult {
 }
 
 /**
- * 可直达「版本时光机」的文档格式（与 KnowledgeGraph.tsx:94 TIME_MACHINE_FORMATS 同集合）。
- * 非此集合的格式不显示「进入版本时光机 →」入口——不做跳过去发现没有时光机的假入口。
+ * 可直达「版本时光机」的基础格式集（向后兼容导出；完整判定见 `canOpenTimeMachine` / `isTimeMachineFormat`，
+ * 已涵盖全部第一档 UTF-8 源码与纯文本格式如 `.mjs`/`.ts`/`.json`/`.txt` 及 `md`/`svg`/`csv`/`tsv`/`xlsx`）。
  */
 export const READER_TIME_MACHINE_FORMATS: ReadonlySet<string> = new Set([
   'md',
@@ -203,9 +205,9 @@ export const READER_TIME_MACHINE_FORMATS: ReadonlySet<string> = new Set([
   'xlsx',
 ]);
 
-/** 该文档格式是否可直达版本时光机（纯函数，供 chrome 与 App 层共用口径）。 */
+/** 该文档格式是否可直达版本时光机（纯函数，委托 formatMeta.isTimeMachineFormat 单一口径）。 */
 export function canOpenTimeMachine(format: string): boolean {
-  return READER_TIME_MACHINE_FORMATS.has(format);
+  return isTimeMachineFormat(format);
 }
 
 /** 1. Non-Intrusive New Version Alert Banner (§2.2, §5.3)；返回面包屑已并入文件头 Row 1 释放首屏阅读高度 */
@@ -385,7 +387,212 @@ export function ReaderMiniVersionAxis({
   );
 }
 
-/** 2. 紧凑双层文件头：第一层文档身份 + 第二层模式与阅读工具条，昼夜双态协同 */
+/**
+ * 所属专项紧凑胶囊 + 悬浮五阶段 Stepper 下拉（减密升级）：
+ * 默认收拢为「专项名 · 当前阶段 ▾」单枚轻胶囊（不再在每份源码/文档顶栏铺满 5 步胶囊并重复状态徽标）；
+ * 点击展开完整五阶段进度与跨阶段快速跳转。
+ */
+function InitiativeStageDropdown({ ctx }: { ctx: ReaderCtx }) {
+  const { activeFile, activePackage, activePackageProjection, activeFileStage, jumpToStageDoc, paperLightMode } = ctx;
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  if (!activePackage) return null;
+  const currentStep = STAGE_STEPS.find((s) => s.role === activePackage.stage);
+  const stageShort = currentStep?.short ?? activePackage.stage;
+
+  return (
+    <div ref={rootRef} className="relative shrink-0">
+      <button
+        type="button"
+        data-reader-initiative-pill=""
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        title={`所属专项：${activePackage.name}（当前阶段：${currentStep?.full ?? activePackage.stage}）· 点击展开五阶段进度`}
+        className={`inline-flex h-7 items-center gap-1 rounded-full px-2 text-[12px] cursor-pointer transition-colors ${
+          paperLightMode
+            ? 'text-[color:var(--ink-soft)] hover:bg-accent/70 hover:text-[color:var(--ink-strong)]'
+            : 'text-white/65 hover:bg-white/[0.08] hover:text-white'
+        }`}
+      >
+        <span className="max-w-[9rem] truncate font-medium text-[color:var(--ink-strong)]">
+          {activePackage.name}
+        </span>
+        <span aria-hidden="true" className="opacity-45">·</span>
+        <span className="font-medium text-[color:var(--accent-iris-ink)]">{stageShort}</span>
+        <ChevronDown
+          className={`w-3 h-3 shrink-0 opacity-60 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div
+          role="region"
+          aria-label="专项五阶段进度"
+          data-esc-layer="open"
+          className="absolute right-0 top-full z-50 mt-1.5 w-max max-w-[360px] rounded-xl border border-border bg-popover p-2.5 shadow-lg space-y-2"
+        >
+          <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-[color:var(--glass-hairline)]">
+            <span className="text-[11.5px] font-semibold text-foreground truncate" title={activePackage.name}>
+              {activePackage.name}
+            </span>
+            {activePackageProjection?.source === 'server' && (
+              <span
+                data-doc-state={activePackageProjection.state}
+                className={docStatePillClass(activePackageProjection.state)}
+                title={`专项状态：${DOC_STATE_LABEL[activePackageProjection.state]}${
+                  activePackageProjection.pendingP0 !== null
+                    ? ` · 未决 P0 ${activePackageProjection.pendingP0} / P1 ${activePackageProjection.pendingP1}`
+                    : ''
+                }`}
+              >
+                {initiativeStateBadgeLine(activePackageProjection.state)}
+              </span>
+            )}
+          </div>
+          <div
+            role="group"
+            aria-label="五阶段进度 Stepper"
+            className="flex flex-wrap items-center gap-0.5"
+          >
+            {STAGE_STEPS.map((step, i) => {
+              const isCurrent = activePackage.stage === step.role;
+              const isReadingDoc = activeFileStage === step.role;
+              const stageDoc =
+                activePackage.readingOrder.find((d) => d.stage === step.role) ?? null;
+              const reachable = stageDoc !== null && stageDoc.fileId !== activeFile.file_id;
+              return (
+                <React.Fragment key={step.role}>
+                  {i > 0 && (
+                    <span className="text-[10px] leading-none text-muted-foreground/60">
+                      →
+                    </span>
+                  )}
+                  <Button
+                    variant={isCurrent ? 'primary' : 'ghost'}
+                    size="sm"
+                    disabled={!reachable}
+                    title={`${step.full}${
+                      stageDoc ? `：${stageDoc.title}` : '：该阶段暂无文档'
+                    }${isCurrent ? '（当前阶段）' : ''}`}
+                    aria-label={`${step.full}${isCurrent ? '（当前阶段）' : ''}${
+                      isReadingDoc ? '（当前阅读）' : ''
+                    }`}
+                    onClick={() => {
+                      jumpToStageDoc(step.role);
+                      setOpen(false);
+                    }}
+                    className="relative !h-6 !px-1.5 !text-[11px]"
+                  >
+                    {step.short}
+                    {isReadingDoc && !isCurrent && (
+                      <span
+                        className={`absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full ${
+                          paperLightMode ? 'bg-[#9A6A45]' : 'bg-[#D99B52]'
+                        }`}
+                        title="当前阅读文档在此阶段"
+                      />
+                    )}
+                  </Button>
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 新事件并入阅读指挥条：不再独占一行横幅。
+ * 条上只留计数和两个动词；「保持当前位置 / 进入新窗口」写在按钮的 title 里，任何宽度都在。
+ */
+function ReaderChangeNoticeChip({
+  count,
+  at,
+  merging,
+  onMerge,
+  onRefresh,
+  onDismiss,
+}: {
+  count: number;
+  at: string;
+  merging: boolean;
+  onMerge?: () => void;
+  onRefresh?: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div
+      role="status"
+      data-reader-change-notice=""
+      title="可静默并入保持当前位置，或刷新切入最新分页窗口"
+      className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-[color:color-mix(in_srgb,var(--stage-ink-decision)_12%,transparent)] pl-2 pr-0.5 text-[12px] text-[color:var(--stage-ink-decision-text)]"
+    >
+      <span className="size-1.5 shrink-0 rounded-full bg-[color:var(--stage-ink-decision)] animate-pulse" />
+      <span className="whitespace-nowrap tabular-nums">
+        {count} 条新事件 · {formatLocalClock(at)}
+      </span>
+      <Button
+        variant="primary"
+        size="sm"
+        disabled={merging || !onMerge}
+        data-silent-merge-events=""
+        onClick={() => onMerge?.()}
+        title="静默并入（保持当前位置）"
+        className="!h-5 !rounded-full !px-2 !text-[11px]"
+      >
+        {merging ? '并入中…' : '并入'}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={merging || !onRefresh}
+        data-refresh-events-window=""
+        onClick={() => onRefresh?.()}
+        title="刷新进入新窗口"
+        className="!h-5 !rounded-full !px-1.5 !text-[11px]"
+      >
+        刷新
+      </Button>
+      <button
+        type="button"
+        data-dismiss-change-notice=""
+        aria-label="暂收新事件提示"
+        title="暂收提示（不丢失未并入事件）"
+        onClick={onDismiss}
+        className="flex size-5 items-center justify-center rounded-full text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] cursor-pointer"
+      >
+        <X className="size-3" />
+      </button>
+    </div>
+  );
+}
+
+/** 2. 单行阅读指挥条：身份、查看方式、动作三段并列。句子留在 title，不靠断点藏字。 */
 export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
   const {
     activeFile,
@@ -416,9 +623,6 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
     canCompareSinceRead,
     hasReadBaseline,
     activePackage,
-    activePackageProjection,
-    activeFileStage,
-    jumpToStageDoc,
     // ── U05：Zen 专注纸面 / 迷你版本轴 / 阅读进度 ──
     zenMode,
     toggleZen,
@@ -429,10 +633,18 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
     compareMiniVersion,
     canOpenTimeMachine,
     onOpenTimeMachine,
+    readingNotice,
+    onSilentMergeNotice,
+    silentMergingNotice,
+    onRefreshNoticeWindow,
   } = ctx;
+  const [dismissedNoticeKey, setDismissedNoticeKey] = useState<string | null>(null);
+  const noticeKey = readingNotice ? `${readingNotice.at}:${readingNotice.count}` : null;
+  const visibleNotice = readingNotice && noticeKey !== dismissedNoticeKey ? readingNotice : null;
   return (
     <div
-      className={`relative z-20 px-5 ${zenMode ? 'py-1' : 'py-1.5'} backdrop-blur-xl flex flex-col gap-1 transition-colors ${
+      data-reader-header=""
+      className={`relative z-20 h-11 px-4 backdrop-blur-xl flex items-center gap-3 transition-colors ${
         paperLightMode
           ? 'bg-white/85 shadow-[0_1px_0_rgba(38,36,61,0.06),0_6px_18px_-12px_rgba(38,36,61,0.09)]'
           : 'bg-[#151822]/95 shadow-[0_1px_0_rgba(255,255,255,0.08),0_10px_24px_-12px_rgba(0,0,0,0.65)]'
@@ -450,135 +662,238 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
         });
       }}
     >
-      {/* Row 1：返回来源胶囊 + 标题身份 + 版本徽标 + 状态胶囊 + 右侧阅读操作与文件菜单 */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1">
-          {returnBreadcrumb && (
-            <button
-              type="button"
-              onClick={onFollowReturnBreadcrumb}
-              data-reader-return-breadcrumb=""
-              title={`${returnBreadcrumb.label} · 阅读位置与跳转来源已保留`}
-              className={`inline-flex shrink-0 items-center gap-1 rounded-[8px] border px-2 py-0.5 text-[11.5px] font-medium cursor-pointer transition-colors ${
-                paperLightMode
-                  ? 'border-[#E6D5C3] bg-[#FBF6EE] text-[#9A6A45] hover:bg-[#F5EBD9] hover:text-[#7C5436]'
-                  : 'border-[#3D342A] bg-[#24201B] text-[#E5A96A] hover:bg-[#2E2821] hover:text-[#F3C186]'
-              }`}
-            >
-              <ArrowLeft className="w-3 h-3 shrink-0" />
-              <span className="max-w-[140px] truncate">{returnBreadcrumb.label}</span>
-            </button>
-          )}
-          {/* 衬线文档标题 + 轻悬浮信息卡（U05 顶栏减密：长路径与文件 ID 移入卡内） */}
-          <div className="relative group inline-flex min-w-0 items-center gap-1">
-            <h1
-              title={activeFile.title}
-              className="font-serif-claude text-[17px] leading-[24px] font-semibold flex items-center gap-1.5 truncate text-[color:var(--ink-strong)]"
-            >
-              {activeFile.format === 'md' && (
-                <FileText className="w-4 h-4 shrink-0 text-[color:var(--accent-wave)]" />
+      {/* 左侧身份区：返回来源胶囊 + 标题身份 + 版本徽标 + 状态胶囊（长标题弹性截断，绝不挤破单行） */}
+      <div className="flex-1 min-w-0 flex items-center gap-1.5">
+        {returnBreadcrumb && (
+          <button
+            type="button"
+            onClick={onFollowReturnBreadcrumb}
+            data-reader-return-breadcrumb=""
+            aria-label={returnBreadcrumb.label}
+            title={`${returnBreadcrumb.label} · 阅读位置与跳转来源已保留`}
+            className={`inline-flex h-6 shrink-0 items-center gap-1 rounded-[7px] border px-2 text-[11.5px] font-medium cursor-pointer transition-colors ${
+              paperLightMode
+                ? 'border-[#E6D5C3] bg-[#FBF6EE] text-[#9A6A45] hover:bg-[#F5EBD9] hover:text-[#7C5436]'
+                : 'border-[#3D342A] bg-[#24201B] text-[#E5A96A] hover:bg-[#2E2821] hover:text-[#F3C186]'
+            }`}
+          >
+            <ArrowLeft className="w-3 h-3 shrink-0" />
+            <span className="max-w-[8.5rem] truncate">{returnBreadcrumb.label}</span>
+          </button>
+        )}
+        {/* 衬线文档标题 + 轻悬浮信息卡（U05 顶栏减密：长路径与文件 ID 移入卡内） */}
+        <div className="relative group inline-flex min-w-0 items-center gap-0.5">
+          <h1
+            title={activeFile.title}
+            className="min-w-0 font-serif-claude text-[16px] leading-6 font-semibold flex items-center gap-1.5 text-[color:var(--ink-strong)]"
+          >
+            {activeFile.format === 'md' && (
+              <FileText className="w-4 h-4 shrink-0 text-[color:var(--accent-wave)]" />
+            )}
+            {activeFile.format === 'svg' && (
+              <FileCode className="w-4 h-4 text-[color:var(--accent-iris-deep)] shrink-0" />
+            )}
+            {activeFile.format === 'pdf' && (
+              <FileSpreadsheet className="w-4 h-4 text-[color:var(--stage-ink-decision)] shrink-0" />
+            )}
+            {activeFile.format !== 'md' &&
+              activeFile.format !== 'svg' &&
+              activeFile.format !== 'pdf' && (
+                <FileText
+                  className="w-4 h-4 shrink-0"
+                  style={{ color: formatUiMeta(activeFile.format).dotColor }}
+                />
               )}
-              {activeFile.format === 'svg' && (
-                <FileCode className="w-4 h-4 text-[color:var(--accent-iris-deep)] shrink-0" />
-              )}
-              {activeFile.format === 'pdf' && (
-                <FileSpreadsheet className="w-4 h-4 text-[color:var(--stage-ink-decision)] shrink-0" />
-              )}
-              {activeFile.format !== 'md' &&
-                activeFile.format !== 'svg' &&
-                activeFile.format !== 'pdf' && (
-                  <FileText
-                    className="w-4 h-4 shrink-0"
-                    style={{ color: formatUiMeta(activeFile.format).dotColor }}
-                  />
-                )}
-              <span className="truncate">{activeFile.title}</span>
-            </h1>
-            <button
-              type="button"
-              aria-label="查看文件信息（完整路径与文件 ID）"
-              title="文件信息：完整相对路径与文件 ID"
-              className="shrink-0 rounded-[6px] p-0.5 text-[color:var(--ink-faint)] opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:text-[color:var(--ink-soft)] cursor-pointer"
-            >
-              <Info className="w-3.5 h-3.5" />
-            </button>
-            <span
-              data-reader-file-info=""
-              className="invisible absolute left-0 top-full z-40 mt-1.5 w-[320px] rounded-[14px] p-3 text-left opacity-0 transition-opacity glass-pop group-hover:visible group-hover:opacity-100 group-focus-within:visible"
-              // 双态就地换底（同迷你版本轴口径）：夜航下白玻璃与浅字相撞不可读；
-              // 0.985/0.985 双档封堵正文笔画透印（浅档复合亮度 ≥252/255、
-              // 夜航档亮笔画穿透 1.5% 复合 Δ≈3 级，1× 均不可辨）
-              style={
-                paperLightMode
-                  ? { background: 'rgba(255, 254, 250, 0.985)' }
-                  : { background: 'rgba(24, 27, 36, 0.985)' }
-              }
-            >
-              <span className="flex items-center justify-between gap-2 pb-1.5 mb-2 border-b border-[color:var(--glass-hairline)]">
-                <span className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-semibold text-[color:var(--ink-strong)]">
-                  文件信息
-                </span>
-                <span className="text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)] tabular-nums">
-                  {activeFile.revisions.length} 个版本
-                </span>
+            <span className="truncate">{activeFile.title}</span>
+          </h1>
+          <button
+            type="button"
+            aria-label="查看文件信息（完整路径与文件 ID）"
+            title="文件信息：完整相对路径与文件 ID"
+            className="shrink-0 rounded-[var(--r-ctl)] p-0.5 text-[color:var(--ink-soft)] opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 [@media(pointer:coarse)]:opacity-100 hover:text-[color:var(--ink-strong)] cursor-pointer"
+          >
+            <Info className="w-3.5 h-3.5" />
+          </button>
+          <span
+            data-reader-file-info=""
+            className="invisible absolute left-0 top-full z-40 mt-1.5 w-[min(320px,88vw)] rounded-[var(--r-card)] p-3 text-left opacity-0 transition-opacity glass-pop group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+            // 双态就地换底（同迷你版本轴口径）：夜航下白玻璃与浅字相撞不可读；
+            // 0.985/0.985 双档封堵正文笔画透印（浅档复合亮度 ≥252/255、
+            // 夜航档亮笔画穿透 1.5% 复合 Δ≈3 级，1× 均不可辨）
+            style={
+              paperLightMode
+                ? { background: 'rgba(255, 254, 250, 0.985)' }
+                : { background: 'rgba(24, 27, 36, 0.985)' }
+            }
+          >
+            <span className="flex items-center justify-between gap-2 pb-1.5 mb-2 border-b border-[color:var(--glass-hairline)]">
+              <span className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-semibold text-[color:var(--ink-strong)]">
+                文件信息
               </span>
-              <span className="block space-y-1.5">
-                <span className="block text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)]">
-                  完整相对路径
-                </span>
-                <span className="block font-mono text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-strong)] break-all">
-                  {activeFile.relative_path}
-                </span>
-                <span className="flex items-center justify-between gap-2 pt-1">
-                  <span className="text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)]">
-                    文件 ID
-                  </span>
-                  <CopyIdButton id={activeFile.file_id} />
-                </span>
+              <span className="text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)] tabular-nums">
+                {activeFile.revisions.length} 个版本
               </span>
             </span>
-          </div>
-          {/* 元信息行（U05 减密后只剩：版本演化胶囊 + 六态胶囊 + 恢复提示） */}
-          <div className="flex items-center gap-1.5 text-[length:var(--text-micro)] leading-[var(--lh-micro)] tabular-nums text-[color:var(--ink-soft)]">
-            <div>
-              <button
-                type="button"
-                onClick={() => setVersionAxisOpen((v) => !v)}
-                data-reader-version-axis-trigger=""
-                aria-haspopup="true"
-                aria-expanded={versionAxisOpen}
-                title="展开文档迷你版本轴（按修订链 vN → … → v1）"
-                className="rounded-full bg-[color:color-mix(in_srgb,var(--accent-wave)_11%,transparent)] px-2 py-0.5 font-mono font-medium text-[color:var(--accent-wave)] hover:bg-[color:color-mix(in_srgb,var(--accent-wave)_18%,transparent)] cursor-pointer"
-              >
-                {revisionVersionLabel(currentRev.versionNumber, !hasNewerRevisionWhileReading)}
-              </button>
-            </div>
-            {artifactState && (
-              <span
-                data-doc-state={artifactState.state}
-                className={docStatePillClass(artifactState.state)}
-                title={`文档状态：${DOC_STATE_LABEL[artifactState.state]}`}
-              >
-                {DOC_STATE_LABEL[artifactState.state]}
+            <span className="block space-y-1.5">
+              <span className="block text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)]">
+                完整相对路径
               </span>
-            )}
-            {rollbackInfo.isRollback && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="text-[color:var(--stage-ink-decision-text)]">
-                  A→B→A 恢复自 {rollbackInfo.matchesEarlierRevisionId}
+              <span className="block font-mono text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-strong)] break-all">
+                {activeFile.relative_path}
+              </span>
+              <span className="flex items-center justify-between gap-2 pt-1">
+                <span className="text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)]">
+                  文件 ID
                 </span>
-              </>
+                <CopyIdButton id={activeFile.file_id} />
+              </span>
+            </span>
+          </span>
+        </div>
+        {/* 元信息行：单版本轻淡显示 v1，多版本以微胶囊高亮并可展开迷你版本轴 */}
+        <div className="shrink-0 flex items-center gap-1 text-[length:var(--text-micro)] leading-[var(--lh-micro)] tabular-nums text-[color:var(--ink-soft)]">
+          <div>
+            <button
+              type="button"
+              onClick={() => setVersionAxisOpen((v) => !v)}
+              data-reader-version-axis-trigger=""
+              aria-haspopup="true"
+              aria-expanded={versionAxisOpen}
+              title="展开文档迷你版本轴（按修订链 vN → … → v1）"
+              className={
+                activeFile.revisions.length <= 1 && !hasNewerRevisionWhileReading
+                  ? 'rounded-md px-1.5 py-0.5 font-mono text-[color:var(--ink-faint)] hover:bg-accent hover:text-[color:var(--ink-strong)] cursor-pointer transition-colors'
+                  : 'rounded-full bg-[color:color-mix(in_srgb,var(--accent-wave)_11%,transparent)] px-2 py-0.5 font-mono font-medium text-[color:var(--accent-wave)] hover:bg-[color:color-mix(in_srgb,var(--accent-wave)_18%,transparent)] cursor-pointer'
+              }
+            >
+              {activeFile.revisions.length <= 1 && !hasNewerRevisionWhileReading
+                ? `v${currentRev.versionNumber}`
+                : revisionVersionLabel(currentRev.versionNumber, !hasNewerRevisionWhileReading)}
+            </button>
+          </div>
+          {artifactState && artifactState.state !== 'draft' && (
+            <span
+              data-doc-state={artifactState.state}
+              className={docStatePillClass(artifactState.state)}
+              title={`文档状态：${DOC_STATE_LABEL[artifactState.state]}`}
+            >
+              {DOC_STATE_LABEL[artifactState.state]}
+            </span>
+          )}
+          {rollbackInfo.isRollback && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span
+                className="max-w-[130px] truncate text-[color:var(--stage-ink-decision-text)]"
+                title={`A→B→A 恢复自 ${rollbackInfo.matchesEarlierRevisionId}`}
+              >
+                A→B→A 恢复自 {rollbackInfo.matchesEarlierRevisionId}
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 指挥条右段：新事件胶囊 + 查看方式 + 阅读动作。
+          关系 / 溯源 / 专注只留图标，名字在 aria-label 与 title 里，避免和「标为已读」抢同一行。 */}
+      <div className="shrink-0 flex items-center gap-2">
+        {visibleNotice && (
+          <ReaderChangeNoticeChip
+            count={visibleNotice.count}
+            at={visibleNotice.at}
+            merging={silentMergingNotice}
+            onMerge={onSilentMergeNotice ? () => void onSilentMergeNotice() : undefined}
+            onRefresh={onRefreshNoticeWindow ? () => void onRefreshNoticeWindow() : undefined}
+            onDismiss={() => setDismissedNoticeKey(noticeKey)}
+          />
+        )}
+        <div
+          className={`glx-zen-chrome shrink-0 flex items-center gap-1.5 ${
+            zenMode ? 'opacity-70' : ''
+          }`}
+        >
+          {/* wf_4：所属专项 + 五阶段 Stepper 收拢为紧凑下拉胶囊，按需展开五阶段跳转 */}
+          {activePackage && <InitiativeStageDropdown ctx={ctx} />}
+
+          <div
+            role="group"
+            aria-label="当前对象查看模式"
+            className={`inline-flex shrink-0 items-center gap-0.5 rounded-[8px] p-0.5 text-xs ${
+              paperLightMode
+                ? 'bg-[color:var(--depth-1-bg)] shadow-[inset_0_1px_2px_rgba(38,36,61,0.04)]'
+                : 'bg-white/[0.06] shadow-[inset_0_1px_2px_rgba(0,0,0,0.28)]'
+            }`}
+          >
+            <Button
+              variant={subMode === 'read' ? 'primary' : 'ghost'}
+              size="sm"
+              className="!h-6 !px-2 !text-[11.5px]"
+              title={`当前版本 ${revisionVersionLabel(currentRev.versionNumber, !hasNewerRevisionWhileReading)}`}
+              onClick={() => onChangeSubMode('read')}
+            >
+              {hasNewerRevisionWhileReading
+                ? `当前 v${currentRev.versionNumber}`
+                : '正文'}
+            </Button>
+
+            {(canCompareSinceRead || subMode === 'diff_since_read') && (
+              <Button
+                variant={subMode === 'diff_since_read' ? 'primary' : 'ghost'}
+                size="sm"
+                className="!h-6 !px-2 !text-[11.5px]"
+                onClick={() => onChangeSubMode('diff_since_read')}
+                disabled={!canCompareSinceRead}
+                aria-label={hasReadBaseline ? '对比上次阅读' : '对比最早版本'}
+                title={
+                  hasReadBaseline
+                    ? '与上次读到的版本比较'
+                    : '尚未建立阅读基线：与最早收录的版本比较'
+                }
+              >
+                <GitCompare className="w-3 h-3" />
+                <span>对比</span>
+                {hasReadBaseline && canCompareSinceRead && unreadStatus.isUnread && (
+                  <span className="ml-0.5 text-[length:var(--text-micro)] leading-[var(--lh-micro)]">有更新</span>
+                )}
+              </Button>
             )}
+
+            {(activeFile.revisions.length > 1 || subMode === 'diff_versions') && (
+              <Button
+                variant={subMode === 'diff_versions' ? 'primary' : 'ghost'}
+                size="sm"
+                className="!h-6 !px-2 !text-[11.5px]"
+                onClick={() => onChangeSubMode('diff_versions')}
+              >
+                历史快照 ({activeFile.revisions.length})
+              </Button>
+            )}
+
+            <Button
+              variant={subMode === 'relations' ? 'primary' : 'ghost'}
+              size="sm"
+              className="!h-6 !px-2 !text-[11.5px]"
+              aria-label="局部关系图"
+              title="局部关系图：本文与上下游文档的一跳关系"
+              onClick={() => onChangeSubMode('relations')}
+            >
+              <Network className="w-3 h-3" />
+              <span className="sr-only">关系</span>
+            </Button>
           </div>
         </div>
+
+        <span
+          aria-hidden="true"
+          className="h-3.5 w-px bg-[color:var(--glass-hairline)] shrink-0"
+        />
 
         <Toolbar
           aria-label="阅读器操作工具栏"
           data-reader-toolbar=""
-          className="flex flex-wrap items-center gap-1.5"
+          className="shrink-0 flex-nowrap !gap-0.5 !rounded-none !border-0 !bg-transparent !p-0 !shadow-none before:hidden"
         >
-          <Group aria-label="阅读状态与收藏" className="gap-0.5 rounded-xl border border-border/75 bg-card/65 p-0.5">
+          <Group aria-label="阅读状态与收藏" className="gap-0.5 border-0 bg-transparent p-0 shadow-none">
             {(() => {
               // GL-01 单一真相源：以 unreadStatus.isUnread 判定是否已读，
               // 确保手工「标为已读」、V04「确立已读基线」与服务端水合态完全一致；
@@ -603,15 +918,16 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
                     ? '自上次阅读后文档已有新版本，点击推进至最新已读基线'
                     : '将当前版本标为已读基线（打开文件不会自动标记整篇已读）';
               const pillToneClass = isUpToDateRead
-                ? 'bg-[color:color-mix(in_srgb,var(--status-green)_12%,transparent)] border-[color:color-mix(in_srgb,var(--status-green)_32%,transparent)] text-[color:var(--stage-ink-deliver-text)] dark:text-[color:var(--success-foreground)] hover:bg-[color:color-mix(in_srgb,var(--status-green)_18%,transparent)]'
+                ? 'text-[color:var(--stage-ink-deliver-text)] dark:text-[color:var(--success-foreground)] hover:bg-[color:color-mix(in_srgb,var(--status-green)_12%,transparent)]'
                 : isUpdatedAfterRead
                   ? 'bg-[color:color-mix(in_srgb,var(--accent-wave)_11%,transparent)] border-[color:color-mix(in_srgb,var(--accent-wave)_32%,transparent)] text-[color:var(--accent-wave)] hover:bg-[color:color-mix(in_srgb,var(--accent-wave)_18%,transparent)]'
-                  : 'hover:border-[color:color-mix(in_srgb,var(--status-green)_32%,transparent)] hover:text-[color:var(--stage-ink-deliver-text)] dark:hover:text-[color:var(--success-foreground)]';
+                  : 'hover:text-[color:var(--stage-ink-deliver-text)] dark:hover:text-[color:var(--success-foreground)]';
               return (
                 <Button
-                  variant="secondary"
+                  variant={isUpdatedAfterRead ? 'secondary' : 'ghost'}
                   size="sm"
                   aria-pressed={isUpToDateRead}
+                  aria-label={label}
                   data-reader-read-toggle={isUpToDateRead ? 'read' : 'unread'}
                   data-reader-read-reason={unreadStatus.reason}
                   onClick={() => {
@@ -622,7 +938,7 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
                     }
                   }}
                   title={title}
-                  className={pillToneClass}
+                  className={`${pillToneClass} !px-2`}
                 >
                   <CheckCircle2
                     className={`w-3.5 h-3.5 ${
@@ -647,6 +963,7 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
             <Button
               variant={readingState?.bookmarked ? 'primary' : 'ghost'}
               size="sm"
+              className="!px-1.5"
               onClick={() => onToggleBookmark(activeFile.file_id)}
               aria-label={readingState?.bookmarked ? '取消收藏' : '收藏此资料'}
               title={readingState?.bookmarked ? '取消收藏' : '收藏此资料'}
@@ -655,11 +972,17 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
             </Button>
           </Group>
 
-          <Group aria-label="纸面视图工具组" className="gap-0.5 rounded-xl border border-border/75 bg-card/65 p-0.5">
+          <span
+            aria-hidden="true"
+            className="mx-0.5 h-3.5 w-px bg-[color:var(--glass-hairline)] shrink-0"
+          />
+
+          <Group aria-label="纸面视图工具组" className="gap-0.5 border-0 bg-transparent p-0 shadow-none">
             {activeFile.format === 'md' && subMode === 'read' && (
               <Button
                 variant={outlineOpen ? 'primary' : 'ghost'}
                 size="sm"
+                className="!px-1.5 2xl:!px-2"
                 onClick={() => setOutlineOpen((v) => !v)}
                 aria-pressed={outlineOpen}
                 aria-label={outlineOpen ? '收起章节大纲' : '展开章节大纲'}
@@ -671,7 +994,7 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
               >
                 <PanelLeft className="w-3.5 h-3.5" />
                 {/* U05 主行单行化：1440（xl..2xl）下收文字只留图标（aria-label 提供可读名），
-                    ≥2xl 恢复全标签；与昼夜钮合计省 ~104px，四大锚点在目录栏展开的主配置下回到同一条 Row1 */}
+                    ≥2xl 恢复全标签；与昼夜钮合计省 ~104px，四大锚点在目录栏展开的主配置下回到同一条主行 */}
                 <span className="max-2xl:hidden">{outlineOpen ? '收起大纲' : '大纲'}</span>
               </Button>
             )}
@@ -680,6 +1003,7 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
               <Button
                 variant="ghost"
                 size="sm"
+                className="!px-1.5 2xl:!px-2"
                 onClick={() => setPaperLightMode((v) => !v)}
                 aria-label={paperLightMode ? '切换到深色阅读纸' : '切换到纸面浅色'}
                 title={paperLightMode ? '切换到深色阅读纸' : '切换到纸面浅色'}
@@ -698,18 +1022,21 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
               </Button>
             )}
 
-            <GroupSeparator className="hidden xl:block my-1" />
+            {activeFile.format === 'md' && subMode === 'read' && (
+              <GroupSeparator className="hidden xl:block my-1" />
+            )}
 
             <Button
               variant={inspectorOpen ? 'primary' : 'ghost'}
               size="sm"
               onClick={onToggleInspector}
               aria-expanded={inspectorOpen}
-              className="max-xl:hidden"
+              aria-label={inspectorOpen ? '收起溯源面板' : '展开溯源面板'}
+              className="max-xl:hidden !px-2"
               title="溯源与关联：版本时间、文件大小、完整路径与上下游阅读顺序"
             >
               <Info className="w-3.5 h-3.5" />
-              <span>溯源</span>
+              <span className="sr-only">溯源</span>
             </Button>
 
             {/* 专注纸面（Zen）：一键收起左右侧栏 + 居中黄金阅读行宽（快捷键 Z） */}
@@ -718,7 +1045,9 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
               size="sm"
               onClick={() => toggleZen('toolbar-button')}
               aria-pressed={zenMode}
+              aria-label={zenMode ? '退出专注纸面' : '进入专注纸面'}
               data-reader-zen-toggle=""
+              className="!px-2"
               title={
                 zenMode
                   ? '退出专注纸面：恢复左右侧栏（快捷键 Z）'
@@ -726,7 +1055,7 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
               }
             >
               {zenMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Focus className="w-3.5 h-3.5" />}
-              <span>{zenMode ? '退出专注' : '专注纸面'}</span>
+              <span className="sr-only">{zenMode ? '退出' : '专注'}</span>
             </Button>
           </Group>
 
@@ -739,6 +1068,7 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
                 <Button
                   variant={fileActionsOpen ? 'primary' : 'ghost'}
                   size="sm"
+                  className="!px-1.5"
                   aria-label="文件操作"
                   aria-expanded={fileActionsOpen}
                   title="文件操作：定位目录、复制路径、重命名、移动、移入回收站"
@@ -829,173 +1159,18 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
         </Toolbar>
       </div>
 
-      {/* Row 2：查看模式分段胶囊 + 所属专项紧凑条（单行合流，按需展示可用对比/历史项，释放首屏阅读高度） */}
-      <div
-        className={`glx-zen-chrome flex flex-wrap items-center justify-between gap-x-3 gap-y-1 ${
-          zenMode ? 'opacity-70' : ''
-        }`}
-      >
-        <div
-          role="group"
-          aria-label="当前对象查看模式"
-          className={`inline-flex items-center gap-0.5 rounded-[9px] p-0.5 text-xs ${
-            paperLightMode
-              ? 'bg-[color:var(--depth-1-bg)] shadow-[inset_0_1px_2px_rgba(38,36,61,0.04)]'
-              : 'bg-white/[0.06] shadow-[inset_0_1px_2px_rgba(0,0,0,0.28)]'
-          }`}
-        >
-          <Button
-            variant={subMode === 'read' ? 'primary' : 'ghost'}
-            size="sm"
-            className="!h-6 !px-2 !text-[11.5px]"
-            title={`当前版本 ${revisionVersionLabel(currentRev.versionNumber, !hasNewerRevisionWhileReading)}`}
-            onClick={() => onChangeSubMode('read')}
-          >
-            {hasNewerRevisionWhileReading
-              ? `当前 v${currentRev.versionNumber}`
-              : '正文'}
-          </Button>
-
-          {(canCompareSinceRead || subMode === 'diff_since_read') && (
-            <Button
-              variant={subMode === 'diff_since_read' ? 'primary' : 'ghost'}
-              size="sm"
-              className="!h-6 !px-2 !text-[11.5px]"
-              onClick={() => onChangeSubMode('diff_since_read')}
-              disabled={!canCompareSinceRead}
-              title={
-                hasReadBaseline
-                  ? '与上次读到的版本比较'
-                  : '尚未建立阅读基线：与最早收录的版本比较'
-              }
-            >
-              <GitCompare className="w-3 h-3" />
-              <span>{hasReadBaseline ? '对比上次阅读' : '对比最早版本'}</span>
-              {hasReadBaseline && canCompareSinceRead && unreadStatus.isUnread && (
-                <span className="ml-0.5 text-[length:var(--text-micro)] leading-[var(--lh-micro)]">(有更新)</span>
-              )}
-            </Button>
-          )}
-
-          {(activeFile.revisions.length > 1 || subMode === 'diff_versions') && (
-            <Button
-              variant={subMode === 'diff_versions' ? 'primary' : 'ghost'}
-              size="sm"
-              className="!h-6 !px-2 !text-[11.5px]"
-              onClick={() => onChangeSubMode('diff_versions')}
-            >
-              历史快照 ({activeFile.revisions.length})
-            </Button>
-          )}
-
-          <Button
-            variant={subMode === 'relations' ? 'primary' : 'ghost'}
-            size="sm"
-            className="!h-6 !px-2 !text-[11.5px]"
-            onClick={() => onChangeSubMode('relations')}
-          >
-            <Network className="w-3 h-3" />
-            <span>局部关系图</span>
-          </Button>
-        </div>
-
-        {/* wf_4：所属专项 + 五阶段 Stepper 并入 Row 2 右侧，宽屏同行、窄屏优雅折行 */}
-        {activePackage && (
-          <div className="min-w-0 flex flex-wrap items-center gap-1.5 text-xs">
-            <span
-              className={`shrink-0 text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-medium tracking-wide ${
-                paperLightMode ? 'text-[color:var(--ink-soft)]' : 'text-white/55'
-              }`}
-            >
-              所属专项
-            </span>
-            <span
-              className={`truncate max-w-[160px] font-semibold text-[11.5px] ${
-                paperLightMode ? 'text-[color:var(--ink-strong)]' : 'text-[#F3F4F8]'
-              }`}
-              title={activePackage.name}
-            >
-              {activePackage.name}
-            </span>
-            {activePackageProjection?.source === 'server' && (
-              <span
-                data-doc-state={activePackageProjection.state}
-                className={docStatePillClass(activePackageProjection.state)}
-                title={`专项状态：${DOC_STATE_LABEL[activePackageProjection.state]}${
-                  activePackageProjection.pendingP0 !== null
-                    ? ` · 未决 P0 ${activePackageProjection.pendingP0} / P1 ${activePackageProjection.pendingP1}`
-                    : ''
-                }`}
-              >
-                {initiativeStateBadgeLine(activePackageProjection.state)}
-              </span>
-            )}
-            <div
-              role="group"
-              aria-label="五阶段进度 Stepper"
-              className="flex flex-wrap items-center gap-0.5"
-            >
-              {STAGE_STEPS.map((step, i) => {
-                const isCurrent = activePackage.stage === step.role;
-                const isReadingDoc = activeFileStage === step.role;
-                const stageDoc =
-                  activePackage.readingOrder.find((d) => d.stage === step.role) ?? null;
-                const reachable = stageDoc !== null && stageDoc.fileId !== activeFile.file_id;
-                return (
-                  <React.Fragment key={step.role}>
-                    {i > 0 && (
-                      <span
-                        className={`text-[10px] leading-none ${
-                          paperLightMode ? 'text-[color:var(--ink-soft)]' : 'text-white/35'
-                        }`}
-                      >
-                        →
-                      </span>
-                    )}
-                    <Button
-                      variant={isCurrent ? 'primary' : 'ghost'}
-                      size="sm"
-                      disabled={!reachable}
-                      title={`${step.full}${
-                        stageDoc ? `：${stageDoc.title}` : '：该阶段暂无文档'
-                      }${isCurrent ? '（当前阶段）' : ''}`}
-                      aria-label={`${step.full}${isCurrent ? '（当前阶段）' : ''}${
-                        isReadingDoc ? '（当前阅读）' : ''
-                      }`}
-                      onClick={() => jumpToStageDoc(step.role)}
-                      className="relative !h-6 !px-1.5 !text-[11px]"
-                    >
-                      {step.short}
-                      {isReadingDoc && !isCurrent && (
-                        <span
-                          className={`absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full ${
-                            paperLightMode ? 'bg-[#9A6A45]' : 'bg-[#D99B52]'
-                          }`}
-                          title="当前阅读文档在此阶段"
-                        />
-                      )}
-                    </Button>
-                  </React.Fragment>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* U05 · 迷你版本轴弹层挂头部根节点（避让修复）：锚 header 底沿向下展开，
-            绝不盖住 Row2 查看模式分段条（历史快照/局部关系图）——弹层只覆盖正文
-            纸面（非交互区）。关闭态零 DOM；outside-click 与 Esc 由控制器收口。 */}
-        {versionAxisOpen && (
-          <ReaderMiniVersionAxis
-            nodes={miniVersionAxis}
-            paperLightMode={paperLightMode}
-            onSelect={selectMiniVersion}
-            onCompare={compareMiniVersion}
-            canOpenTimeMachine={canOpenTimeMachine}
-            onOpenTimeMachine={onOpenTimeMachine}
-          />
-        )}
-      </div>
+      {/* U05 · 迷你版本轴弹层挂头部根节点末尾：锚单行 header 底沿向下展开，
+          绝不盖住任何头部控件——弹层只覆盖正文纸面（非交互区）。关闭态零 DOM；outside-click 与 Esc 由控制器收口。 */}
+      {versionAxisOpen && (
+        <ReaderMiniVersionAxis
+          nodes={miniVersionAxis}
+          paperLightMode={paperLightMode}
+          onSelect={selectMiniVersion}
+          onCompare={compareMiniVersion}
+          canOpenTimeMachine={canOpenTimeMachine}
+          onOpenTimeMachine={onOpenTimeMachine}
+        />
+      )}
     </div>
   );
 }

@@ -20,6 +20,10 @@ import ShortcutsCheatSheetModal from '../src/components/ShortcutsCheatSheetModal
 import { NonLegacyFilePreviewPanel } from '../src/components/NonLegacyFilePreviewPanel';
 import { ReaderView } from '../src/components/ReaderView';
 import { AppBanners } from '../src/components/app/AppBanners';
+import { TopHeader } from '../src/components/TopHeader';
+import { MdHumanDiffPanel } from '../src/components/timemachine/MdHumanDiffPanel';
+import { buildMarkdownHumanDiff } from '../src/utils/multimodalDiff';
+import { groupFilesIntoPackages } from '../src/utils/taskPackages';
 import { WorkspaceSettingsModal } from '../src/components/modals/WorkspaceSettingsModal';
 import { APP_BUILD_INFO } from '../src/utils/appBuildInfo';
 import { formatUiMeta } from '../src/utils/formatMeta';
@@ -134,8 +138,21 @@ test('Polish-02 · AppLibraryStage 目录面包屑栏与暗夜模式格式/快�
       indexGeneration: 12,
     })
   );
-  assert.ok(darkHtml.includes('text-[#86EFAC]'), '暗夜态「已保存去重快照」徽标必须使用亮绿高对比色');
+  assert.ok(!darkHtml.includes('已保存去重快照'), '常态图片预览脚标不再铺陈内部「已保存去重快照」术语');
   assert.ok(darkHtml.includes('v1 · 2026-11-22'), '版本与观测日期应完整呈现，不再被长 revision_id 挤截');
+  assert.ok(!darkHtml.includes('>PNG<'), '图片脚下不再重复格式徽标');
+  assert.ok(!darkHtml.includes('>查看原图<'), '查看原图只留图标，不压在画面上');
+  assert.ok(darkHtml.includes('aria-label="查看原图"'), '原图入口仍可发现');
+
+  const binDarkHtml = renderToStaticMarkup(
+    React.createElement(NonLegacyFilePreviewPanel, {
+      activeFile: { ...file, format: 'zip', title: 'archive.zip', relative_path: 'dist/archive.zip' },
+      currentRev: rev,
+      paperLightMode: false,
+      indexGeneration: 12,
+    })
+  );
+  assert.ok(binDarkHtml.includes('text-[#86EFAC]'), '暗夜态元数据卡片的快照徽标必须使用亮绿高对比色');
 });
 
 test('Polish-03 · 设置面板存储配额去工程代号、暗夜适配且配额口径实时对齐', () => {
@@ -298,7 +315,7 @@ test('Polish-04 · 内容优先排版：源码/预览收折技术元数据、阅
   );
   assert.ok(readerHtmlMulti.includes('历史快照 (2)'), '多版本文件应正常展示历史快照入口');
 
-  // 5. AppBanners：新事件细条精简冗余说明并提供一键暂收入口
+  // 5. AppBanners：全景溯源页签新事件细条精简冗余说明并提供一键暂收入口；阅读态不弹窗打断
   const bannerHtml = renderToStaticMarkup(
     React.createElement(AppBanners, {
       ctx: {
@@ -319,11 +336,355 @@ test('Polish-04 · 内容优先排版：源码/预览收折技术元数据、阅
         dataSource: 'real',
         files: [],
         dataError: '',
+        activeTab: 'panorama',
+      } as never,
+    })
+  );
+  assert.ok(bannerHtml.includes('data-dismiss-change-notice=""'), '新事件细条应支持一键暂收，避免长期压占视口');
+  assert.ok(!bannerHtml.includes('可静默并入保持当前位置，或刷新切入最新分页窗口</span>'), '应去除冗长说明文案，保持细条精炼');
+});
+
+test('Polish-05 · 信息降密：扫描态并入同步胶囊、时光机合流单右栏与未变章节折叠、预览工具条沉底与专项胶囊收拢', () => {
+  // 1. 后台扫描中不再顶出通栏横幅（收编入 TopHeader 同步胶囊）；扫描失败保留重试横幅
+  const runningBannerHtml = renderToStaticMarkup(
+    React.createElement(AppBanners, {
+      ctx: {
+        rescanState: 'running',
+        rescanError: '',
+        handleRescan: async () => {},
+        l4aProgress: null,
+        hitlClearedAt: null,
+        deliveredInitiative: null,
+        deliveredInitiatives: [],
+        initiativeLifecycle: null,
+        runInitiativeLifecycle: async () => {},
+        activeInitiative: null,
+        changeNotice: null,
+        refreshEvents: async () => {},
+        silentMergeNewEvents: async () => {},
+        silentMergingEvents: false,
+        dataSource: 'real',
+        files: [],
+        dataError: '',
         activeTab: 'library',
       } as never,
     })
   );
-  assert.ok(bannerHtml.includes('data-dismiss-change-notice=""'), '新事件细条应支持一键暂收，避免长期压占阅读区');
-  assert.ok(!bannerHtml.includes('可静默并入保持当前位置，或刷新切入最新分页窗口</span>'), '应去除冗长说明文案，保持细条精炼');
+  assert.ok(!runningBannerHtml.includes('正在扫描工作区'), '扫描中不再顶出全宽通栏横幅压占视口');
+
+  const scanningHeaderHtml = renderToStaticMarkup(
+    React.createElement(TopHeader, {
+      activeTab: 'panorama',
+      onSelectTab: () => {},
+      searchQuery: '',
+      onSearchChange: () => {},
+      searchHits: [],
+      onSelectSearchHit: () => {},
+      unreadFilesCount: 0,
+      contextBasketCount: 0,
+      eventCount: 10,
+      decisions: [],
+      onOpenDecision: () => {},
+      config: makeConfig(),
+      dataSource: 'real',
+      scanSummary: '',
+      dataError: null,
+      files: [],
+      sidebarFilters: { quickScope: 'all', folder: 'all', format: 'all', role: 'all', topic: 'all' },
+      onUpdateSidebarFilters: () => {},
+      onResetSidebarFilters: () => {},
+      libraryMode: 'read',
+      onLibraryModeChange: () => {},
+      onOpenSettings: () => {},
+      onOpenMcpConsole: () => {},
+      onOpenContextDrawer: () => {},
+      isScanning: true,
+    })
+  );
+  assert.ok(scanningHeaderHtml.includes('扫描中…'), '扫描进度应直接体现在 TopHeader 同步胶囊内');
+
+  // 2. MdHumanDiffPanel：有变与未变章节并存时默认折叠未变章节；决定/待办 0 变化压缩为单行轻提示
+  const mdDiff = buildMarkdownHumanDiff(
+    ['# 文档', '## 未变章 A', '原文 A', '## 改动章 B', '旧内容 B', '## 未变章 C', '原文 C'].join('\n'),
+    ['# 文档', '## 未变章 A', '原文 A', '## 改动章 B', '新内容 B', '## 未变章 C', '原文 C'].join('\n')
+  );
+  const mdHtml = renderToStaticMarkup(
+    React.createElement(MdHumanDiffPanel, { result: mdDiff, mode: 'human' })
+  );
+  assert.ok(mdHtml.includes('data-outline-unchanged-toggle=""'), '应提供未变章节折叠开关');
+  assert.ok(mdHtml.includes('改动章 B'), '改动章节默认可见');
+  assert.ok(!mdHtml.includes('未变章 A'), '未变章节默认折叠以降低垂直密度');
+  assert.ok(mdHtml.includes('data-element-changes-empty=""'), '决定/待办无变化时压缩为单行静默提示');
+
+  // 3. NonLegacyFilePreviewPanel：文本正文置顶，工具条沉底并浮出轻量复制/入篮操作
+  const tsRev: Revision = {
+    revision_id: 'rev_p5_v1',
+    file_id: 'f_p5_01',
+    versionNumber: 1,
+    content_sha256: 'ab1169f66f6a8c0a000000000000000000000000000000000000000000000000',
+    observed_at: '2026-11-23T12:00:00Z',
+    source_time: '2026-11-23T12:00:00Z',
+    sizeBytes: 1024,
+    snapshotAvailable: true,
+    isBaselineProtected: true,
+    summaryNote: 'v1',
+    markdownContent: 'export const alpha = 1;\n',
+  };
+  const tsFile: FileRecord = {
+    file_id: 'f_p5_01',
+    relative_path: '04-智能体代码/src/Overview.tsx',
+    title: 'Overview.tsx',
+    format: 'tsx',
+    folder: '04-智能体代码/src',
+    role: '素材',
+    roleProvenance: '来自路径',
+    topics: [],
+    current_revision_id: tsRev.revision_id,
+    revisions: [tsRev],
+    coverage: 'full_text',
+  };
+  const codeHtml = renderToStaticMarkup(
+    React.createElement(NonLegacyFilePreviewPanel, {
+      activeFile: tsFile,
+      currentRev: tsRev,
+      paperLightMode: true,
+      indexGeneration: 1,
+      systemActions: {
+        desktopSystemSupported: true,
+        hasWorkspaceRoot: true,
+        onOpenWithDefaultApp: () => {},
+        onRevealInExplorer: () => {},
+        onCopyRelativePath: () => {},
+        onCopyAbsolutePath: () => {},
+      },
+      onAddEvidencePointer: () => true,
+    })
+  );
+  const codeIdx = codeHtml.indexOf('export const alpha = 1;');
+  const footerIdx = codeHtml.indexOf('data-preview-compact-bar=""');
+  assert.ok(codeIdx > 0 && footerIdx > codeIdx, '源码正文应位于底部状态脚标之前（首屏正文顶格直出）');
+  assert.ok(codeHtml.includes('data-preview-floating-actions=""'), '应提供右上角轻悬浮复制/入篮入口');
+
+  // 4. ReaderView：所属专项五阶段 Stepper 默认收拢为单枚下拉胶囊，不再平铺 5 步按钮
+  const pkg = groupFilesIntoPackages([tsFile])[0] ?? null;
+  const readerHtml = renderToStaticMarkup(
+    React.createElement(ReaderView, {
+      files: [tsFile],
+      activeFile: tsFile,
+      pinnedRevisionId: tsRev.revision_id,
+      onChangeRevision: () => {},
+      subMode: 'read',
+      onChangeSubMode: () => {},
+      readingState: undefined,
+      onMarkReadHere: () => {},
+      onMarkFullyRead: () => {},
+      onScrollProgress: () => {},
+      onToggleBookmark: () => {},
+      onNavigateLinkedFile: () => {},
+      returnBreadcrumb: null,
+      onFollowReturnBreadcrumb: () => {},
+      decisions: [],
+      relations: [],
+      onSelectDecision: () => {},
+      onAddEvidencePointer: () => {},
+      indexGeneration: 1,
+      packageContext: pkg,
+    })
+  );
+  assert.ok(readerHtml.includes('data-reader-initiative-pill=""'), '专项五阶段应默认收拢为紧凑胶囊触发器');
+  assert.ok(!readerHtml.includes('aria-label="五阶段进度 Stepper"'), '未点击展开前不应在 Row 2 常驻铺满五阶段 Stepper');
+
+  // 5. 全景/画布视图默认收起左侧目录栏（释放横向空间，用户可随时一键展开）
+  const sidebarShellSrc = readSrc('components/app/GlobalDirectorySidebar.tsx');
+  assert.ok(
+    sidebarShellSrc.includes("activeTab === 'panorama' ? !dirShell.panoramaSidebarOpen : dirShell.sidebarCollapsed"),
+    '全景/时光机视图默认收起左侧目录栏，让出空间'
+  );
 });
+
+test('Polish-06 · 全局视图去噪：清零 SVG/PDF/MD 工程黑话与 coverage 键值、阅读态屏蔽事件通栏、顶栏去大数字与静默态收拢', () => {
+  // 1. SVG 阅读器：不再展示「受限安全矢量预览」「可提取文字节点」「SVG 可提取文字检索层」「coverage=svg_text」
+  const svgRev: Revision = {
+    revision_id: 'rev_svg_p6',
+    file_id: 'f_svg_p6',
+    versionNumber: 1,
+    content_sha256: 'ab1169f66f6a8c0a000000000000000000000000000000000000000000000000',
+    observed_at: '2026-11-24T10:00:00Z',
+    source_time: '2026-11-24T10:00:00Z',
+    sizeBytes: 20480,
+    snapshotAvailable: true,
+    isBaselineProtected: true,
+    summaryNote: 'v1',
+    svgSource: '<svg xmlns="http://www.w3.org/2000/svg"><text>标题</text></svg>',
+    svgExtractedTexts: ['标题', '方案一'],
+  };
+  const svgFile: FileRecord = {
+    file_id: 'f_svg_p6',
+    relative_path: '01-方案文档/preview.svg',
+    title: '2D与3D绘制预览优化方案草案',
+    format: 'svg',
+    folder: '01-方案文档',
+    role: '素材',
+    roleProvenance: '来自路径',
+    topics: [],
+    current_revision_id: svgRev.revision_id,
+    revisions: [svgRev],
+    coverage: 'svg_text',
+  };
+  const svgReaderHtml = renderToStaticMarkup(
+    React.createElement(ReaderView, {
+      files: [svgFile],
+      activeFile: svgFile,
+      pinnedRevisionId: svgRev.revision_id,
+      onChangeRevision: () => {},
+      subMode: 'read',
+      onChangeSubMode: () => {},
+      readingState: undefined,
+      onMarkReadHere: () => {},
+      onMarkFullyRead: () => {},
+      onScrollProgress: () => {},
+      onToggleBookmark: () => {},
+      onNavigateLinkedFile: () => {},
+      returnBreadcrumb: null,
+      onFollowReturnBreadcrumb: () => {},
+      decisions: [],
+      relations: [],
+      onSelectDecision: () => {},
+      onAddEvidencePointer: () => {},
+      indexGeneration: 1,
+    })
+  );
+  assert.ok(!svgReaderHtml.includes('受限安全矢量预览'), 'SVG 画布不得堆砌安全免责说明');
+  assert.ok(!svgReaderHtml.includes('coverage=svg_text'), 'SVG 画布绝不向用户暴露内部 coverage= 键值');
+  assert.ok(!svgReaderHtml.includes('SVG 可提取文字检索层'), 'SVG 底部不再占行渲染工程检索层条');
+  assert.ok(!svgReaderHtml.includes('100% 原尺寸</span>'), '不重复并列 100% 与 100% 原尺寸两枚按钮');
+  assert.ok(svgReaderHtml.includes('data-svg-extracted-texts-toggle=""'), '有提取文字时在工具栏提供按需展开开关');
+  assert.ok(svgReaderHtml.includes('v1</button>'), '单版本文件顶栏以极淡 v1 呈现，不加橙底「(最新)」噪音');
+
+  // 2. PDF 阅读器：索引正常态不再铺陈「阅读能力：内嵌阅读器可用」「检索索引状态」「按版本 rev_xxx 快照直读」
+  const pdfRev: Revision = {
+    revision_id: 'rev_pdf_p6',
+    file_id: 'f_pdf_p6',
+    versionNumber: 1,
+    content_sha256: 'cd1169f66f6a8c0a000000000000000000000000000000000000000000000000',
+    observed_at: '2026-11-24T10:00:00Z',
+    source_time: '2026-11-24T10:00:00Z',
+    sizeBytes: 102400,
+    snapshotAvailable: true,
+    isBaselineProtected: true,
+    summaryNote: 'v1',
+  };
+  const pdfFile: FileRecord = {
+    file_id: 'f_pdf_p6',
+    relative_path: '01-方案文档/spec.pdf',
+    title: '规范文档',
+    format: 'pdf',
+    folder: '01-方案文档',
+    role: '说明',
+    roleProvenance: '来自路径',
+    topics: [],
+    current_revision_id: pdfRev.revision_id,
+    revisions: [pdfRev],
+    coverage: 'full_text',
+    pdfStatus: 'page_indexed',
+    pdfStatusReason: '已按页抽取',
+  };
+  const pdfReaderHtml = renderToStaticMarkup(
+    React.createElement(ReaderView, {
+      files: [pdfFile],
+      activeFile: pdfFile,
+      pinnedRevisionId: pdfRev.revision_id,
+      onChangeRevision: () => {},
+      subMode: 'read',
+      onChangeSubMode: () => {},
+      readingState: undefined,
+      onMarkReadHere: () => {},
+      onMarkFullyRead: () => {},
+      onScrollProgress: () => {},
+      onToggleBookmark: () => {},
+      onNavigateLinkedFile: () => {},
+      returnBreadcrumb: null,
+      onFollowReturnBreadcrumb: () => {},
+      decisions: [],
+      relations: [],
+      onSelectDecision: () => {},
+      onAddEvidencePointer: () => {},
+      indexGeneration: 1,
+    })
+  );
+  assert.ok(!pdfReaderHtml.includes('阅读能力：内嵌阅读器可用'), 'PDF 画布不得展示内部能力清单文案');
+  assert.ok(!pdfReaderHtml.includes('检索索引状态'), 'PDF 索引正常态不展示技术索引状态条');
+  assert.ok(!pdfReaderHtml.includes('真实 PDF 原页 · 按版本'), 'PDF 卡片头部不再泄露内部 revision_id');
+
+  // 3. TopHeader：主导航 Tab 不再常驻 20272 / 5588 超大数字；常态同步走静默图标；空证据篮走纯图标
+  const calmHeaderHtml = renderToStaticMarkup(
+    React.createElement(TopHeader, {
+      activeTab: 'library',
+      onSelectTab: () => {},
+      searchQuery: '',
+      onSearchChange: () => {},
+      searchHits: [],
+      onSelectSearchHit: () => {},
+      unreadFilesCount: 4981,
+      contextBasketCount: 0,
+      eventCount: 20272,
+      decisions: [],
+      onOpenDecision: () => {},
+      config: {
+        ...makeConfig(),
+        enumSnapshot: { ...makeConfig().enumSnapshot, totalCount: 5588 },
+      },
+      dataSource: 'real',
+      scanSummary: '',
+      dataError: null,
+      files: [],
+      sidebarFilters: { quickScope: 'all', folder: 'all', format: 'all', role: 'all', topic: 'all' },
+      onUpdateSidebarFilters: () => {},
+      onResetSidebarFilters: () => {},
+      libraryMode: 'read',
+      onLibraryModeChange: () => {},
+      onOpenSettings: () => {},
+      onOpenMcpConsole: () => {},
+      onOpenContextDrawer: () => {},
+      readingIslandFiles: [svgFile],
+      readingStates: {},
+      onOpenDocFromIsland: () => {},
+    })
+  );
+  assert.ok(!calmHeaderHtml.includes('>20272<'), '顶栏全景溯源 Tab 不再常驻超大事件数');
+  assert.ok(!calmHeaderHtml.includes('>5588<'), '顶栏知识资产库 Tab 不再重复展示总文档数');
+  assert.ok(calmHeaderHtml.includes('class="sr-only">已同步</span>'), '常态已同步收拢为静默图标（语义保留给读屏）');
+  assert.ok(calmHeaderHtml.includes('class="sr-only">证据篮</span>'), '空证据篮收拢为静默图标，有收集项时再展文字与角标');
+  assert.ok(!calmHeaderHtml.includes('data-island-ring'), '顶栏阅读抽屉入口收拢为单图标，不再渲染三枚彩色圆环');
+
+  // 4. HTML / Office 预览：技术元数据条沉底，不再在阅读器顶栏与内容工具栏之间叠出第三条横栏
+  const htmlRev: Revision = {
+    ...svgRev,
+    revision_id: 'rev_html_p6',
+    file_id: 'f_html_p6',
+    markdownContent: '<html><body><h1>Hello</h1></body></html>',
+  };
+  const htmlFile: FileRecord = {
+    ...svgFile,
+    file_id: 'f_html_p6',
+    relative_path: '01-方案文档/demo.html',
+    title: 'demo.html',
+    format: 'html',
+    current_revision_id: htmlRev.revision_id,
+    revisions: [htmlRev],
+  };
+  const htmlPreview = renderToStaticMarkup(
+    React.createElement(NonLegacyFilePreviewPanel, {
+      activeFile: htmlFile,
+      currentRev: htmlRev,
+      paperLightMode: true,
+      indexGeneration: 1,
+    })
+  );
+  const htmlReaderIdx = htmlPreview.indexOf('data-html-reader=""');
+  const htmlFooterIdx = htmlPreview.indexOf('data-preview-compact-bar=""');
+  assert.ok(htmlReaderIdx > 0 && htmlFooterIdx > htmlReaderIdx, 'HTML 预览主内容应置顶，技术脚标沉底');
+  assert.ok(!htmlPreview.includes('离线沙盒隔离</span>'), '常态 HTML 预览不常驻绿底「离线沙盒隔离」胶囊');
+});
+
 

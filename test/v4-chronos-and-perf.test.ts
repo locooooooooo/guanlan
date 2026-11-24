@@ -535,8 +535,38 @@ test('V11 · mergeIncrementalEventPage 与 AppBanners「静默并入（保持当
   assert.equal(mergedPage.next_cursor, 'cursor_page_2', '必须保留原有分页游标，绝不丢滚动/翻页位置');
   assert.equal(mergedPage.total_in_window, 121);
 
-  // AppBanners 同时渲染「静默并入（保持当前位置）」与「刷新进入新窗口」
+  // AppBanners 仅在全景溯源页签渲染新事件双按钮条（阅读文档/首页不打断）
   const bannerHtml = renderToStaticMarkup(
+    React.createElement(AppBanners, {
+      ctx: {
+        rescanState: 'idle',
+        rescanError: '',
+        handleRescan: async () => {},
+        l4aProgress: null,
+        hitlClearedAt: null,
+        deliveredInitiative: null,
+        deliveredInitiatives: [],
+        initiativeLifecycle: null,
+        runInitiativeLifecycle: async () => {},
+        activeInitiative: null,
+        changeNotice: { count: 3, at: '2026-11-23T11:00:00+08:00' },
+        refreshEvents: async () => {},
+        silentMergeNewEvents: async () => {},
+        silentMergingEvents: false,
+        dataSource: 'real',
+        files: [],
+        dataError: '',
+        activeTab: 'panorama',
+      } as never,
+    })
+  );
+  assert.ok(bannerHtml.includes('data-silent-merge-events=""'), '必须提供静默并入按钮');
+  assert.ok(bannerHtml.includes('静默并入（保持当前位置）'));
+  assert.ok(bannerHtml.includes('data-refresh-events-window=""'), '必须保留刷新进入新窗口原契约');
+  assert.ok(bannerHtml.includes('刷新进入新窗口'));
+
+  // 知识资产库阅读态不得弹出新事件通栏条打断阅读
+  const libraryBannerHtml = renderToStaticMarkup(
     React.createElement(AppBanners, {
       ctx: {
         rescanState: 'idle',
@@ -560,10 +590,7 @@ test('V11 · mergeIncrementalEventPage 与 AppBanners「静默并入（保持当
       } as never,
     })
   );
-  assert.ok(bannerHtml.includes('data-silent-merge-events=""'), '必须提供静默并入按钮');
-  assert.ok(bannerHtml.includes('静默并入（保持当前位置）'));
-  assert.ok(bannerHtml.includes('data-refresh-events-window=""'), '必须保留刷新进入新窗口原契约');
-  assert.ok(bannerHtml.includes('刷新进入新窗口'));
+  assert.ok(!libraryBannerHtml.includes('data-silent-merge-events=""'), '阅读文档时不弹出事件分页通栏横幅');
 });
 
 // ===== V11 · 5,500 份虚拟窗口切片索引边界、渲染预算与日历多目录行护栏 =====

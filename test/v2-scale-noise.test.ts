@@ -247,7 +247,7 @@ test('V04 · LeftSidebar 渲染 coss SegmentedControl / ScrollArea / 确立已�
       files,
       readingStates,
       activeFileId: 'f1',
-      filters: { quickScope: 'all', folder: 'all', format: 'all', role: 'all', topic: 'all' },
+      filters: { quickScope: 'unread', folder: 'all', format: 'all', role: 'all', topic: 'all' },
       onUpdateFilters: () => {},
       onResetFilters: () => {},
       onOpenFileToRead: () => {},
@@ -257,7 +257,7 @@ test('V04 · LeftSidebar 渲染 coss SegmentedControl / ScrollArea / 确立已�
 
   assert.ok(sidebarHtml.includes('data-slot="segmented-control"'), '顶栏范围筛选应换装 coss SegmentedControl');
   assert.ok(sidebarHtml.includes('data-slot="scroll-area"'), '目录树应接入 coss ScrollArea');
-  assert.ok(sidebarHtml.includes('data-mark-baseline-trigger=""'), '存在未读时应展示确立已读基线入口');
+  assert.ok(sidebarHtml.includes('data-mark-baseline-trigger=""'), '未读筛选态下存在未读时应展示确立已读基线入口');
   assert.ok(
     !sidebarHtml.includes('data-continue-reading-row="f2"'),
     '纯 baselineOnly 文件不得污染「继续阅读」区'
@@ -732,9 +732,8 @@ test('V06 · UI 渲染验收：左栏 InputGroup 快筛/三态排序/静默徽�
     })
   );
   assert.ok(sidebarHtml.includes('data-sidebar-quick-filter'), '左栏应渲染 InputGroup 即时目录/文件快筛');
-  assert.ok(sidebarHtml.includes('data-sidebar-sort-group'), '左栏应渲染三态排序 Group 控件');
-  assert.ok(sidebarHtml.includes('data-sort-option="active7d"'), '应包含「近7日活跃」排序切换');
-  assert.ok(sidebarHtml.includes('data-sort-option="unread"'), '应包含「未读数」排序切换');
+  assert.ok(sidebarHtml.includes('data-sidebar-sort-group'), '左栏快筛行内应包含紧凑三态排序切换钮');
+  assert.ok(sidebarHtml.includes('data-sidebar-sort-mode="name"'), '默认按名称排序，点击可循环切换近7日活跃与未读数');
   assert.ok(sidebarHtml.includes('data-folder-muted="true"'), '已静默目录在左栏应以温和灰阶标注');
   assert.ok(sidebarHtml.includes('已静默'), '左栏应显示「已静默」徽标');
   assert.ok(sidebarHtml.includes('data-muted-folders-pill="1"'), '左栏底缘应渲染「已静默 1 个目录」轻胶囊');

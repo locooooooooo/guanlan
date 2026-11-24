@@ -249,21 +249,20 @@ export const HtmlReaderView: React.FC<HtmlReaderViewProps> = ({
           {viewMode === 'render' && (
             <>
               <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] ${
+                className={`inline-flex items-center justify-center w-6 h-6 rounded-md ${
                   allowExternalHttps
-                    ? 'border-[#D99B52]/45 bg-[#D99B52]/10 text-[#A8762B]'
-                    : 'border-[#2E8B57]/35 bg-[#2E8B57]/10 text-[#226B42]'
+                    ? 'text-[#A8762B] bg-[#D99B52]/12'
+                    : mutedCls
                 }`}
-                title="独立不透明沙盒源，与宿主完全隔离，无法访问主窗口、Tauri 桥、本地存储或本机 API"
-              >
-                <ShieldCheck className="w-3 h-3 shrink-0" />
-                <span>
-                  {!allowScripts
-                    ? '纯静态隔离'
+                title={
+                  !allowScripts
+                    ? '纯静态隔离：已禁用脚本，与宿主完全隔离'
                     : allowExternalHttps
-                      ? '沙盒 · 已放行 HTTPS'
-                      : '离线沙盒隔离'}
-                </span>
+                      ? '沙盒渲染：已放行 HTTPS 外链资源'
+                      : '离线沙盒隔离：已屏蔽外部网络与本机 API'
+                }
+              >
+                <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
               </span>
 
               {prepared && prepared.features.externalUrls.length > 0 && !allowExternalHttps && (

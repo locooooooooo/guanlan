@@ -354,6 +354,14 @@ export function AppLibraryStage({ ctx }: { ctx: WorkspaceStoreCtx }) {
               onZenModeChange={handleZenModeChange}
               // U05 · 迷你版本轴「进入版本时光机 →」：只做视图跳转
               onOpenTimeMachine={handleOpenTimeMachine}
+              readingNotice={ctx.changeNotice}
+              onSilentMergeNotice={() => {
+                void ctx.silentMergeNewEvents();
+              }}
+              silentMergingNotice={ctx.silentMergingEvents}
+              onRefreshNoticeWindow={() => {
+                void ctx.refreshEvents();
+              }}
               indexGeneration={config.runtimeStatus.indexGeneration}
               stateOverview={stateOverview}
               systemActions={systemActions}

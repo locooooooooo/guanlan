@@ -128,7 +128,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
       {/* 1. Return Breadcrumb & Non-Intrusive New Version Alert Banner（浮动 Chrome） */}
       <ReaderTopBannerSection ctx={ctx} />
 
-      {/* 2. 紧凑双层文件头（浮动 Chrome） */}
+      {/* 2. 紧凑单行文件头（浮动 Chrome） */}
       <ReaderFileHeaderSection ctx={ctx} />
 
       {/* 2.5 U05 · 顶部 2px 琉璃阅读进度光条（紧贴顶栏下沿）：

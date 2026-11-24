@@ -196,6 +196,14 @@ export interface ReaderViewProps {
   onZenModeChange?: (zenMode: boolean) => void;
   /** U05：直达「版本时光机」（U04 画布）——只做视图跳转，不改任何只读语义。 */
   onOpenTimeMachine?: () => void;
+  /**
+   * 阅读中的新事件提示。并入文件头指挥条，不再另起通栏。
+   * 缺省不渲染；暂收状态由文件头自己记住，不回写全景页的横幅。
+   */
+  readingNotice?: { count: number; at: string } | null;
+  onSilentMergeNotice?: () => void;
+  silentMergingNotice?: boolean;
+  onRefreshNoticeWindow?: () => void;
   /** 决策回执 T3（可选）：把已勾选决策/填空加入证据篮。 */
   onAddDecisionToBasket?: (payload: import('./readerDecisionModel').DecisionReceiptBasketPayload) => void;
   /** Inline 拍板闭环（PRD 3.3 / 方案 F5）：拍板回写成功后回调。 */
@@ -250,6 +258,10 @@ export function useReaderController({
   // U05：专注纸面（Zen）状态通知 + 直达版本时光机（可选；未传则对应入口零动作）
   onZenModeChange,
   onOpenTimeMachine,
+  readingNotice = null,
+  onSilentMergeNotice,
+  silentMergingNotice = false,
+  onRefreshNoticeWindow,
   // 决策回执 T3：证据篮回调可选——未传只隐藏「加入证据篮」按钮，其余功能完整
   onAddDecisionToBasket,
   // Inline 拍板闭环（F5）：回调可选——未传只更新本组件内状态，不炸
@@ -1831,6 +1843,10 @@ export function useReaderController({
     compareMiniVersion,
     canOpenTimeMachine: canOpenTimeMachineNow,
     onOpenTimeMachine: openVersionTimeMachine,
+    readingNotice,
+    onSilentMergeNotice,
+    silentMergingNotice,
+    onRefreshNoticeWindow,
     customFromRevId,
     setCustomFromRevId,
     customToRevId,

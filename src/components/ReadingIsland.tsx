@@ -86,7 +86,7 @@ export function IslandRing({
   if (compact) {
     return (
       <div
-        className="inline-flex items-center gap-1"
+        className="inline-flex items-center"
         data-island-ring={label}
         role="img"
         aria-label={aria}
@@ -123,7 +123,7 @@ export function IslandRing({
             {icon}
           </div>
         </div>
-        <span className="text-[11px] leading-none font-mono tabular-nums text-muted-foreground group-hover/island-pill:text-foreground">
+        <span className="sr-only">
           {percent}%
         </span>
       </div>
@@ -491,7 +491,7 @@ export function ReadingIslandPanel({
             }`}
           >
             <div
-              className="glx-read-meter-fill h-full w-full rounded-full bg-gradient-to-r from-[color:var(--status-green)] to-[color:var(--stage-ink-deliver)] dark:from-[color:var(--success)] dark:to-[color:var(--success-foreground)]"
+              className="glx-read-meter-fill h-full w-full rounded-full bg-[color:var(--status-green)] dark:bg-[color:var(--success)]"
               style={{ transform: `scaleX(${readRatio})` }}
             />
           </div>
@@ -614,41 +614,52 @@ export default function ReadingIsland({
         data-island-pill=""
         aria-expanded={expanded}
         aria-label={expanded ? '收起阅读与存档抽屉' : '打开阅读与存档抽屉'}
-        title={`已读 ${stats.read} · 未读 ${stats.unread} · 已落盘 ${stats.persisted} / 共 ${stats.total} 份`}
+        title={`阅读与存档 · 已读 ${stats.read} · 未读 ${stats.unread} · 已落盘 ${stats.persisted} / 共 ${stats.total} 份`}
         onClick={() => setExpanded((v) => !v)}
         className={
           compact
-            ? 'group/island-pill relative inline-flex h-7 items-center gap-2 rounded-lg border border-input bg-popover not-dark:bg-clip-padding px-2 text-foreground shadow-xs transition-colors duration-[var(--dur-1)] motion-reduce:transition-none before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_rgba(0,0,0,0.04)] hover:bg-accent/60 dark:bg-input/35 dark:hover:bg-input/60 dark:before:shadow-[0_-1px_rgba(255,255,255,0.06)] cursor-pointer'
+            ? 'group/island-pill relative inline-flex h-7 w-7 items-center justify-center rounded-md text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] transition-colors duration-[var(--dur-1)] motion-reduce:transition-none cursor-pointer'
             : 'group/island-pill inline-flex items-center gap-3 rounded-xl border border-input bg-popover not-dark:bg-clip-padding px-3 py-2 shadow-xs hover:bg-accent/50 transition-colors duration-[var(--dur-1)] motion-reduce:transition-none cursor-pointer'
         }
       >
-        <IslandRing
-          compact={compact}
-          label="已读"
-          percent={islandPercent(stats.read, stats.total)}
-          count={stats.read}
-          total={stats.total}
-          color={ISLAND_STATUS_COLORS.read}
-          icon={<Check className="w-3.5 h-3.5" />}
-        />
-        <IslandRing
-          compact={compact}
-          label="未读"
-          percent={islandPercent(stats.unread, stats.total)}
-          count={stats.unread}
-          total={stats.total}
-          color={ISLAND_STATUS_COLORS.unread}
-          icon={<BookOpen className="w-3.5 h-3.5" />}
-        />
-        <IslandRing
-          compact={compact}
-          label="已落盘"
-          percent={islandPercent(stats.persisted, stats.total)}
-          count={stats.persisted}
-          total={stats.total}
-          color={ISLAND_STATUS_COLORS.persisted}
-          icon={<Archive className="w-3.5 h-3.5" />}
-        />
+        {compact ? (
+          <>
+            <BookOpen className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="sr-only">
+              已读 {islandPercent(stats.read, stats.total)}% · 未读 {stats.unread} 份 · 已落盘 {stats.persisted}/{stats.total}
+            </span>
+          </>
+        ) : (
+          <>
+            <IslandRing
+              compact={false}
+              label="已读"
+              percent={islandPercent(stats.read, stats.total)}
+              count={stats.read}
+              total={stats.total}
+              color={ISLAND_STATUS_COLORS.read}
+              icon={<Check className="w-3.5 h-3.5" />}
+            />
+            <IslandRing
+              compact={false}
+              label="未读"
+              percent={islandPercent(stats.unread, stats.total)}
+              count={stats.unread}
+              total={stats.total}
+              color={ISLAND_STATUS_COLORS.unread}
+              icon={<BookOpen className="w-3.5 h-3.5" />}
+            />
+            <IslandRing
+              compact={false}
+              label="已落盘"
+              percent={islandPercent(stats.persisted, stats.total)}
+              count={stats.persisted}
+              total={stats.total}
+              color={ISLAND_STATUS_COLORS.persisted}
+              icon={<Archive className="w-3.5 h-3.5" />}
+            />
+          </>
+        )}
       </button>
 
       {expanded && (

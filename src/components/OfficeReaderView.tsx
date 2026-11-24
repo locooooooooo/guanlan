@@ -378,9 +378,9 @@ export const OfficeReaderView: React.FC<OfficeReaderViewProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <FileText className="w-4 h-4 text-[color:var(--accent-iris)]" />
-              <span className="font-semibold">Word 结构化只读视图</span>
-              <span className={`px-2 py-0.5 rounded-md border font-mono text-[11px] tabular-nums ${chipBgCls}`}>
-                {docx.headings.length} 标题 · {docx.total_paragraphs} 段落 · {docx.comments.length} 批注
+              <span className={`font-mono text-[11px] tabular-nums ${mutedCls}`}>
+                {docx.headings.length} 标题 · {docx.total_paragraphs} 段落
+                {docx.comments.length > 0 ? ` · ${docx.comments.length} 批注` : ''}
               </span>
               {(docx.tracked_changes.insertions > 0 || docx.tracked_changes.deletions > 0) && (
                 <button
@@ -485,7 +485,7 @@ export const OfficeReaderView: React.FC<OfficeReaderViewProps> = ({
                           )}
                           <span>{p.text}</span>
                         </div>
-                        <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                        <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity">
                           <button
                             type="button"
                             onClick={(e) => {

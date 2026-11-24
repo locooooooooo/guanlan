@@ -183,11 +183,29 @@ function islandFixture(): { files: FileRecord[]; states: Record<string, ReadingS
   return { files: [readDoc, neverDoc, evictedDoc], states };
 }
 
-test('悬浮岛收起态：恰好三个进度环，百分比与计数一致，默认不展开面板', () => {
+test('悬浮岛收起态：顶栏走极简静默单图标；inline 形态渲染三环进度，默认不展开面板', () => {
   const { files, states } = islandFixture();
-  const html = stripComments(
+  const headerHtml = stripComments(
     renderToString(
       createElement(ReadingIsland, {
+        placement: 'header',
+        files,
+        readingStates: states,
+        quota: { usedTotalMiB: 12, maxTotalMiB: 50 } as WorkspaceConfig['quota'],
+        onOpenDoc: () => {},
+      })
+    )
+  );
+  assert.ok(headerHtml.includes('data-island-pill=""'), '顶栏触发器在位');
+  assert.equal(headerHtml.split('data-island-ring').length - 1, 0, '顶栏态不再渲染三枚彩色小圆环');
+  assert.ok(headerHtml.includes('已读 1 · 未读 2 · 已落盘 2 / 共 3 份'), '顶栏 title 完整透出三项真实计数');
+  assert.ok(headerHtml.includes('aria-expanded="false"'), '收起态 pill 声明未展开');
+  assert.equal(headerHtml.split('data-island-panel').length - 1, 0, '收起态不渲染面板');
+
+  const inlineHtml = stripComments(
+    renderToString(
+      createElement(ReadingIsland, {
+        placement: 'inline',
         files,
         readingStates: states,
         quota: { usedTotalMiB: 12, maxTotalMiB: 50 } as WorkspaceConfig['quota'],
@@ -196,19 +214,17 @@ test('悬浮岛收起态：恰好三个进度环，百分比与计数一致，�
     )
   );
 
-  assert.equal(html.split('data-island-ring').length - 1, 3, '已读/未读/已落盘 三环');
-  assert.ok(html.includes('data-island-ring="已读"'), '环语义标记齐全');
-  assert.ok(html.includes('data-island-ring="未读"'));
-  assert.ok(html.includes('data-island-ring="已落盘"'));
-  assert.ok(html.includes('>33%</span>'), '已读 1/3 → 33%');
-  assert.ok(html.includes('>67%</span>'), '未读 2/3 → 67%');
+  assert.equal(inlineHtml.split('data-island-ring').length - 1, 3, '已读/未读/已落盘 三环');
+  assert.ok(inlineHtml.includes('data-island-ring="已读"'), '环语义标记齐全');
+  assert.ok(inlineHtml.includes('data-island-ring="未读"'));
+  assert.ok(inlineHtml.includes('data-island-ring="已落盘"'));
+  assert.ok(inlineHtml.includes('>33%</span>'), '已读 1/3 → 33%');
+  assert.ok(inlineHtml.includes('>67%</span>'), '未读 2/3 → 67%');
   assert.ok(
-    html.includes('aria-label="已落盘 2/3 · 67%"'),
+    inlineHtml.includes('aria-label="已落盘 2/3 · 67%"'),
     '落盘环按快照可用性计数（1 份被配额淘汰 → 2/3）'
   );
-  assert.ok(html.includes('aria-label="已读 1/3 · 33%"'), 'aria 带真实计数（虚报不可发生）');
-  assert.ok(html.includes('aria-expanded="false"'), '收起态 pill 声明未展开');
-  assert.equal(html.split('data-island-panel').length - 1, 0, '收起态不渲染面板');
+  assert.ok(inlineHtml.includes('aria-label="已读 1/3 · 33%"'), 'aria 带真实计数（虚报不可发生）');
 });
 
 test('悬浮岛展开面板：分组清单 + 配额水位 + 落盘徽标，未读文案与 GL-01 同源', () => {
