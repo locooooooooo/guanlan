@@ -3,6 +3,11 @@ name: ci
 # 前端（TypeScript + 单测 + Vite 构建）+ Rust（core/service/desktop）+ 真实服务冒烟与 Node↔Rust 对拍。
 # Windows 作业编译桌面壳与安装包配置；smoke 作业从干净 checkout 生成夹具后运行 release 二进制。
 # 本地等价命令：npm run gate（frontend 与 rust-desktop 作业），npm run gate -- --full（再加 smoke 作业）。
+#
+# action 的版本：取当前主版本，并且必须是 runs.using 为 node24 的版本。GitHub 已于 2026-09-23 把
+# Node 20 从托管 runner 上移除，actions/checkout、setup-node、upload-artifact、download-artifact 的
+# v4 都是 node20，会直接失败。再升大版本之前，先看新版本的 action.yml：using 是什么，自己用到的
+# 输入还在不在。Swatinem/rust-cache@v2 已是 node24，dtolnay/rust-toolchain 是组合 action。
 
 on:
   push:
@@ -25,8 +30,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -46,7 +51,7 @@ jobs:
       run:
         working-directory: native
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # 工具链版本以 native/rust-toolchain.toml 为准。dtolnay/rust-toolchain@stable 只装最新
       # stable，并不读这个文件；这里先把 channel 解析出来再显式传入，保证「本地通过 = CI 通过」。
       - name: Resolve the pinned toolchain
@@ -76,7 +81,7 @@ jobs:
       run:
         working-directory: native
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Resolve the pinned toolchain
         id: toolchain
         shell: bash
@@ -89,7 +94,7 @@ jobs:
         with:
           workspaces: native
       # 安装包配置校验脚本用 node 运行；显式钉住 Node 版本，不依赖 runner 预装。
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: fmt (all)
@@ -112,7 +117,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Resolve the pinned toolchain
         id: toolchain
         shell: bash
@@ -123,7 +128,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: native
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm

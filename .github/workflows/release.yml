@@ -9,6 +9,7 @@ name: release
 # 构建复用 scripts/build-windows-installer.mjs，和本地构建是同一个脚本。
 # 更新说明取上一个标签以来在 main 上的提交标题，所以提交标题要写用户看得到的变化
 # （docs/code-standards.md 的「提交」一节）。
+# action 的版本要求同 ci.yml：只用 runs.using 为 node24 的版本，Node 20 已从托管 runner 上移除。
 
 on:
   push:
@@ -33,7 +34,7 @@ jobs:
     outputs:
       version: ${{ steps.meta.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # 预检要判断标签是否在 main 上，更新说明要取上一个标签以来的提交：需要完整历史与标签
           fetch-depth: 0
@@ -52,7 +53,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: native
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -89,7 +90,7 @@ jobs:
         env:
           VERSION: ${{ steps.meta.outputs.version }}
         run: node scripts/release-preflight.mjs --assets dist-release
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: guanlan-${{ steps.meta.outputs.version }}-windows
           path: dist-release
@@ -105,13 +106,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: guanlan-${{ needs.build.outputs.version }}-windows
           path: dist-release

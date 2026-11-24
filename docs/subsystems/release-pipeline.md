@@ -117,6 +117,7 @@ Rust 侧没有嵌入提交哈希。`env!("CARGO_PKG_VERSION")` 只在 MCP 代理
 
 - **工作流只有读权限**（`permissions: contents: read`）。需要写权限的发布流程在它自己的工作流里申请。
 - **`main` 上的运行不会被取消。** 并发组按分支划分，PR 的运行可以被同一个 PR 的下一次推送取代，`main` 上的必须跑完，因为发布以一次完整的绿色运行为准。
+- **action 只用基于 Node 24 的版本。** GitHub 在 2026-09-23 把 Node 20 从托管 runner 上移除，声明 `runs.using: node20` 的 action 从那以后无法运行。`actions/checkout`、`setup-node`、`upload-artifact` 的 `v4` 与 `download-artifact` 的 `v4` 都是 node20，现在用的是 `checkout@v7`、`setup-node@v7`、`upload-artifact@v7`、`download-artifact@v8`。再升大版本之前，先看新版本的 `action.yml`：`using` 是什么，自己用到的输入还在不在。
 - **工具链以 `rust-toolchain.toml` 为准。** `dtolnay/rust-toolchain@stable` 只装最新 stable，并不读这个文件。CI 先解析出 `channel`，再显式传给 `dtolnay/rust-toolchain@master`。改工具链版本只改那一个文件。
 - **每个 cargo 步骤有自己的超时**，卡住的步骤不会占满整个作业的时限。
 - `smoke` 作业的注释里说明：夹具、期望结果与身份向量都在 `.gitignore` 里，从干净 checkout 用 `seed-fixture.ts` 重建。
