@@ -311,7 +311,9 @@ export function projectWorkspace(
     quota: {
       maxTotalMiB: 500,
       usedTotalMiB: Number((blobTotals.bytes / 1024 / 1024).toFixed(1)),
-      maxSingleBinaryMiB: 20,
+      // 与契约 contract-storage.md §6 的第二档一致（默认 50 MiB）。冒烟拿这个投影值比对
+      // Rust 服务的 bootstrap；写成 20 时冒烟的 bootstrap 一项会红。
+      maxSingleBinaryMiB: 50,
       protectedSnapshotsCount: blobTotals.n,
       evictedSnapshotsCount: 0,
     },
