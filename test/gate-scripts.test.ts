@@ -10,6 +10,7 @@ import {
   describeResult,
   envForStep,
   isKnownBuildFlake,
+  recordCommand,
 } from '../scripts/gate.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -65,8 +66,14 @@ describe('统一门禁脚本：从输出里统计测试数', () => {
   });
 });
 
-describe('统一门禁脚本：一步结果的描述', () => {
-  const step = { label: 'cargo test --workspace --locked', tests: 'rust' };
+describe('统一门禁脚本：运行记录里的命令', () => {
+  it('全量要写成 -- --full：`npm run gate --full` 会让 npm 把它当成自己的参数吞掉', () => {
+    assert.equal(recordCommand(false), 'npm run gate');
+    assert.equal(recordCommand(true), 'npm run gate -- --full');
+  });
+});
+
+describe('统一门禁脚本：一步结果的描述', () => {  const step = { label: 'cargo test --workspace --locked', tests: 'rust' };
 
   it('通过时写明测试数', () => {
     const verdict = describeResult({ code: 0, output: 'test result: ok. 5 passed; 0 failed; 0 ignored;' }, step);

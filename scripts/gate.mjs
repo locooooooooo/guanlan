@@ -135,6 +135,15 @@ export function envForStep(step, { cargoFile, sandboxDir, skipLogFile, base = pr
   return env;
 }
 
+/**
+ * 运行记录第一行里的命令。全量时必须写 `-- --full`：`npm run gate --full` 会让 npm 把
+ * `--full` 当成自己的参数吞掉，照抄的人实际只跑了默认的七步。
+ * @param {boolean} full
+ */
+export function recordCommand(full) {
+  return full ? 'npm run gate -- --full' : 'npm run gate';
+}
+
 // ---------- 主流程 ----------
 
 function isFile(candidate) {
@@ -403,7 +412,7 @@ async function main() {
   console.log('运行记录（可以贴进提交正文的「运行」一节）：');
   console.log('```');
   const conditions = [
-    `npm run gate${full ? ' --full' : ''}`,
+    recordCommand(full),
     head ? `HEAD ${head}${dirty ? ' 加未提交的改动' : ''}` : null,
     `Node ${process.version}`,
     toolchain ? toolchain.replace(/ \(.*/, '') : null,
