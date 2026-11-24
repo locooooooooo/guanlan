@@ -31,7 +31,7 @@
 | 测试的名字要与它守的东西一致。 | 名字、断言消息、标题里写的数字，都要和断言一致。 | **本仓事故**。MCP 代理的 `tools/list` 测试原名里写着「四个」，断言的一直是 6 个工具。`v12-release-parity.test.ts` 里一个用例标题写「耗时 < 40ms」，断言的是 `dt < 120`。 |
 | 在 `main` 上失败的检查是现在就要修的问题。 | 「在 main 上也一样失败」不是基线，「整套跑才失败、单跑能过」也不是。修到根上，或者开一个写明原因的 Issue。 | **本仓现状**。建立这套规范时的基线跑了一次：`npm run build` 首跑在 `@tailwindcss/oxide` 的 `boundary.rs` panic，重跑三次都通过。这是一个已知的偶发失败，尚未定位。 |
 | 被跳过的测试不算通过。 | 跑完看输出里有没有 `[skip]`、`ignored` 或直接返回的用例。 | **本仓事故**。`identity_vectors_from_fixture` 在没有 `identity-vectors.json` 时打印 `[skip]` 并返回，所以干净 checkout 上的 `cargo test` 从没验证过夹具身份。`domain/triage/tests.rs` 里两个对拍测试因为依赖的 JS 源文件不在仓库里，从不执行，其中一个连提示都不打印。 |
-| 测试不碰真实机器。 | 测试用临时目录、临时数据目录。绝不读写用户真实的数据目录、配置或工作区。 | **本仓事故**。不设 `GUANLAN_DATA_DIR` 时 `cargo test --workspace` 会写 `%LOCALAPPDATA%\Guanlan\workspaces\`，和已安装的观澜用的是同一个目录。项目表与 `desktop.json` 已经有 `cfg(test)` 或显式临时路径的隔离，工作区数据目录还没有。`scripts/seed-volume.ts` 与 `scripts/v04-reconcile-once.ts` 会直接写真实数据目录。 |
+| 测试不碰真实机器。 | 测试用临时目录、临时数据目录。绝不读写用户真实的数据目录、配置或工作区。 | **本仓事故**。不设 `GUANLAN_DATA_DIR` 时 `cargo test --workspace` 会写 `%LOCALAPPDATA%\Guanlan\workspaces\`，和已安装的观澜用的是同一个目录。项目表与 `desktop.json` 已经有 `cfg(test)` 或显式临时路径的隔离，工作区数据目录还没有。`npm run gate` 会替 Rust 步骤设好临时的 `GUANLAN_DATA_DIR`；直接跑 `cargo test` 时要自己设。`scripts/seed-volume.ts` 与 `scripts/v04-reconcile-once.ts` 会直接写真实数据目录。 |
 | 测试启动的东西要随测试结束。 | 起的进程、监听、服务、常连接都要在测试返回前停掉或等它结束。 | **本仓事故**。`test/workspace-client-v1.test.ts`：fetch 默认 keep-alive，「`server.close()` 会等常连接而挂起，必须显式断掉全部连接再等关闭回调」。 |
 | 计时测试两边都要留余量。 | 不用负载很重的 runner 可能超过的墙钟时间做断言；复现计时失败要靠注入延迟，不靠反复重跑。 | **本仓现状**。桌面壳测试断言切回已建库工作区小于 300 毫秒、导入出现在时间线小于 500 毫秒，随 Windows CI 一起跑。同一条验证命令在本机两次运行里一次 5 秒、一次 75 秒。 |
 | 记录要等运行结束再写。 | 提交说明里写已经结束的运行的结果。「推的时候还在跑」不是记录，每个红灯都要有对应的 Issue。 | **本仓事故**。`test/calfix-01-calendar-fixes.test.ts` 文件头：「未运行 npm test/lint/build（并行施工期纪律，总装后统一门禁实测裁决）」。`test/tl-cal-02-window.test.ts`：「本轮按角色约束**未执行**测试命令」。 |
@@ -42,7 +42,15 @@
 
 1. **一个没有这个改动就会失败的测试。** 把旧代码放回去跑新测试，它必须以一个指名行为的真实失败告终。写明是哪个测试、报了什么。然后恢复改动，确认它通过。
 2. **在沙箱里跑。** Rust 测试前把 `GUANLAN_DATA_DIR` 指到一个临时目录，跑完删掉。不要在有真实工作区数据的目录上跑 `scripts/seed-volume.ts` 或 `scripts/v04-reconcile-once.ts`。
-3. **构建与测试套件。** `cargo` 必须在 `native/` 下执行，才会用上 `rust-toolchain.toml` 锁定的工具链。`GUANLAN_DATA_DIR` 用 Node 建一个临时目录，三个平台拿到的都是原生路径：
+3. **构建与测试套件。** 一条命令跑完：
+
+   ```sh
+   npm run gate
+   ```
+
+   它按 CI 的 `frontend` 与 `rust-desktop` 作业的顺序跑类型检查、前端单测、构建、安装包配置校验、`cargo fmt`、`cargo clippy`、`cargo test`，第一步失败就停，结束时打印一份运行记录，可以直接贴进提交正文。`npm run gate -- --full` 会再跑 release 构建、生成夹具、冒烟与对拍。它会替你做三件容易漏的事：`cargo` 一律在 `native/` 下执行（否则用不上锁定的工具链）；Rust 测试在临时的 `GUANLAN_DATA_DIR` 下跑（否则会写进已安装的观澜正在用的数据目录）；`cargo` 不在 PATH 上时自己去 `~/.cargo/bin` 找。
+
+   想手动跑，等价命令是：
 
    ```sh
    npm run lint && npm test && npm run build
@@ -54,7 +62,7 @@
    ```
 
    跑全量，不要只跑你改的包。仓库的守卫测试放在改动未必触及的地方：`npm test` 里有读 `tauri.conf.json`、`native/Cargo.toml`、`ci.yml` 并跑安装包脚本的用例，`http::tests::stubs_and_unknown_routes` 守着 501 桩的清单，`watcher` 的 `timing_constants_match_contract` 守着监听常量。用 `&&` 串命令，前一步失败就停。
-4. **动了身份公式、采集范围、对账判定或派生规则时，跑对拍与冒烟。** 这是「不生成第二套历史」唯一的硬保证：
+4. **动了身份公式、采集范围、对账判定或派生规则时，跑对拍与冒烟。** 这是「不生成第二套历史」唯一的硬保证。`npm run gate -- --full` 会跑下面这些，也可以手动执行：
 
    ```sh
    cd native && cargo build --release --locked -p guanlan-service && cd ..

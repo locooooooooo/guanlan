@@ -81,7 +81,7 @@ Rust 侧没有嵌入提交哈希。`env!("CARGO_PKG_VERSION")` 只在 MCP 代理
 - **每个 cargo 步骤有自己的超时**，卡住的步骤不会占满整个作业的时限。
 - `smoke` 作业的注释里说明：夹具、期望结果与身份向量都在 `.gitignore` 里，从干净 checkout 用 `seed-fixture.ts` 重建。
 
-CI 上**从不构建真正的安装包**，也不上传任何产物。
+CI 上**从不构建真正的安装包**，也不上传任何产物。本地的统一入口是 `npm run gate`，见下文「验证」。
 
 ## 约束
 
@@ -93,7 +93,10 @@ CI 上**从不构建真正的安装包**，也不上传任何产物。
 ## 验证
 
 ```sh
+npm run gate                                        # 对应 CI 的 frontend 与 rust-desktop 作业
+npm run gate -- --full                              # 再加 smoke 作业的几步，需要能做 release 构建
 node scripts/build-windows-installer.mjs --check-only
-npm test     # 含 V12 与 F03 的版本号与打包配置断言
 node native/crates/guanlan-desktop/gen-icon.mjs   # 只在改了图标样式时
 ```
+
+[`scripts/gate.mjs`](../../scripts/gate.mjs) 是本地的统一入口，步骤与 CI 的对应关系写在它的头注释里。

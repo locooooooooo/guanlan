@@ -10,6 +10,8 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test": "tsx --test --test-concurrency=4 \"test/*.test.ts\" \"src/utils/*.test.ts\" \"src/hooks/*.test.ts\"",
+    "gate": "node scripts/gate.mjs",
+    "gate:full": "node scripts/gate.mjs --full",
     "seed": "tsx scripts/seed-fixture.ts"
   },
   "dependencies": {

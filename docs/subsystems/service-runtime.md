@@ -91,4 +91,4 @@ cargo test --locked -p guanlan-service --lib -- background_index_false_keeps_rea
 cargo test --locked -p guanlan-service --test v03_l4a_and_decisions_ssot
 ```
 
-`cargo test` 在 `native/` 下执行才会用上 `rust-toolchain.toml` 锁定的工具链。这些测试会启动真实服务并写工作区数据目录；跑之前把 `GUANLAN_DATA_DIR` 指到临时目录，否则写的是本机真实的数据目录。
+`cargo test` 在 `native/` 下执行才会用上 `rust-toolchain.toml` 锁定的工具链。这些测试会启动真实服务并写工作区数据目录；跑之前把 `GUANLAN_DATA_DIR` 指到临时目录，否则写的是本机真实的数据目录。`npm run gate` 两件事都会替你做好。

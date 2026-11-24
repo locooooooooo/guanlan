@@ -2,7 +2,7 @@ name: ci
 
 # 前端（TypeScript + 单测 + Vite 构建）+ Rust（core/service/desktop）+ 真实服务冒烟与 Node↔Rust 对拍。
 # Windows 作业编译桌面壳与安装包配置；smoke 作业从干净 checkout 生成夹具后运行 release 二进制。
-# 本地等价命令见 docs/code-standards.md 的「验收标准」。
+# 本地等价命令：npm run gate（frontend 与 rust-desktop 作业），npm run gate -- --full（再加 smoke 作业）。
 
 on:
   push:
