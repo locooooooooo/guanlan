@@ -1,0 +1,112 @@
+<!-- reviewed-through: 7e0b5fa (2026-11-24) -->
+
+# 合并进来的工作给出的教训
+
+观澜的代码有很大一部分由智能体编写，再由人或智能体评审后合并。合并进来的工作会出问题：同一个 bug 修了又修，验证做得太薄，文档写了没人跑。这里留下从这些问题里学到的东西。改代码之前先读。每条教训先写规则，再写为什么，最后是证据。一条教训在 3 个不同的日子被评审发现，就并入 [docs/code-standards.md](docs/code-standards.md)。
+
+**第一批内容从哪里来。** 仓库以单个压缩提交开源（`7e0b5fa`），更早的提交历史不在仓库里。所以下面多数教训不是从逐日复盘里来的，而是**回填**的：从源码注释和回归测试里留存的记录还原出来，包括注释里引用的 issue #4 到 #39，以及以修复命名的测试文件。每条都指向仓库里现在还读得到的证据，标注了「来源」。回填的教训只代表「出过这个问题」，不代表「评审见过几次」。从这之后，新的教训来自对合并提交的复盘，会写明是哪次。
+
+## 读不全的时候
+
+- **读不到、读不全，就保留原状并报告，绝不当成「没有」。**
+  - 采集器对读不到的目录「保留原有记录，报告问题，不判定缺失」；触到文件数或深度上限时标记范围不完整，这一轮不做缺失检测。来源：`index/collector.rs`、`index/mod.rs` 的 `reconcile_collected`。
+  - 前端的后台续拉失败时，缓存只是一部分清单。阅读状态每次变化就写回本机，按这份清单剪枝会把没拉到页的文件的进度、收藏、批注「永久删除」，且没有补救机会。现在只有续拉成功且条数与服务端计数对得上才剪枝。来源：`src/stores/useWorkspaceStore.tsx` 的剪枝守卫。
+  - 参考工作区离线时保留最后已知的摘要并标 `online = false`，「绝不伪造在线数据」。来源：`guanlan-service/src/mounts.rs`。
+- **半成品不冒充成品。**
+  - 检索索引还在建或被清空时，检索端点返回空结果加状态字段，「绝不拿半成品索引冒充结果」。来源：`query/search.rs`。
+  - L4A 进度 `total = 0` 时置空，不造 100% 的假进度。来源：`src/stores/useWorkspaceStore.tsx`。
+  - 状态投影在没有服务端数据时走本地回退，未决计数如实为 `null`，不拿 `0` 冒充已对账。来源：`src/utils/stateProjection.ts`。
+
+## 缓存与派生数据要跟着事实走
+
+- **事实变了，建立在它上面的缓存要失效。** 磁盘改动带来新版本时若不丢掉旧的详情缓存，阅读器停在旧版本，「标为已读」标错版本，未读永远清不掉。来源：`applyFileSummaries`。
+- **没定下来的状态不要缓存。** 占位版本行先到时缓存了空对象，正文补齐后仍命中旧对象，预览永远缺失。只缓存可判定的终态。来源：issue #31，`src/utils/filePreviewCache.ts`。
+- **多套缓存各管各的，就会互相覆盖。** 正文曾分散在三套缓存里：一个入口把「已请求」永久标记，失败后不再补取；晚到的详情整链替换版本列表，丢掉已经并入的正文。现在统一由一个带字节预算的协调层管。来源：issue #29，`src/utils/revisionContentStore.ts`。
+- **发起新查询时先作废旧窗口。** 「此前漏 bump」：切换「仅未定时事件」时没有推进代际，旧指纹签发的在途游标续页把旧窗口的事件追加进了新窗口。来源：`toggleUndatedEvents`。
+- **派生数据可以丢弃重建，但规则版本要登记。** 检索索引的规则版本与库内标记不符时自动全量重建。抽取规则版本一升就是全量重派生，必须是一次独立的变更。来源：`index/search_index.rs`、`index/writer.rs` 的 `EXTRACT_RULE_VERSION`。
+
+## 不可信输入
+
+- **解析器的每一步都必须前进，并且有硬上限。** PDF 词法器在三个位置各出过一次原地打转，每次都把进程内存推到数十 GB，最后以 96 GiB 分配失败崩溃：
+  - 内联图像找不到 `EI` 边界时原地 `continue`；
+  - CMap 流里的游离 `>` 被通用分支反复推成空 token；
+  - 解释阶段的文本累计没有封顶，「直到序列化时才崩溃」。
+
+  三次都来自真实的 CAD 或打印 PDF，每次各加一道上限和一个回归测试。来源：`index/pdf.rs` 的 `stray_gt_in_cmap_terminates_tokenization`、`inline_image_without_ei_terminates_tokenization`、`page_text_accumulation_is_hard_capped`。
+- **解析崩溃不能拖垮唯一写线程。** Office 与 PDF 解析都包在 `catch_unwind` 里。来源：`index/office.rs`、`index/pdf.rs`。
+- **按字节切字符串之前，先确认切在字符边界上。**
+  - 非 ASCII 路径的第 8 个字节落在多字节字符中间，`path[..n]` 在启动时 panic。来源：`domain/mounts.rs` 的 `strip_extended_prefix`。
+  - 按字节取哈希前两位，遇到以多字节字符开头的损坏哈希就 panic。来源：issue #36，`storage/mod.rs`、`index/ident.rs`。
+- **写下去的字节必须与登记的哈希一致。** 快照落盘前重读临时文件重算哈希，不符就按「本轮不稳定」丢弃，等下一轮。采纳草案时先校验、再原子改名。来源：`Writer::write_snapshot_to_disk`、`index_jobs.rs` 的 `write_workspace_file`。
+
+## 跨实现一致性
+
+- **两份实现的规则，先有共享向量。** Token 估算与阶段分类各有共享向量文件，两端同读。卡点块解析与密钥脱敏也是双份实现，却没有共享向量，改的时候只能靠人记得两侧同步。来源：`native/testdata/token-vectors.json`、`stage-vectors.json`。
+- **身份公式连怪癖都要照抄。** 用 `chars()` 代替 `encode_utf16()` 会让含 emoji 的路径算出不同的 ID。用 `canonicalize` 求 `rootKey` 会引入 `\\?\` 前缀。`detail_json` 的键序是手工拼串保住的。`mtime` 列声明是 INTEGER，真实库里绝大多数行却是 REAL。来源：`index/ident.rs`、`domain/path_win32.rs`、`index/derive.rs`、`storage/mod.rs`。
+- **同一毫秒里的两次操作要有不同的事件身份。** 连续重命名、移动、删除曾在事件身份上碰撞，事件被静默丢弃。现在用严格单调的时间戳。来源：`index/file_ops.rs` 的 `monotonic_now_iso`。
+- **被跳过的对拍不算跑过。** 身份向量夹具不在 git 里，缺文件时那个测试打印 `[skip]` 就返回。来源：`domain/vectors_fixture_test.rs`。
+
+## 并发与状态
+
+- **运行中的任务不能再并入新工作。** `ChangedPaths` 若并入正在运行的任务，二次保存会被静默丢弃。现在只并入仍在排队的同类任务。来源：`index_jobs.rs` 的 `changed_paths_never_merges_into_already_running_job`。
+- **同哈希的恢复候选只能用一次。** 两个同哈希的新文件各自认领同一个缺失文件，会算出相同的版本 ID，在事务里撞唯一约束，回滚整轮对账。命中后立刻移出候选池。来源：`reconcile_collected`。
+- **状态机的幂等就是 `running` 的持久性；首次落库是静默的。** 没有既有行时的第一次写入不发迁移事件、不计变化、不推进代际。来源：`index/state_engine.rs`。
+- **连接归还之前，先清掉上一个请求的取消标志。** 否则「上一请求的取消误伤复用连接的新请求」。来源：`http/query_exec.rs`、`ReadonlyStore::reset_query_state`。
+- **panic 过的查询不能把连接带走。** 此前一次 panic 让读事务永不结束，后续查询被钉在旧快照上。来源：issue #36。
+- **测试起的常连接要显式断开。** fetch 默认 keep-alive，`server.close()` 会一直等。来源：`test/workspace-client-v1.test.ts`。
+
+## 写入护栏
+
+- **会写用户文件的路径都要过同一套护栏。** 只读保护加在了文件与文件夹操作上，拍板回写、草案采纳、MCP 宿主配置三条写路径漏了。新增写路径时要对照[工作区写入](docs/subsystems/workspace-writes.md)的护栏一览补齐。来源：2026-11-24 编写子系统参考时发现，尚未修。
+- **冲突不覆盖。** 拍板回写、草案采纳、桌面壳保存都用 CAS，冲突时不写文件，把本来想写的内容存成草案。写 MCP 宿主配置时，已有文件解析失败就中止，「以避免覆写人工配置」。
+- **删除只进回收站。** 严禁对用户工作区文件调用任何永久删除 API。
+- **两阶段导出。** 先预览拿到令牌，再确认导出；参数漂移就拒绝。来源：`application/capsule.rs`。
+- **人工审阅不可跳过，失联如实标未知。** 修复动作只有两个白名单，没有任何直接完结的动作。来源：`application/review_board.rs`。
+- **候选事项不自动采纳。** 编织器只产出候选与证据。来源：`domain/candidate_weaver.rs`。
+
+## 性能是有代价的，要量
+
+- **只比较版本身份，不重算内容。** 未读统计曾对每个基线落后的文件跑全文二维 LCS，「2200 份文件就是 2200 次」。来源：issue #18，`hasUnreadChanges`。
+- **分页不能每页重读全量。** 文件摘要、事件、决定、版本链各有一次「不再每页全量重读」的修复。来源：issue #19 到 #25、#33、#38，`query/` 各模块的注释。
+- **频繁切换的状态不要放进 React 树。** 画布主题用 `useState` 时一次切换是整棵树重渲两次，实测 2.1 秒；移出 React 状态后 723 毫秒。来源：`src/stores/useWorkspaceStore.tsx` 的 `handleCanvasThemeChange`。
+- **大列表要开窗。** 日历一次渲染 4776 天、上万个元素，改成窗口化加聚合槽。来源：`test/tl-cal-02-window.test.ts`。
+- **大正文走流式，内联有字节预算。** 此前整读快照再复制再序列化，单请求峰值是正文的三倍。来源：issue #32，`http/response_budget.rs`。
+- **读取用流式哈希，恒定内存。** 代价是变更文件读两遍，换来的是 2 GB 的视频也只占 64 KiB 的缓冲。来源：`index/collector.rs`。
+
+## 验证
+
+- **写了测试不等于跑了测试。** 有测试文件在头注释里写明「未运行 npm test/lint/build」，有的写明「本轮按角色约束未执行测试命令」。来源：`test/calfix-01-calendar-fixes.test.ts`、`test/tl-cal-02-window.test.ts`。
+- **测试名要和断言一致。** MCP 代理的 `tools/list` 测试原名里写着「四个」，断言的却是 6 个；另一个用例标题写「耗时 < 40ms」，断言的是小于 120。
+- **验证命令要真的跑到测试。** 编写子系统参考时，三条 `cargo test` 命令的过滤条件写成了测试文件名，而模块路径其实是另一个名字，每条都匹配到 0 个测试、退出码却是 0。逐条真跑、看「running N tests」的 N 才发现。来源：提交 `a67332b`。
+- **改之前先跑一遍基线。** 建立这套规范时先在未改动的提交上跑全部门禁，才发现 `npm run build` 有一次偶发崩溃。没有基线就分不清是自己弄坏的还是本来就有。
+- **测试不碰真实数据目录。** 不设 `GUANLAN_DATA_DIR` 时，Rust 测试会写进已安装的观澜正在用的那个目录。
+- **文档里的数字会过期，链接不会。** 契约文档写着 MCP 有 4 个工具、监听是 8 秒轮询加 1500 毫秒防抖、采集上限是 5000 和 14，代码早已是 6 个、100 毫秒加 220 毫秒、20 万和 32。写文档时链接到源码里的常量，不抄数值。来源：提交 `380bfca`。
+
+## 界面
+
+- **渲染路径里不要裸读本机存储。** 浏览器禁止所有 Cookie 时，首次访问 `localStorage` 就抛异常，顶栏渲染失败等于整棵树白屏。门控 UI 缺席可以接受，白屏不能。来源：`src/utils/safeStorage.ts`。
+- **事件派发结束后不要再读 `currentTarget`。** React 在派发一结束就把它置空，而 `setState` 的更新函数可能拖到渲染期才执行，读它会抛异常并白屏。来源：`src/components/DocumentTimeMachineView.tsx`。
+- **直跳不是开关。** 画布里「再点同值即清空」是 toggle，首页跳转要的是锁定聚焦，不能复用同一个处理器。来源：`src/components/app/AppMainViews.tsx`。
+- **「读到这里」不能顺手清掉未读。** 记录章节定位时若推进了 `last_read_revision_id`，点一下大纲就会瞬间清掉全部「上次读后有改动」的高亮。来源：`src/stores/useWorkspaceStore.tsx`。
+- **脏数据不要决定默认视图。** 一条 2013 年的事件让迷你月历默认停在十三年前。默认定位取最新活跃月份。来源：`src/components/CalendarSidePanels.tsx`。
+- **随机文件名会进截图。** 截图基线用临时目录的随机后缀作为工作区名，曾让同一页面跨跑差异 2.4%。来源：`scripts/visual-baseline.mjs`。
+
+## 做对了的例子
+
+- **迁移失败。** `f03_injected_migration_failure_rolls_back_losslessly_and_backup_restores_cleanly` 人为让迁移失败，验证原库完好、备份能还原。
+- **并发的人工编辑。** `e02_concurrent_human_edit_blocks_adopt_via_cas_without_losing_any_character` 让人和智能体同时改一个文件，断言一个字符都不丢。
+- **身份公式。** `scripts/parity-reconcile.ts` 刻意不共享任何实现，只比对两边的库。
+
+## 已在代码规范里的
+
+下面这些从第一天起就写进了 [docs/code-standards.md](docs/code-standards.md)，这里不再重复：一个改动只做一件事；修复要带一个没有它就失败的测试；测试不碰网络；测试用真实输入；不完整的范围不判缺失；解析器要有硬上限；跨实现的规则先改共享向量；超限要明确拒绝；默认值不覆盖用户设置；记录要等运行结束再写；计时测试留余量。
+
+## 待处理
+
+编写这批文档时看到、但按「一个改动一个目标」没有顺手修的问题，每一条都应该有自己的 Issue：
+
+- 只读保护护栏漏了三条写路径（见上文）。
+- `identity_vectors_from_fixture` 与两个 triage 对拍测试在干净 checkout 上从不执行。
+- Rust 测试在没有 `GUANLAN_DATA_DIR` 时写真实数据目录。
+- MCP 代理的 `resolve_endpoint` 不校验回环地址。
+- `npm run build` 的偶发崩溃（`@tailwindcss/oxide` 4.3.4 的 `boundary.rs`）。
