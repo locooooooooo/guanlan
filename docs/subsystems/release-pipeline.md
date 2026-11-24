@@ -26,8 +26,8 @@
 升一个版本的步骤：
 
 1. 改 `package.json` 的 `version`，再把 `native/Cargo.toml` 的 `[workspace.package] version`、`native/crates/guanlan-desktop/tauri.conf.json` 的 `version`，以及上面列的字面量改成同一个值。
-2. 让两份锁文件跟上。在仓库根目录执行 `npm install --package-lock-only --legacy-peer-deps`，在 `native/` 下执行 `cargo metadata --format-version 1 > /dev/null`。两条命令都只改版本字段，不动任何已解析的依赖版本，这一点在临时副本上核对过。
-   - npm 那条要带 `--legacy-peer-deps`，是因为仓库现在有一个同伴依赖冲突（`esbuild ^0.25` 对 vite 8 的可选同伴依赖 `^0.27 || ^0.28`），不带它 `npm install` 会直接报 `ERESOLVE`。冲突本身要另行修掉。
+2. 让两份锁文件跟上。在仓库根目录执行 `npm install --package-lock-only`，在 `native/` 下执行 `cargo metadata --format-version 1 > /dev/null`。两条命令都只改版本字段，不动任何已解析的依赖版本，这一点在临时副本上核对过。
+   - npm 那条要用 Node 24 自带的 npm 11。CI 用的 Node 22 自带 npm 10，它重新生成的锁文件除了版本号还会改掉几十个无关的条目（平台包的 `libc` 字段与 `dev` 标记）。
 3. 跑 `npm run notices` 重新生成第三方许可索引。两份锁文件里都有版本号，索引记着它们的 SHA-256，不重新生成的话 `npm test` 会红。
 4. 跑 `npm run preflight`。它一次列出所有没对上的地方；`npm test` 里也有同样的检查。
 

@@ -60,7 +60,7 @@ native/
 npm ci
 ```
 
-按锁文件安装。**先不要用 `npm install`**：仓库目前有一个同伴依赖冲突（顶层的 `esbuild ^0.25` 不满足 vite 8 的要求），重新解析依赖会报 `ERESOLVE`；`npm ci` 不重新解析，不受影响。
+按锁文件安装，和 CI 装出来的一致。CI 用的是 Node 22，它自带的 npm 遇到无效的同伴依赖会直接拒绝安装；`npm test` 里有一项检查盯着依赖树，它红了先看 `npm ls --all`。
 
 ### 2. 启动 Rust 读服务
 

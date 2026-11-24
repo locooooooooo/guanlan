@@ -51,7 +51,7 @@
 
 - **cargo 要在 `native/` 下执行**，rustup 才会读 `native/rust-toolchain.toml`。在仓库根目录跑用的是默认工具链，fmt 与 clippy 的结果会和 CI 不一样。
 - **直接跑 `cargo test --workspace` 会写真实的数据目录**，和已安装的观澜用的是同一个。先设 `GUANLAN_DATA_DIR`，或者经由 `npm run gate` 跑。
-- **`npm install` 在这个仓库里会因同伴依赖冲突失败**（顶层的 `esbuild ^0.25` 不满足 vite 8 的要求）。按锁文件安装用 `npm ci`；只同步锁文件里的版本字段用 `npm install --package-lock-only --legacy-peer-deps`。冲突本身在待处理里。
+- **本机的 Node 和 CI 的不一样时，用 CI 的版本再验一次。** CI 用 Node 22（npm 10），它对无效的同伴依赖零容忍，`npm ci` 会直接失败；Node 24 的 npm 11 会放行。仓库里曾有一个没人用的 `esbuild ^0.25` 钉子，就是这样在本机验过、到 CI 才失败。`npm test` 里有一项检查盯着依赖树，改了依赖后别忽略它。重新生成锁文件用 npm 11（Node 24 自带）：npm 10 会带进无关的改动。
 - **`.css` 只能在 `src/App.tsx` 里导入**；`src/utils` 下的纯函数模块不导入 `.css` 或 React。否则 node 测试加载不了。
 - **`npm run notices` 要先 `npm ci`，并找得到 cargo。** 它在内存里跑一遍生产构建，再调用 `cargo tree` 与 `cargo metadata`（在 `native/` 下）。不写 `dist/`，也不写数据目录。
 - **`cargo test` 的过滤条件按模块路径写**，不是文件名：`http_tests.rs` 挂在 `http::tests` 下。跑完看输出里的 `running N tests`，N 是 0 就等于没测。

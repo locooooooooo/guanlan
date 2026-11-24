@@ -62,7 +62,7 @@ native/
 npm ci
 ```
 
-This installs exactly what the lockfile says. **Do not use `npm install` for now**: the repository has a peer dependency conflict (the top-level `esbuild ^0.25` does not satisfy what vite 8 asks for), so re-resolving dependencies fails with `ERESOLVE`. `npm ci` does not re-resolve and is not affected.
+This installs exactly what the lockfile says, the same as CI. CI runs on Node 22, whose npm refuses to install when a peer dependency is invalid. One of the `npm test` checks watches the dependency tree; if it goes red, start with `npm ls --all`.
 
 ### 2. Start the Rust read service
 
