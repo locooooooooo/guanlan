@@ -2,7 +2,9 @@
 #
 # 为什么锁定：`cargo fmt` 与 `clippy -D warnings` 的诊断集合随工具链版本变化——
 # 不锁定就无法保证「本地通过 = CI 通过」，也无法复现历史基线。
-# 本文件同时被 rustup（本地）与 CI（dtolnay/rust-toolchain + Swatinem/rust-cache）遵守。
+# 本地由 rustup 自动遵守（cargo 必须在 native/ 下执行才会读到本文件）。
+# CI（.github/workflows/ 下的工作流）先解析下面的 channel，再显式传给
+# dtolnay/rust-toolchain——该 action 的 `@stable` 只装最新 stable，并不读本文件。
 #
 # 升级流程：改 channel → 本地 cargo fmt --all && cargo clippy --workspace --all-targets
 # -- -D warnings 全绿 → 同一 PR 内提交，不单独升级工具链。

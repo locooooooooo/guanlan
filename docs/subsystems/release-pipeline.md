@@ -10,7 +10,7 @@
 | 前端构建身份 | `vite.config.ts` 的 `define`，运行时由 [`appBuildInfo.ts`](../../src/utils/appBuildInfo.ts) 读取 | V12-04、V12-06、V12-07 |
 | 安装包配置 | [`tauri.conf.json`](../../native/crates/guanlan-desktop/tauri.conf.json) 与 [`tauri.release.conf.json`](../../native/crates/guanlan-desktop/tauri.release.conf.json) | `build-windows-installer.mjs --check-only`，以及 f03 测试 |
 | 安装包构建 | [`scripts/build-windows-installer.mjs`](../../scripts/build-windows-installer.mjs) | 无自动测试，只有 `--check-only` |
-| 工具链 | [`native/rust-toolchain.toml`](../../native/rust-toolchain.toml) 锁定 1.99.1 | 无 |
+| 工具链 | [`native/rust-toolchain.toml`](../../native/rust-toolchain.toml) 锁定 1.99.1 | CI 的三个 Rust 作业都从这份文件解析 `channel` 后显式安装 |
 | CI | [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | f03 测试断言其中有 `--check-only` 这一行 |
 
 ## 版本号
@@ -64,7 +64,7 @@ Rust 侧没有嵌入提交哈希。`env!("CARGO_PKG_VERSION")` 只在 MCP 代理
 
 ## CI
 
-`ci.yml` 在推送到 `main` 与提 PR 时触发，共四个作业：
+`ci.yml` 在推送到 `main`、提 PR 时触发，也可以手动触发，共四个作业：
 
 | 作业 | 系统 | 做什么 |
 | --- | --- | --- |
@@ -72,6 +72,14 @@ Rust 侧没有嵌入提交哈希。`env!("CARGO_PKG_VERSION")` 只在 MCP 代理
 | `rust-core` | Ubuntu | `cargo fmt --check`、对 core 与 service 跑 clippy 与 test |
 | `rust-desktop` | Windows | 对整个 workspace 跑 clippy 与 test，再跑安装包配置的 `--check-only` |
 | `smoke` | Ubuntu 与 Windows | 构建 release 版 `guanlan`，`npm run seed`，跑冒烟与对拍 |
+
+几条约定：
+
+- **工作流只有读权限**（`permissions: contents: read`）。需要写权限的发布流程在它自己的工作流里申请。
+- **`main` 上的运行不会被取消。** 并发组按分支划分，PR 的运行可以被同一个 PR 的下一次推送取代，`main` 上的必须跑完，因为发布以一次完整的绿色运行为准。
+- **工具链以 `rust-toolchain.toml` 为准。** `dtolnay/rust-toolchain@stable` 只装最新 stable，并不读这个文件。CI 先解析出 `channel`，再显式传给 `dtolnay/rust-toolchain@master`。改工具链版本只改那一个文件。
+- **每个 cargo 步骤有自己的超时**，卡住的步骤不会占满整个作业的时限。
+- `smoke` 作业的注释里说明：夹具、期望结果与身份向量都在 `.gitignore` 里，从干净 checkout 用 `seed-fixture.ts` 重建。
 
 CI 上**从不构建真正的安装包**，也不上传任何产物。
 

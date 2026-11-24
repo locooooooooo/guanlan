@@ -2,11 +2,23 @@ name: ci
 
 # 前端（TypeScript + 单测 + Vite 构建）+ Rust（core/service/desktop）+ 真实服务冒烟与 Node↔Rust 对拍。
 # Windows 作业编译桌面壳与安装包配置；smoke 作业从干净 checkout 生成夹具后运行 release 二进制。
+# 本地等价命令见 docs/code-standards.md 的「验收标准」。
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+# main 上的运行必须跑完：一次被下一次推送取消的运行不算通过，发布以完整的绿色运行为准。
+# PR 的运行可以被同一个 PR 的下一次推送取消；尚未开始的旧运行被新运行取代。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# 工作流只需要读取仓库内容；发布在 release.yml 里单独申请写权限。
+permissions:
+  contents: read
 
 jobs:
   frontend:
@@ -35,8 +47,15 @@ jobs:
         working-directory: native
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      # 工具链版本以 native/rust-toolchain.toml 为准。dtolnay/rust-toolchain@stable 只装最新
+      # stable，并不读这个文件；这里先把 channel 解析出来再显式传入，保证「本地通过 = CI 通过」。
+      - name: Resolve the pinned toolchain
+        id: toolchain
+        shell: bash
+        run: echo "channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' native/rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ steps.toolchain.outputs.channel }}
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
@@ -44,8 +63,10 @@ jobs:
       - name: fmt (all)
         run: cargo fmt --all -- --check
       - name: clippy core+service (strict)
+        timeout-minutes: 15
         run: cargo clippy -p guanlan-core -p guanlan-service --all-targets -- -D warnings
       - name: test core+service
+        timeout-minutes: 20
         run: cargo test --locked -p guanlan-core -p guanlan-service
 
   rust-desktop:
@@ -56,17 +77,28 @@ jobs:
         working-directory: native
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Resolve the pinned toolchain
+        id: toolchain
+        shell: bash
+        run: echo "channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' native/rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ steps.toolchain.outputs.channel }}
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: native
+      # 安装包配置校验脚本用 node 运行；显式钉住 Node 版本，不依赖 runner 预装。
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: fmt (all)
         run: cargo fmt --all -- --check
       - name: clippy workspace (strict, incl. desktop)
+        timeout-minutes: 20
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: test workspace (incl. desktop)
+        timeout-minutes: 20
         run: cargo test --workspace --locked
       - name: verify Windows MSI/NSIS installer engineering config
         working-directory: .
@@ -81,7 +113,13 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Resolve the pinned toolchain
+        id: toolchain
+        shell: bash
+        run: echo "channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' native/rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.toolchain.outputs.channel }}
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: native
@@ -92,10 +130,11 @@ jobs:
       - name: frontend deps
         run: npm ci
       - name: build release server
+        timeout-minutes: 25
         run: cargo build --release --locked -p guanlan-service
         working-directory: native
       - name: generate fixture + expected + identity vectors
-        # testdata 全部被 .gitignore 忽略：从干净 checkout 用 seed-fixture.ts 重建
+        # testdata 里的夹具、期望结果与身份向量被 .gitignore 忽略：从干净 checkout 用 seed-fixture.ts 重建
         run: npm run seed
       - name: resolve server binary
         shell: bash
@@ -106,6 +145,8 @@ jobs:
             echo "GUANLAN_EXE=native/target/release/guanlan" >> "$GITHUB_ENV"
           fi
       - name: smoke v1
+        timeout-minutes: 10
         run: npx tsx scripts/smoke-v1.ts --exe "${{ env.GUANLAN_EXE }}"
       - name: parity (Node ↔ Rust 写入对拍)
+        timeout-minutes: 10
         run: npx tsx scripts/parity-reconcile.ts --exe "${{ env.GUANLAN_EXE }}"
