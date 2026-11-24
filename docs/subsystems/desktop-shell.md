@@ -33,7 +33,7 @@
 
 1. 目录不存在返回 `NOT_FOUND`。
 2. 目标与当前是同一个 `rootKey` 时直接复用现役服务，不重启。
-3. 否则先 `shutdown` 旧服务，释放端口、写线程、监听与排他锁。
+3. 否则先 `shutdown` 旧服务：先向全部项目写线程发送协作取消信号（中止含大体积音视频的在途扫描），再关闭 SSE、停机 HTTP 监听（2 秒超时兜底），最后在阻塞线程池 join 写线程并释放端口、监听与排他锁。
 4. `start_service_with_projects_file` 启动新服务：端口为 0（随机）、`cors_desktop: true`、`background_index: true`，项目表文件放在 `desktop.json` 旁边。
 5. 成功则把该工作区置顶写进最近列表（至多 10 条）。
 6. 新工作区遇 `ROOT_IN_USE` 时不报错，而是返回 `root_in_use` 状态，附带数据目录、锁文件路径与锁诊断（pid、取锁时间），以及 `previousRoot`，让前端给出恢复选项。
@@ -82,6 +82,6 @@ cargo test --locked -p guanlan-desktop -- desktop_runtime_switches desktop_impor
 cd .. && node scripts/build-windows-installer.mjs --check-only
 ```
 
-桌面壳的测试里有两个带耗时断言：已建库工作区二次切回出首屏要小于 300 毫秒，外部文件导入后出现在时间线要小于 500 毫秒。它们在 `cargo test --workspace` 里随 Windows CI 一起跑。
+桌面壳的测试里有三项带耗时断言：已建库工作区二次切回出首屏要小于 300 毫秒，外部文件导入后出现在时间线要小于 500 毫秒，大体积工作区扫描中途切走要小于 800 毫秒（`desktop_runtime_switches_promptly_while_previous_workspace_is_scanning`）。它们在 `cargo test --workspace` 里随 Windows CI 一起跑。
 
 打包与安装包的构建见[构建与发布](release-pipeline.md)。

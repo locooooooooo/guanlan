@@ -18,6 +18,7 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
     activeInitiative, changeNotice, refreshEvents, silentMergeNewEvents, silentMergingEvents,
     dataSource, files, dataError, activeTab,
     networkOffline, streamDisconnected, retryingConnection, handleRetryConnection,
+    switchingWorkspace,
   } = ctx;
   const [dismissedNoticeKey, setDismissedNoticeKey] = useState<string | null>(null);
   const changeNoticeKey = changeNotice ? `${changeNotice.at}:${changeNotice.count}` : null;
@@ -27,8 +28,9 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
     activeTab === 'panorama' && changeNotice && changeNoticeKey !== dismissedNoticeKey
       ? changeNotice
       : null;
+  // 主动切换工作区期间旧服务正按预期停机，不弹连接中断/扫描失败红条，改为中性状态条提示。
   const showConnectionAlert =
-    networkOffline || streamDisconnected || dataSource === 'error';
+    !switchingWorkspace && (networkOffline || streamDisconnected || dataSource === 'error');
   const connectionAlertText = networkOffline
     ? '当前网络已断开，操作暂无法同步，请恢复网络后重试'
     : streamDisconnected
@@ -36,6 +38,20 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
       : dataError || '无法连接观澜读服务，工作区数据暂不可用';
   return (
     <>
+      {switchingWorkspace && (
+        <div
+          data-switching-workspace-banner=""
+          role="status"
+          className="px-4 py-1.5 bg-card/90 border-b border-[color:var(--glass-hairline)] text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-secondary)] flex items-center gap-2 shrink-0 tabular-nums"
+        >
+          <span
+            className="size-1.5 rounded-full bg-[color:var(--accent-iris-deep)] animate-pulse shrink-0"
+            aria-hidden="true"
+          />
+          <span>正在切换工作区，请稍候…</span>
+        </div>
+      )}
+
       {/* 全局断网 / 服务不可用告警条（role="alert" + 可点击重试，防重提交） */}
       {showConnectionAlert && (
         <div
@@ -62,7 +78,7 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
 
       {/* 手动重扫进度已收编入 TopHeader 右上角同步胶囊（「扫描中…」+ 旋转图标），
           不再弹出通栏横幅挤压正文/画布高度；仅在扫描失败时呈现可重试告警横幅。 */}
-      {rescanState === 'error' && (
+      {!switchingWorkspace && rescanState === 'error' && (
         <div
           className="px-4 py-1.5 bg-[color:color-mix(in_srgb,var(--stage-ink-exec)_10%,var(--card))] border-b border-[color:color-mix(in_srgb,var(--stage-ink-exec)_36%,transparent)] text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--stage-ink-exec-text)] flex flex-wrap items-center gap-2 shrink-0 tabular-nums"
           role="alert"

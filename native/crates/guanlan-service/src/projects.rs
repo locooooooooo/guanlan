@@ -112,7 +112,8 @@ impl ProjectRuntime {
         })
     }
 
-    /// 优雅停止该项目的 watcher、写线程、通知桥与排他锁（绝不持锁跨 await）
+    /// 优雅停止该项目的 watcher、写线程、通知桥与排他锁（绝不持锁跨 await，
+    /// 且写线程 `handle.join()` 放在 `spawn_blocking` 里避免阻塞 Tokio 异步工作线程）。
     pub async fn shutdown(&self) {
         let (watcher, jobs, bridge, lock) = {
             let mut g = self.owned.lock().expect("项目运行时资源锁");
@@ -123,11 +124,17 @@ impl ProjectRuntime {
                 g.lock.take(),
             )
         };
+        if let Some(j) = &jobs {
+            j.signal_shutdown();
+        }
         if let Some(w) = watcher {
             w.stop().await;
         }
         if let Some(j) = jobs {
-            j.shutdown();
+            let _ = tokio::task::spawn_blocking(move || {
+                j.shutdown();
+            })
+            .await;
         }
         if let Some(t) = bridge {
             let _ = tokio::task::spawn_blocking(move || {
@@ -921,12 +928,29 @@ impl ProjectHub {
         }
     }
 
+    /// 非阻塞通知全部在线项目的写线程协作中止（服务停机/切换工作区时第一时间触发）。
+    pub fn signal_shutdown(&self) {
+        let runtimes: Vec<Arc<ProjectRuntime>> = {
+            let slots = self.slots.lock().expect("项目表锁");
+            slots
+                .iter()
+                .filter_map(|s| s.runtime.as_ref().map(Arc::clone))
+                .collect()
+        };
+        for rt in runtimes {
+            rt.jobs.signal_shutdown();
+        }
+    }
+
     /// 优雅停止全部受管项目的运行时（服务退出时调用）
     pub async fn shutdown_all(&self) {
         let runtimes: Vec<Arc<ProjectRuntime>> = {
             let mut slots = self.slots.lock().expect("项目表锁");
             slots.iter_mut().filter_map(|s| s.runtime.take()).collect()
         };
+        for rt in &runtimes {
+            rt.jobs.signal_shutdown();
+        }
         for rt in runtimes {
             rt.shutdown().await;
         }
@@ -938,6 +962,9 @@ impl ProjectHub {
             let mut slots = self.slots.lock().expect("项目表锁");
             slots.iter_mut().filter_map(|s| s.runtime.take()).collect()
         };
+        for rt in &runtimes {
+            rt.jobs.signal_shutdown();
+        }
         for rt in runtimes {
             let mut g = rt.owned.lock().expect("项目运行时资源锁");
             g.watcher.take();

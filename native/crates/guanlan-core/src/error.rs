@@ -75,6 +75,9 @@ pub enum GuanlanError {
     /// C05 码表扩展项。
     #[error("{0}")]
     CrossWorkspaceForbidden(String),
+    /// 409：协作式取消或服务停机在事务提交点前安全中止长耗时扫描/对账（非服务故障）。
+    #[error("{0}")]
+    Cancelled(String),
     /// 500：内部错误（rusqlite/IO 等），包络码 INTERNAL（非契约 §0.2 六码）
     #[error("内部错误：{0}")]
     Internal(String),
@@ -96,6 +99,7 @@ impl GuanlanError {
             Self::Conflict(_) => "CONFLICT",
             Self::MountRejected(_) => "MOUNT_REJECTED",
             Self::CrossWorkspaceForbidden(_) => "CROSS_WORKSPACE_FORBIDDEN",
+            Self::Cancelled(_) => "CANCELLED",
             Self::Internal(_) => "INTERNAL",
         }
     }
@@ -110,7 +114,7 @@ impl GuanlanError {
             Self::UnsupportedContent(_) => 413,
             Self::NotImplemented(_) => 501,
             Self::BadRequest(_) => 400,
-            Self::Conflict(_) => 409,
+            Self::Conflict(_) | Self::Cancelled(_) => 409,
             Self::MountRejected(_) => 409,
             Self::CrossWorkspaceForbidden(_) => 403,
             Self::Internal(_) => 500,
@@ -133,6 +137,7 @@ impl GuanlanError {
                 | Self::Conflict(msg)
                 | Self::MountRejected(msg)
                 | Self::CrossWorkspaceForbidden(msg)
+                | Self::Cancelled(msg)
                 | Self::Internal(msg) => Some(msg.clone()),
                 Self::NotImplemented(endpoint) => Some((*endpoint).to_string()),
                 Self::RootInUse | Self::IndexBusy => None,

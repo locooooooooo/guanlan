@@ -14,10 +14,12 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import HomeView from '../src/components/HomeView';
 import { LeftSidebar } from '../src/components/LeftSidebar';
+import { AppBanners } from '../src/components/app/AppBanners';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { AgentContextDrawer } from '../src/components/modals/AgentContextDrawer';
 import { appThemeModeLabel } from '../src/stores/appThemeStore';
 import type { ContextResponse } from '../src/services/apiTypes';
+import type { WorkspaceStoreCtx } from '../src/stores/useWorkspaceStore';
 
 function readSrc(relPath: string): string {
   return readFileSync(fileURLToPath(new URL(`../src/${relPath}`, import.meta.url)), 'utf8');
@@ -236,5 +238,67 @@ test('交互闭环与防重提交：全浮层支持 Esc 与外部点击关闭，
   assert.ok(
     readSrc('hooks/useDirectoryShell.ts').includes('Array.isArray(res.data.folders)'),
     'useDirectoryShell 须校验 folders 为数组防止白屏'
+  );
+});
+
+test('工作区切换过渡态：switchingWorkspace 期间展示中性状态条并抑制旧后端断连/扫描失败红条', () => {
+  const baseCtx = {
+    rescanState: 'error',
+    rescanError: '无法连接观澜读服务（/api/v1）',
+    handleRescan: async () => {},
+    l4aProgress: null,
+    hitlClearedAt: null,
+    deliveredInitiative: null,
+    deliveredInitiatives: [],
+    initiativeLifecycle: null,
+    runInitiativeLifecycle: async () => {},
+    activeInitiative: null,
+    changeNotice: null,
+    refreshEvents: async () => {},
+    silentMergeNewEvents: async () => {},
+    silentMergingEvents: false,
+    dataSource: 'error',
+    files: [],
+    dataError: '无法连接观澜读服务（/api/v1）',
+    activeTab: 'home',
+    networkOffline: false,
+    streamDisconnected: true,
+    retryingConnection: false,
+    handleRetryConnection: async () => {},
+    switchingWorkspace: true,
+  } as unknown as WorkspaceStoreCtx;
+
+  const switchingHtml = renderToStaticMarkup(React.createElement(AppBanners, { ctx: baseCtx }));
+  assert.ok(
+    switchingHtml.includes('data-switching-workspace-banner'),
+    '切换工作区期间应展示中性切换状态条'
+  );
+  assert.ok(switchingHtml.includes('正在切换工作区'), '切换状态条文案应明确告知正在切换');
+  assert.ok(
+    !switchingHtml.includes('data-connection-alert'),
+    '切换工作区期间不得弹出旧后端断连告警红条'
+  );
+  assert.ok(
+    !switchingHtml.includes('扫描失败'),
+    '切换工作区期间不得弹出旧后端扫描失败红条'
+  );
+
+  const idleErrorHtml = renderToStaticMarkup(
+    React.createElement(AppBanners, { ctx: { ...baseCtx, switchingWorkspace: false } })
+  );
+  assert.ok(
+    idleErrorHtml.includes('data-connection-alert'),
+    '非切换态真正断连时仍须正常展示断连告警条'
+  );
+  assert.ok(idleErrorHtml.includes('扫描失败'), '非切换态真正扫描失败时仍须展示失败条');
+
+  const storeSrc = readSrc('stores/useWorkspaceStore.tsx');
+  assert.ok(
+    storeSrc.includes('switchingWorkspaceRef'),
+    'useWorkspaceStore 须维护同步 switchingWorkspaceRef 抑制切走瞬间的断连回调'
+  );
+  assert.ok(
+    storeSrc.includes('streamEverConnectedRef.current = false'),
+    'resetWorkspaceScopedState 须重置 SSE 断连状态，避免旧工作区红条残留'
   );
 });

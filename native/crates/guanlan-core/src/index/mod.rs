@@ -35,6 +35,8 @@ mod tests;
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Instant;
 
 use rusqlite::params;
@@ -83,6 +85,9 @@ pub struct ReconcileOptions {
     /// 音视频与未知二进制只记元数据）。为 `None` 时自动按「环境变量 → 工作区 `meta`
     /// → 默认 10MB/50MB」结算。
     pub snapshot_policy: Option<SnapshotPolicy>,
+    /// 协作式取消标志（服务停机/切换工作区/用户取消任务时置 true）。
+    /// 仅在采集、身份规划、事务外快照写入等阶段间隙生效；进入 SQLite 事务提交点后不再中断。
+    pub cancel: Option<Arc<AtomicBool>>,
 }
 
 impl Default for ReconcileOptions {
@@ -93,11 +98,19 @@ impl Default for ReconcileOptions {
             max_depth: collector::DEFAULT_MAX_DEPTH,
             observed_at: None,
             snapshot_policy: None,
+            cancel: None,
         }
     }
 }
 
 impl ReconcileOptions {
+    /// 当前是否已请求协作式取消
+    pub fn is_cancelled(&self) -> bool {
+        self.cancel
+            .as_deref()
+            .is_some_and(|flag| flag.load(Ordering::Acquire))
+    }
+
     /// 按环境变量覆盖采集上限与快照阈值。
     ///
     /// - `GUANLAN_MAX_FILES`：文件数上限。**触顶即视为范围不完整**——不判缺失，
@@ -287,19 +300,35 @@ fn allocate_new_file_id(
     )))
 }
 
+fn check_cancelled(options: &ReconcileOptions, stage: &str) -> Result<(), GuanlanError> {
+    if options.is_cancelled() {
+        return Err(GuanlanError::Cancelled(format!(
+            "任务已取消（阶段：{stage}，事务提交点前安全中止）"
+        )));
+    }
+    Ok(())
+}
+
 /// 对账一次扫描，写入持久历史
 pub fn reconcile(
     writer: &mut Writer,
     options: &ReconcileOptions,
 ) -> Result<ReconcileReport, GuanlanError> {
+    check_cancelled(options, "启动前")?;
     let started = Instant::now();
     let workspace = writer.workspace()?;
-    let collected = collector::collect_workspace(
+    let collected = collector::collect_workspace_cancellable(
         Path::new(&workspace.root_path),
         &options.excluded_dirs,
         options.max_files,
         options.max_depth,
+        options.cancel.as_deref(),
     );
+    if collected.cancelled || options.is_cancelled() {
+        return Err(GuanlanError::Cancelled(
+            "任务已取消（阶段：文件采集，事务提交点前安全中止）".to_owned(),
+        ));
+    }
     reconcile_collected(writer, options, workspace, collected, started)
 }
 
@@ -310,9 +339,19 @@ pub fn reconcile_paths(
     options: &ReconcileOptions,
     paths: &[String],
 ) -> Result<ReconcileReport, GuanlanError> {
+    check_cancelled(options, "启动前")?;
     let started = Instant::now();
     let workspace = writer.workspace()?;
-    let collected = collector::collect_specific_paths(Path::new(&workspace.root_path), paths);
+    let collected = collector::collect_specific_paths_cancellable(
+        Path::new(&workspace.root_path),
+        paths,
+        options.cancel.as_deref(),
+    );
+    if collected.cancelled || options.is_cancelled() {
+        return Err(GuanlanError::Cancelled(
+            "任务已取消（阶段：定向采集，事务提交点前安全中止）".to_owned(),
+        ));
+    }
     reconcile_collected(writer, options, workspace, collected, started)
 }
 
@@ -352,6 +391,7 @@ fn reconcile_collected(
     let mut missing_candidates: Vec<FileRow> = writer.list_recovery_candidates(&workspace_id)?;
 
     for file in &collected.files {
+        check_cancelled(options, "身份识别")?;
         let rel_path = normalize_rel_path(&file.relative_path);
 
         let mut file_row = match writer.find_file_by_path(&workspace_id, &rel_path)? {
@@ -490,6 +530,7 @@ fn reconcile_collected(
     // 按「读取不稳定」记录，等下一轮对账恢复（TS 因整批驻留内存不会出现此情形）。
     let mut unstable_during_write: Vec<String> = Vec::new();
     for plan in &mut pending {
+        check_cancelled(options, "写入快照")?;
         // B01：只记元数据的档位（音视频 / 未知二进制 / 超阈值文件）**不复制字节**。
         // 这里连源文件都不再读第二遍——采集阶段已经算过流式哈希。
         if plan.revision.snapshot_available == 0 {
@@ -558,6 +599,8 @@ fn reconcile_collected(
     }
 
     // ---------- 事务提交：文件、版本、事件、证据一起落库 ----------
+    // 进入写事务前的最后一道取消检查；一旦开始写事务便不再中断，保证数据库事实完整。
+    check_cancelled(options, "事务提交前")?;
     // 路径索引：已入库文件 + 本轮待写入文件，保证引用能解析到已有路径
     // （B05：改用两列轻查询，避免万级库整表 FileRow 反序列化）
     let mut path_index: HashMap<String, String> = HashMap::new();

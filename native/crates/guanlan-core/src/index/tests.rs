@@ -930,3 +930,34 @@ fn b03_reconcile_indexes_docx_and_xlsx_links_decisions_and_caches_by_hash() {
     assert_eq!(docx_anchor.kind, "docx_paragraph");
     assert_eq!(docx_anchor.paragraph, Some(2));
 }
+
+#[test]
+fn reconcile_aborts_cleanly_on_cancel_without_partial_writes() {
+    let dir = TempWorkspace::new("reconcile-cancel");
+    dir.write("notes/a.md", "# A\n");
+    dir.write("media/video.mp4", &"x".repeat(256 * 1024));
+
+    let mut writer = dir.writer();
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let err = reconcile(
+        &mut writer,
+        &ReconcileOptions {
+            cancel: Some(cancel),
+            ..Default::default()
+        },
+    )
+    .expect_err("取消标志置位后对账应返回 Cancelled");
+    assert!(
+        matches!(err, crate::error::GuanlanError::Cancelled(_)),
+        "预期 GuanlanError::Cancelled，实际：{err:?}"
+    );
+    let ws = writer.workspace().expect("工作区行");
+    assert!(
+        writer
+            .list_files(&ws.workspace_id, true)
+            .expect("查文件")
+            .is_empty(),
+        "事务提交前取消不得留下半成品文件行"
+    );
+    assert_eq!(ws.index_generation, 0, "取消的对账不得推进代际");
+}

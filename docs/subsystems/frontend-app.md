@@ -46,7 +46,7 @@
 - **正文补齐走目标化行替换。** `publishContentFor` 只替换一行，其余行保持引用身份，让卡片上的 memo 不失效。
 - **代际计数当竞态守卫。** `eventFetchGenRef` 让旧窗口的在途请求作废；`dayQueryRef` 配合 `sameDayQuery` 防止日期窗口串页。
 - **按工作区分桶的持久化。** 阅读状态与静音文件夹按 `workspace_id` 分桶存在本机存储。
-- **切换工作区或项目时整体复位。** `resetWorkspaceScopedState` 重置全部工作区范围内的状态。
+- **切换工作区或项目时整体复位。** `resetWorkspaceScopedState` 重置全部工作区范围内的状态（含 SSE 断连状态与重扫/重试防重锁）。桌面端切换工作区期间，由 `switchingWorkspace` 与同步镜像 `switchingWorkspaceRef` 暂停旧后端的 SSE 订阅、任务与状态轮询以及断连/扫描失败红条，改为在 `AppBanners` 展示中性「正在切换工作区」状态条。
 
 ### 订阅方式
 

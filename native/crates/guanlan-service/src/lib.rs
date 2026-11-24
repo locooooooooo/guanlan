@@ -98,12 +98,20 @@ impl RunningService {
 
     /// 优雅停机并释放全部项目的工作区锁、监听套接字、写线程、watcher 与 SSE 连接（切换/退出零泄漏）。
     pub async fn shutdown(mut self) {
+        // 先行通知所有项目写线程协作中止（大工作区全量扫描可在毫秒级退出，不拖住停机）
+        self.projects.signal_shutdown();
         self.notices.close();
         if let Some(tx) = self.shutdown_tx.take() {
             let _ = tx.send(());
         }
-        if let Some(server) = self.server.take() {
-            let _ = server.await;
+        if let Some(mut server) = self.server.take() {
+            if tokio::time::timeout(std::time::Duration::from_secs(2), &mut server)
+                .await
+                .is_err()
+            {
+                server.abort();
+                let _ = server.await;
+            }
         }
         self.projects.shutdown_all().await;
     }
@@ -111,6 +119,7 @@ impl RunningService {
 
 impl Drop for RunningService {
     fn drop(&mut self) {
+        self.projects.signal_shutdown();
         self.notices.close();
         if let Some(tx) = self.shutdown_tx.take() {
             let _ = tx.send(());

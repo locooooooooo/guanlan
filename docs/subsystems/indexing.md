@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 文件监听 | `watcher::start` 启动 OS 原生监听（Windows `ReadDirectoryChangesW`、Linux `inotify`、其余平台轮询），把事件合并防抖后提交为索引任务。 | [`watcher.rs`](../../native/crates/guanlan-service/src/watcher.rs) |
 | 任务队列 | `IndexJobManager` 与 `writer_loop`：单执行槽、串行执行、同类合并、协作式取消、重启恢复。 | [`index_jobs.rs`](../../native/crates/guanlan-service/src/index_jobs.rs) |
-| 采集 | `collect_workspace` 与 `collect_specific_paths` 枚举文件、流式计算 SHA-256、判定读取是否稳定。**不做任何版本或事件判定。** | [`collector.rs`](../../native/crates/guanlan-core/src/index/collector.rs) |
+| 采集 | `collect_workspace` / `collect_workspace_cancellable` 与 `collect_specific_paths` / `collect_specific_paths_cancellable` 枚举文件、流式计算 SHA-256、判定读取是否稳定，并在目录、文件及 64 KiB 哈希块间隙响应协作式取消标志。**不做任何版本或事件判定。** | [`collector.rs`](../../native/crates/guanlan-core/src/index/collector.rs) |
 | 忽略规则 | `DEFAULT_EXCLUDED` 排除依赖与构建目录；`Gitignore` 与 `IgnoreStack` 实现逐目录生效的 `.gitignore`。 | [`collector.rs`](../../native/crates/guanlan-core/src/index/collector.rs)、[`ignore.rs`](../../native/crates/guanlan-core/src/index/ignore.rs) |
 | 对账 | `reconcile`（整库）与 `reconcile_paths`（定向）共用 `reconcile_collected`：识别身份、规划版本、写快照、一个事务提交。 | [`index/mod.rs`](../../native/crates/guanlan-core/src/index/mod.rs) |
 | 写库语句 | `Writer` 持有唯一可写连接、`SCHEMA` 常量与全部写语句。 | [`writer.rs`](../../native/crates/guanlan-core/src/index/writer.rs) |
@@ -32,7 +32,7 @@
 
 `VerifyAll` 走 `reconcile`，`ChangedPaths` 走 `reconcile_paths`，之后都进入 `reconcile_collected`。
 
-1. **采集**。`hash_file_stable` 先 stat、流式读一遍算哈希、再 stat；期间大小或 mtime 变了就重读一次，仍不稳定则标记 `stable = false`。全程只用一个 64 KiB 缓冲。目录项按名排序，同一工作区每次扫描顺序一致。触到文件数或深度上限时 `complete = false`。
+1. **采集**。`hash_file_stable` / `hash_file_stable_cancellable` 先 stat、流式读一遍算哈希、再 stat；期间大小或 mtime 变了就重读一次，仍不稳定则标记 `stable = false`。全程只用一个 64 KiB 缓冲，并在每块读取前检查取消标志；被取消时返回 `CollectResult { cancelled: true, complete: false, .. }`，不误记为读取错误。目录项按名排序，同一工作区每次扫描顺序一致。触到文件数或深度上限时 `complete = false`。
 2. **识别身份**（第一遍）。依次尝试：精确路径、路径别名、由路径推出的 ID、以及「恰好一个缺失或回收站文件与本文件同哈希」的恢复候选。最后一种命中后立刻从候选池移除，否则同轮第二个同哈希文件会撞唯一约束、回滚整轮对账。
 3. **规划版本**。最新版本哈希相同即未变，只更新采集状态；mtime 单独变化不新增版本或事件。否则规划一个新版本：`seq = 最新 seq + 1`，`revision_id = revision_id_of(file_id, seq)`，`prev_revision_id` 指向最新版本。
 4. **判定快照档位**。`tier_for` 在采集时刻决定，写进 `revisions.snapshot_available`，之后不再重算：
@@ -59,7 +59,7 @@
 ## 约束与失败行为
 
 - **不生成第二套历史。** `rootKey`、`file_id`、`revision_id`、`event_id` 的公式是与旧 Node 管线逐字兼容的契约。`rootKey` 恒按 win32 `path.resolve` 规则求值，在所有平台上都一样；不能用 `std::fs::canonicalize` 替代，Windows 上它会引入 `\\?\` 前缀让哈希不同。路径与标题按 UTF-16 码元迭代，用 `chars()` 会让含 emoji 的路径算出不同的 ID。唯一的硬保证是 `scripts/parity-reconcile.ts`。
-- **不完整的范围不得判定缺失。** 触顶、定向对账、目录读不到，都只报告已扫到的范围。读不到的目录保留原有记录并报告问题。
+- **不完整的范围不得判定缺失。** 触顶、定向对账、目录读不到、协作式取消中止，都不得判定缺失。读不到的目录保留原有记录并报告问题；`ReconcileOptions.cancel` 置位后，在事务提交点前（采集、身份规划、快照落盘与解析阶段）返回 `GuanlanError::Cancelled`，不留半成品行、不推进代际；进入 SQLite 事务后不再中断。
 - **读取不稳定就不落版本。** 采集期间或写快照期间被改写的文件按读取问题记账，等下一轮对账恢复；绝不写入与哈希不符的快照。
 - **版本行存在，意味着快照已在磁盘。** `insert_revision` 对引用了未登记快照的版本报错；`snapshot_available = 0` 的版本是唯一例外，它们本来就不存字节。
 - **解析器不能拖垮写线程。** Office 与 PDF 解析包在 `catch_unwind` 里，并设有硬上限：PDF 每页文本累计 256 KiB（`MAX_PAGE_TEXT_ACCUM`）、单页 Form XObject 至多调用 256 次（`MAX_FORM_INVOCATIONS`）、单个流解压至多 16 MiB（`MAX_STREAM_DECODE_BYTES`）。解压与解析计算不进写锁持有期。这些上限都对应过真实事故：词法器在畸形 PDF 上原地打转，曾把进程内存推到数十 GB 后崩溃。

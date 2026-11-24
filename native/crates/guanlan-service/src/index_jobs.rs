@@ -384,6 +384,9 @@ pub struct IndexJob {
     /// 已取消标记（四态模型下的取消口径：终态 failed + error=已取消；
     /// 活跃期 wire state 报 cancelled，见 `to_response`）
     pub cancelled: bool,
+    /// 协作式取消原子标志：由 `cancel()` 与 `signal_shutdown()` 共同置位，
+    /// 传进 `ReconcileOptions::cancel` 让长耗时采集/流式哈希在毫秒级安全中止。
+    cancel_flag: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl IndexJob {
@@ -402,6 +405,7 @@ impl IndexJob {
             report: None,
             result: None,
             cancelled: false,
+            cancel_flag: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 
@@ -609,11 +613,25 @@ impl IndexJobManager {
         }
     }
 
-    /// 优雅停机：阻止后续排队的 Run 继续执行，发送 Shutdown 并等待唯一写入线程退出、关闭 SQLite 写连接。
-    pub fn shutdown(&self) {
+    /// 非阻塞停机通知：立即置位停机标志与所有活跃任务的协作取消标志，并发送 Shutdown，
+    /// 让正在采集/哈希大文件的唯一写入线程在毫秒级安全中止，避免切换工作区或退出时卡死。
+    pub fn signal_shutdown(&self) {
         self.shutting_down
             .store(true, std::sync::atomic::Ordering::Release);
+        if let Ok(jobs) = self.jobs.lock() {
+            for job in jobs.values() {
+                if job.state.is_active() {
+                    job.cancel_flag
+                        .store(true, std::sync::atomic::Ordering::Release);
+                }
+            }
+        }
         let _ = self.sender.send(JobCommand::Shutdown);
+    }
+
+    /// 优雅停机：通知活跃任务协作中止、阻止后续排队的 Run 继续执行，并等待唯一写入线程退出、关闭 SQLite 写连接。
+    pub fn shutdown(&self) {
+        self.signal_shutdown();
         if let Some(handle) = self.writer_thread.lock().expect("写线程句柄锁").take() {
             let _ = handle.join();
         }
@@ -894,6 +912,8 @@ impl IndexJobManager {
             )));
         }
         job.cancelled = true;
+        job.cancel_flag
+            .store(true, std::sync::atomic::Ordering::Release);
         if job.state == JobState::Queued {
             queued.retain(|id| id != job_id);
             job.state = JobState::Failed;
@@ -1055,8 +1075,19 @@ fn writer_loop(
                     .is_some_and(|j| {
                         matches!(j.kind, JobKind::VerifyAll | JobKind::ChangedPaths(_))
                     });
-                run_job(&mut writer, &jobs, &running, &queued, &notices, &job_id);
-                if ran_scan && has_pending_l4a(&mut writer) {
+                run_job(
+                    &mut writer,
+                    &jobs,
+                    &running,
+                    &queued,
+                    &shutting_down,
+                    &notices,
+                    &job_id,
+                );
+                if ran_scan
+                    && !shutting_down.load(std::sync::atomic::Ordering::Acquire)
+                    && has_pending_l4a(&mut writer)
+                {
                     l4a_pending = true;
                 }
             }
@@ -1244,42 +1275,45 @@ fn run_job(
     jobs: &Arc<Mutex<HashMap<String, IndexJob>>>,
     running: &Arc<Mutex<Option<String>>>,
     queued: &Arc<Mutex<Vec<String>>>,
+    shutting_down: &Arc<std::sync::atomic::AtomicBool>,
     notices: &Option<Sender<SseNotice>>,
     job_id: &str,
 ) {
-    // 取消标记已置位（排队期取消）：直接落终态
-    {
-        let guard = jobs.lock().expect("任务表锁");
-        if let Some(job) = guard.get(job_id) {
-            if job.cancelled {
-                drop(guard);
-                IndexJobManager::finalize_cancellation(jobs, job_id);
-                finish_slot(running, queued, job_id);
-                return;
-            }
+    // 取消标记已置位（排队期取消）或已进入停机：直接落终态
+    let (kind, cancel_flag) = {
+        let mut guard = jobs.lock().expect("任务表锁");
+        let Some(job) = guard.get_mut(job_id) else {
+            return;
+        };
+        if shutting_down.load(std::sync::atomic::Ordering::Acquire) {
+            job.cancelled = true;
+            job.cancel_flag
+                .store(true, std::sync::atomic::Ordering::Release);
         }
-    }
-    let Some(kind) = jobs
-        .lock()
-        .expect("任务表锁")
-        .get(job_id)
-        .map(|job| job.kind.clone())
-    else {
-        return;
+        if job.cancelled {
+            drop(guard);
+            IndexJobManager::finalize_cancellation(jobs, job_id);
+            finish_slot(running, queued, job_id);
+            return;
+        }
+        (job.kind.clone(), Arc::clone(&job.cancel_flag))
     };
     update(jobs, job_id, |job| {
         job.state = JobState::Running;
         job.phase = "running".to_owned();
     });
 
-    // 阶段间隙 1：执行前取消检查
-    if is_cancelled(jobs, job_id) {
+    // 阶段间隙 1：执行前取消/停机检查
+    if shutting_down.load(std::sync::atomic::Ordering::Acquire) {
+        cancel_flag.store(true, std::sync::atomic::Ordering::Release);
+    }
+    if is_cancelled(jobs, job_id) || cancel_flag.load(std::sync::atomic::Ordering::Acquire) {
         IndexJobManager::finalize_cancellation(jobs, job_id);
         finish_slot(running, queued, job_id);
         return;
     }
 
-    let outcome = execute_job(writer, &kind);
+    let outcome = execute_job(writer, &kind, Arc::clone(&cancel_flag));
     // 阶段间隙 2：执行后取消检查（协作式——执行已完成的不再回滚，如实按结果落态）
     if outcome.is_ok() && is_cancelled(jobs, job_id) {
         IndexJobManager::finalize_cancellation(jobs, job_id);
@@ -1305,6 +1339,22 @@ fn run_job(
             });
             publish_notice(notices, jobs, Some(job_id.to_owned()), sse_kinds);
             persist_job_run(writer, jobs, job_id, "completed", None);
+        }
+        Err(GuanlanError::Cancelled(reason)) => {
+            update(jobs, job_id, |job| {
+                job.cancelled = true;
+                job.state = JobState::Failed;
+                job.phase = "cancelled".to_owned();
+                job.error = Some(reason.clone());
+                job.failed_items.clear();
+            });
+            persist_job_run(
+                writer,
+                jobs,
+                job_id,
+                "failed",
+                Some(GuanlanError::Cancelled(reason)),
+            );
         }
         Err(error) => {
             let message = error.to_string();
@@ -1660,6 +1710,7 @@ fn execute_candidate_exclude(
 fn execute_job(
     writer: &mut Writer,
     kind: &JobKind,
+    cancel_flag: Arc<std::sync::atomic::AtomicBool>,
 ) -> Result<
     (
         Option<IndexJobReport>,
@@ -1670,10 +1721,16 @@ fn execute_job(
 > {
     match kind {
         JobKind::VerifyAll => {
-            let report = reconcile(writer, &ReconcileOptions::from_env())?;
+            let mut options = ReconcileOptions::from_env();
+            options.cancel = Some(Arc::clone(&cancel_flag));
+            let report = reconcile(writer, &options)?;
             enqueue_l4a(writer, &report.changed_file_ids)?;
-            // C01：对账后重扫候选事项（排除表保证剔除不反弹）
-            let clusters = reweave_candidate_clusters(writer, &report.workspace_id)?;
+            // 事务已提交完成后若收到停机/取消信号，跳过可重算的候选聚类编织以尽快退出
+            let clusters = if cancel_flag.load(std::sync::atomic::Ordering::Acquire) {
+                0
+            } else {
+                reweave_candidate_clusters(writer, &report.workspace_id)?
+            };
             let mut kinds = sse_kinds_from_report(&report);
             if clusters > 0 {
                 kinds.push("candidates".to_owned());
@@ -1687,10 +1744,15 @@ fn execute_job(
                     "changed_paths 任务需要 paths（≤2000 条相对路径）".to_owned(),
                 ));
             }
-            let report = reconcile_paths(writer, &ReconcileOptions::from_env(), paths)?;
+            let mut options = ReconcileOptions::from_env();
+            options.cancel = Some(Arc::clone(&cancel_flag));
+            let report = reconcile_paths(writer, &options, paths)?;
             enqueue_l4a(writer, &report.changed_file_ids)?;
-            // C01：对账后重扫候选事项
-            let clusters = reweave_candidate_clusters(writer, &report.workspace_id)?;
+            let clusters = if cancel_flag.load(std::sync::atomic::Ordering::Acquire) {
+                0
+            } else {
+                reweave_candidate_clusters(writer, &report.workspace_id)?
+            };
             let mut kinds = vec!["watcher".to_owned()];
             kinds.extend(sse_kinds_from_report(&report));
             if clusters > 0 {
@@ -1730,7 +1792,9 @@ fn execute_job(
             }
             writer.set_initiative_dirs(dirs)?;
             // 登记后立即重算（新识别规则生效；幂等重算无迁移则零事件）
-            let report = reconcile(writer, &ReconcileOptions::from_env())?;
+            let mut options = ReconcileOptions::from_env();
+            options.cancel = Some(cancel_flag);
+            let report = reconcile(writer, &options)?;
             let summary = Some(to_index_job_report(&report));
             Ok((
                 summary,
@@ -3174,6 +3238,70 @@ mod tests {
         assert_eq!(
             guard.get(&id2).unwrap().kind,
             JobKind::ChangedPaths(vec!["a.md".to_owned(), "b.md".to_owned()])
+        );
+    }
+
+    #[test]
+    fn shutdown_aborts_in_flight_large_verify_all_promptly() {
+        use std::io::Write;
+        struct CleanupDir(std::path::PathBuf);
+        impl Drop for CleanupDir {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let base = CleanupDir(std::env::temp_dir().join(format!(
+            "guanlan-jobs-cancel-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        )));
+        let ws = base.0.join("ws");
+        let data = base.0.join("data");
+        std::fs::create_dir_all(&ws).expect("建工作区");
+        // 写入 6 × 16 MiB = 96 MiB 大文件（模拟含大视频的工作区：debug 下完整 SHA-256 需数秒）
+        let chunk = vec![0xA5u8; 1024 * 1024];
+        for i in 0..6 {
+            let mut f =
+                std::fs::File::create(ws.join(format!("clip_{i:02}.mp4"))).expect("建大文件");
+            for _ in 0..16 {
+                f.write_all(&chunk).expect("写大文件");
+            }
+        }
+
+        let writer = Writer::open_at(&data, &ws.to_string_lossy()).expect("打开可写库");
+        let mgr = IndexJobManager::start(writer);
+        let (job_id, _, _) = mgr.submit_kind(JobKind::VerifyAll);
+
+        // 等待写线程进入 Running 态（已开始采集与流式哈希）
+        let wait_start = std::time::Instant::now();
+        while wait_start.elapsed() < std::time::Duration::from_secs(3) {
+            if mgr
+                .get(&job_id)
+                .is_some_and(|job| job.state == JobState::Running)
+            {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+
+        let shutdown_start = std::time::Instant::now();
+        mgr.shutdown();
+        let elapsed_ms = shutdown_start.elapsed().as_millis();
+
+        let job = mgr.get(&job_id).expect("任务快照仍在");
+        assert!(
+            job.cancelled && job.phase == "cancelled",
+            "停机期间正在跑的大目录 VerifyAll 必须被协作中止，而非跑完（state={:?} phase={} elapsed={}ms）",
+            job.state,
+            job.phase,
+            elapsed_ms
+        );
+        assert!(
+            elapsed_ms < 1000,
+            "协作取消后 shutdown 应在 1s 内返回，实测 {elapsed_ms}ms"
         );
     }
 }

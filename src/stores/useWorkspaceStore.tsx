@@ -420,6 +420,9 @@ export function useWorkspaceStore() {
   const hasActiveBackend = !desktopSession || desktopSession.status === 'ready';
   const [workspaceEpoch, setWorkspaceEpoch] = useState(0);
   const [switchingWorkspace, setSwitchingWorkspace] = useState(false);
+  // 同步镜像 switchingWorkspace：在 switch_workspace 关闭旧服务的同一瞬间，
+  // 抑制旧后端在途请求与 SSE 断连误报成全局故障红条。
+  const switchingWorkspaceRef = useRef(false);
   const [workspaceSwitchError, setWorkspaceSwitchError] = useState<string | null>(null);
   const readingWorkspaceIdRef = useRef<string | null>(null);
   // A04：右键系统操作菜单、拖放导入引导浮层与非侵入反馈条
@@ -925,6 +928,7 @@ export function useWorkspaceStore() {
         );
       })();
       if (!boot.ok || !boot.data) {
+        if (switchingWorkspaceRef.current) return;
         setDataSource('error');
         // P0-2（v0.7 提示文本治理）：内部阶段名「bootstrap」直出改用户语言——
         // 状态句 + 影响句 + 恢复路径（不虚构自动重试）
@@ -1082,7 +1086,7 @@ export function useWorkspaceStore() {
   const pollL4aRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
-    if (!hasActiveBackend) {
+    if (!hasActiveBackend || switchingWorkspace) {
       l4aWasActiveRef.current = false;
       setL4aProgress(null);
       return;
@@ -1120,16 +1124,16 @@ export function useWorkspaceStore() {
       pollL4aRef.current = null;
       window.clearTimeout(timer);
     };
-  }, [hasActiveBackend, workspaceEpoch]);
+  }, [hasActiveBackend, switchingWorkspace, workspaceEpoch]);
 
   // ── 批次二：索引任务轮询 ────────────────────────────────────────────────
   // 启动后台对账与手动「重新扫描」共用这一条通路：任务结束即重新取数。
   useEffect(() => {
-    if (!hasActiveBackend || rescanState !== 'running' || !activeJobId) return;
+    if (!hasActiveBackend || switchingWorkspace || rescanState !== 'running' || !activeJobId) return;
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       const status = await fetchIndexJobStatus(activeJobId);
-      if (cancelled) return;
+      if (cancelled || switchingWorkspaceRef.current) return;
       if (!status.ok) {
         rescanInFlightRef.current = false;
         setRescanState('error');
@@ -1155,15 +1159,21 @@ export function useWorkspaceStore() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeJobId, hasActiveBackend, pollTick, rescanState, workspaceEpoch]);
+  }, [activeJobId, hasActiveBackend, pollTick, rescanState, switchingWorkspace, workspaceEpoch]);
 
   // ── 批次二：手动重新扫描（同步 ref 锁，防止慢网/4x CPU 连点重复提交） ──
   const handleRescan = useCallback(async () => {
-    if (rescanInFlightRef.current || rescanState === 'running') return;
+    if (switchingWorkspaceRef.current || rescanInFlightRef.current || rescanState === 'running') {
+      return;
+    }
     rescanInFlightRef.current = true;
     setRescanState('running');
     setRescanError('');
     const accepted = await startIndexJob('verify_all');
+    if (switchingWorkspaceRef.current) {
+      rescanInFlightRef.current = false;
+      return;
+    }
     if (!accepted.ok) {
       rescanInFlightRef.current = false;
       setRescanState('error');
@@ -1192,11 +1202,12 @@ export function useWorkspaceStore() {
 
   // 手动重试连接（断网恢复 / 读服务报错后点击重试，防重提交）
   const handleRetryConnection = useCallback(async () => {
-    if (retryInFlightRef.current) return;
+    if (switchingWorkspaceRef.current || retryInFlightRef.current) return;
     retryInFlightRef.current = true;
     setRetryingConnection(true);
     try {
       const status = await fetchWorkspaceStatus();
+      if (switchingWorkspaceRef.current) return;
       if (!status.ok) {
         setDataError(status.error || '读服务暂时不可用，请确认服务已启动后重试');
         setDataSource('error');
@@ -1800,7 +1811,7 @@ export function useWorkspaceStore() {
   // 服务未实现 SSE/端点未落地时静默（无数据可名 → 不造提示）；'hello' 与其余
   // kinds 不改既有 changeNotice 横幅口径（横幅复活属 F6 其余票）。
   useEffect(() => {
-    if (!hasActiveBackend) return;
+    if (!hasActiveBackend || switchingWorkspace) return;
     return subscribeWorkspaceStream((notice) => {
       if (notice.type !== 'workspace-change') return;
       const kinds = notice.kinds ?? [];
@@ -1923,12 +1934,12 @@ export function useWorkspaceStore() {
         if (wasDisconnected) {
           setBootstrapNonce((n) => n + 1);
         }
-      } else if (streamEverConnectedRef.current) {
+      } else if (streamEverConnectedRef.current && !switchingWorkspaceRef.current) {
         streamDisconnectedRef.current = true;
         setStreamDisconnected(true);
       }
     });
-  }, [hasActiveBackend, pushDecisionChangeNote, workspaceEpoch]);
+  }, [hasActiveBackend, pushDecisionChangeNote, switchingWorkspace, workspaceEpoch]);
 
   // E04：批阅看板数据拉取 + 打开/初始刷新 + 一键「已知悉」/ 孤儿修复 / 跳转原文 / 查看草案
   const refreshReviewBoard = useCallback(async () => {
@@ -3500,6 +3511,12 @@ export function useWorkspaceStore() {
     setDrillRange(null);
     dayQueryRef.current = { granularity: 'day', order: 'occurred', drill: null };
     setChangeNotice(null);
+    streamEverConnectedRef.current = false;
+    streamDisconnectedRef.current = false;
+    setStreamDisconnected(false);
+    rescanInFlightRef.current = false;
+    retryInFlightRef.current = false;
+    setRetryingConnection(false);
     setRescanState('idle');
     setRescanError('');
     setActiveJobId('');
@@ -3612,16 +3629,23 @@ export function useWorkspaceStore() {
   const handleSwitchWorkspace = useCallback(
     async (root: string) => {
       const target = root.trim();
-      if (!target || switchingWorkspace) return;
+      if (!target || switchingWorkspaceRef.current || switchingWorkspace) return;
+      switchingWorkspaceRef.current = true;
       setSwitchingWorkspace(true);
       setWorkspaceSwitchError(null);
-      const res = await switchDesktopWorkspace(target);
-      setSwitchingWorkspace(false);
-      if (!res.ok) {
-        setWorkspaceSwitchError(res.error.message);
-        return;
+      streamDisconnectedRef.current = false;
+      setStreamDisconnected(false);
+      try {
+        const res = await switchDesktopWorkspace(target);
+        if (!res.ok) {
+          setWorkspaceSwitchError(res.error.message);
+          return;
+        }
+        applyDesktopSessionState(res.state);
+      } finally {
+        switchingWorkspaceRef.current = false;
+        setSwitchingWorkspace(false);
       }
-      applyDesktopSessionState(res.state);
     },
     [applyDesktopSessionState, switchingWorkspace]
   );
@@ -4213,7 +4237,7 @@ export function useWorkspaceStore() {
   );
 
   const dirShell = useDirectoryShell({
-    enabled: hasActiveBackend,
+    enabled: hasActiveBackend && !switchingWorkspace,
     workspaceScopeKey: config.rootPath || 'default',
     workspaceEpoch,
     bootstrapNonce,
@@ -4275,7 +4299,7 @@ export function useWorkspaceStore() {
   );
 
   const multiProjects = useMultiProjects({
-    enabled: hasActiveBackend,
+    enabled: hasActiveBackend && !switchingWorkspace,
     workspaceEpoch,
     bootstrapNonce,
     onProjectActivated: handleProjectActivated,

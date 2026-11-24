@@ -1505,6 +1505,69 @@ mod save_workspace_file_tests {
             let _ = std::fs::remove_dir_all(d);
         }
     }
+
+    #[tokio::test]
+    async fn desktop_runtime_switches_promptly_while_previous_workspace_is_scanning() {
+        use std::io::Write;
+        let base = TempRoot::new("switch-during-scan");
+        let cfg_path = base.0.join("desktop.json");
+        let ws_heavy = base.0.join("heavy-media");
+        let ws_light = base.0.join("light-notes");
+        std::fs::create_dir_all(&ws_heavy).unwrap();
+        std::fs::create_dir_all(&ws_light).unwrap();
+        std::fs::write(ws_light.join("README.md"), "# Light\n").unwrap();
+
+        // 模拟含多个大视频文件的工作区：debug 下整盘 SHA-256 需 ~2 秒
+        let chunk = vec![0x3Cu8; 1024 * 1024];
+        for i in 0..8 {
+            let mut f = std::fs::File::create(ws_heavy.join(format!("video_{i:02}.mp4"))).unwrap();
+            for _ in 0..16 {
+                f.write_all(&chunk).unwrap();
+            }
+        }
+
+        let rt = DesktopRuntime::new(Some(cfg_path));
+        let opened = rt
+            .switch_to(&ws_heavy.to_string_lossy())
+            .await
+            .expect("打开大工作区");
+        assert_eq!(opened.status, "ready");
+        // 给后台 VerifyAll 一点时间进入流式哈希阶段
+        tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+
+        let started = std::time::Instant::now();
+        let switched = rt
+            .switch_to(&ws_light.to_string_lossy())
+            .await
+            .expect("大工作区扫描中途切走必须快速完成");
+        let elapsed_ms = started.elapsed().as_millis();
+        assert_eq!(switched.status, "ready");
+        assert_eq!(
+            switched.root.as_deref(),
+            Some(ws_light.to_string_lossy().as_ref())
+        );
+        assert!(
+            elapsed_ms < 800,
+            "旧工作区扫描中途切换不应卡死等待扫完，实测 {elapsed_ms}ms"
+        );
+
+        // 旧工作区排他锁必须已释放
+        let (heavy_data_dir, _, _) =
+            guanlan_service::runtime::workspace_lock_context(&ws_heavy.to_string_lossy())
+                .expect("取重工作区锁上下文");
+        let probe_lock = guanlan_service::runtime::acquire_workspace_lock(&heavy_data_dir)
+            .expect("切换完成后旧工作区排他锁必须已释放");
+        drop(probe_lock);
+
+        rt.shutdown_active().await;
+        for ws in [&ws_heavy, &ws_light] {
+            if let Ok((d, _, _)) =
+                guanlan_service::runtime::workspace_lock_context(&ws.to_string_lossy())
+            {
+                let _ = std::fs::remove_dir_all(d);
+            }
+        }
+    }
 }
 
 /// C03：全局呼出热键解析与 desktop.json 持久化（纯函数 + 配置 roundtrip）

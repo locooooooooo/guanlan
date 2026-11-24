@@ -19,7 +19,7 @@
 | 多项目并存 | `ProjectHub` 管理多个 `ProjectRuntime`，每个项目有自己的数据目录、锁、写线程与连接池。项目表在 `projects.json`（`default_projects_file_path`）。 | [`projects.rs`](../../native/crates/guanlan-service/src/projects.rs) |
 | 只读挂载 | `MountRegistry` 以只读方式打开参考工作区，状态在主区数据目录的 `mounts.json`。 | [`mounts.rs`](../../native/crates/guanlan-service/src/mounts.rs) |
 | 桌面壳跨源 | `build_router_with_desktop_cors` 只为 `tauri.localhost` 与本机开发端口放行 CORS。CLI 模式用 `build_router`。 | [`http/mod.rs`](../../native/crates/guanlan-service/src/http/mod.rs) |
-| 停机 | `RunningService::shutdown` 关闭通知中枢、触发 axum 优雅停机，再由 `ProjectHub::shutdown_all` 逐个释放锁、写线程与监听。 | [`lib.rs`](../../native/crates/guanlan-service/src/lib.rs)、[`projects.rs`](../../native/crates/guanlan-service/src/projects.rs) |
+| 停机 | `RunningService::shutdown` 先经 `ProjectHub::signal_shutdown` 通知所有项目写线程协作中止在途大扫描，再关闭通知中枢、触发 axum 优雅停机（2 秒超时后强制 abort 防止长连接挂死），最后由 `ProjectHub::shutdown_all` 经 `spawn_blocking` join 写线程并逐个释放锁与监听。 | [`lib.rs`](../../native/crates/guanlan-service/src/lib.rs)、[`projects.rs`](../../native/crates/guanlan-service/src/projects.rs) |
 
 ## 运行路径
 
@@ -64,7 +64,7 @@ CLI 最后打印端点行并 `join`。桌面壳持有 `RunningService`，切换�
 任务只有四态：`Queued`、`Running`、`Completed`、`Failed`。挂起、等待人工这类语义属于任务节点层，见[长任务引擎](longtask-engine.md)。
 
 - **同类合并**：`verify_all` 单飞；`changed_paths` 只并入仍在排队的同类任务，合并后不超过 2000 条；`set_initiative_dirs` 幂等覆盖；其余类型永不合并。
-- **取消**是协作式的。排队中的任务立即落到 `Failed`；运行中的任务在阶段间隙停下，同样落到 `Failed` 并标注已取消。事务提交点不可中断。对外的状态在活跃期报 `cancelled`。
+- **取消**是协作式的。排队中的任务立即落到 `Failed`；运行中的任务通过共享原子取消标志在文件采集（目录/文件/64 KiB 流式哈希块间隙）及事务前对账阶段及时停下，同样落到 `Failed` 并标注已取消。事务提交点不可中断。服务停机或切换工作区时，`IndexJobManager::signal_shutdown` 会第一时间置位全部活跃任务的取消标志。对外的状态在活跃期报 `cancelled`。
 - **重启恢复**：`recover_from_job_runs` 读 `job_runs` 表，把上一轮的 queued / running 任务重新入队；请求体无法重建的标为失败。
 - **写线程调度**：`writer_loop` 先服务显式命令；没有命令且 L4A 摘要有积压时，每空闲 40 毫秒处理一小批（至多 3 篇），任何交互式命令都能立刻抢占。
 
@@ -84,6 +84,7 @@ CLI 最后打印端点行并 `join`。桌面壳持有 `RunningService`，切换�
 ```sh
 cd native
 cargo test --locked -p guanlan-service --lib -- lifecycle_tests runtime::tests
+cargo test --locked -p guanlan-service --lib -- shutdown_aborts_in_flight_large_verify_all_promptly
 cargo test --locked -p guanlan-service --lib -- bounded_executor_saturates_deterministically cancel_releases_capacity_promptly panicking_query_is_contained_and_pool_recovers generation_cached_for_error_envelope_on_first_request
 cargo test --locked -p guanlan-service --lib -- response_budget
 cargo test --locked -p guanlan-service --lib -- multi_project_hub_end_to_end_lifecycle

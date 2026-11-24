@@ -23,6 +23,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
 
 use sha2::{Digest, Sha256};
@@ -138,8 +139,15 @@ pub struct CollectResult {
     /// 采集是否覆盖了指定范围的完整遍历；**不完整时不得据此判定缺失**
     pub complete: bool,
     pub truncated: bool,
+    /// 采集过程中是否因协作式取消/服务停机提前中止（此时 `complete` 必为 false）
+    pub cancelled: bool,
     /// 被 `.gitignore` 排除的路径数（诊断用：让用户知道「为什么这个文件没进来」）
     pub ignored_count: usize,
+}
+
+#[inline]
+fn is_cancelled(cancel: Option<&AtomicBool>) -> bool {
+    cancel.is_some_and(|flag| flag.load(Ordering::Acquire))
 }
 
 /// 采集工作区文件清单
@@ -149,6 +157,17 @@ pub fn collect_workspace(
     max_files: usize,
     max_depth: usize,
 ) -> CollectResult {
+    collect_workspace_cancellable(root, excluded_dirs, max_files, max_depth, None)
+}
+
+/// 采集工作区文件清单（支持协作式取消：每目录、每文件以及大文件 64KiB 流式哈希块间隙检查取消标志）。
+pub fn collect_workspace_cancellable(
+    root: &Path,
+    excluded_dirs: &[String],
+    max_files: usize,
+    max_depth: usize,
+    cancel: Option<&AtomicBool>,
+) -> CollectResult {
     let mut excluded: Vec<String> = DEFAULT_EXCLUDED.iter().map(|s| (*s).to_owned()).collect();
     excluded.extend(excluded_dirs.iter().cloned());
 
@@ -156,6 +175,18 @@ pub fn collect_workspace(
     let mut read_errors: Vec<ReadError> = Vec::new();
     let mut complete = true;
     let mut truncated = false;
+    let mut cancelled = false;
+
+    if is_cancelled(cancel) {
+        return CollectResult {
+            files,
+            read_errors,
+            complete: false,
+            truncated: false,
+            cancelled: true,
+            ignored_count: 0,
+        };
+    }
 
     if !root.is_dir() {
         return CollectResult {
@@ -166,6 +197,7 @@ pub fn collect_workspace(
             }],
             complete: false,
             truncated: false,
+            cancelled: false,
             ignored_count: 0,
         };
     }
@@ -186,8 +218,10 @@ pub fn collect_workspace(
         &mut read_errors,
         &mut complete,
         &mut truncated,
+        &mut cancelled,
         &mut stack,
         &mut ignored_count,
+        cancel,
     );
 
     CollectResult {
@@ -195,6 +229,7 @@ pub fn collect_workspace(
         read_errors,
         complete,
         truncated,
+        cancelled,
         ignored_count,
     }
 }
@@ -312,10 +347,24 @@ fn walk_folders(
 /// **`.gitignore` 纪律同样生效**：被忽略的路径不进采集结果——否则定向通道
 /// 会把整树扫描排除掉的文件又塞回库里，造成「收录/缺失」来回抖动。
 pub fn collect_specific_paths(root: &Path, paths: &[String]) -> CollectResult {
+    collect_specific_paths_cancellable(root, paths, None)
+}
+
+/// 定向路径采集的可取消版本（服务停机或任务取消时在路径间隙与流式哈希循环中及时返回）。
+pub fn collect_specific_paths_cancellable(
+    root: &Path,
+    paths: &[String],
+    cancel: Option<&AtomicBool>,
+) -> CollectResult {
     let mut files: Vec<CollectedFile> = Vec::new();
     let mut read_errors: Vec<ReadError> = Vec::new();
     let mut ignored_count = 0usize;
+    let mut cancelled = false;
     for raw in paths {
+        if is_cancelled(cancel) {
+            cancelled = true;
+            break;
+        }
         let rel = raw.replace('\\', "/");
         if rel.is_empty() || rel.contains("..") || rel.starts_with('/') {
             read_errors.push(ReadError {
@@ -345,7 +394,7 @@ pub fn collect_specific_paths(root: &Path, paths: &[String]) -> CollectResult {
             continue;
         }
         let format = format_of(&name, &full);
-        match hash_file_stable(&full) {
+        match hash_file_stable_cancellable(&full, cancel) {
             Ok(hashed) => files.push(CollectedFile {
                 file_name: name,
                 relative_path: rel,
@@ -356,6 +405,10 @@ pub fn collect_specific_paths(root: &Path, paths: &[String]) -> CollectResult {
                 stable: hashed.stable,
                 absolute_path: full,
             }),
+            Err(err) if err.kind() == std::io::ErrorKind::Interrupted && is_cancelled(cancel) => {
+                cancelled = true;
+                break;
+            }
             Err(err) => read_errors.push(ReadError {
                 relative_path: rel,
                 message: err.to_string(),
@@ -368,6 +421,7 @@ pub fn collect_specific_paths(root: &Path, paths: &[String]) -> CollectResult {
         // 定向采集范围不完整：缺失判定禁用（契约 §5.4）
         complete: false,
         truncated: false,
+        cancelled,
         ignored_count,
     }
 }
@@ -481,9 +535,16 @@ fn walk(
     read_errors: &mut Vec<ReadError>,
     complete: &mut bool,
     truncated: &mut bool,
+    cancelled: &mut bool,
     stack: &mut IgnoreStack,
     ignored_count: &mut usize,
+    cancel: Option<&AtomicBool>,
 ) {
+    if is_cancelled(cancel) {
+        *cancelled = true;
+        *complete = false;
+        return;
+    }
     if depth > max_depth || files.len() >= max_files {
         // 范围不完整：complete 必须同步为 false，调用方才不会把截断范围外的文件误判缺失
         *truncated = true;
@@ -534,6 +595,11 @@ fn walk(
     names.sort_by(|a, b| a.0.cmp(&b.0));
 
     for (name, full_path) in names {
+        if is_cancelled(cancel) {
+            *cancelled = true;
+            *complete = false;
+            return;
+        }
         if files.len() >= max_files {
             *truncated = true;
             *complete = false;
@@ -576,11 +642,16 @@ fn walk(
                 read_errors,
                 complete,
                 truncated,
+                cancelled,
                 stack,
                 ignored_count,
+                cancel,
             );
             if pushed {
                 stack.pop();
+            }
+            if *cancelled {
+                return;
             }
             continue;
         }
@@ -596,7 +667,7 @@ fn walk(
         }
 
         let format = format_of(&name, &full_path);
-        match hash_file_stable(&full_path) {
+        match hash_file_stable_cancellable(&full_path, cancel) {
             Ok(hashed) => files.push(CollectedFile {
                 relative_path,
                 file_name: name,
@@ -607,6 +678,11 @@ fn walk(
                 stable: hashed.stable,
                 absolute_path: full_path,
             }),
+            Err(err) if err.kind() == std::io::ErrorKind::Interrupted && is_cancelled(cancel) => {
+                *cancelled = true;
+                *complete = false;
+                return;
+            }
             Err(err) => read_errors.push(ReadError {
                 relative_path,
                 message: err.to_string(),
@@ -737,19 +813,42 @@ pub struct HashedFile {
 /// **内存口径（B01）**：全程只持有一个 64KiB 缓冲，2GB 视频的流式哈希内存峰值
 /// 恒定在 64KB 量级——绝不整读大文件。
 pub fn hash_file_stable(path: &Path) -> std::io::Result<HashedFile> {
-    let first = attempt_hash(path)?;
+    hash_file_stable_cancellable(path, None)
+}
+
+/// 稳定读取的可取消版本：每次 64KiB 分块读取前检查取消标志，大视频/归档文件也能毫秒级中止。
+pub fn hash_file_stable_cancellable(
+    path: &Path,
+    cancel: Option<&AtomicBool>,
+) -> std::io::Result<HashedFile> {
+    let first = attempt_hash_cancellable(path, cancel)?;
     if first.stable {
         return Ok(first);
     }
-    attempt_hash(path)
+    attempt_hash_cancellable(path, cancel)
 }
 
-fn attempt_hash(path: &Path) -> std::io::Result<HashedFile> {
+fn attempt_hash_cancellable(
+    path: &Path,
+    cancel: Option<&AtomicBool>,
+) -> std::io::Result<HashedFile> {
+    if is_cancelled(cancel) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Interrupted,
+            "采集已取消",
+        ));
+    }
     let before = stat_fingerprint(path)?;
     let mut file = fs::File::open(path)?;
     let mut hasher = Sha256::new();
     let mut buf = vec![0u8; 64 * 1024];
     loop {
+        if is_cancelled(cancel) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "采集已取消",
+            ));
+        }
         let read = file.read(&mut buf)?;
         if read == 0 {
             break;
@@ -1027,6 +1126,43 @@ mod tests {
         assert_eq!(hashed.size_bytes, 8 * 1024 * 1024);
         assert_eq!(hashed.sha256.len(), 64);
         assert!(hashed.stable);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn collect_workspace_cancellable_and_hash_abort_promptly() {
+        let dir = tmp_dir("cancel");
+        write(&dir, "a.md", b"# A");
+        write(&dir, "sub/b.mp4", &vec![0x5Au8; 512 * 1024]);
+
+        let flag = AtomicBool::new(true);
+        let result = collect_workspace_cancellable(
+            &dir,
+            &[],
+            DEFAULT_MAX_FILES,
+            DEFAULT_MAX_DEPTH,
+            Some(&flag),
+        );
+        assert!(result.cancelled, "已置位取消标志时必须立即中止采集");
+        assert!(
+            !result.complete,
+            "中止采集范围不完整，complete 必须为 false"
+        );
+        assert!(result.files.is_empty());
+        assert!(result.read_errors.is_empty(), "协作取消不得误记为读取错误");
+
+        let hash_err = hash_file_stable_cancellable(&dir.join("sub/b.mp4"), Some(&flag))
+            .expect_err("流式哈希应响应取消标志返回 Interrupted");
+        assert_eq!(hash_err.kind(), std::io::ErrorKind::Interrupted);
+
+        let specific = collect_specific_paths_cancellable(
+            &dir,
+            &["a.md".to_owned(), "sub/b.mp4".to_owned()],
+            Some(&flag),
+        );
+        assert!(specific.cancelled);
+        assert!(specific.read_errors.is_empty());
+
         let _ = fs::remove_dir_all(&dir);
     }
 }

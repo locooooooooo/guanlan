@@ -54,6 +54,7 @@
 - **连接归还之前，先清掉上一个请求的取消标志。** 否则「上一请求的取消误伤复用连接的新请求」。来源：`http/query_exec.rs`、`ReadonlyStore::reset_query_state`。
 - **panic 过的查询不能把连接带走。** 此前一次 panic 让读事务永不结束，后续查询被钉在旧快照上。来源：issue #36。
 - **测试起的常连接要显式断开。** fetch 默认 keep-alive，`server.close()` 会一直等。来源：`test/workspace-client-v1.test.ts`。
+- **服务停机前先协作取消在途长任务，且绝不在异步工作线程上裸 `join` 阻塞线程。** 桌面端切换工作区时，`RunningService::shutdown` 先关了 HTTP 与 SSE，再在异步上下文里等 `IndexJobManager::shutdown` 的 `writer_thread.join()`；若旧工作区含大体积音视频文件、正跑整盘 `VerifyAll` 流式 SHA-256，写线程无法中断，导致切换卡死数十秒乃至数分钟，期间前端对已停机的旧端口持续报「连接已中断 / 扫描失败 / 无法连接观澜读服务」。现在取消标志贯通采集、64 KiB 流式哈希与事务前对账，`ProjectRuntime::shutdown` 先发取消信号再进 `spawn_blocking` 等写线程退出，前端在切换窗口内暂停旧后端 SSE 与轮询。来源：提交「desktop: 切换工作区或停机时协作中止在途扫描，消除假断连报错」。
 
 ## 写入护栏
 
