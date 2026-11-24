@@ -6,7 +6,7 @@
 
 | 部分 | 事实来源 | 谁在检查 |
 | --- | --- | --- |
-| 版本号 | `package.json` 的 `version` 是参照；另外 16 处见下文「版本号」 | `test/release-preflight.test.ts` 随 `npm test` 把 16 处逐一与它比对；`test/v12-release-parity.test.ts` 与 `test/f03-installer-migration.test.ts` 另有自己的断言 |
+| 版本号 | `package.json` 的 `version` 是参照；另外 15 处见下文「版本号」 | `test/release-preflight.test.ts` 随 `npm test` 把 15 处逐一与它比对；`test/v12-release-parity.test.ts` 与 `test/f03-installer-migration.test.ts` 另有自己的断言 |
 | 发版预检 | [`scripts/release-preflight.mjs`](../../scripts/release-preflight.mjs)：版本号、标签、构建产物三组检查 | `test/release-preflight.test.ts` |
 | 前端构建身份 | `vite.config.ts` 的 `define`，运行时由 [`appBuildInfo.ts`](../../src/utils/appBuildInfo.ts) 读取 | V12-04、V12-06、V12-07 |
 | 安装包配置 | [`tauri.conf.json`](../../native/crates/guanlan-desktop/tauri.conf.json) 与 [`tauri.release.conf.json`](../../native/crates/guanlan-desktop/tauri.release.conf.json) | `build-windows-installer.mjs --check-only`，以及 f03 测试 |
@@ -18,7 +18,7 @@
 
 ## 版本号
 
-版本号一共出现在 17 处。`package.json` 是参照，其余 16 处必须与它相同：
+版本号一共出现在 16 处。`package.json` 是参照，其余 15 处必须与它相同（`npm run preflight` 打印 17 行，多出的一行是汇总）：
 
 - 清单与锁文件：`package-lock.json`（顶层与 `packages[""]` 各一处）、`native/Cargo.toml` 的 `[workspace.package] version`、`native/Cargo.lock` 里三个 crate、`tauri.conf.json`。
 - 写死的字面量：`src/utils/appBuildInfo.ts` 的兜底值、`vite.config.ts` 的两处兜底值、`test/v12-release-parity.test.ts` 里断言版本的四处、`scripts/visual-baseline.mjs` 里断言「关于观澜」版本的一处。
@@ -80,7 +80,7 @@ Rust 侧没有嵌入提交哈希。`env!("CARGO_PKG_VERSION")` 只在 MCP 代理
 
 **`build`（Windows）**，推送 `v*` 标签或手动触发时运行：
 
-1. 预检。有标签时要求：标签等于 `v<版本>`，版本号 17 处一致，标签所指的提交是 `main` 的祖先。手动触发没有标签，只查版本号。预检不过，这一步就失败，不往下构建。
+1. 预检。有标签时要求：标签等于 `v<版本>`，版本号 16 处一致，标签所指的提交是 `main` 的祖先。手动触发没有标签，只查版本号。预检不过，这一步就失败，不往下构建。
 2. `node scripts/build-windows-installer.mjs`，和本地构建是同一个脚本。
 3. 暂存四个文件到 `dist-release/` 并算出 `SHA256SUMS`：两个安装包、改名后的命令行 `guanlan-cli-<版本>-x86_64-pc-windows-msvc.exe`、校验和文件。
 4. 核对暂存的产物：文件齐、不为空、没有多余的文件、校验和与内容一致。
@@ -152,7 +152,7 @@ Rust 侧没有嵌入提交哈希。`env!("CARGO_PKG_VERSION")` 只在 MCP 代理
 ```sh
 npm run gate                                        # 对应 CI 的 frontend 与 rust-desktop 作业
 npm run gate -- --full                              # 再加 smoke 作业的几步，需要能做 release 构建
-npm run preflight                                   # 17 处版本号是否一致；加 --tag vX.Y.Z --require-on-main 核对标签
+npm run preflight                                   # 16 处版本号是否一致；加 --tag vX.Y.Z --require-on-main 核对标签
 node scripts/gen-third-party-notices.mjs --check    # 第三方许可索引是否与重新生成的结果一致；需要 node_modules 与 cargo
 node scripts/build-windows-installer.mjs --check-only
 node native/crates/guanlan-desktop/gen-icon.mjs   # 只在改了图标样式时

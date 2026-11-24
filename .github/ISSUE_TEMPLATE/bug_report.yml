@@ -7,7 +7,7 @@ body:
     attributes:
       label: 观澜版本
       description: 「设置 → 关于观澜」里的版本号与提交短哈希；从源码运行的写提交哈希。
-      placeholder: v1.2.0（8d8e4ab）
+      placeholder: v1.2.1（8d8e4ab）
     validations:
       required: true
 

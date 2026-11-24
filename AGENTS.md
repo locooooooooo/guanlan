@@ -62,7 +62,7 @@
 ## 文档要跟着改
 
 - 改动改变了某个子系统的职责、接口、状态、运行路径、兼容规则或失败行为，在**同一个提交**里更新 `docs/subsystems/` 里对应的那份参考。
-- **升版本号**要改 17 处，清单与步骤见[构建与发布](docs/subsystems/release-pipeline.md#版本号)；`npm run preflight` 会一次列出所有没对上的地方。升完跑 `npm run notices`：两份锁文件里有版本号，锁文件变了，第三方许可索引要跟着重新生成。
+- **升版本号**要改 16 处，清单与步骤见[构建与发布](docs/subsystems/release-pipeline.md#版本号)；`npm run preflight` 会一次列出所有没对上的地方。升完跑 `npm run notices`：两份锁文件里有版本号，锁文件变了，第三方许可索引要跟着重新生成。
 - 改了发布产物的文件名，要同步 `release.yml`、`build-windows-installer.mjs` 与 `release-preflight.mjs` 三处。
 - 修掉了「待处理」里的问题，从 `LESSONS.md` 里删掉那一条。
 - 这轮工作里有值得记下的教训，写进 `LESSONS.md`：先写规则，再写为什么，最后写证据。
