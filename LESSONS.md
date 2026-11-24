@@ -124,6 +124,8 @@
 - **行为待核实的（只读了代码，没有运行验证）：** MCP 代理的 `resolve_endpoint` 不校验回环地址；索引写线程上除了解析器之外没有 panic 兜底，一处 panic 会让线程退出，之后的任务全部失败；查询的执行超时与取消可能以 500 而不是 503 返回；`guanlan scan` 先打开可写库、后取工作区锁。
 - **仓库卫生：**
   - `npm run build` 的偶发崩溃（`@tailwindcss/oxide` 4.3.4 的 `boundary.rs`）。`npm run gate` 只对它自动重试一次，根因没有查。
+  - 测试在系统临时目录里留下目录，从不清理。Rust 测试的 `guanlan-core-*`、`guanlan-svc-*` 一类（六个文件、十五处），以及 Node 测试 `test/v04-events-query.test.ts`，它每次运行留下 5 个 `guanlan-evq-*`。建立这套规范时，本机 `%TEMP%` 里有 22565 个 `guanlan-*` 目录、58498 个文件、约 4.8 GB。
+  - `npm run gate` 的每一步没有超时。某一步卡住时门禁会一直等着，既不失败也不提示；CI 的 cargo 步骤有超时。建立这套规范时，有一轮门禁在 `npm test` 停了十多分钟，同一个测试文件单独跑 20 次没有复现，原因没有查清。
   - 两个历史脚本写死了个人路径：`scripts/v04-reconcile-once.ts`（缺省工作区）、`scripts/verify-v03-data-simple.cjs`（连参数都不收）。测试与身份数字向量里也拿同一路径当样本（`src/utils/guanlanEngine.test.ts`、`native/crates/guanlan-core/src/domain/mod.rs`）；后者改了会改变向量的值，要连向量一起重新生成。
   - 两个历史脚本会直接写真实数据目录：`scripts/v04-reconcile-once.ts`、`scripts/seed-volume.ts`，都经 `defaultDataDir` 取默认目录。
   - 没有任何地方引用的资源：`scripts/visual-baseline/u12/` 下的截图、`public/assets/aistudio/` 下的一张图片。
