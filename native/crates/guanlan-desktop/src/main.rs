@@ -549,6 +549,118 @@ fn set_windows_context_menu(enabled: bool) -> Result<bool, String> {
     set_windows_context_menu_impl(enabled)
 }
 
+/// 检查更新的结果。`status`：`available`（有新版本）、`up_to_date`、`not_configured`
+/// （生产包暂未配置更新源，见 docs/subsystems/release-pipeline.md 的「自动更新」）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopUpdateCheck {
+    status: String,
+    current_version: String,
+    version: Option<String>,
+    notes: Option<String>,
+    pub_date: Option<String>,
+}
+
+/// 更新源是否配置：`plugins.updater.endpoints` 非空。未配置时不去联网——插件在空
+/// endpoints 上会返回 ReleaseNotFound，那不是「已是最新」，也不该当成错误弹出来。
+fn updater_endpoints_configured(app: &tauri::AppHandle) -> bool {
+    app.config()
+        .plugins
+        .0
+        .get("updater")
+        .and_then(|config| config.get("endpoints"))
+        .and_then(|endpoints| endpoints.as_array())
+        .is_some_and(|endpoints| !endpoints.is_empty())
+}
+
+/// 把下载进度转成前端 CustomEvent（与拖拽、全局热键同一种注入方式，不用事件插件）。
+fn emit_update_progress(
+    window: &tauri::WebviewWindow,
+    phase: &str,
+    downloaded: u64,
+    total: Option<u64>,
+) {
+    let total_js = total
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "null".to_owned());
+    let script = format!(
+        "window.dispatchEvent(new CustomEvent('guanlan:update-progress', {{ detail: {{ phase: '{phase}', downloaded: {downloaded}, total: {total_js} }} }}));"
+    );
+    let _ = window.eval(&script);
+}
+
+#[tauri::command]
+async fn check_desktop_update(app: tauri::AppHandle) -> Result<DesktopUpdateCheck, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let current_version = app.package_info().version.to_string();
+    if !updater_endpoints_configured(&app) {
+        return Ok(DesktopUpdateCheck {
+            status: "not_configured".to_owned(),
+            current_version,
+            version: None,
+            notes: None,
+            pub_date: None,
+        });
+    }
+    let updater = app
+        .updater()
+        .map_err(|err| format!("UPDATER_NOT_READY: {err}"))?;
+    match updater.check().await {
+        Ok(Some(update)) => Ok(DesktopUpdateCheck {
+            status: "available".to_owned(),
+            current_version,
+            version: Some(update.version.clone()),
+            notes: update.body.clone(),
+            pub_date: update.date.map(|date| date.to_string()),
+        }),
+        Ok(None) => Ok(DesktopUpdateCheck {
+            status: "up_to_date".to_owned(),
+            current_version,
+            version: None,
+            notes: None,
+            pub_date: None,
+        }),
+        Err(err) => Err(format!("UPDATE_CHECK_FAILED: {err}")),
+    }
+}
+
+/// 下载并安装更新。Windows 上安装器启动后进程会退出（插件的行为），前端只需要把进度
+/// 显示出来；安装器以 passive 模式运行（配置里的 installMode），不要求用户操作。
+#[tauri::command]
+async fn install_desktop_update(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+) -> Result<(), String> {
+    use tauri_plugin_updater::UpdaterExt;
+    if !updater_endpoints_configured(&app) {
+        return Err("UPDATE_NOT_CONFIGURED".to_owned());
+    }
+    let updater = app
+        .updater()
+        .map_err(|err| format!("UPDATER_NOT_READY: {err}"))?;
+    let update = updater
+        .check()
+        .await
+        .map_err(|err| format!("UPDATE_CHECK_FAILED: {err}"))?
+        .ok_or_else(|| "UPDATE_NOT_AVAILABLE".to_owned())?;
+    let progress_window = window.clone();
+    let mut downloaded: u64 = 0;
+    update
+        .download_and_install(
+            move |chunk_length, content_length| {
+                downloaded += chunk_length as u64;
+                emit_update_progress(&progress_window, "downloading", downloaded, content_length);
+            },
+            move || emit_update_progress(&window, "installing", 0, None),
+        )
+        .await
+        .map_err(|err| format!("UPDATE_INSTALL_FAILED: {err}"))?;
+    // Windows 上安装器接管；其他平台按插件要求重启应用。
+    #[cfg(not(windows))]
+    app.restart();
+    Ok(())
+}
+
 fn main() {
     let cli_args: Vec<String> = std::env::args().skip(1).collect();
     if cli_args.iter().any(|a| a == "--register-context-menu") {
@@ -594,6 +706,9 @@ fn main() {
                 })
                 .build(),
         )
+        // 应用内更新：插件读 tauri.conf.json 的 plugins.updater（公钥与 endpoints）。
+        // 只注册 Rust 侧，前端经 __GUANLAN_UPDATE_BRIDGE__ 调下面的两个命令。
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             save_workspace_file,
             get_desktop_state,
@@ -607,7 +722,9 @@ fn main() {
             resolve_workspace_path,
             import_external_files,
             get_windows_context_menu_status,
-            set_windows_context_menu
+            set_windows_context_menu,
+            check_desktop_update,
+            install_desktop_update
         ])
         .setup(move |app| {
             // 全局快捷键注册（解析失败的兜底值已保证合法；再失败仅告警不阻断启动）
@@ -735,6 +852,20 @@ window.__GUANLAN_SYSTEM_BRIDGE__ = {
       sourcePaths: sourcePaths,
       targetDir: targetDir || ''
     });
+  }
+};
+window.__GUANLAN_UPDATE_BRIDGE__ = {
+  check: function () {
+    if (!window.__TAURI_INTERNALS__) {
+      return Promise.reject(new Error('NOT_TAURI'));
+    }
+    return window.__TAURI_INTERNALS__.invoke('check_desktop_update');
+  },
+  install: function () {
+    if (!window.__TAURI_INTERNALS__) {
+      return Promise.reject(new Error('NOT_TAURI'));
+    }
+    return window.__TAURI_INTERNALS__.invoke('install_desktop_update');
   }
 };
 "#;

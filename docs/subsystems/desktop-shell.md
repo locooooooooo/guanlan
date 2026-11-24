@@ -51,12 +51,13 @@
 | `window.__GUANLAN_SAVE_FILE__` | 保存回写，转 `save_workspace_file` 命令 |
 | `window.__GUANLAN_WORKSPACE_BRIDGE__` | `getState`、`pickFolder`、`switchWorkspace`、`removeRecentWorkspace` |
 | `window.__GUANLAN_SYSTEM_BRIDGE__` | `pickExternalFiles`、`revealInExplorer`、`openWithDefaultApp`、`writeClipboardText`、`resolveWorkspacePath`、`importExternalFiles` |
+| `window.__GUANLAN_UPDATE_BRIDGE__` | `check`、`install`，对应下面的检查与安装更新命令 |
 
-壳还通过 `window.eval` 向页面派发两个自定义事件：`guanlan:native-drag-drop`（原生拖放）与 `guanlan:global-shortcut`（全局热键）。
+壳还通过 `window.eval` 向页面派发三个自定义事件：`guanlan:native-drag-drop`（原生拖放）、`guanlan:global-shortcut`（全局热键）与 `guanlan:update-progress`（下载进度：`phase`、`downloaded`、`total`）。
 
 ### Tauri 命令
 
-`save_workspace_file`、`get_desktop_state`、`pick_workspace_folder`、`pick_external_files`、`switch_workspace`、`remove_recent_workspace`、`reveal_in_explorer`、`open_with_default_app`、`write_clipboard_text`、`resolve_workspace_path`、`import_external_files`、`get_windows_context_menu_status`、`set_windows_context_menu`。共 13 个，全部经 `window.__TAURI_INTERNALS__.invoke` 调用。
+`save_workspace_file`、`get_desktop_state`、`pick_workspace_folder`、`pick_external_files`、`switch_workspace`、`remove_recent_workspace`、`reveal_in_explorer`、`open_with_default_app`、`write_clipboard_text`、`resolve_workspace_path`、`import_external_files`、`get_windows_context_menu_status`、`set_windows_context_menu`、`check_desktop_update`、`install_desktop_update`。共 15 个，全部经 `window.__TAURI_INTERNALS__.invoke` 调用。
 
 ## 约束与失败行为
 
@@ -65,7 +66,8 @@
 - **保存回写是乐观并发的。** 磁盘内容与阅读时的原文不一致就返回 `CONFLICT`，不落任何字节，见[工作区写入](workspace-writes.md)。
 - **外部文件导入只写工作区内部**，禁止导入到隐藏的点目录，同名冲突自动改名。
 - **`desktop.json` 读不到或解析失败时按空配置起步**，不阻断启动。旧格式只有 `lastRoot` 一个键，向后兼容。
-- **Tauri 的能力清单是空的**（`capabilities.json` 为 `{}`）。网页没有被授予任何 Tauri ACL 权限，所有原生访问都经上面这 13 个命令。
+- **Tauri 的能力清单是空的**（`capabilities.json` 为 `{}`）。网页没有被授予任何 Tauri ACL 权限，所有原生访问都经上面这 15 个命令。**更新器也走这条路**：`tauri-plugin-updater` 只在 Rust 侧注册，网页不调用插件的命令，所以不需要 `updater:default` 权限。
+- **更新只在用户点「设置 → 关于观澜 → 检查更新」时发生**，没有启动时检查、没有后台轮询。`tauri.conf.json` 里有更新器公钥，`endpoints` 为空：生产包在更新源定下来之前显示「未配置更新源」，不联网。演练用的回环更新源由构建脚本的 `--updater-test-endpoint` 临时叠加，不写进仓库里的发布配置。签名私钥在仓库外，见[构建与发布](release-pipeline.md#自动更新)。
 - **`security.csp` 是 `null`**，没有配置内容安全策略。
 - **右键菜单只由 NSIS 安装包注册。** MSI 安装后没有「用观澜打开此文件夹」，需要在设置里手动打开。菜单项写在 `HKCU` 下，免管理员提权，卸载时清除。
 - release 构建不弹控制台窗口，debug 构建保留终端以便看 stderr。

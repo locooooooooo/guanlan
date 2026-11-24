@@ -15,9 +15,11 @@ import {
   AlertTriangle,
   Check,
   Database,
+  Download,
   EyeOff,
   FolderCog,
   Info,
+  RefreshCw,
   RotateCcw,
   ShieldCheck,
   X,
@@ -25,6 +27,14 @@ import {
 import type { StorageStatsResponse } from '../../services/apiTypes';
 import type { WorkspaceConfig } from '../../types/guanlan';
 import { APP_BUILD_INFO, formatBuildTimestamp } from '../../utils/appBuildInfo';
+import {
+  checkDesktopUpdate,
+  installDesktopUpdate,
+  isDesktopUpdateBridgeAvailable,
+  subscribeUpdateProgress,
+  type DesktopUpdateCheck,
+  type DesktopUpdateProgress,
+} from '../../services/desktopBridge';
 import { Button, IconButton } from '../ui/primitives';
 import {
   StorageUsageSection,
@@ -47,6 +57,16 @@ import {
 } from '../ui';
 
 export type SettingsTabId = 'workspace' | 'noise' | 'storage' | 'health' | 'about';
+
+/** 「关于观澜」里检查更新的界面状态。检查只在用户点按钮时发生。 */
+type UpdateUiState =
+  | { kind: 'idle' }
+  | { kind: 'checking' }
+  | { kind: 'not_configured' }
+  | { kind: 'up_to_date'; currentVersion: string }
+  | { kind: 'available'; check: DesktopUpdateCheck }
+  | { kind: 'installing'; progress: DesktopUpdateProgress }
+  | { kind: 'error'; message: string };
 
 export const SETTINGS_TABS: ReadonlyArray<{
   id: SettingsTabId;
@@ -83,6 +103,8 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<SettingsTabId>(initialTab);
   const [liveStats, setLiveStats] = useState<StorageStatsResponse | null>(null);
+  const [updateState, setUpdateState] = useState<UpdateUiState>({ kind: 'idle' });
+  const updateBridgeAvailable = isDesktopUpdateBridgeAvailable();
 
   useEffect(() => {
     if (!isOpen) return;
@@ -91,7 +113,42 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
     });
   }, [isOpen, config.rootPath]);
 
+  // 下载与安装进度由桌面壳以 CustomEvent 推过来（见 src/services/desktopBridge.ts）
+  useEffect(() => {
+    if (!isOpen) return;
+    return subscribeUpdateProgress((progress) => {
+      setUpdateState({ kind: 'installing', progress });
+    });
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const handleCheckUpdate = async () => {
+    setUpdateState({ kind: 'checking' });
+    const result = await checkDesktopUpdate();
+    if (!result.ok) {
+      setUpdateState({ kind: 'error', message: result.error });
+      return;
+    }
+    if (result.data.status === 'available') {
+      setUpdateState({ kind: 'available', check: result.data });
+    } else if (result.data.status === 'not_configured') {
+      setUpdateState({ kind: 'not_configured' });
+    } else {
+      setUpdateState({ kind: 'up_to_date', currentVersion: result.data.currentVersion });
+    }
+  };
+
+  const handleInstallUpdate = async () => {
+    setUpdateState({
+      kind: 'installing',
+      progress: { phase: 'downloading', downloaded: 0, total: null },
+    });
+    const result = await installDesktopUpdate();
+    if (!result.ok) {
+      setUpdateState({ kind: 'error', message: result.error });
+    }
+  };
 
   const effectiveUsedMiB = liveStats
     ? Math.round((liveStats.blobs_disk_bytes / (1024 * 1024)) * 100) / 100
@@ -107,6 +164,31 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
     ? liveStats.policy.text_max_mib ||
       Math.max(1, Math.round(liveStats.policy.text_max_bytes / (1024 * 1024)))
     : null;
+
+  const updateStatusText = (() => {
+    switch (updateState.kind) {
+      case 'idle':
+        return updateBridgeAvailable ? '' : '仅桌面客户端支持';
+      case 'checking':
+        return '正在检查…';
+      case 'not_configured':
+        return '未配置更新源';
+      case 'up_to_date':
+        return `已是最新（v${updateState.currentVersion}）`;
+      case 'available':
+        return `发现 v${updateState.check.version}`;
+      case 'installing': {
+        const { phase, downloaded, total } = updateState.progress;
+        if (phase === 'installing') return '正在安装，应用即将重启…';
+        if (total && total > 0) {
+          return `正在下载 ${Math.min(100, Math.round((downloaded / total) * 100))}%`;
+        }
+        return downloaded > 0 ? `正在下载 ${(downloaded / (1024 * 1024)).toFixed(1)} MiB` : '正在下载…';
+      }
+      case 'error':
+        return updateState.message;
+    }
+  })();
 
   const quotaRatio = Math.min(
     100,
@@ -482,6 +564,54 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
                           {formatBuildTimestamp(APP_BUILD_INFO.buildTime)}
                         </span>
                       </div>
+                    </div>
+                    <div className="space-y-2 pt-1" data-about-update="">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={
+                            !updateBridgeAvailable ||
+                            updateState.kind === 'checking' ||
+                            updateState.kind === 'installing'
+                          }
+                          onClick={() => void handleCheckUpdate()}
+                        >
+                          <RefreshCw
+                            className={`h-3 w-3 ${updateState.kind === 'checking' ? 'animate-spin' : ''}`}
+                          />
+                          <span>{updateState.kind === 'checking' ? '检查中…' : '检查更新'}</span>
+                        </Button>
+                        {updateStatusText ? (
+                          <span
+                            className="text-[11px] text-muted-foreground"
+                            data-about-update-status={updateState.kind}
+                          >
+                            {updateStatusText}
+                          </span>
+                        ) : null}
+                      </div>
+                      {updateState.kind === 'available' ? (
+                        <div className="space-y-2 rounded-lg border border-border/70 bg-muted/35 px-3 py-2">
+                          <div className="text-[12px] font-medium text-foreground">
+                            发现新版本 v{updateState.check.version}（当前 v
+                            {updateState.check.currentVersion}）
+                          </div>
+                          {updateState.check.notes ? (
+                            <div className="max-h-24 overflow-auto whitespace-pre-wrap text-[11px] text-muted-foreground">
+                              {updateState.check.notes}
+                            </div>
+                          ) : null}
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => void handleInstallUpdate()}
+                          >
+                            <Download className="h-3 w-3" />
+                            <span>下载并安装</span>
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
                     <div className="flex flex-wrap gap-1.5 pt-1">
                       <Badge variant="outline" size="sm">coss.com/ui + @base-ui/react</Badge>

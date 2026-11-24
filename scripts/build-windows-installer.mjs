@@ -14,7 +14,16 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import os from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,9 +35,21 @@ const baseConfPath = resolve(desktopDir, 'tauri.conf.json');
 const releaseConfPath = resolve(desktopDir, 'tauri.release.conf.json');
 const nsisHookPath = resolve(desktopDir, 'installer/windows-context-menu.nsh');
 
-const args = new Set(process.argv.slice(2));
+const argv = process.argv.slice(2);
+const args = new Set(argv);
 const checkOnly = args.has('--check-only');
 const skipBundle = args.has('--stage-only');
+/** 演练用：把 createUpdaterArtifacts 与一个回环更新源叠加进构建配置（不写进仓库里的
+ *  发布配置）。只在本地走通更新流程时使用，见 docs/subsystems/release-pipeline.md。 */
+function flagValue(name) {
+  const index = argv.indexOf(name);
+  if (index < 0) return undefined;
+  const value = argv[index + 1];
+  return value !== undefined && !value.startsWith('--') ? value : undefined;
+}
+const updaterTestEndpoint = args.has('--updater-test-endpoint')
+  ? flagValue('--updater-test-endpoint')
+  : undefined;
 
 function fail(msg) {
   console.error(`[guanlan-installer] FAIL: ${msg}`);
@@ -54,6 +75,28 @@ function validateInstallerConfig() {
   const externalBin = relConf?.bundle?.externalBin ?? [];
   if (!externalBin.includes('binaries/guanlan')) {
     fail('tauri.release.conf.json 必须通过 externalBin 嵌入 binaries/guanlan CLI');
+  }
+  // 更新器运行时的公钥在基础配置里；endpoints 生产上暂时留空（见发布参考的「自动更新」）
+  const updaterPubkey = baseConf?.plugins?.updater?.pubkey;
+  if (typeof updaterPubkey !== 'string' || updaterPubkey.trim() === '') {
+    fail('tauri.conf.json 缺少 plugins.updater.pubkey');
+  }
+  if (updaterTestEndpoint !== undefined) {
+    let url;
+    try {
+      url = new URL(updaterTestEndpoint);
+    } catch {
+      fail(`--updater-test-endpoint 不是合法的 URL：${updaterTestEndpoint}`);
+    }
+    const loopback = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback.has(url.hostname))) {
+      fail(`--updater-test-endpoint 只接受 https 或回环 http，实得 ${updaterTestEndpoint}`);
+    }
+    if (!process.env.TAURI_SIGNING_PRIVATE_KEY) {
+      fail('--updater-test-endpoint 需要签名私钥：先设置 TAURI_SIGNING_PRIVATE_KEY（私钥路径或内容）');
+    }
+  } else if (args.has('--updater-test-endpoint')) {
+    fail('--updater-test-endpoint 后面要跟一个地址');
   }
   for (const iconRel of baseConf?.bundle?.icon ?? []) {
     const iconAbs = resolve(desktopDir, iconRel);
@@ -128,24 +171,54 @@ if (skipBundle) {
 // 3. 调用仓内 vendored @tauri-apps/cli（零 PATH 依赖）或 cargo tauri 生成 MSI + NSIS 安装包
 console.log('[guanlan-installer] 3/3 打包 Windows MSI / NSIS 安装器...');
 const tauriCliJs = resolve(guanlanDir, 'node_modules/@tauri-apps/cli/tauri.js');
-if (existsSync(tauriCliJs)) {
-  execFileSync(
-    process.execPath,
-    [tauriCliJs, 'build', '--config', releaseConfPath],
-    {
-      cwd: desktopDir,
-      stdio: 'inherit',
-    }
+let buildConfigPath = releaseConfPath;
+let tempConfigPath = null;
+if (updaterTestEndpoint) {
+  // 演练：把 createUpdaterArtifacts 与回环更新源叠加到发布配置上，写到临时文件再传给
+  // Tauri CLI；仓库里的发布配置保持干净（endpoints 为空、不产出带签名的更新包）。
+  const baseConf = JSON.parse(readFileSync(baseConfPath, 'utf8'));
+  const relConf = JSON.parse(readFileSync(releaseConfPath, 'utf8'));
+  const merged = {
+    ...relConf,
+    bundle: { ...(relConf.bundle ?? {}), createUpdaterArtifacts: true },
+    plugins: {
+      ...(relConf.plugins ?? {}),
+      updater: {
+        ...(baseConf.plugins?.updater ?? {}),
+        endpoints: [updaterTestEndpoint],
+        dangerousInsecureTransportProtocol: true,
+      },
+    },
+  };
+  tempConfigPath = resolve(os.tmpdir(), `guanlan-tauri-updater-test-${process.pid}.json`);
+  writeFileSync(tempConfigPath, JSON.stringify(merged, null, 2));
+  buildConfigPath = tempConfigPath;
+  console.log(
+    `[guanlan-installer] 演练配置：更新源 ${updaterTestEndpoint}（createUpdaterArtifacts=true，仅本次构建）`
   );
-} else {
-  execFileSync(
-    'cargo',
-    ['tauri', 'build', '--config', releaseConfPath],
-    {
-      cwd: desktopDir,
-      stdio: 'inherit',
-    }
-  );
+}
+try {
+  if (existsSync(tauriCliJs)) {
+    execFileSync(
+      process.execPath,
+      [tauriCliJs, 'build', '--config', buildConfigPath],
+      {
+        cwd: desktopDir,
+        stdio: 'inherit',
+      }
+    );
+  } else {
+    execFileSync(
+      'cargo',
+      ['tauri', 'build', '--config', buildConfigPath],
+      {
+        cwd: desktopDir,
+        stdio: 'inherit',
+      }
+    );
+  }
+} finally {
+  if (tempConfigPath) rmSync(tempConfigPath, { force: true });
 }
 
 const baseConf = JSON.parse(readFileSync(baseConfPath, 'utf8'));
@@ -154,6 +227,11 @@ const nsisOut = resolve(nativeDir, `target/release/bundle/nsis/Guanlan_${ver}_x6
 const msiOut = resolve(nativeDir, `target/release/bundle/msi/Guanlan_${ver}_x64_zh-CN.msi`);
 if (!existsSync(nsisOut)) fail(`未产出 NSIS 安装包：${nsisOut}`);
 if (!existsSync(msiOut)) fail(`未产出 MSI 安装包：${msiOut}`);
+if (updaterTestEndpoint) {
+  const sigOut = `${nsisOut}.sig`;
+  if (!existsSync(sigOut)) fail(`演练构建没有产出更新签名：${sigOut}`);
+  console.log(`[guanlan-installer] 更新签名：${sigOut}（${statSync(sigOut).size} 字节）`);
+}
 console.log(`[guanlan-installer] NSIS 产物：${nsisOut}（${formatMiB(statSync(nsisOut).size)}）`);
 console.log(`[guanlan-installer] MSI  产物：${msiOut}（${formatMiB(statSync(msiOut).size)}）`);
 console.log('[guanlan-installer] Windows MSI / NSIS 安装包构建与校验全部完成！');

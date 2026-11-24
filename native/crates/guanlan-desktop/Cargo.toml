@@ -15,6 +15,8 @@ serde_json.workspace = true
 guanlan-service = { path = "../guanlan-service" }
 # C03：全局呼出热键（面板唤起；Tauri 官方插件，Rust 侧注册无需 capabilities 声明）
 tauri-plugin-global-shortcut = "2"
+# 应用内更新：Rust 侧注册，前端经注入桥调用自定义命令；网页没有被授予任何 Tauri ACL 权限
+tauri-plugin-updater = "2"
 
 # tauri 内部已依赖 tokio；这里显式声明以便 tauri::async_runtime 口径一致
 tokio.workspace = true

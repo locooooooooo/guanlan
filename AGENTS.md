@@ -54,6 +54,7 @@
 - **本机的 Node 和 CI 的不一样时，用 CI 的版本再验一次。** CI 用 Node 22（npm 10），它对无效的同伴依赖零容忍，`npm ci` 会直接失败；Node 24 的 npm 11 会放行。仓库里曾有一个没人用的 `esbuild ^0.25` 钉子，就是这样在本机验过、到 CI 才失败。`npm test` 里有一项检查盯着依赖树，改了依赖后别忽略它。重新生成锁文件用 npm 11（Node 24 自带）：npm 10 会带进无关的改动。
 - **`.css` 只能在 `src/App.tsx` 里导入**；`src/utils` 下的纯函数模块不导入 `.css` 或 React。否则 node 测试加载不了。
 - **`npm run notices` 要先 `npm ci`，并找得到 cargo。** 它在内存里跑一遍生产构建，再调用 `cargo tree` 与 `cargo metadata`（在 `native/` 下）。不写 `dist/`，也不写数据目录。
+- **演练应用内更新**用 `node scripts/build-windows-installer.mjs --updater-test-endpoint http://127.0.0.1:8788/latest.json`，它要求 `TAURI_SIGNING_PRIVATE_KEY` 指向仓库外的私钥（本机在 `%USERPROFILE%\.guanlan\updater\`）。这个开关只叠加进一次构建的临时配置，不写进仓库。私钥不要提交；公钥在 `tauri.conf.json`；生产 `endpoints` 留空，等更新源定了再填。
 - **`cargo test` 的过滤条件按模块路径写**，不是文件名：`http_tests.rs` 挂在 `http::tests` 下。跑完看输出里的 `running N tests`，N 是 0 就等于没测。
 - **干净 checkout 上有测试会跳过**：依赖生成夹具的 `identity_vectors_from_fixture`，和依赖不在仓库里的 JS 源文件的两个 triage 对拍测试，都会提前返回。`npm run gate` 会把它们点名列在运行记录里；直接跑 `cargo test` 时看不到，因为测试框架会截获通过的测试打印的内容。被跳过的测试不算通过。Rust 测试要提前返回时用 `note_skipped`，不要自己打印。
 - **仓库历史只有一个压缩提交。** 注释里引用的 issue #4 到 #39、「方案 §N」「PRD v2.0」指向的文档都不在仓库里，查不到原文。现在的约定以 `docs/` 为准。

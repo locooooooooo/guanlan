@@ -56,6 +56,27 @@ interface DesktopSystemBridge {
   ) => Promise<ImportExternalFilesData>;
 }
 
+interface DesktopUpdateBridge {
+  check: () => Promise<DesktopUpdateCheck>;
+  install: () => Promise<void>;
+}
+
+/** 检查更新的结果。`not_configured` 表示这个构建没有配置更新源（生产包在更新源定下来
+ *  之前就是如此），不是错误，也不要当成「已是最新」。 */
+export interface DesktopUpdateCheck {
+  status: 'available' | 'up_to_date' | 'not_configured';
+  currentVersion: string;
+  version?: string | null;
+  notes?: string | null;
+  pubDate?: string | null;
+}
+
+export interface DesktopUpdateProgress {
+  phase: 'downloading' | 'installing';
+  downloaded: number;
+  total: number | null;
+}
+
 export interface ImportedFileEntry {
   sourcePath: string;
   relativePath: string;
@@ -99,6 +120,7 @@ interface GuanlanDesktopGlobals {
   __GUANLAN_BOOT__?: DesktopSessionState;
   __GUANLAN_WORKSPACE_BRIDGE__?: DesktopWorkspaceBridge;
   __GUANLAN_SYSTEM_BRIDGE__?: DesktopSystemBridge;
+  __GUANLAN_UPDATE_BRIDGE__?: DesktopUpdateBridge;
 }
 
 function globals(): GuanlanDesktopGlobals {
@@ -394,5 +416,76 @@ export function subscribeGlobalShortcut(
   window.addEventListener('guanlan:global-shortcut', listener);
   return () => {
     window.removeEventListener('guanlan:global-shortcut', listener);
+  };
+}
+
+/** Rust 命令的错误串带一个可读前缀（如 `UPDATE_CHECK_FAILED: ...`），拆出来当码用；
+ *  其余错误按桥的通用解析处理。 */
+function parseUpdaterError(err: unknown): { code: string; message: string } {
+  const raw = err instanceof Error ? err.message : String(err);
+  const match = /^([A-Z][A-Z_]+):\s*([\s\S]*)$/.exec(raw);
+  if (match) return { code: match[1], message: match[2] || match[1] };
+  return parseBridgeError(err);
+}
+
+export type DesktopUpdateCheckOutcome =
+  | { ok: true; data: DesktopUpdateCheck }
+  | { ok: false; code: string; error: string };
+
+export type DesktopUpdateInstallOutcome = { ok: true } | { ok: false; code: string; error: string };
+
+export function isDesktopUpdateBridgeAvailable(): boolean {
+  return Boolean(globals().__GUANLAN_UPDATE_BRIDGE__);
+}
+
+/** 手动检查更新。没有启动时检查、没有后台轮询：只在用户点按钮时请求一次。 */
+export async function checkDesktopUpdate(): Promise<DesktopUpdateCheckOutcome> {
+  const bridge = globals().__GUANLAN_UPDATE_BRIDGE__;
+  if (!bridge) {
+    return { ok: false, code: 'NOT_DESKTOP', error: '检查更新需在观澜桌面客户端中使用' };
+  }
+  try {
+    return { ok: true, data: await bridge.check() };
+  } catch (err) {
+    const parsed = parseUpdaterError(err);
+    return { ok: false, code: parsed.code, error: parsed.message };
+  }
+}
+
+/** 下载并安装。Windows 上安装器启动后应用会退出，因此这个 Promise 可能来不及 resolve；
+ *  界面应当以进度事件为准，不要等它返回再改状态。 */
+export async function installDesktopUpdate(): Promise<DesktopUpdateInstallOutcome> {
+  const bridge = globals().__GUANLAN_UPDATE_BRIDGE__;
+  if (!bridge) {
+    return { ok: false, code: 'NOT_DESKTOP', error: '安装更新需在观澜桌面客户端中使用' };
+  }
+  try {
+    await bridge.install();
+    return { ok: true };
+  } catch (err) {
+    const parsed = parseUpdaterError(err);
+    return { ok: false, code: parsed.code, error: parsed.message };
+  }
+}
+
+/** 下载与安装进度（Rust 侧经 window.eval 派发的 CustomEvent）。 */
+export function subscribeUpdateProgress(
+  handler: (progress: DesktopUpdateProgress) => void
+): () => void {
+  if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
+    return () => {};
+  }
+  const listener = (rawEvent: Event) => {
+    const detail = (rawEvent as CustomEvent<DesktopUpdateProgress>).detail;
+    if (!detail || (detail.phase !== 'downloading' && detail.phase !== 'installing')) return;
+    handler({
+      phase: detail.phase,
+      downloaded: Number.isFinite(detail.downloaded) ? detail.downloaded : 0,
+      total: typeof detail.total === 'number' ? detail.total : null,
+    });
+  };
+  window.addEventListener('guanlan:update-progress', listener);
+  return () => {
+    window.removeEventListener('guanlan:update-progress', listener);
   };
 }

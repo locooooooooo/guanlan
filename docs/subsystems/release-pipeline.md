@@ -58,9 +58,34 @@ Rust 侧没有嵌入提交哈希。`env!("CARGO_PKG_VERSION")` 只在 MCP 代理
 - `nsis/Guanlan_<版本>_x64-setup.exe`
 - `msi/Guanlan_<版本>_x64_zh-CN.msi`
 
-`--check-only` 只做配置校验：两个配置文件与右键菜单钩子存在、`bundle.targets` 同时含 `nsis` 与 `msi`、挂了安装钩子、release 配置里有 `externalBin` 的 `binaries/guanlan`、图标齐备、钩子源码含六个关键指令。`--stage-only` 走完前两步就停。
+`--check-only` 只做配置校验：两个配置文件与右键菜单钩子存在、`bundle.targets` 同时含 `nsis` 与 `msi`、挂了安装钩子、release 配置里有 `externalBin` 的 `binaries/guanlan`、`tauri.conf.json` 里有更新器公钥、图标齐备、钩子源码含六个关键指令。`--stage-only` 走完前两步就停。
 
-安装包**没有代码签名**，也没有配置自动更新。`tauri.conf.json` 的 `bundle.windows.webviewInstallMode` 是 `embedBootstrapper`。图标源图由 `gen-icon.mjs` 生成，再经 `tauri icon` 产出全套尺寸。
+安装包**没有代码签名**；应用内更新已经实现，但生产更新源还没有配置，见下文「自动更新」。`tauri.conf.json` 的 `bundle.windows.webviewInstallMode` 是 `embedBootstrapper`。图标源图由 `gen-icon.mjs` 生成，再经 `tauri icon` 产出全套尺寸。
+
+安装包里也**没有随附许可文件**。`tauri.conf.json` 与 `tauri.release.conf.json` 没有配置 `bundle.resources`、`license` 或 `licenseFile`，所以仓库里的 `LICENSE` 与 `THIRD_PARTY_NOTICES` 都不会装到用户机器上。
+
+## 自动更新
+
+应用内更新走 `tauri-plugin-updater`，但只在 Rust 侧注册，网页经 `__GUANLAN_UPDATE_BRIDGE__` 调 `check_desktop_update` / `install_desktop_update` 两个命令，不引入 `@tauri-apps/plugin-updater`，也不需要 Tauri 的 ACL 权限（见[桌面壳](desktop-shell.md#网页如何调用原生能力)）。
+
+**只在用户点「设置 → 关于观澜 → 检查更新」时联网**，没有启动时检查、没有后台轮询。三种结果：有新版本、已是最新、未配置更新源。
+
+- **公钥**在 `tauri.conf.json` 的 `plugins.updater.pubkey`，是 `TAURI_SIGNING_PRIVATE_KEY` 对应密钥对的公开部分，可以公开。
+- **私钥不在仓库里**，也不要提交。本机生成的那份在 `%USERPROFILE%\.guanlan\updater\guanlan-updater.key`（无密码），要备份：丢了就无法再给已安装的用户签更新包。接 CI 时把它作为 `TAURI_SIGNING_PRIVATE_KEY`（路径或内容）与可选的 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 放进仓库 secret。
+- **生产更新源暂时留空**：`plugins.updater.endpoints` 是空数组，所以正式构建的关于页显示「未配置更新源」，不会发请求。等有了 HTTPS 地址（对象存储、CDN 或公开的 GitHub Releases），把地址填进这里，并把 `latest.json` 放上去。
+- **演练用的回环更新源**：`node scripts/build-windows-installer.mjs --updater-test-endpoint http://127.0.0.1:8788/latest.json` 会把 `createUpdaterArtifacts: true`、这个地址与 `dangerousInsecureTransportProtocol` 合并进一个临时配置再传给 Tauri CLI；不加这个参数时构建行为完全不变。这个开关还要求 `TAURI_SIGNING_PRIVATE_KEY` 已设置，地址只接受 https 或回环 http。产物里会多出 `Guanlan_<版本>_x64-setup.exe.sig`。
+- **更新清单**由 `node scripts/gen-update-manifest.mjs` 生成：`--version`、`--signature-file`（Tauri 产出的 `.sig`）、`--url`（安装包地址）、`--out latest.json`，可选 `--notes-file`、`--pub-date`。格式是 Tauri v2 的静态清单：`version`、`platforms.windows-x86_64.url` 与 `.signature`（`.sig` 原文，不是路径）必填。
+- **安装方式**是 passive（`plugins.updater.windows.installMode`）：显示进度、不需要点下一步。Windows 上安装器启动后应用退出，装完由安装器重启。**应用内更新面向 NSIS 安装版**；MSI 安装版请下载新安装包手动升级。
+
+**还没接进发布流水线。** `release.yml` 目前仍只产出四个资产，不设签名 secret、不暂存 `.sig`、不生成 `latest.json`。等更新源地址确定后再加：构建步骤补签名环境变量、暂存 `.sig` 与 `latest.json`、预检的 `expectedAssetNames` 与 `checkAssets` 认识新文件、`publish` 的资产计数改掉。在那之前，这四个资产与手动升级就是全部。
+
+**本地演练的步骤**（需要一个带更新器的旧版本，所以旧版本也要用这个开关构建）：
+
+1. 把构建可见的版本号临时改成旧版本（`package.json`、`native/Cargo.toml`、`native/Cargo.lock` 的成员版本、`tauri.conf.json`），用 `--updater-test-endpoint` 构建并安装；装完的关于页应显示旧版本。
+2. 改回新版本，同样带开关构建，得到 `Guanlan_<新版本>_x64-setup.exe` 与 `.sig`。
+3. `node scripts/gen-update-manifest.mjs --version <新版本> --signature-file <安装包>.exe.sig --url http://127.0.0.1:8788/Guanlan_<新版本>_x64-setup.exe --out latest.json`，把安装包、`.sig`、`latest.json` 放进一个目录，在该目录起一个只监听 `127.0.0.1` 的静态服务。
+4. 打开旧版本 → 设置 → 关于观澜 → 检查更新 → 下载并安装。安装器以 passive 模式运行，装完应用重启，关于页应显示新版本。
+5. 关掉静态服务再点检查更新，应显示可读的错误；把清单里的版本改成与当前相同，应提示已是最新。
 
 安装包里也**没有随附许可文件**。`tauri.conf.json` 与 `tauri.release.conf.json` 没有配置 `bundle.resources`、`license` 或 `licenseFile`，所以仓库里的 `LICENSE` 与 `THIRD_PARTY_NOTICES` 都不会装到用户机器上。
 
