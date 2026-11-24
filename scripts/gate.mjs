@@ -21,6 +21,10 @@
  * 第一步失败就停，后面没跑的步骤如实列为「未跑」。结束时打印一份运行记录（每步的结果、
  * 耗时、测试数），可以直接贴进提交正文的「运行」一节，格式见 docs/code-standards.md。
  *
+ * Rust 测试里提前返回（跳过）的那些算在「通过」里，其实什么都没验证。libtest 会截获通过的测试
+ * 打印的内容，扫输出找不到它们的 [skip]。所以 cargo test 那一步设了 GUANLAN_TEST_SKIP_LOG，
+ * 测试把自己跳过的原因记进那个文件，运行记录里逐个点名，不计入验证。
+ *
  * 已知的偶发失败：npm run build 冷启动时 @tailwindcss/oxide 的提取器偶尔 panic
  * （crates/oxide/src/extractor/boundary.rs，index out of bounds），重跑即过。门禁只对
  * 这一种失败自动重试一次，并在记录里注明重试过；其余失败不重试。
@@ -100,8 +104,12 @@ export function describeResult(result, step) {
       tests = `，${counts.passed} 通过 / ${counts.failed} 失败`;
     }
   }
-  if (step.tests === 'rust' && /\[skip\]/.test(result.output.replace(ANSI, ''))) {
-    notes.push('输出里有 [skip]（夹具不存在时的显式跳过）');
+  // 被跳过的测试算在「通过」里，但什么都没验证。libtest 会截获通过的测试打印的内容，所以不能
+  // 靠扫输出：Rust 测试提前返回时把「测试名: 原因」写进 GUANLAN_TEST_SKIP_LOG，这里读那份记录。
+  if (result.skipped !== undefined && result.skipped.length > 0) {
+    // 每条是「完整路径::测试名: 原因」，记录里只放测试名；原因在步骤跑完时已经打全了
+    const names = result.skipped.map((line) => line.split('::').pop()?.split(': ')[0] ?? line);
+    notes.push(`${result.skipped.length} 个测试跳过、什么都没验证（不计入）：${names.join('、')}`);
   }
   if (result.retried) notes.push('重试过一次');
   let verdict = '通过';
@@ -111,6 +119,20 @@ export function describeResult(result, step) {
       : `未通过（退出码 ${result.code}${result.signal ? `，信号 ${result.signal}` : ''}）`;
   }
   return { text: `${verdict}${tests}${notes.length ? `。${notes.join('；')}` : ''}`, ok: result.code === 0 };
+}
+
+/**
+ * 一步要用的环境变量：cargo 的目录进 PATH；沙箱步骤换成临时的数据目录；收跳过记录的步骤
+ * 拿到记录文件的路径。不设 cargoFile 时不动 PATH。
+ * @param {{ sandbox?: boolean, skipLog?: boolean }} step
+ * @param {{ cargoFile: string | null, sandboxDir: string, skipLogFile: string, base?: NodeJS.ProcessEnv }} context
+ */
+export function envForStep(step, { cargoFile, sandboxDir, skipLogFile, base = process.env }) {
+  const env = { ...base };
+  if (cargoFile) env.PATH = `${path.dirname(cargoFile)}${path.delimiter}${env.PATH ?? ''}`;
+  if (step.sandbox) env.GUANLAN_DATA_DIR = sandboxDir;
+  if (step.skipLog) env.GUANLAN_TEST_SKIP_LOG = skipLogFile;
+  return env;
 }
 
 // ---------- 主流程 ----------
@@ -163,6 +185,7 @@ export function findCargo() {
  * @property {boolean} [shell]
  * @property {'default' | 'full'} group
  * @property {boolean} [sandbox]    为真时在临时的 GUANLAN_DATA_DIR 下跑
+ * @property {boolean} [skipLog]    为真时让 Rust 测试把提前返回（跳过）的测试记到沙箱目录下的一个文件
  * @property {'rust' | 'node'} [tests] 按哪种格式从输出里统计测试数
  * @property {(output: string) => boolean} [retryOn] 失败输出命中时重试一次
  */
@@ -214,7 +237,7 @@ export function buildSteps(cargoFile) {
     },
     cargoStep('rust:fmt', 'default', ['fmt', '--all', '--', '--check']),
     cargoStep('rust:clippy', 'default', ['clippy', '--workspace', '--all-targets', '--', '-D', 'warnings']),
-    cargoStep('rust:test', 'default', ['test', '--workspace', '--locked'], { tests: 'rust' }),
+    cargoStep('rust:test', 'default', ['test', '--workspace', '--locked'], { tests: 'rust', skipLog: true }),
     cargoStep('rust:build-release', 'full', ['build', '--release', '--locked', '-p', 'guanlan-service']),
     { id: 'fixture:seed', group: 'full', cmd: npmScript('seed'), shell: true, label: 'npm run seed' },
     tsScriptStep('smoke:v1', 'smoke-v1', ['--exe', releaseExe], ['--exe', RELEASE_EXE_REL]),
@@ -328,12 +351,9 @@ async function main() {
   console.log(`  Rust 步骤的数据目录：${sandboxDir}`);
   console.log('');
 
-  const envFor = (step) => {
-    const env = { ...process.env };
-    if (cargo.file) env.PATH = `${path.dirname(cargo.file)}${path.delimiter}${env.PATH ?? ''}`;
-    if (step.sandbox) env.GUANLAN_DATA_DIR = sandboxDir;
-    return env;
-  };
+  // Rust 测试把提前返回（跳过）的测试记在这里，见文件头
+  const skipLogFile = path.join(sandboxDir, 'test-skips.log');
+  const envFor = (step) => envForStep(step, { cargoFile: cargo.file, sandboxDir, skipLogFile });
 
   const planned = steps.filter((step) => step.group === 'default' || full);
   const done = [];
@@ -352,6 +372,15 @@ async function main() {
       result = { code: 1, signal: null, secs: 0, output: line, missingCargo: true };
     } else {
       result = await runStep(step, envFor(step));
+      if (step.skipLog && fs.existsSync(skipLogFile)) {
+        result.skipped = fs
+          .readFileSync(skipLogFile, 'utf8')
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean);
+        // 先把每条的原因打全，运行记录里只放得下测试名
+        for (const line of result.skipped) process.stdout.write(`  跳过的测试：${line}\n`);
+      }
     }
     const verdict = describeResult(result, step);
     done.push({ step, result, verdict });

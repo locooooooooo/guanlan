@@ -628,13 +628,15 @@ fn parity_100_percent_against_ringflow_node_js_engine() {
         .join("../../../..")
         .canonicalize();
     let Ok(root) = repo_root else {
-        eprintln!("[skip] 无法定位主仓根目录，跳过 Node↔Rust 实时对拍");
+        crate::domain::note_skipped("无法定位主仓根目录，跳过 Node↔Rust 实时对拍");
         return;
     };
     let triage_js = root.join("workflow-triage.js");
     let policy_js = root.join("workflow-policy.js");
     if !triage_js.exists() || !policy_js.exists() {
-        eprintln!("[skip] 未找到主仓 workflow-triage.js / workflow-policy.js，跳过实时对拍");
+        crate::domain::note_skipped(
+            "未找到主仓 workflow-triage.js / workflow-policy.js，跳过实时对拍",
+        );
         return;
     }
 
@@ -717,7 +719,7 @@ process.stdout.write(JSON.stringify(out));
             String::from_utf8_lossy(&o.stderr)
         ),
         Err(e) => {
-            eprintln!("[skip] 本机未找到 node 可执行文件，跳过实时对拍：{e}");
+            crate::domain::note_skipped(format!("本机未找到 node 可执行文件，跳过实时对拍：{e}"));
             return;
         }
     };
@@ -944,11 +946,13 @@ fn parity_raw_markdown_documents_against_markdown_index_and_triage_js() {
         .join("../../../..")
         .canonicalize();
     let Ok(root) = repo_root else {
-        eprintln!("[skip] 无法定位主仓根目录，跳过原始 Markdown 文档的实时对拍");
+        crate::domain::note_skipped("无法定位主仓根目录，跳过原始 Markdown 文档的实时对拍");
         return;
     };
     if !root.join("markdown-index.js").exists() || !root.join("workflow-triage.js").exists() {
-        eprintln!("[skip] 未找到主仓 markdown-index.js / workflow-triage.js，跳过实时对拍");
+        crate::domain::note_skipped(
+            "未找到主仓 markdown-index.js / workflow-triage.js，跳过实时对拍",
+        );
         return;
     }
 

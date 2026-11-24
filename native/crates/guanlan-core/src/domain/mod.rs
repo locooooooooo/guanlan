@@ -123,9 +123,148 @@ const IDENTITY_VECTORS_PATH: &str = concat!(
     "/../../testdata/identity-vectors.json"
 );
 
+/// 测试提前返回（跳过）时调用，代替直接 `eprintln!("[skip] …")`。
+///
+/// libtest 会截获通过的测试打印的内容，所以直接打印的 `[skip]` 在 `cargo test` 的输出里
+/// 看不到，一份「381 通过」里会混着什么都没验证的测试。设了 `GUANLAN_TEST_SKIP_LOG`
+/// 时（`npm run gate` 会设），把「测试名: 原因」追加到那个文件，门禁据此在运行记录里
+/// 点名被跳过的测试。没设时只打印，与此前一样。
+#[cfg(test)]
+pub(crate) fn note_skipped(reason: impl std::fmt::Display) {
+    eprintln!("[skip] {reason}");
+    let Ok(path) = std::env::var("GUANLAN_TEST_SKIP_LOG") else {
+        return;
+    };
+    append_skip(&path, reason);
+}
+
+/// [`note_skipped`] 的落盘部分。路径由调用方给出：单测直接调它，不去改进程的环境变量
+/// （测试是并行跑的，改了会影响别的测试）。写不进去也不让测试失败，跳过的提示只是提示。
+#[cfg(test)]
+fn append_skip(path: &str, reason: impl std::fmt::Display) {
+    use std::io::Write;
+    // 整行拼好再写一次。直接 writeln!(file, …) 会把一行拆成几次 write，两个测试同时
+    // 跳过时字会交错（实测出现过）。
+    let current = std::thread::current();
+    let name = current.name().unwrap_or("(未知测试名)");
+    let line = format!("{name}: {reason}\n");
+    let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    else {
+        return;
+    };
+    let _ = file.write_all(line.as_bytes());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 本测试专用的临时目录，离开作用域时删除。删除不能只靠测试末尾的那一句：断言失败时
+    /// 走不到它，目录就留在临时文件夹里（做弄坏验证时留下过上百个）。
+    struct ScratchDir(std::path::PathBuf);
+
+    impl ScratchDir {
+        fn new(tag: &str) -> Self {
+            // 名字里带进程 ID 与纳秒时间：上一次运行没删干净时不会读到旧记录
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default();
+            let dir = std::env::temp_dir().join(format!(
+                "guanlan-skip-log-{tag}-{}-{nanos}",
+                std::process::id()
+            ));
+            std::fs::create_dir_all(&dir).expect("建临时目录");
+            Self(dir)
+        }
+
+        /// 目录里一个文件的路径，可以直接传给 [`append_skip`]
+        fn file(&self, name: &str) -> String {
+            self.0
+                .join(name)
+                .to_str()
+                .expect("临时路径是合法 UTF-8")
+                .to_string()
+        }
+    }
+
+    impl Drop for ScratchDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn read_lines(path: &str) -> Vec<String> {
+        std::fs::read_to_string(path)
+            .expect("读回跳过记录")
+            .lines()
+            .map(str::to_string)
+            .collect()
+    }
+
+    /// 跳过记录带上测试的完整路径名与原因，并且是追加而不是覆盖
+    #[test]
+    fn skip_log_appends_test_name_and_reason() {
+        let dir = ScratchDir::new("append");
+        let path = dir.file("skips.log");
+        append_skip(&path, "夹具不存在");
+        append_skip(&path, format!("另一个原因：{}", 1 + 1));
+        let lines = read_lines(&path);
+        assert_eq!(lines.len(), 2, "{lines:?}");
+        let prefix = "domain::tests::skip_log_appends_test_name_and_reason: ";
+        assert_eq!(lines[0], format!("{prefix}夹具不存在"));
+        assert_eq!(lines[1], format!("{prefix}另一个原因：2"));
+    }
+
+    /// 几个测试同时跳过时，每条记录各占一行、互不交错。门禁按行数点名，交错会让两条并成一条。
+    #[test]
+    fn skip_log_lines_do_not_interleave_when_tests_skip_concurrently() {
+        let dir = ScratchDir::new("race");
+        let path = dir.file("skips.log");
+        let writers: Vec<_> = (0..8)
+            .map(|thread| {
+                let path = path.clone();
+                std::thread::spawn(move || {
+                    for i in 0..10 {
+                        append_skip(&path, format!("原因 {thread}-{i}"));
+                    }
+                })
+            })
+            .collect();
+        for writer in writers {
+            writer.join().expect("写跳过记录的线程不该 panic");
+        }
+        let lines = read_lines(&path);
+        assert_eq!(lines.len(), 80, "{lines:?}");
+        for line in &lines {
+            assert!(
+                line.starts_with("(未知测试名): 原因 ")
+                    && line.ends_with(|c: char| c.is_ascii_digit()),
+                "有交错的行：{line:?}"
+            );
+        }
+    }
+
+    /// 断言失败时临时目录也要删掉：靠 Drop，不靠测试末尾的那一句
+    #[test]
+    fn scratch_dir_is_removed_even_when_the_test_panics() {
+        let dir = ScratchDir::new("drop");
+        let path = dir.0.clone();
+        assert!(path.is_dir());
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+            let _kept_until_unwind = dir;
+            panic!("模拟一条断言失败");
+        }));
+        assert!(outcome.is_err(), "闭包应当 panic");
+        assert!(
+            !path.exists(),
+            "临时目录没有随作用域结束而删除：{}",
+            path.display()
+        );
+    }
 
     /// 契约 §2.1/§2.3 明列的具体值 + 本会话 node v24.19.0 实测补充
     /// （实测命令见会话记录：`node gen.mjs` 用与源码逐字相同的算法计算）。

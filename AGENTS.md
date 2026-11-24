@@ -14,7 +14,7 @@
 ## 动手
 
 - **先建分支**，不直接在 `main` 上提交。
-- **提交之前跑 `npm run gate`。** 它一条命令跑完 CI 的 `frontend` 与 `rust-desktop` 两个作业的全部检查，并在 `native/` 下执行 cargo、替 Rust 步骤设好临时的 `GUANLAN_DATA_DIR`、在 cargo 不在 PATH 上时自己去 `~/.cargo/bin` 找。第一步失败就停。它结束时打印的运行记录可以直接贴进提交正文。动了身份公式、采集范围、对账判定或派生规则，再跑 `npm run gate -- --full`（含 release 构建、冒烟与 Node ↔ Rust 对拍）。
+- **提交之前跑 `npm run gate`。** 它一条命令跑完 CI 的 `frontend` 与 `rust-desktop` 两个作业的全部检查，并在 `native/` 下执行 cargo、替 Rust 步骤设好临时的 `GUANLAN_DATA_DIR`、在 cargo 不在 PATH 上时自己去 `~/.cargo/bin` 找、把提前返回的 Rust 测试点名在运行记录里。第一步失败就停。它结束时打印的运行记录可以直接贴进提交正文。动了身份公式、采集范围、对账判定或派生规则，再跑 `npm run gate -- --full`（含 release 构建、冒烟与 Node ↔ Rust 对拍）。
 - **动了依赖就重新生成第三方许可索引**（`npm run notices`），与锁文件一起提交。升版本号会改到两份锁文件，也算动依赖。`npm test` 会核对索引与两份锁文件是否还对得上。生成时哪一项取不到，它会报错停下：这时去查清，不要写一个猜的许可。
 - **提交说明写「领域: 用户现在看到什么」**，正文写三段：运行（跑了什么，各自的数字）、手动破坏（把修复拿掉后哪个测试变红）、未试。Release 的更新说明取的就是提交标题。领域词表见代码规范的「提交」一节。
 - **一个提交只有一个目标。** 路上看到的别的问题写进 Issue 或 `LESSONS.md` 的「待处理」，不顺手修。
@@ -55,7 +55,7 @@
 - **`.css` 只能在 `src/App.tsx` 里导入**；`src/utils` 下的纯函数模块不导入 `.css` 或 React。否则 node 测试加载不了。
 - **`npm run notices` 要先 `npm ci`，并找得到 cargo。** 它在内存里跑一遍生产构建，再调用 `cargo tree` 与 `cargo metadata`（在 `native/` 下）。不写 `dist/`，也不写数据目录。
 - **`cargo test` 的过滤条件按模块路径写**，不是文件名：`http_tests.rs` 挂在 `http::tests` 下。跑完看输出里的 `running N tests`，N 是 0 就等于没测。
-- **干净 checkout 上有测试会跳过**：依赖生成夹具的 `identity_vectors_from_fixture`，和依赖不在仓库里的 JS 源文件的两个 triage 对拍测试，都会打印 `[skip]`。被跳过的测试不算通过。
+- **干净 checkout 上有测试会跳过**：依赖生成夹具的 `identity_vectors_from_fixture`，和依赖不在仓库里的 JS 源文件的两个 triage 对拍测试，都会提前返回。`npm run gate` 会把它们点名列在运行记录里；直接跑 `cargo test` 时看不到，因为测试框架会截获通过的测试打印的内容。被跳过的测试不算通过。Rust 测试要提前返回时用 `note_skipped`，不要自己打印。
 - **仓库历史只有一个压缩提交。** 注释里引用的 issue #4 到 #39、「方案 §N」「PRD v2.0」指向的文档都不在仓库里，查不到原文。现在的约定以 `docs/` 为准。
 - **代码注释与提交说明以中文为主**，注释写「为什么」，密度与周围一致。
 

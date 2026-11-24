@@ -156,4 +156,4 @@ node scripts/build-windows-installer.mjs --check-only
 node native/crates/guanlan-desktop/gen-icon.mjs   # 只在改了图标样式时
 ```
 
-[`scripts/gate.mjs`](../../scripts/gate.mjs) 是本地的统一入口，步骤与 CI 的对应关系写在它的头注释里。发布流水线没法在本地触发；它里面的每段 shell 都抽出来在本机演练过，做法记在引入它的提交说明里。
+[`scripts/gate.mjs`](../../scripts/gate.mjs) 是本地的统一入口，步骤与 CI 的对应关系写在它的头注释里。它的运行记录会点名 `cargo test` 里提前返回（跳过）的测试；CI 直接跑 `cargo test`，libtest 会截获这些测试打印的内容，日志里看不到。发布流水线没法在本地触发；它里面的每段 shell 都抽出来在本机演练过，做法记在引入它的提交说明里。

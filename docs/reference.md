@@ -121,6 +121,7 @@ guanlan-desktop --unregister-context-menu
 | `GUANLAN_WORKSPACE_ROOT` | 桌面壳 | 启动时打开的工作区，优先级低于命令行目录 | 无 |
 | `GUANLAN_DESKTOP_CONFIG` | 桌面壳 | `desktop.json` 的显式路径 | `%LOCALAPPDATA%\Guanlan\desktop.json` |
 | `GUANLAN_TARGET_TRIPLE` | 安装包脚本 | sidecar 的目标三元组，决定暂存文件名 | `x86_64-pc-windows-msvc` |
+| `GUANLAN_TEST_SKIP_LOG` | 仅 Rust 测试 | 测试提前返回（跳过）时，把「测试名: 原因」追加到这个文件。`npm run gate` 设它，用来在运行记录里点名被跳过的测试 | 不设时只打印 `[skip]`，而测试框架会截获它 |
 | `GUANLAN_GIT_SHA` | `vite.config.ts` | 构建身份里的提交短哈希 | `git rev-parse --short HEAD`，失败则 `dev` |
 | `GUANLAN_BUILD_TIME` | `vite.config.ts` | 构建身份里的时间戳 | 构建时刻 |
 | `GUANLAN_SERVE` | Vite 开发服务器 | `/api` 的代理目标 | `http://127.0.0.1:8787` |

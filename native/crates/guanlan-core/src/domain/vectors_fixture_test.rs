@@ -34,12 +34,12 @@ fn identity_vectors_from_fixture() {
     let text = match std::fs::read_to_string(IDENTITY_VECTORS_PATH) {
         Ok(t) => t,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            eprintln!(
-                "[skip] 身份数字向量夹具 {} 不存在（干净 checkout 无 seed），\
+            note_skipped(format!(
+                "身份数字向量夹具 {} 不存在（干净 checkout 无 seed），\
                      跳过夹具向量断言；生成方式：node node_modules/tsx/dist/cli.mjs \
                      scripts/seed-fixture.ts（io: {e}）",
                 IDENTITY_VECTORS_PATH
-            );
+            ));
             return;
         }
         Err(e) => panic!("读取身份数字向量夹具失败 {IDENTITY_VECTORS_PATH}: {e}"),
