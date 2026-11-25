@@ -133,6 +133,8 @@ import { extractCoreSummary, groupFilesIntoPackages, taskPackageOf } from '../ut
 import type { TaskPackage } from '../utils/taskPackages';
 // 新事件提示时刻 / 文档日期统一按本地时区取值
 import { formatLocalClock, localDay } from '../utils/timeFormat';
+// 日历窗口事件取数（只取最近 90 天的一页，不排空历史游标）
+import { calendarWindowEventQuery } from '../utils/calendarEventWindow';
 import {
   applyBatchMarkUnread,
   applyBatchReadingBaseline,
@@ -4792,29 +4794,24 @@ export function useWorkspaceStore() {
     ]
   );
 
-  // 日历态消费的累计事件表在 bootstrap 后只有首页（50 条），
-  // 更早日期的事件不会出现在日历上。进入日历态即沿当前
-  // 窗口游标自动续拉至取尽；列表态的手动「加载更多」保持不变。
-  // 链式触发：每页到达（eventPage 变更）后由 effect 接棒下一页；
-  // 筛选竞态由 loadMoreEvents 内的代际守卫兜底（期间改筛选的旧页直接作废）。
-  const calendarAutoFillLatchRef = useRef(false);
-  const calendarAutoFillStoppedRef = useRef(false);
+  // 日历只画主轴窗口内的刻度：进入日历时取最近 90 天的一页（≤200 条），
+  // 不再沿游标把整库事件排空进累计表。排空在高密度工作区上是数千次请求，
+  // 每页都并进 events 并重渲整棵树；更早历史仍由列表态的「加载更多」显式触发。
+  // 每代词只取一次（筛选变化会推进 eventFetchGenRef，窗口随之重取）。
+  const calendarWindowFetchedRef = useRef('');
   useEffect(() => {
-    if (panoramaMode !== 'calendar') {
-      calendarAutoFillLatchRef.current = false;
-      calendarAutoFillStoppedRef.current = false;
-      return;
-    }
-    if (calendarAutoFillStoppedRef.current || calendarAutoFillLatchRef.current) return;
-    if (!eventPage?.has_more || eventPageLoading) return;
-    calendarAutoFillLatchRef.current = true;
-    void loadMoreEvents().then((ok) => {
-      calendarAutoFillLatchRef.current = false;
-      // false = 取页失败或期间筛选变更致在途页作废：停止自动补全（不无限重试），
-      // 切出再切回日历态即重新开始；列表态的手动加载不受影响
-      if (!ok) calendarAutoFillStoppedRef.current = true;
-    });
-  }, [panoramaMode, eventPage, eventPageLoading, loadMoreEvents]);
+    if (panoramaMode !== 'calendar' || !hasActiveBackend) return;
+    const key = `${workspaceEpoch}:${eventFetchGenRef.current}`;
+    if (calendarWindowFetchedRef.current === key) return;
+    calendarWindowFetchedRef.current = key;
+    const gen = eventFetchGenRef.current;
+    void (async () => {
+      const result = await fetchEventPage(calendarWindowEventQuery(new Date()));
+      // 期间改了筛选：这页属于旧窗口，丢弃
+      if (eventFetchGenRef.current !== gen) return;
+      if (result.page) mergeEventsPage(result.page.items);
+    })();
+  }, [hasActiveBackend, mergeEventsPage, panoramaMode, workspaceEpoch]);
 
   // 标尺粒度切换（月/周/日）。切回全域窗口重新取数，选中日期清空由画布自选最新桶
   const handleGranularityChange = (granularity: EventDayGranularity) => {
