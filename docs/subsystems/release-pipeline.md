@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 版本号 | `package.json` 的 `version` 是参照；另外 15 处见下文「版本号」 | `test/release-preflight.test.ts` 随 `npm test` 把 15 处逐一与它比对；`test/v12-release-parity.test.ts` 与 `test/f03-installer-migration.test.ts` 另有自己的断言 |
 | 发版预检 | [`scripts/release-preflight.mjs`](../../scripts/release-preflight.mjs)：版本号、标签、构建产物三组检查 | `test/release-preflight.test.ts` |
-| 前端构建身份 | `vite.config.ts` 的 `define`，运行时由 [`appBuildInfo.ts`](../../src/utils/appBuildInfo.ts) 读取 | V12-04、V12-06、V12-07 |
+| 前端构建身份 | `vite.config.ts` 的 `define`，运行时由 [`appBuildInfo.ts`](../../src/utils/appBuildInfo.ts) 读取 | `test/v12-release-parity.test.ts` |
 | 安装包配置 | [`tauri.conf.json`](../../native/crates/guanlan-desktop/tauri.conf.json) 与 [`tauri.release.conf.json`](../../native/crates/guanlan-desktop/tauri.release.conf.json) | `build-windows-installer.mjs --check-only`，以及 f03 测试 |
 | 安装包构建 | [`scripts/build-windows-installer.mjs`](../../scripts/build-windows-installer.mjs) | 本地只自动测到 `--check-only`；真正的构建只在发布流水线里跑 |
 | 发布流水线 | [`.github/workflows/release.yml`](../../.github/workflows/release.yml) | 预检、产物核对、资产计数；见下文「发布」 |

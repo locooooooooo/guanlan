@@ -1,9 +1,5 @@
 /**
- * 观澜 Guanlan —— Markdown 章节大纲解析
- *
- * v0.3 的扫描→转换链（extractDecisions / extractRelations / buildTimelineEvents /
- * buildWorkspaceState）已随 v0.4 采集对账链（collectWorkspace + server/reconcile）
- * 下线删除，本模块仅保留仍在使用的章节大纲解析。
+ * 观澜 Guanlan —— Markdown 章节大纲解析（Node 对拍基线）
  */
 
 import type { MarkdownSection } from '../types/guanlan';

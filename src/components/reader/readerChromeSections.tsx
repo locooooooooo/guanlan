@@ -1,19 +1,16 @@
 /**
- * D01-a 拆解 · 阅读器浮动 Chrome 层（任务卡 D01-a ②）。
+ * 阅读器浮动 Chrome 层：
+ * 承载新版本告警横幅、紧凑单行文件头（文档身份 + 查看模式分段 + 所属专项五阶段胶囊 +
+ * 阅读操作与文件菜单）、文档迷你版本轴、专注纸面（Zen）状态机与 2px 阅读进度光条换算。
  *
- * 从 ReaderView.tsx（原 2653-3093）原样迁入：返回面包屑横幅、新版本告警横幅、
- * 紧凑单行文件头（文档身份 + 查看模式分段 + 所属专项五阶段胶囊 + 阅读操作与文件菜单）。
- * 迁移纪律：JSX 与类名逐字一致（像素回归护栏）。
- *
- * ── U05（长任务卡 v1.1 §4）增补 ─────────────────────────────────────────
- *  ① 顶栏减密：CopyIdButton 与超长相对路径移入「标题轻悬浮信息卡 / ··· 菜单」，
- *     主行只留四大视觉锚点（衬线标题 / 版本演化胶囊 / 标为已读 / Zen·溯源·昼夜）。
- *  ② 文档迷你版本轴：点版本胶囊展开玻璃微型修订链（vN → … → v1，按修订链序，
- *     禁改按日期排），支持一键切版比对与「进入版本时光机 →」直达 U04 画布。
- *  ③ 专注纸面（Zen）：状态机纯函数 + 顶栏一键入口 + 快捷键。
- *  ④ 阅读进度光条：2px 琉璃光条的唯一换算出口 computeReadingProgressScaleX
- *     （百分比 → scaleX；数据源复用 handleMarkdownScroll 已算好的 pct）。
- *  本文件所有新增计算均为无 DOM 依赖的纯函数（测试直接 import）。
+ * · 顶栏减密：CopyIdButton 与超长相对路径移入标题悬浮信息卡与「···」菜单，
+ *   主行保留核心视觉锚点（衬线标题 / 版本演化胶囊 / 标为已读 / Zen·溯源·昼夜）。
+ * · 文档迷你版本轴：点版本胶囊展开玻璃微型修订链（vN → … → v1，按修订链序，
+ *   禁改按日期排），支持一键切版比对与「进入版本时光机 →」直达时光机画布。
+ * · 专注纸面（Zen）：状态机纯函数 + 顶栏一键入口 + 快捷键。
+ * · 阅读进度光条：2px 琉璃光条的唯一换算出口 computeReadingProgressScaleX
+ *   （百分比 → scaleX；数据源复用 handleMarkdownScroll 已算好的 pct）。
+ * 纯函数计算无 DOM 依赖，可直接由测试 import。
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -37,12 +34,11 @@ import {
   Sun,
   X,
 } from 'lucide-react';
-// v0.6 品牌界面升级（B1/B2）：阅读器 chrome 走字阶令牌与基础件——
-// 控件开合（墨实心）＝Button primary/ghost 双态（§4.3 #8/#9/#10），图标钮＝IconButton（§4.1）
+// 阅读器 chrome 统一走字阶令牌与基础件（Button primary/ghost 双态）
 import { Button } from '../ui/primitives';
 import { Group, GroupSeparator, Toolbar } from '../ui';
 import { FileSystemActionBar } from '../FileContextMenu';
-// 契约⑧①：observed_at 相对时间（「X 分钟前/今天 HH:mm」）——单一事实源在 utils/timeFormat.ts
+// observed_at 相对时间（「X 分钟前/今天 HH:mm」），单一事实源在 utils/timeFormat.ts
 import { formatLocalClock, formatRelativeObservedAt } from '../../utils/timeFormat';
 import {
   DOC_STATE_LABEL,
@@ -57,7 +53,7 @@ import type { ReaderCtx } from './useReaderController';
 import type { ReaderSubMode } from './readerShared';
 
 /* ══════════════════════════════════════════════════════════════════════════
-   U05 · 纯函数层（无 DOM 依赖，测试直接 import）
+   纯函数层（无 DOM 依赖，测试直接 import）
    ══════════════════════════════════════════════════════════════════════════ */
 
 /**
@@ -210,7 +206,7 @@ export function canOpenTimeMachine(format: string): boolean {
   return isTimeMachineFormat(format);
 }
 
-/** 1. Non-Intrusive New Version Alert Banner (§2.2, §5.3)；返回面包屑已并入文件头 Row 1 释放首屏阅读高度 */
+/** 新版本告警横幅（返回面包屑已并入文件头以释放首屏阅读高度） */
 export function ReaderTopBannerSection({ ctx }: { ctx: ReaderCtx }) {
   const {
     hasNewerRevisionWhileReading,
@@ -259,9 +255,9 @@ export function ReaderTopBannerSection({ ctx }: { ctx: ReaderCtx }) {
 }
 
 /**
- * 2.5 文档迷你版本轴（U05）：点版本胶囊展开的玻璃微型修订链。
- * 顺序＝修订链序（vN → … → v1），每节点给「采集时刻 + 变动概览」；
- * 底部「进入版本时光机 →」直达 U04 画布（只做视图跳转，不改任何只读语义）。
+ * 文档迷你版本轴：点版本胶囊展开的玻璃微型修订链。
+ * 顺序按修订链序（vN → … → v1），每节点给出采集时刻与变动概览；
+ * 底部「进入版本时光机 →」直达时光机画布（只做视图跳转，不改任何只读语义）。
  */
 export interface ReaderMiniVersionAxisProps {
   nodes: MiniVersionAxisNode[];
@@ -623,7 +619,7 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
     canCompareSinceRead,
     hasReadBaseline,
     activePackage,
-    // ── U05：Zen 专注纸面 / 迷你版本轴 / 阅读进度 ──
+    // ── Zen 专注纸面 / 迷你版本轴 / 阅读进度 ──
     zenMode,
     toggleZen,
     versionAxisOpen,
@@ -681,7 +677,7 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
             <span className="max-w-[8.5rem] truncate">{returnBreadcrumb.label}</span>
           </button>
         )}
-        {/* 衬线文档标题 + 轻悬浮信息卡（U05 顶栏减密：长路径与文件 ID 移入卡内） */}
+        {/* 衬线文档标题 + 轻悬浮信息卡（长路径与文件 ID 移入卡内以保持顶栏简洁） */}
         <div className="relative group inline-flex min-w-0 items-center gap-0.5">
           <h1
             title={activeFile.title}
@@ -812,7 +808,7 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
             zenMode ? 'opacity-70' : ''
           }`}
         >
-          {/* wf_4：所属专项 + 五阶段 Stepper 收拢为紧凑下拉胶囊，按需展开五阶段跳转 */}
+          {/* 所属专项 + 五阶段 Stepper 收拢为紧凑下拉胶囊，按需展开五阶段跳转 */}
           {activePackage && <InitiativeStageDropdown ctx={ctx} />}
 
           <div
@@ -895,8 +891,8 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
         >
           <Group aria-label="阅读状态与收藏" className="gap-0.5 border-0 bg-transparent p-0 shadow-none">
             {(() => {
-              // GL-01 单一真相源：以 unreadStatus.isUnread 判定是否已读，
-              // 确保手工「标为已读」、V04「确立已读基线」与服务端水合态完全一致；
+              // 单一真相源：以 unreadStatus.isUnread 判定是否已读，
+              // 确保手工「标为已读」、「确立已读基线」与服务端水合态完全一致；
               // 浏览历史版本时绝不将已读基线倒退到旧版本，始终面向 latestRev。
               const isUpToDateRead = !unreadStatus.isUnread;
               const isUpdatedAfterRead = unreadStatus.reason === 'updated_since_last_read';
@@ -993,8 +989,8 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
                 }
               >
                 <PanelLeft className="w-3.5 h-3.5" />
-                {/* U05 主行单行化：1440（xl..2xl）下收文字只留图标（aria-label 提供可读名），
-                    ≥2xl 恢复全标签；与昼夜钮合计省 ~104px，四大锚点在目录栏展开的主配置下回到同一条主行 */}
+                {/* 主行单行化：1440（xl..2xl）下收文字只留图标（aria-label 提供可读名），
+                    ≥2xl 恢复全标签；与昼夜钮合计省 ~104px，保证目录栏展开时主行不换行 */}
                 <span className="max-2xl:hidden">{outlineOpen ? '收起大纲' : '大纲'}</span>
               </Button>
             )}
@@ -1100,7 +1096,7 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
                         {activeFile.relative_path}
                       </span>
                     </div>
-                    {/* U05 顶栏减密：文件 ID 从主行移入此处（长 ID 不再占主行视线） */}
+                    {/* 文件 ID 从主行移入此处，避免长 ID 占用顶栏视线 */}
                     <div
                       data-reader-file-id-entry=""
                       className="flex items-center justify-between gap-2 rounded-[8px] bg-[color:color-mix(in_srgb,var(--ink-strong)_4%,transparent)] px-2 py-1"
@@ -1159,7 +1155,7 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
         </Toolbar>
       </div>
 
-      {/* U05 · 迷你版本轴弹层挂头部根节点末尾：锚单行 header 底沿向下展开，
+      {/* 迷你版本轴弹层挂头部根节点末尾：锚单行 header 底沿向下展开，
           绝不盖住任何头部控件——弹层只覆盖正文纸面（非交互区）。关闭态零 DOM；outside-click 与 Esc 由控制器收口。 */}
       {versionAxisOpen && (
         <ReaderMiniVersionAxis

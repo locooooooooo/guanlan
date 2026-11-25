@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { FolderOpen, Package } from 'lucide-react';
 import type { FileRecord } from '../types/guanlan';
 import type { StateOverviewResponse } from '../services/apiTypes';
-// 筛选/阶段判定全部消费 taskPackages 既有产出（C2 契约：口径写死进组件、依据入注释，零新造判定）
+// 筛选/阶段判定全部消费 taskPackages 产出（零新造判定）
 import {
   formatPackageMetaLine,
   packageBadgeLine,
@@ -10,11 +10,11 @@ import {
   STAGE_ACCENT,
   STAGE_SLOT_ORDER,
 } from '../utils/taskPackages';
-// 统一状态机 SSOT（方案 F2）：筛选胶囊词表上移 stateProjection——executing/awaiting
-// 直接取 STAGE_BADGE_PHRASE，与卡片徽标短语同源（AC-01 四视图同词）；胶囊排版骨架
-// 亦单一出口（PILL_LAYOUT_BASE——本组件只配颜色/阴影件，不再私持同族骨架串）。
-// F1/F2：/state-overview 投影优先渲染六态词；无服务端行时 projectInitiativeState
-// 的 fallback 分支保留既有阶段短语（断连行为与基线一致）。
+// 统一状态机 SSOT：筛选胶囊词表来自 stateProjection——executing/awaiting
+// 直接取 STAGE_BADGE_PHRASE，与卡片徽标短语同源；胶囊排版骨架
+// 亦单一出口（PILL_LAYOUT_BASE——本组件只配颜色/阴影件）。
+// /state-overview 投影优先渲染六态词；无服务端行时 projectInitiativeState
+// 的 fallback 分支保留既有阶段短语。
 import {
   DOC_STATE_LABEL,
   GALLERY_FILTERS,
@@ -51,7 +51,7 @@ import {
 export { buildPackageVisualFingerprint } from '../utils/packageFingerprint';
 
 // ============================================================
-// 任务包视觉预览网格 · 专项橱窗（V07 · coss Frame/CardFrame + 真实数据指纹封面）
+// 任务包视觉预览网格 · 专项橱窗（coss Frame/CardFrame + 真实数据指纹封面）
 //   - 首页与知识库概览共用；筛选与状态投影严格复用 stateProjection SSOT；
 //   - 封面舞台注入真实数据驱动的微视觉指纹：近 14 天变更微折线（Sparkline）+
 //     格式构成比例彩带（Format Ribbon）+ 清晰更新相对时间（零造数、杜绝空白横条与 60... 截断）；
@@ -64,7 +64,7 @@ const STAGE_BADGE_PILL_CLASS =
 
 export interface TaskPackageGalleryProps {
   packages: TaskPackage[];
-  /** 文件索引（封面/文档回查与 V07 真实数据指纹派生） */
+  /** 文件索引（封面/文档回查与真实数据指纹派生） */
   fileById: Map<string, FileRecord>;
   /** svg 封面 dataUri 表（file_id → data:image/svg+xml;utf8,…），调用方必传口径见上 */
   svgDataUris?: Record<string, string>;
@@ -73,9 +73,9 @@ export interface TaskPackageGalleryProps {
   filter?: GalleryFilterKey;
   onFilterChange?: (key: GalleryFilterKey) => void;
   className?: string;
-  /** F1/F2（AC-01）：/state-overview 六态投影（App 级唯一数据源）。 */
+  /** /state-overview 六态投影（App 级唯一数据源）。 */
   stateOverview?: StateOverviewResponse | null;
-  /** A04：右键菜单支持（以包首份核心文件为目标） */
+  /** 右键菜单支持（以包首份核心文件为目标） */
   onOpenFileContextMenu?: (e: React.MouseEvent, target: FileContextMenuTarget) => void;
   /** 可选锚点时间（测试注入固定时刻，生产环境默认当前时间） */
   nowIso?: string;
@@ -129,7 +129,7 @@ const FiveStageRail: React.FC<{ stage: StageRole }> = ({ stage }) => {
   );
 };
 
-/** V07 · 真实数据驱动的 14 天变更微折线 + 格式构成比例彩带 */
+/** 真实数据驱动的 14 天变更微折线 + 格式构成比例彩带 */
 const PackageFingerprintVisual: React.FC<{
   pkgId: string;
   stage: StageRole;
@@ -248,11 +248,11 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
   onOpenFileContextMenu,
   nowIso,
 }) => {
-  // F1：App 级 /state-overview 响应 → 常数查索引（一次构建；无响应 → null 回退阶段词）
+  // App 级 /state-overview 响应 → 常数查索引（一次构建；无响应 → null 回退阶段词）
   const stateIndex = useMemo(() => indexStateOverview(stateOverview), [stateOverview]);
-  // 筛选：filter prop 提供即受控值，缺省走内部 useState 自持（C2；onFilterChange 有则 always 回调）
+  // 筛选：filter prop 提供即受控值，缺省走内部 useState 自持（onFilterChange 有则总是回调）
   const [innerFilter, setInnerFilter] = useState<GalleryFilterKey>('all');
-  // F01：事项资料胶囊打包 / 秒开校验弹窗状态（挂载在橱窗内，首页与知识库概览自动共享）
+  // 事项资料胶囊打包 / 秒开校验弹窗状态（挂载在橱窗内，首页与知识库概览自动共享）
   const [capsulePreset, setCapsulePreset] = useState<CapsuleTargetPreset | null>(null);
   const currentFilter = filter ?? innerFilter;
   const changeFilter = (key: GalleryFilterKey) => {
@@ -283,7 +283,7 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
     [packages, currentFilter]
   );
 
-  // V07：批量派生可见专项的真实数据微指纹（零造数）
+  // 批量派生可见专项的真实数据微指纹（零造数）
   const fingerprints = useMemo(() => {
     const map = new Map<string, PackageVisualFingerprint>();
     for (const pkg of visiblePackages) {
@@ -305,7 +305,7 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
             </Badge>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {/* F01：按时间段打包开放胶囊 / 另一台观澜秒开校验胶囊（coss Group 紧凑拼接） */}
+            {/* 按时间段打包开放胶囊 / 另一台观澜秒开校验胶囊（coss Group 紧凑拼接） */}
             <Group
               aria-label="事项胶囊工具"
               className="h-7 shrink-0 rounded-lg border border-border bg-card/85 shadow-xs"
@@ -435,7 +435,7 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
                     }${pkg.lastActivity ? ` · 最近 ${localDay(pkg.lastActivity)}` : ''}`}
                     className="flex min-h-0 flex-1 cursor-pointer flex-col text-left"
                   >
-                    {/* V07 封面舞台（data-gallery-cover）：真实数据指纹（14天 Sparkline + 格式构成彩带）或 SVG 展台 */}
+                    {/* 封面舞台（data-gallery-cover）：真实数据指纹（14天 Sparkline + 格式构成彩带）或 SVG 展台 */}
                     <span
                       data-gallery-cover=""
                       className="relative flex h-[132px] w-full shrink-0 flex-col justify-between overflow-hidden border-b border-border/60 p-3"
@@ -528,7 +528,7 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
                     </span>
                   </button>
 
-                  {/* 元信息底行 + F01 一键打包胶囊按钮（同级兄弟节点，无嵌套 button；强制不截断「60 份」） */}
+                  {/* 元信息底行 + 一键打包胶囊按钮（同级兄弟节点，无嵌套 button；强制不截断「60 份」） */}
                   <div className="flex items-center justify-between gap-2 border-t border-border/60 bg-muted/25 px-3.5 py-2 text-[11px] leading-4 font-mono text-muted-foreground tabular-nums">
                     <span
                       data-gallery-meta=""

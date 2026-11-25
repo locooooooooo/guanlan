@@ -1,4 +1,4 @@
-//! MCP stdio 代理测试（契约 K）：
+//! MCP stdio 代理测试（contract-query-api.md §2.2）：
 //! - 协议面：initialize 回显 / tools/list 六工具逐字序 / 未知方法 -32601 /
 //!   未知工具 -32602 / 通知无响应 / 解析错误 -32700；
 //! - 六工具转发：mock 后端断言上游 method/path/body 逐字（含 job 有界轮询）；
@@ -126,7 +126,10 @@ fn tools_list_is_exactly_the_six_tools_in_order() {
         .iter()
         .map(|t| t["name"].as_str().expect("工具名"))
         .collect();
-    assert_eq!(names, TOOL_NAMES, "PRD 4.3 四工具逐字序 + E03/E05 扩展工具");
+    assert_eq!(
+        names, TOOL_NAMES,
+        "六个 MCP 工具名及顺序应与 TOOL_NAMES 一致"
+    );
     for tool in &tools {
         assert!(
             tool["inputSchema"].is_object(),
@@ -453,7 +456,7 @@ fn read_artifact_http_4xx_surfaces_envelope_as_error() {
     );
 }
 
-// ---------- 端点解析（契约 K：不猜端口） ----------
+// ---------- 端点解析（不猜端口） ----------
 
 #[test]
 fn endpoint_flag_wins_over_env() {
@@ -533,7 +536,7 @@ fn e02_propose_revision_forwards_context_hashes_and_receipt_summary() {
                     "file_id": "f_plan",
                     "base_revision_id": "rev_2",
                     "content": "# 计划 v3\n已补齐守卫\n",
-                    "note": "E02 测试",
+                    "note": "修订草案测试",
                     "input_context_hashes": ["sha256:0123456789abcdef", "fedcba9876543210"],
                     "receipt_summary": "按架构规范补齐 CAS 状态机守卫",
                 },
@@ -557,14 +560,14 @@ fn e02_propose_revision_forwards_context_hashes_and_receipt_summary() {
 
 #[test]
 fn e03_get_context_bundle_resolves_uri_and_returns_byte_identical_bundle() {
-    let canonical_markdown = "<guanlan_context workspace=\"H:/ws\" initiative=\"02-证道阁\" stage=\"执行\">\n  <objective>\n    推进任务\n  </objective>\n</guanlan_context>\n";
+    let canonical_markdown = "<guanlan_context workspace=\"H:/ws\" initiative=\"02-上下文引擎\" stage=\"执行\">\n  <objective>\n    推进任务\n  </objective>\n</guanlan_context>\n";
     let canonical_payload = json!({
         "protocol": "guanlan-mcp/v1",
         "session_checkpoint_id": null,
         "workspace_root": "H:/ws",
-        "initiative": { "id": "init_02", "name": "02-证道阁", "current_stage": "执行" },
+        "initiative": { "id": "init_02", "name": "02-上下文引擎", "current_stage": "执行" },
         "context_bundle": [
-            { "uri": "guanlan://02-证道阁/计划.md", "granularity": "diff_only", "version": "v2", "hash": "sha256:0123456789abcdef" }
+            { "uri": "guanlan://02-上下文引擎/计划.md", "granularity": "diff_only", "version": "v2", "hash": "sha256:0123456789abcdef" }
         ],
         "allowed_mcp_tools": [
             "guanlan.read_artifact",
@@ -585,7 +588,7 @@ fn e03_get_context_bundle_resolves_uri_and_returns_byte_identical_bundle() {
                     "items": [
                         {
                             "file_id": "f_plan",
-                            "relative_path": "02-证道阁/计划.md",
+                            "relative_path": "02-上下文引擎/计划.md",
                             "current_revision_id": "rev_f_plan_r2",
                             "status": "active"
                         }
@@ -627,9 +630,9 @@ fn e03_get_context_bundle_resolves_uri_and_returns_byte_identical_bundle() {
             json!({
                 "name": "guanlan.get_context_bundle",
                 "arguments": {
-                    "uri": "guanlan://02-证道阁/计划.md",
+                    "uri": "guanlan://02-上下文引擎/计划.md",
                     "items": [
-                        { "uri": "guanlan://02-证道阁/计划.md", "granularity": "diff_only" }
+                        { "uri": "guanlan://02-上下文引擎/计划.md", "granularity": "diff_only" }
                     ],
                     "mode": "both",
                 },

@@ -1,4 +1,4 @@
-//! 身份保真文件操作（A05）：工作区内安全重命名、跨目录原子移动与操作系统回收站移除。
+//! 身份保真文件操作：工作区内安全重命名、跨目录原子移动与操作系统回收站移除。
 //!
 //! 铁律与红线：
 //! - 重命名/移动全程走工作区边界内路径校验（拦截 `..`、绝对路径、盘符/UNC、NTFS 流冒号、
@@ -236,7 +236,7 @@ fn validate_new_file_name(raw_name: &str, current_format: &str) -> Result<String
     let expected = FileFormat::parse(current_format).ok_or_else(|| {
         GuanlanError::BadRequest(format!("不支持重命名此格式文件：{current_format}"))
     })?;
-    // B01：白名单放开后「兼容」按**格式族**判定——同族改名（md→markdown、
+    // 扩展名兼容性按格式族判定：同族改名（md→markdown、
     // png→jpg）放行；跨族改名（md→png）仍拦住，避免阅读器拿到读不了的类型。
     let actual = collector::format_of(&clean, Path::new(&clean));
     if !expected.is_compatible_with(&actual) {
@@ -1416,7 +1416,7 @@ pub fn trash_folder_with(
 
 const MAX_BATCH_FILE_OPS: usize = 200;
 
-/// 批量跨目录移动文件（静默去重，逐个执行 A05 原子移动并如实汇报成败）。
+/// 批量跨目录移动文件（静默去重，逐个执行身份保真原子移动并如实汇报成败）。
 pub fn batch_move_files(
     writer: &mut Writer,
     input: &BatchMoveFilesInput,

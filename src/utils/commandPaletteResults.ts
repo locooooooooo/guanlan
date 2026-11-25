@@ -1,10 +1,10 @@
 /**
- * C03 · Ctrl+K 命令面板——结果组装纯函数（零 React 依赖，node:test 可单测）。
+ * Ctrl+K 命令面板——结果组装纯函数（零 React 依赖，node:test 可单测）。
  *
- * 双层刷新口径（验收「每敲击至结果列表刷新 <50ms」）：
+ * 双层刷新口径（每敲击至结果列表刷新 <50ms）：
  *   - 本地层（同步）：files 全量摘要（App 已在内存）按关键词做路径/标题子串过滤 +
  *     语法过滤（@日期/type:/status:待拍板/in:事项）——每敲击即时刷新；
- *   - 全文层（异步并入）：C02 `GET /api/v1/search` 的正文级命中在防抖后到达，
+ *   - 全文层（异步并入）：服务端 `GET /api/v1/search` 的正文级命中在防抖后到达，
  *     按 score 优先、file_id 去重合并——列表先出本地结果，全文命中随后并入。
  *   空查询：最近浏览 Top 20（readingStates.updated_at 排序）+ 常驻动作行。
  */
@@ -52,7 +52,7 @@ export interface PaletteItem {
   snippetText?: string;
   /** 待拍板数（artifact pending_p0+p1；仅文件条目携带） */
   pendingDecisions?: number;
-  /** C05：命中来源挂载工作区（跨项目命中携带；主区命中缺省） */
+  /** 命中来源挂载工作区（跨项目命中携带；主区命中缺省） */
   sourceWorkspace?: { name: string; rootKey: string };
   /** 多项目并存：命中来自其他受管项目时携带，Enter 直接零重启切焦点并打开完整阅读器 */
   projectId?: string;
@@ -119,7 +119,7 @@ export function localFileHits(
   return items.slice(0, limit);
 }
 
-/** 服务端命中（C02 /search）→ 面板条目（全文层） */
+/** 服务端命中（/search）→ 面板条目（全文层） */
 export function serverHitsToItems(hits: SearchHitDto[], limit: number): PaletteItem[] {
   const items: PaletteItem[] = [];
   for (const hit of hits) {
@@ -250,7 +250,7 @@ export function assemblePaletteResults(input: {
   files: PaletteFileLite[];
   readingStates: Record<string, ReadingState | undefined>;
   serverItems: PaletteItem[];
-  /** C05：挂载区跨库层（带 sourceWorkspace 来源徽标；无在线挂载时为空） */
+  /** 挂载区跨库层（带 sourceWorkspace 来源徽标；无在线挂载时为空） */
   crossItems?: PaletteItem[];
   initiatives: InitiativeStateView[];
   artifacts: ArtifactStateView[];

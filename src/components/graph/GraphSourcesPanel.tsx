@@ -1,9 +1,6 @@
 /**
- * D01-a 四层拆解 · 浮动 Chrome 层 · Sources 来源面板（任务卡 D01-a ②）。
- *
- * 从 GraphCanvasView.tsx（原 2437-2983）原样迁入的左侧浮动面板：七个分类折叠组
- * （I/R/S/A/M/C/H）+ 收起窄条。体量大、自成一块 chrome，独立成文件。
- * 迁移纪律：JSX 与类名逐字一致（像素回归护栏）；数据一律来自 controller ctx。
+ * 左侧浮动 Chrome · Sources 来源面板：
+ * 承载七个分类折叠组（I/R/S/A/M/C/H）与收起窄条，数据一律来自 controller ctx。
  */
 
 import React from 'react';
@@ -11,8 +8,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-reac
 import { GraphSourcesMdList } from './GraphSourcesMdList';
 import type { GraphCanvasCtx } from './useGraphCanvasController';
 
-/** LEFT FLOATING PANEL: "Sources" — Compact, airy, un-crowded proportions matching screenshot
- *  C3：收起时切 w-[44px] 窄条（仅留展开钮），画布可视原点随 260ms 动画左移补位 */
+/** 左侧浮动来源面板：收起时切换为 w-[44px] 窄条（仅留展开钮），画布可视原点随 260ms 动画左移补位 */
 export function GraphSourcesPanel({ ctx }: { ctx: GraphCanvasCtx }) {
   const {
     files,
@@ -102,9 +98,7 @@ export function GraphSourcesPanel({ ctx }: { ctx: GraphCanvasCtx }) {
           </div>
         </div>
 
-        {/* Built in / Project Root Summary Row
-            P2-1（v0.7 提示文本治理）：装饰字符 ▸ 与孤立 · 全删——该行不可折叠，留 ▸ 即说谎；
-            P0-3：演示工程名「拥抱AI」改动态工作区名 */}
+        {/* Built in / Project Root Summary Row：该行不可折叠故不放箭头装饰，名称取动态工作区名 */}
         {!sourcesPanelCollapsed && (
           <div className="mt-3 flex items-center justify-between text-[11.5px] text-[color:var(--cv-ink-3)] py-1">
             <div className="flex items-center gap-2">
@@ -400,7 +394,7 @@ export function GraphSourcesPanel({ ctx }: { ctx: GraphCanvasCtx }) {
                       key={day.date || 'undated'}
                       type="button"
                       onClick={() =>
-                        // T05：再次点击当前日期取消选中
+                        // 再次点击当前日期取消选中
                         selectDate(scene.activeDate === day.date ? undefined : day.date)
                       }
                       className={`block text-[10.5px] font-mono cursor-pointer truncate max-w-[170px] ${

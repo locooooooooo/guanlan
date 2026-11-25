@@ -1,23 +1,23 @@
 /**
- * Inline 拍板闭环 · 卡点块解析与拍板表单纯函数层（PRD 3.3 / 方案 F5）。
+ * Inline 拍板闭环 · 卡点块解析与拍板表单纯函数层。
  *
  * 职责（全部纯函数 + 本机记忆存储，禁 import .css / React——node --test 直跑约束）：
  *  - parseDecisionBlocks：识别 `[P0/P1/P2 - 待确认|已确认|…]` 卡点标记与
- *    PRD 3.3 标准字段行（决定/确认人/角色/现·新运行条件/生效范围与日期），
+ *    标准字段行（决定/确认人/角色/现·新运行条件/生效范围与日期），
  *    产出行号锚定的区块模型（阅读器按块模型行号原位渲染表单）；
  *  - extractDecisionOptions：从「可选方案 / 推荐理由」章节提取决定下拉的预设选项
- *    （PRD 3.3：自动提取文档中选项作为预设，并支持自定义输入——自定义在表单层）；
- *  - buildDecisionResolvePayload：表单值 → 契约 C DecisionResolveRequest
+ *    （自动提取文档中选项作为预设，并支持表单层自定义输入）；
+ *  - buildDecisionResolvePayload：表单值 → DecisionResolveRequest
  *    （trim、空可选字段省略键——不发送空串）；
  *  - matchStatementToBlock：服务端陈述（GET /statements，line_start 行号）与本地
  *    解析区块的匹配（区块行范围内首个命中）；无服务端陈述 → null（表单诚实降级）；
  *  - remainingBlockingCount / isBlockingCleared：本会话已拍板集合下的剩余阻塞
- *    （P0/P1）计数与清零判定（AC-03 长任务恢复提示的本地口径）；
- *  - 确认人/角色本机记忆：无成员数据源（方案登记偏差）——自由文本 + localStorage
+ *    （P0/P1）计数与清零判定（长任务恢复提示的本地口径）；
+ *  - 确认人/角色本机记忆：无成员数据源——自由文本 + localStorage
  *    最近值点选（datalist 预填），读写全 try/catch，node 无 window 环境安全降级。
  *
  * 铁律：本层不写文件、不发请求——.md 占位符替换由后端拍板回写 job（CAS）完成，
- * 前端只组装载荷与展示结果（契约 C：恒 202，无 409 路径）。
+ * 前端只组装载荷与展示结果（后端恒 202，无 409 路径）。
  */
 
 import type { DecisionResolveRequest, StatementDetailDTO } from '../services/apiTypes';
@@ -26,13 +26,13 @@ import type { DecisionResolveRequest, StatementDetailDTO } from '../services/api
 
 export type DecisionPriority = 'P0' | 'P1' | 'P2';
 
-/** PRD 3.2/3.3 状态词（库内口径，与 STATEMENT_STATUS_LABEL 同域） */
+/** 状态词（库内口径，与 STATEMENT_STATUS_LABEL 同域） */
 export type DecisionBlockStatus = '待确认' | '已确认' | '已否决' | '已搁置' | '已取代';
 
 /**
  * 卡点标记：`[P1 - 待确认]` 形态。容忍全角连字符与空格变体；
  * 组合优先级（如 `[P0/P1 - 待确认]`）按列出顺序取首个为代表性优先级，
- * blocking = 任一为 P0/P1（P2 不构成阻塞门禁，契约 stateMachine 节）。
+ * blocking = 任一为 P0/P1（P2 不构成阻塞门禁）。
  */
 const DECISION_MARKER_RE =
   /\[((?:P[012])(?:\s*\/\s*P[012])*)\s*[-－—]\s*(待确认|已确认|已否决|已搁置|已取代)\]/;
@@ -51,7 +51,7 @@ export interface DecisionBlock {
   status: DecisionBlockStatus;
   /** 标记行去掉标记与列表符后的标题文本 */
   title: string;
-  /** PRD 3.3 标准字段行号（区块内首个命中；缺省字段不出键） */
+  /** 标准字段行号（区块内首个命中；缺省字段不出键） */
   fields: {
     decision?: number;
     confirmer?: number;
@@ -176,7 +176,7 @@ function normalizeOptionText(raw: string): string {
 }
 
 /**
- * 「可选方案 / 推荐理由」预设选项提取（PRD 3.3，确定性口径）：
+ * 「可选方案 / 推荐理由」预设选项提取（确定性口径）：
  *  - 行内标签形态：`可选方案：A、B、C` → 按行内分隔符切分；
  *  - 章节标题形态：`## 可选方案` 之下的列表项逐条收集（至下一标题/第二个空行/护栏）；
  *  - 「推荐理由：…」整行不进选项（推荐语义由 statement.recommendation / 表单副文承载）；
@@ -253,7 +253,7 @@ export function extractDecisionOptions(markdownContent: string): string[] {
   return options.slice(0, DECISION_OPTIONS_MAX);
 }
 
-// ================= 拍板载荷（契约 C） =================
+// ================= 拍板载荷 =================
 
 /** 拍板表单值（DecisionResolveCard 的提交形状） */
 export interface DecisionResolveFormValues {
@@ -267,7 +267,7 @@ export interface DecisionResolveFormValues {
   note: string;
 }
 
-/** 表单值 → 契约 C 请求体：trim；空可选字段省略键（不发送空串）；decision/confirmer 必填 */
+/** 表单值 → 拍板请求体：trim；空可选字段省略键（不发送空串）；decision/confirmer 必填 */
 export function buildDecisionResolvePayload(values: DecisionResolveFormValues): DecisionResolveRequest {
   const payload: DecisionResolveRequest = {
     decision: values.decision.trim(),
@@ -304,7 +304,7 @@ export function matchStatementToBlock(
   return best;
 }
 
-// ================= 阻塞清零判定（AC-03 本地口径） =================
+// ================= 阻塞清零判定（本地口径） =================
 
 /**
  * 剩余阻塞数：待确认 + blocking(P0/P1) + 不在本会话已拍板集合。

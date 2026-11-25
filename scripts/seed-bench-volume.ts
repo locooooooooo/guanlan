@@ -1,5 +1,5 @@
 /**
- * B05 · 10,000 份混合文件标准压测夹具生成器（纯文件系统写入，不建库）
+ * 10,000 份混合文件标准压测夹具生成器（纯文件系统写入，不建库）
  *
  * 用法：
  *   npx tsx scripts/seed-bench-volume.ts <输出根目录> [--total 10000] [--clean]
@@ -8,7 +8,7 @@
  *   docs/     MD 2,800（约 1/14 带 [P1 - 待确认] 决策标记 + 跨文件链接，驱动派生管线）
  *   src/      代码 2,800（ts/js/py/rs/go 循环）
  *   assets/   PNG 2,000（合法最小 PNG 头 + 随机尾，走魔数/尺寸探测路径）
- *   specs/    PDF 800（2~6 页文本，驱动 B04 页级抽取重路径）
+ *   specs/    PDF 800（2~6 页文本，驱动 PDF 页级抽取重路径）
  *   docs/     DOCX 400（合法最小 OOXML：[Content_Types]+rels+document.xml）
  *   sheets/   XLSX 400（合法最小 OOXML：workbook+sharedStrings+sheet1）
  *   archives/ ZIP 400（stored 无压缩 zip）
@@ -150,7 +150,7 @@ function buildPng(padBytes: number): Buffer {
   return Buffer.concat([PNG_SIG, IHDR, IDAT, IEND, tail]);
 }
 
-// ---------- 最小多页文本 PDF（B04 页级抽取真实负载） ----------
+// ---------- 最小多页文本 PDF（PDF 页级抽取真实负载） ----------
 function buildPdf(pages: number, tag: string): Buffer {
   const objects: string[] = [];
   objects.push('<< /Type /Catalog /Pages 2 0 R >>');
@@ -249,7 +249,7 @@ function mdDoc(rel: string, i: number, pdfTotal: number): string {
     '',
     `文档日期：${dayIso(i).slice(0, 10)}`,
     '',
-    `本文件是 B05 体量基准的合成样本：${rel}。`,
+    `本文件是体量基准的合成样本：${rel}。`,
     `填充校验串：${'ab'.repeat(16)}（第 ${i} 号）`,
   ];
   if (withDecision) {
@@ -291,7 +291,7 @@ function jsonDoc(i: number): string {
       id: `bench-${i}`,
       day: dayIso(i).slice(0, 10),
       metrics: Array.from({ length: 24 }, () => rndInt(1000)),
-      note: 'B05 体量基准合成样本（内容唯一）',
+      note: '体量基准合成样本（内容唯一）',
     },
     null,
     2
@@ -304,7 +304,7 @@ if (CLEAN) {
 }
 fs.mkdirSync(WS_ROOT, { recursive: true });
 
-console.log(`B05 夹具生成：${TARGET}（目标 ${TOTAL} 个可见文件）`);
+console.log(`体量基准夹具生成：${TARGET}（目标 ${TOTAL} 个可见文件）`);
 const t0 = Date.now();
 
 // 配比（合计 = TOTAL）：按比例缩放到任意 total
@@ -396,7 +396,7 @@ for (let i = 0; i < zipCount; i++) {
   putFile(
     `archives/基准-归档-${pad(i, 5)}.zip`,
     buildStoredZip([
-      { name: `readme-${i}.txt`, data: Buffer.from(`B05 归档样本 ${i}\n${'z'.repeat(256)}`) },
+      { name: `readme-${i}.txt`, data: Buffer.from(`体量基准归档样本 ${i}\n${'z'.repeat(256)}`) },
       { name: `data-${i}.csv`, data: Buffer.from(csvDoc(i)) },
     ]),
     nextIso()

@@ -1,5 +1,5 @@
 /**
- * F01 事项资料胶囊（Context Capsule）前端纯函数助手：
+ * 事项资料胶囊（Context Capsule）前端纯函数助手：
  * 1. 字节体积人类可读格式化；
  * 2. 两阶段预览/导出门禁守卫（严禁未预览或未勾选确认就触发导出）；
  * 3. 开放胶囊原文证据行切片（支持另一台观澜秒开后点击决定精准定位 Lx–Ly 并高亮上下文）。
@@ -48,7 +48,7 @@ export function buildCapsulePreviewPayload(draft: CapsuleDraftParams): CapsulePr
 }
 
 /**
- * F01 停机红线客户端双重门禁：
+ * 停机红线客户端双重门禁：
  * 必须具备最新有效 preview_token、至少勾选 1 份文件、不在加载/导出中、且用户已显式勾选确认框。
  */
 export function canConfirmCapsuleExport(opts: {

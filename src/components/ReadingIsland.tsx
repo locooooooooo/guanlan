@@ -18,17 +18,16 @@ import { ScrollArea } from './ui/scroll-area';
 import { Sheet, SheetPopup } from './ui/sheet';
 
 /**
- * V02 · 「阅读与存档」顶栏微胶囊 + coss Sheet (inset) 悬浮圆角抽屉。
+ * 「阅读与存档」顶栏微胶囊 + coss Sheet (inset) 悬浮圆角抽屉。
  *
- * 相比旧版 `fixed right-0 top-1/2` 亮白竖条（U12 截屏实证压盖日历右侧栏、版本时光机右栏
- * 且在夜航画布形成刺眼白块）：
+ * 相比固定在右侧边缘的悬浮竖条（容易压盖日历右侧栏与版本时光机右栏，且在深色画布上过于刺眼）：
  * - 触发器收编为顶栏工具区的横向紧凑微胶囊（placement="header"），零 fixed 叠加、全站零遮挡、
  *   明暗双态自动跟随 `:root` / `.dark` 语义令牌；
- * - 展开态升级为 Base UI `Sheet (side="right" variant="inset")` 悬浮圆角抽屉，内置
+ * - 展开态使用 Base UI `Sheet (side="right" variant="inset")` 悬浮圆角抽屉，内置
  *   `Frame` 三环中文总览（「已读 / 未读 / 已落盘」）+ `ScrollArea (scrollFade)` 分组清单，
  *   支持 Esc 与遮罩点击关闭；
- * - 全部既有口径（GL-01 hasUnreadChanges、snapshotAvailable、config.quota）与测试锚点
- *   （data-island-ring/pill/panel/doc-row/persist-badge/quota-line/section）100% 保真。
+ * - 全部既有口径（hasUnreadChanges、snapshotAvailable、config.quota）与测试锚点
+ *   （data-island-ring/pill/panel/doc-row/persist-badge/quota-line/section）保持一致。
  */
 
 export interface ReadingIslandProps {
@@ -49,7 +48,7 @@ export interface ReadingIslandProps {
 // ---------- 迷你进度环 ----------
 
 /**
- * 环描边生长纯函数（U11）：周长口径取整 100（r=15.9155），
+ * 环描边生长纯函数：周长口径取整 100（r=15.9155），
  * stroke-dashoffset = 100 - percent（双端钳位 0..100）。
  */
 export function islandRingDashOffset(percent: number): number {
@@ -446,7 +445,7 @@ export function ReadingIslandPanel({
           </Button>
         </div>
 
-        {/* V02：明确中文语义三项总览（已读 / 未读 / 已落盘），消除纯图标盲猜 */}
+        {/* 明确中文语义三项总览（已读 / 未读 / 已落盘），避免纯图标歧义 */}
         <Frame>
           <FramePanel className="grid grid-cols-3 divide-x divide-border p-2.5">
             <div className="flex flex-col items-center gap-0.5 px-1">

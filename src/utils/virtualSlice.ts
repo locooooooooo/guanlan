@@ -1,5 +1,5 @@
 /**
- * V11 · 5,500+ 真实超大工程轻量视窗切片 / 分批渲染与无痛增量事件并入纯函数。
+ * 5,500+ 真实超大工程轻量视窗切片 / 分批渲染与无痛增量事件并入纯函数。
  *
  * 设计原则：
  *  - 零 DOM / 零第三方依赖，Node SSR 与浏览器客户端 100% 同构；
@@ -9,7 +9,7 @@
 
 import type { EventPage, EventPageItem } from '../services/workspaceClient';
 
-/** 左栏单目录直接子文件触发轻量视窗切片的阈值（任务卡 V11 约定：> 150 自动切片）。 */
+/** 左栏单目录直接子文件触发轻量视窗切片的阈值（> 150 自动切片）。 */
 export const SIDEBAR_FILE_SLICE_THRESHOLD = 150;
 
 /** 左栏虚拟切片默认行高（px，与 SidebarFileLeaf / BranchFileRow py-1 + 12px 文本对齐）。 */
@@ -174,7 +174,7 @@ export interface IncrementalEventMergeResult {
 }
 
 /**
- * V11 · 无痛静默并入增量事件页（纯函数）：
+ * 无痛静默并入增量事件页（纯函数）：
  * - 保留用户已加载的历史分页与 next_cursor / has_more，不重置滚动窗口；
  * - 仅将 prev 中尚不存在的 event_id 按到达顺序前置并入，避免重复卡片；
  * - 同步抬升 total_in_window，确保分页总数守恒。

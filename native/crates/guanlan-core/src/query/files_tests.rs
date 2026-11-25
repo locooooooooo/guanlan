@@ -400,7 +400,7 @@ fn include_sections_enum_reference() {
     assert_eq!(sections.len(), 4);
 }
 
-// ===== issue #33：generation 与全部数据库字段绑定同一读快照 =====
+// ===== generation 与全部数据库字段绑定同一读快照 =====
 
 /// 外部写者（模拟另一进程的 Node writer）在 WAL 下与读事务并发提交：
 /// 读事务内 generation 与数据行都不漂移；事务结束后的新查询看到新代际。

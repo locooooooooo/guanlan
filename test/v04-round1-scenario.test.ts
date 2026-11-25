@@ -8,13 +8,13 @@ import { reconcileWorkspace } from '../server/reconcile';
 import { WorkspaceStore } from '../server/WorkspaceStore';
 
 /**
- * v0.4 第一轮通过条件（方案 §6）：
+ * 纵向对账场景验收条件：
  *   修改同一 MD 两次，重启后仍能打开三个版本。
  *   连续重扫不增加事件。
  *   仅变 mtime 不增加内容版本。
  *   A → B → A 可逐版回看。
  *
- * 纵向场景按方案 §6 末：一份修复方案、一张 SVG、一份 PDF。
+ * 纵向场景包含：一份修复方案、一张 SVG、一份 PDF。
  */
 
 const A_CONTENT = [
@@ -119,7 +119,7 @@ test('第一轮纵向场景：基线 → 重扫 → 仅 mtime → 改两次 → 
     assert.equal(baseline.length, 1, '首次扫描只有一张基线卡');
     assert.match(baseline[0].headline, /首次纳入 3 份资料/);
 
-    // 修复方案正文写着「文档日期：2026-11-05」，按方案 §3 以「文档自述日期」入轴；
+    // 修复方案正文写着「文档日期：2026-11-05」，以「文档自述日期」入轴；
     // SVG / PDF 没有日期依据，只归基线卡
     const dated = events1.filter((e) => e.kind === 'appeared');
     assert.equal(dated.length, 1, '只有带自述日期的材料单独入轴');
@@ -409,7 +409,7 @@ test('决策入轴：提出 → 明确确认 → 同状态复述不重复记', (
     s2.store.close();
   }
 
-  // 新版本复述同一状态 → 只补来源证据，不新增事件（方案 §4）
+  // 新版本复述同一状态 → 只补来源证据，不新增事件
   fs.writeFileSync(filePath, docRestated, 'utf-8');
   fs.utimesSync(filePath, new Date('2026-11-06T10:00:00Z'), new Date('2026-11-06T10:00:00Z'));
   const s3 = reconcileWorkspace(root, { dataDir, now: '2026-11-06T10:01:00.000Z' });

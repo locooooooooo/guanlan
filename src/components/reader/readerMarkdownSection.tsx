@@ -1,10 +1,8 @@
 /**
- * D01-a 拆解 · 阅读器 MD 阅读纸分节（任务卡 D01-a ②「格式专用阅读器插件层」之一）。
- *
- * 从 ReaderView.tsx（原 3799-4206）原样迁入：章节大纲侧栏、精装手稿纸容器、
- * GU-CC-01 回退提示、显式提要横幅、正文三态（错误/挂起/正文）、行模型渲染、
- * 底部决策回传动作条。渲染期闭包（renderMarkdownBlock 等）由 controller ctx 提供。
- * 迁移纪律：JSX 与类名逐字一致（像素回归护栏）。
+ * 阅读器 Markdown 阅读纸分节：
+ * 包含章节大纲侧栏、精装手稿纸容器、来源行回退提示、显式提要横幅、
+ * 正文三态（错误/加载/正文）、行模型渲染与底部决策回传动作条。
+ * 渲染期闭包（renderMarkdownBlock 等）由 controller ctx 提供。
  */
 
 import React from 'react';
@@ -25,7 +23,7 @@ import { GlassSkeleton } from '../ui/GlassSkeleton';
 import { formatSourceLineFallbackNotice, scrollToSourceLine } from './readerMarkdownModel';
 import type { ReaderCtx } from './useReaderController';
 
-/** === SUBMODE C / Format 1: MARKDOWN READER (§4.1) === */
+/** Markdown 阅读纸分节 */
 export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
   const {
     paperLightMode,
@@ -122,8 +120,8 @@ export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
           ) : (
           <div className="space-y-0.5">
             {outline.map((sec) => {
-              // issue #18：大纲「自上次读变更」高亮改走章节指纹按需计算
-              // （changedSectionsOutline），不再消费全量 diff 的副产物
+              // 大纲「自上次读变更」高亮走章节指纹按需计算
+              // （changedSectionsOutline），不依赖全量 diff 副产物
               const isChangedSinceRead =
                 changedSectionsOutline.includes(sec.title);
               return (
@@ -182,7 +180,7 @@ export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
             : 'bg-[#0F1117] text-[#F4F3EE]'
         }`}
       >
-        {/* GU-CC-01：证据行就近回退的中性提示 */}
+        {/* 证据行就近回退的中性提示 */}
         {sourceLineFallback && (
           <div
             role="status"
@@ -331,13 +329,11 @@ export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
               </Button>
             </div>
           ) : bodyPhase === 'loading' ? (
-            /* AC-02：正文读取挂起只在纸面内显示 loading——外层标题/工具栏/
-               shell 已先渲染（无全局阻塞遮罩）；冷启动对账期正文可能较慢，
-               但首屏渲染耗时由 readerFirstScreen 预算测量锁定。
-               U11 实机核验收编：裸旋转图标升级琉璃骨架（条底 color-mix(currentColor)
-               随纸面/夜航容器文字色 tint，双主题轨道均可见；reduce 下流光层
-               display:none＝静态骨架终态）；role="status" 与三行诚实文案（含
-               revision 可诊断信息）逐字保留。 */
+            /* 正文读取挂起只在纸面内显示 loading——外层标题/工具栏/shell 已先渲染
+               （无全局阻塞遮罩）；冷启动对账期正文可能较慢。
+               使用琉璃骨架（条底 color-mix(currentColor) 随昼夜阅读容器文字色自适应，
+               reduced-motion 下流光层隐藏退化为静态骨架）；保留 role="status" 与
+               revision 可诊断信息。 */
             <div
               role="status"
               className={`p-6 rounded-lg border flex flex-col items-center justify-center gap-2.5 text-sm ${
@@ -358,17 +354,14 @@ export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
               </span>
             </div>
           ) : (
-          /* 正文档（§3.2 read-body）：17/32（1.88 行高，阅读优先底线①）；
-             衬线为受闸切换（D3）——html 挂 serif-body-live 才启用，见 index.css .read-body */
+          /* 正文区：17/32（1.88 行高）；衬线体受 html.serif-body-live 开关控制，见 index.css .read-body */
           <article className="read-body space-y-0">
-            {/* perf②：行模型（useMemo，deps=[markdownContent, 链接索引]）→ 渲染期叠加
+            {/* 行模型经 useMemo 缓存（依赖 markdownContent 与链接索引），渲染期再叠加
                 易变态（paperLightMode/sourceLine/showLineNumbers/activeSectionId/
-                readingState）。DOM 结构、data-event-source-line 锚点粒度、键方案与
-                旧解析 IIFE 逐字一致；解析只随正文/文件集变化重跑，易变渲染不再
-                全量重解析（App 常驻保活下概览态同样受益）。 */}
+                readingState），避免易变渲染触发正文全量重解析（保活隐藏态同样受益）。 */}
             {markdownBlocks.map((block) => {
               const node = renderMarkdownBlock(block);
-              // Inline 拍板（F5）：卡点块范围末块之后追加原位拍板卡
+              // Inline 拍板：卡点块范围末块之后追加原位拍板卡
               //（原文行逐字渲染零改写；Fragment 接管 map 键，块内 wrapLine 键保留）
               const anchorBlock = resolveCardByAnchor.get(block.line);
               return anchorBlock ? (
@@ -386,7 +379,7 @@ export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
         </div>
       </div>
 
-      {/* 决策回执 T3：底部悬浮「决策回传动作条」——勾选 ≥1 项时滑入。
+      {/* 决策回执：底部悬浮「决策回传动作条」——勾选 ≥1 项时滑入。
           悬浮于阅读纸下缘（外层 relative 容器，不随正文滚动）；居中用 Tailwind
           -translate-x-1/2（v4 落独立 translate 属性），与滑入关键帧操作的 transform
           属性互不覆盖——居中位移若写进 transform 会被动画终帧 transform:none 抹掉。

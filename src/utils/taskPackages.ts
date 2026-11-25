@@ -1,22 +1,22 @@
 /**
  * 语义聚合层 · 任务包(Task Package)与五阶段生命周期。
  *
- * 从「File-Centric」聚合为「Workflow & Lifecycle-Centric」的纯函数地基（wf_1）：
+ * 从「File-Centric」聚合为「Workflow & Lifecycle-Centric」的纯函数地基：
  *  - 任务包识别：任意 relative_path 经 G1→G2→G3→G5 级联规则 100% 归属一个任务包
  *    （专项目录 / 执行轮次 run-id / 任务码 / 顶层资产桶 / 工作区根），id 永不为空；
  *  - 工具噪音隔离：draw 形态/`_` 前缀段产物在分桶前拦截（isToolNoisePath 单源
- *    documentIdentity，与首页高价值待阅同口径），不进包 docs 统计（DoD3）；
+ *    documentIdentity，与首页高价值待阅同口径），不进包 docs 统计；
  *  - 五阶段分类：basename 关键词(顺序即优先级) > 容器默认 > 待分类；
  *    dominantStage 以「最远已到达阶段」表达『卡在决策』等生命周期语义；
- *  - 正文摘要：extractCoreSummary 镜像 guanlanEngine.ts:1305-1321 既有范式，再统一过
+ *  - 正文摘要：extractCoreSummary 镜像 guanlanEngine 既有范式，再统一过
  *    condenseSummary——去 markdown 标记、去路径与 KB、丢弃服务端元数据串（summaryNote），
  *    压成一行 ≤80 字；拿不到正文返回空串，由调用方显式占位，绝不拿文件属性冒充结论；
- *    pkgfix 多级回退链：显式「核心结论」章节 → 逐章节正文（跳过目录/编号规则等元话语节）
+ *    多级回退链：显式「核心结论」章节 → 逐章节正文（跳过目录/编号规则等元话语节）
  *    → 原文首段扫描（跳 frontmatter/表格线/系统说明行，2~3 行截断）→ rev.summaryNote，
- *    签名不变、语义增强，消灭「满屏暂无正文摘要」（多数文档无显式核心结论章节）；
+ *    避免多数文档因无显式核心结论章节而落空；
  *  - 包摘要优先级链（packageConclusionOf）：00-阅读与派发总览 → PLAN*.md → 01-需求单* →
  *    任意首篇 .md → 任意首篇有结论文档，全部扫完无真实正文才返回空串（数据层不造假）；
- *  - 元信息行 formatPackageMetaLine / 徽标行 packageBadgeLine：橱窗票（焦点卡/画廊）
+ *  - 元信息行 formatPackageMetaLine / 徽标行 packageBadgeLine：焦点卡/画廊
  *    消费的一行元信息与版本徽标，全部从 lastActivity / docs 版本 / dominantStage 真实派生，
  *    严禁「暂无事件」式假占位，无数据返回空串由 UI 降级；
  *  - 五阶段计数：stageCountsOf 供看板「蓝图 n → 计划 n → 决策 n → 执行 n → 交付 n」聚合胶囊；
@@ -36,7 +36,7 @@ import type { EventDayItem } from '../services/workspaceClient';
 import { basenameOf, isToolNoisePath, normalizePath } from './documentIdentity';
 import { formatLocalClock, formatLocalStamp, localDay } from './timeFormat';
 import { parseMarkdownOutline } from './guanlanEngine';
-// 统一状态机 SSOT（方案 F2）：六阶段词表 StageRole 与阶段徽标短语单一出口在此，
+// 统一状态机 SSOT：六阶段词表 StageRole 与阶段徽标短语单一出口在此，
 // 本模块消费、不再自造状态文案；StageRole 定义随 wire 上移 apiTypes（经 stateProjection 再导出）
 import { stageBadgeLine } from './stateProjection';
 import type { StageRole } from './stateProjection';
@@ -54,8 +54,8 @@ export interface PackageDoc {
   stage: StageRole; // stageOfPath(relative_path)
   conclusion: string; // extractCoreSummary(FileRecord)，无结论为空串
   /**
-   * 当前版版本号（pkgfix T3）：当前修订 versionNumber；无修订为 null。
-   * 可选字段——既有测试/手搓 PackageDoc 不带此字段时按「无版本数据」处理，
+   * 当前版版本号：当前修订 versionNumber；无修订为 null。
+   * 可选字段——手构 PackageDoc 不带此字段时按「无版本数据」处理，
    * packageBadgeLine 返回空串由 UI 降级，绝不造数。
    */
   versionNumber?: number | null;
@@ -100,10 +100,10 @@ function containerKindOf(container: string): PackageKind {
 }
 
 /**
- * 命名子专项段识别（pkgfix T4）：段名以大写任务码前缀开头——
+ * 命名子专项段识别：段名以大写任务码前缀开头——
  * 如「MECH-WIN-001 机械设计工具独立交付」「OFF-PROD-001 文档中枢」。
  * 小写连字名（agent-a / pdm-long006，G2 run 域同名形态）与日期段（2026-11-06）不命中，
- * 避免把顶层资产桶按任意子目录碎成噪声包（G3 既有纪律：禁止父目录回退）。
+ * 避免把顶层资产桶按任意子目录碎成噪声包（G3 纪律：禁止父目录回退）。
  */
 const NAMED_SUBPROJECT_RE = /^[A-Z][A-Z0-9]*(?:[-_][A-Z0-9]+)+/;
 
@@ -112,7 +112,7 @@ const NAMED_SUBPROJECT_RE = /^[A-Z][A-Z0-9]*(?:[-_][A-Z0-9]+)+/;
  *  G1:01-方案文档/<容器>/<seg3>/… → id='01-方案文档/<容器>/<seg3>'，name=seg3(专项名_日期)
  *  G2:output/<项目>/<seg3>/… → id='output/<项目>/<seg3>'，name=seg3(run-id 或任务码)
  *  G3:其余深度≥2 → id=顶层段，name=顶层段(资产桶)；
- *    例外（pkgfix T4 焦点锚定）：顶层段下存在命名子专项段（任务码前缀）且段深≥3 →
+ *    焦点锚定例外：顶层段下存在命名子专项段（任务码前缀）且段深≥3 →
  *    id=顶层段/子专项段，name=子专项段——焦点卡/画布分组锚定真正交付单元，
  *    不再只显示一级大目录名（04-智能体代码）
  *  G5:根级文件 → id='__root__'，name='工作区根'
@@ -173,7 +173,7 @@ function packageDocOf(file: FileRecord): PackageDoc {
 }
 
 /**
- * 包摘要多级优先链（pkgfix T1）：按阅读价值优先级扫描包内 docs——
+ * 包摘要多级优先链：按阅读价值优先级扫描包内 docs——
  * 00-阅读与派发总览 → PLAN*.md → 01-需求单* → 任意首篇 .md → 任意首篇有结论文档（svg/pdf 兜底，
  * 图形文字/首页文本也是真实正文）。每级取首个 conclusion 非空者；全部扫完无真实正文才返回
  * 空串——空串由 UI 层诚实占位「暂无正文摘要」，数据层不造假。
@@ -219,7 +219,7 @@ const STAGE_RANK: Record<StageRole, number> = {
 /**
  * 文件集→任务包列表(按 id 排序稳定；每包 docs 按 readingOrder 排)。
  * eventCount/lastActivity 为 0/'' 占位，由 enrichPackagesWithEvents 回填。
- * DoD3 零焦虑首屏：draw_edge/draw_ms/draw 等工具脚本产物严禁混入任务包统计——
+ * 工具噪音过滤：draw_edge/draw_ms/draw 等工具脚本产物严禁混入任务包统计——
  * 包文档数、画廊封面候选、画布分组 docCount、最活跃专项 eventCount 全部从包
  * docs 派生，故在分桶前按 isToolNoisePath（单一出口 documentIdentity，与首页
  * 高价值待阅同口径）拦干净；组件层零过滤，消费方拿到的 docs 即终稿。
@@ -300,9 +300,9 @@ export function enrichPackagesWithEvents(
 // ================= 五阶段分类 =================
 
 /** 关键词表：顺序即优先级，自上而下首个命中生效(交付>执行>决策>计划>蓝图)。
- *  pkgfix T5 起受决策强信号约束（见 DECISION_BASENAME_KEYWORDS）：basename 命中强信号的
+ *  受决策强信号约束（见 DECISION_BASENAME_KEYWORDS）：basename 命中强信号的
  *  文件不再进入本表循环，故「决策回执（请勾选后回传）」这类带执行族词的文件名不再被
- *  交付/执行关键词抢在高亮到执行。 */
+ *  交付/执行关键词抢占到执行。 */
 export const STAGE_KEYWORDS: ReadonlyArray<{
   role: StageRole;
   keywords: readonly string[];
@@ -315,10 +315,10 @@ export const STAGE_KEYWORDS: ReadonlyArray<{
 ];
 
 /**
- * 决策强信号（pkgfix T5）：文件名（basename，只看文件名本身、不看目录段）含其一 →
- * 直接归类决策，优先于 STAGE_KEYWORDS 既有顺序表。
+ * 决策强信号：文件名（basename，只看文件名本身、不看目录段）含其一 →
+ * 直接归类决策，优先于 STAGE_KEYWORDS 顺序表。
  * 背景：「决策回执（请勾选后回传）」类文件名常混执行族词（修改/变更/轮次）或交付族词
- * （验收/复验），旧「交付>执行>决策」首中序会把它们高亮到执行/交付；文件名自证用途
+ * （验收/复验），仅按「交付>执行>决策」首中序会把它们误判到执行/交付；文件名自证用途
  * （要你拍板/回传的纸），强信号必须压过泛化关键词。
  */
 export const DECISION_BASENAME_KEYWORDS: readonly string[] = ['决策', '待确认', '回执', '评审'];
@@ -334,7 +334,7 @@ export const CONTAINER_DEFAULT_STAGE: Readonly<Record<string, StageRole>> = {
 };
 
 /**
- * 文档阶段：basename 决策强信号(pkgfix T5，优先于一切关键词)→basename 关键词(小写 contains)
+ * 文档阶段：basename 决策强信号（优先于一切关键词）→basename 关键词(小写 contains)
  * →容器默认→'待分类'。容器判定取路径自身前缀：先看两段容器键（01-方案文档/<容器>），
  * 再看单段键（output）。
  */
@@ -378,13 +378,13 @@ export function dominantStage(docs: PackageDoc[]): StageRole {
 
 // ================= 核心结论 / 正文摘要 =================
 
-/** 摘要单行上限（DoD2 逐字口径：一行 ≤80 字，超出以另加省略号「…」收口）。 */
+/** 摘要单行上限（一行 ≤80 字，超出以省略号「…」收口）。 */
 export const SUMMARY_MAX_CHARS = 80;
 
 /**
- * 文件属性串识别——这些不是结论，是文件元数据，摘要层必须丢弃（wf_2 降噪）。
+ * 文件属性串识别——这些不是结论，是文件元数据，摘要层必须丢弃（降噪）。
  *
- * 唯一产地是服务端 summaryNote 拼装（server/project.ts:141-169）：
+ * 唯一产地是服务端 summaryNote 拼装（server/project.ts）：
  *   `v2 · 2026-11-12 13:03:13（文件修改时间） · 9.1 KB · 01-方案文档/README.md`
  * 另有 PDF 未索引占位句与快照淘汰备注，同属状态说明而非正文。
  * 规则只认「整体形态」标记，不按包含关系误伤正文（正文里出现「KB」由 condenseSummary 的
@@ -408,7 +408,7 @@ export function isFileMetadataText(text: string): boolean {
 }
 
 /**
- * 正文摘要压缩（纯函数，单测：test/wf2-summary-condense.test.ts）：
+ * 正文摘要压缩（纯函数）：
  * ① 元数据串整体丢弃（返回空串，交由调用方显式占位「暂无正文摘要」，绝不把路径/KB 当结论）；
  * ② 去 markdown 标记（围栏代码块、标题井号、引用、列表符、表格竖线、强调/行内代码、HTML 标签、
  *    图片与链接地址）；
@@ -451,7 +451,7 @@ export function condenseSummary(raw: string): string {
   return s;
 }
 
-// ---------- 元话语识别（pkgfix T1：目录/编号规则/自动生成声明是「关于文件的话」，不是业务描述） ----------
+// ---------- 元话语识别（目录/编号规则/自动生成声明是「关于文件的话」，不是业务描述） ----------
 
 /** 系统说明行模式：命中任一即视为元话语。锚定「整体形态」短语，不按宽泛词误伤正文。 */
 const META_DISCOURSE_RES: readonly RegExp[] = [
@@ -474,11 +474,11 @@ function isJunkSectionTitle(title: string): boolean {
   return /目录|编号规则|自动生成/.test(title);
 }
 
-/** 首段扫描行数上限（工票 T1「2~3 行截断」口径：抓满 3 行收口，最终仍由 condenseSummary 压到 ≤80 字）。 */
+/** 首段扫描行数上限（2~3 行截断口径：抓满 3 行收口，最终仍由 condenseSummary 压到 ≤80 字）。 */
 const FIRST_PARAGRAPH_MAX_LINES = 3;
 
 /**
- * 原文首段扫描（pkgfix T1）：无标题文档（sections 为空）或全噪音章节时的最后一层正文回退。
+ * 原文首段扫描：无标题文档（sections 为空）或全噪音章节时的最后一层正文回退。
  * 跳过：frontmatter（首个非空行恰为 '---' 的块）、围栏代码块、标题行、表格行（结构化数据
  * 不是叙述段，`|---` 分隔线已由 condenseSummary 再兜一道）、水平线、系统元话语行、
  * 目录链接行；遇空行即收口（只取第一段），抓满 3 行截断。
@@ -528,18 +528,18 @@ function firstBusinessParagraph(markdown: string): string {
 }
 
 /**
- * 当前版正文摘要（pkgfix T1 多级回退链，签名不变、语义增强）：
+ * 当前版正文摘要（多级回退链）：
  * md→parseMarkdownOutline 后按序取首个可用摘要：
- *   ① isExplicitCallout==='核心结论' 的 summaryText（既有最高优先级，语义不变）；
+ *   ① isExplicitCallout==='核心结论' 的 summaryText（最高优先级）；
  *   ② 逐章节尝试：跳过目录/编号规则等噪音章节与元话语正文，首个压完非空者
- *      （旧实现取首个非空 summaryText，「## 目录」或纯表格节会抢位产出噪声摘要）；
+ *      （避免「## 目录」或纯表格节抢位产出噪声摘要）；
  *   ③ 无标题文档/全噪音章节 → 原文首段扫描 firstBusinessParagraph（跳 frontmatter/
  *      表格线/系统说明行，2~3 行截断）——这是「多数文档没有核心结论章节」时的主回退；
  *   ④ rev.summaryNote 兜底（多为服务端元数据串，condense 后如实为空串）。
  * svg→'可检索图形文字 (N 处)：前 3 条'；pdf→pdfPages[0].extractedText || pdfStatusReason || summaryNote。
- * (算法镜像 guanlanEngine.ts:1305-1321 既有范式)
+ * (算法镜像 guanlanEngine 既有范式)
  *
- * wf_2 起统一过 condenseSummary：返回值保证单行 ≤80 字、不含 markdown 标记、
+ * 统一过 condenseSummary：返回值保证单行 ≤80 字、不含 markdown 标记、
  * 不含 `4.5 KB` 体量、不含 `01-方案文档/…` 路径、不是 `vN · 日期 · 元数据` 串；
  * 全部层扫完无真实正文才返回空串（调用方显式占位，禁止把文件属性冒充结论）。
  */
@@ -549,7 +549,7 @@ export function extractCoreSummary(file: FileRecord): string {
     file.revisions[file.revisions.length - 1];
   if (!rev) return '';
 
-  // issue #30（DerivedSummary store）：派生摘要按版本身份（revision_id）缓存，
+  // DerivedSummary 缓存：派生摘要按版本身份（revision_id）缓存，
   // 输入以引用身份校验——同一版本未变化的正文是同一字符串实例（revisionContentStore
   // 的 ready 条目每次返回同一实例），引用相等即命中，不再对全部已加载 MD 重跑
   // parseMarkdownOutline 全文解析（此前每次发布都对已加载文档全量重解析，
@@ -623,7 +623,7 @@ export function extractCoreSummary(file: FileRecord): string {
   return summary;
 }
 
-/** DerivedSummary 缓存条目：输入按引用身份校验（issue #30） */
+/** DerivedSummary 缓存条目：输入按引用身份校验 */
 interface DerivedSummaryEntry {
   md?: string;
   svgTexts?: string[];
@@ -665,11 +665,11 @@ export function stageCountsOf(docs: PackageDoc[]): Record<StageRole, number> {
   return counts;
 }
 
-// ================= 元信息行 / 徽标行（橱窗票消费，pkgfix T2/T3） =================
+// ================= 元信息行 / 徽标行 =================
 
 /**
- * 徽标阶段短语（pkgfix T3）：从 dominantStage 派生的进行时短语。词表 SSOT 已上移
- * stateProjection.STAGE_BADGE_PHRASE（方案 F2：专项卡片/下拉/星图/顶栏四视图同词），
+ * 徽标阶段短语：从 dominantStage 派生的进行时短语。词表 SSOT 已上移
+ * stateProjection.STAGE_BADGE_PHRASE（专项卡片/下拉/星图/顶栏四视图同词），
  * 本模块只经 stageBadgeLine 组合「v8 · 短语」，不再自持词表。
  */
 
@@ -688,19 +688,19 @@ export function packageVersionNumber(pkg: Pick<TaskPackage, 'docs'>): number | n
 }
 
 /**
- * 徽标行（pkgfix T3）：版本与阶段全从 docs 真实派生——
+ * 徽标行：版本与阶段全从 docs 真实派生——
  *   版本 = 包内文档当前版最大 versionNumber（包整体演进到 vN；全无修订数据 → 不造数）；
  *   阶段短语 = STAGE_BADGE_PHRASE[pkg.stage]（dominantStage 语义，SSOT 在 stateProjection）。
  * 输出形如「v8 · 待用户验收」；有版本无短语（待分类）→「v8」；有短语无版本 →「待拍板」；
- * 两者皆无（无版本数据的待分类包/手搓 docs）→ 空串由 UI 降级，严禁假占位。
- * （组合逻辑委托 stateProjection.stageBadgeLine——回退路径与现状逐字一致。）
+ * 两者皆无（无版本数据的待分类包/手构 docs）→ 空串由 UI 降级，严禁假占位。
+ * （组合逻辑委托 stateProjection.stageBadgeLine。）
  */
 export function packageBadgeLine(pkg: TaskPackage): string {
   return stageBadgeLine(pkg.stage, packageVersionNumber(pkg));
 }
 
 /**
- * 一行元信息（pkgfix T2）：时间从 pkg.lastActivity 真实计算，严禁「暂无事件」式假占位。
+ * 一行元信息：时间从 pkg.lastActivity 真实计算，严禁「暂无事件」式假占位。
  *   近 7 天有活动 →「今天 14:20 更新 · 20 份资料」（相对日+时刻；昨天/2~6 天前同理）
  *   更早         →「11-04 归档 · 20 份资料」（最近活动日期 MM-DD）
  *   无任何时间   →「刚收录 · N 份资料」（事件流未回填 lastActivity 的诚实原貌）
@@ -792,7 +792,7 @@ export function mergeDayRevisions(
 }
 
 /**
- * 合并卡标签(DoD2 逐字口径)：merged 且 vFirst!==vLast → 'v1 → v3 · 今日演进 2 次'；
+ * 合并卡标签：merged 且 vFirst!==vLast → 'v1 → v3 · 今日演进 2 次'；
  * 仅末版可解析 → 'v3'；全不可解析 → ''。evolutionCount===0 时不带演进短语。
  */
 export function dayMergeLabel(m: DayRevisionMerge): string {
@@ -822,13 +822,13 @@ export interface TaskDayLane {
   slots: TaskDaySlot[]; // 固定顺序：蓝图，计划，决策，执行，交付(各阶段一槽)
 }
 
-/** 五阶段槽位固定顺序(ask 原序，逐字)。日泳道与工作流看板共用同一份常量，禁止各处再抄一遍。 */
+/** 五阶段槽位固定顺序。日泳道与工作流看板共用同一份常量，禁止各处再抄一遍。 */
 export const STAGE_SLOT_ORDER: readonly StageRole[] = ['蓝图', '计划', '决策', '执行', '交付'];
 
 /**
- * 阶段槽位强调色(§3.1 stage-ink 六色双层：graphic 原值接令牌，浅底文字走 -text 深档见 index.css)。
+ * 阶段槽位强调色（stage-ink 六色双层：graphic 原值接令牌，浅底文字走 -text 深档见 index.css）。
  * 原为 AtlasView 组件内常量，首页「任务动态」也需要同一套阶段色，故上移至此单一出口；
- * 评审第 1 轮 #2：野值调色板(#9B8AFB 玻璃 2.66 / #D99B52 2.25 / #D97757 2.91 均不达图形 3:1)收编令牌。
+ * 对比度不足的硬编码色值统一收编至设计令牌，确保图形对比度达 3:1。
  */
 export const STAGE_ACCENT: Record<StageRole, string> = {
   蓝图: 'var(--stage-ink-blueprint)',

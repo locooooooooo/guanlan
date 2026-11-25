@@ -262,7 +262,7 @@ describe('决策快照存取', () => {
       assert.deepEqual(snap, { checks: { '3': true, '4': false }, fills: { '5:0': '350mm' } });
       assert.equal(loadDecisionReceiptSnapshot('fileA::missing'), null);
 
-      // 存储键正确（工票点名 guanlan.decisionReceipt.v1）
+      // 存储键正确（guanlan.decisionReceipt.v1）
       assert.ok(store.has(DECISION_RECEIPT_STORAGE_KEY));
 
       // 损坏 JSON → null（不抛）

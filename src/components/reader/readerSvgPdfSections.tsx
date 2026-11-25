@@ -1,11 +1,8 @@
 /**
- * D01-a 拆解 · 阅读器 SVG / PDF 格式专用插件层（任务卡 D01-a ②）。
- *
- * 从 ReaderView.tsx（原 4208-4683）原样迁入：
+ * 阅读器 SVG / PDF 与通用格式分节插件层：
  *  - ReaderSvgSection：受限安全矢量预览（缩放/全宽/源文本切换 + 提取文字检索层）
- *  - ReaderPdfSection：PDF 能力横幅 + 原版版式 iframe / 页级文本 PdfReaderView 双视图
- *  - ReaderNonLegacySection：非 md/svg/pdf 的 L0 预览面板接线（NonLegacyFilePreviewPanel）
- * 迁移纪律：JSX 与类名逐字一致（像素回归护栏）。
+ *  - ReaderPdfSection：PDF 原版版式 iframe / 页级文本 PdfReaderView 双视图
+ *  - ReaderNonLegacySection：非 md/svg/pdf 格式的通用元数据与结构化预览面板
  */
 
 import React, { useEffect, useState } from 'react';
@@ -30,7 +27,7 @@ import {
 } from './readerAnchorLayer';
 import type { ReaderCtx } from './useReaderController';
 
-/** === SUBMODE C / Format 2: SVG SAFE VIEWER (§4.2: 受限图片方式加载，缩放平移，提取文字检索 vs 仅文件名可检索) === */
+/** SVG 安全预览分节（受限图片方式加载，支持缩放、提取文字检索与框选批注） */
 export function ReaderSvgSection({ ctx }: { ctx: ReaderCtx }) {
   const {
     paperLightMode,
@@ -46,7 +43,7 @@ export function ReaderSvgSection({ ctx }: { ctx: ReaderCtx }) {
     activeFile,
     onAddEvidencePointer,
     indexGeneration,
-    // D04 · SVG 框选批注层
+    // SVG 框选批注层
     svgAnnotations,
     svgAnnotateMode,
     setSvgAnnotateMode,
@@ -128,7 +125,7 @@ export function ReaderSvgSection({ ctx }: { ctx: ReaderCtx }) {
           >
             {showSvgSourceDiff ? '图像' : '源码'}
           </Button>
-          {/* D04：框选批注开合（叠加层 crosshair；保存区域恒百分比定位，原图字节零改动） */}
+          {/* 框选批注开合（叠加层 crosshair；保存区域恒百分比定位，原图字节零改动） */}
           <Button
             variant={svgAnnotateMode ? 'primary' : 'ghost'}
             size="sm"
@@ -169,7 +166,7 @@ export function ReaderSvgSection({ ctx }: { ctx: ReaderCtx }) {
                 sanitizedSvg
               )}`;
               return (
-                /* D04：relative w-fit 包裹层精确贴合图像盒（img 转块级消除基线空隙），
+                /* relative w-fit 包裹层精确贴合图像盒（img 转块级消除基线空隙），
                     框选/批注区域叠加层 inset-0 与图像逐像素对齐，缩放无关 */
                 <div className="relative w-fit" data-svg-annotation-host>
                   <img
@@ -252,7 +249,7 @@ export function ReaderSvgSection({ ctx }: { ctx: ReaderCtx }) {
   );
 }
 
-/** === SUBMODE C / Format 3: PDF READER (§4.3: 阅读能力与全文检索状态分别显示) === */
+/** PDF 阅读分节（原版版式与页级文本双视图，阅读能力与全文检索状态分别呈现） */
 export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
   const {
     paperLightMode,
@@ -267,13 +264,13 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
     systemActions,
     onAddEvidencePointer,
     indexGeneration,
-    // D04 · PDF 页批注与到达闪烁
+    // PDF 页批注与到达闪烁
     flashPdfPage,
     pdfAnnotationsByPage,
     flashAnnotationId,
     annotateFromPdfPage,
   } = ctx;
-  // D04：页级文本选中文字 → 「批注选中文字」浮条（摘录进本地证据表，原文零改写）。
+  // 页级文本选中文字 → 「批注选中文字」浮条（摘录进本地证据表，原文零改写）。
   // mouseup 时读取选区；批注卡经 ctx.composer 挂 ReaderView 根。
   const [pdfSelectionQuote, setPdfSelectionQuote] = useState<string>('');
   useEffect(() => {
@@ -308,7 +305,7 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
           className="flex flex-wrap items-center justify-between gap-2 text-xs"
         >
           <div className="flex items-center gap-2">
-            {/* B04：原版版式 / 页级文本双视图切换（pdfAnchor 到达时自动切页级文本） */}
+            {/* 原版版式 / 页级文本双视图切换（pdfAnchor 到达时自动切页级文本） */}
             <div
               className={`flex rounded-lg border overflow-hidden text-xs ${
                 paperLightMode ? 'border-[#D8B79B]' : 'border-[#383633]'
@@ -385,7 +382,7 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
               <PlusCircle className="w-3.5 h-3.5" />
               <span>引用此页</span>
             </Button>
-            {/* D04：本页批注入口（选中页内文字后也可经浮条带摘录批注） */}
+            {/* 本页批注入口（选中页内文字后也可经浮条带摘录批注） */}
             <Button
               variant="ghost"
               size="sm"
@@ -398,7 +395,7 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
           </div>
         </div>
 
-        {/* Embedded PDF Page Viewer —— v0.3 真实原页渲染 */}
+        {/* 嵌入式 PDF 原页视图 */}
         <div
           className={`grid grid-cols-1 ${
             hasPdfPageList ? 'lg:grid-cols-4' : ''
@@ -451,15 +448,15 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
             className={`${
               hasPdfPageList ? 'lg:col-span-3' : ''
             } rounded-xl border overflow-hidden min-h-[540px] flex flex-col ${
-              // D04：决定 pdfAnchor 到达时整卡闪两轮琥珀描边（flashPdfPage，2.2s 自动摘除）
+              // 决定 pdfAnchor 到达时整卡闪两轮琥珀描边（flashPdfPage，2.2s 自动摘除）
               flashPdfPage !== undefined ? 'glx-anchor-flash' : ''
             } ${
               paperLightMode
-                ? 'bg-white border-[#DDD9CF] shadow-[var(--glass-shadow)]' /* 评审第 1 轮 #9④：阴影任意值归 L1 令牌 */
+                ? 'bg-white border-[#DDD9CF] shadow-[var(--glass-shadow)]' /* 阴影统一走 --glass-shadow 令牌 */
                 : 'bg-[#262524] border-[#383633]'
             }`}
           >
-            {/* D04：当前页批注 chips（本页有批注才渲染；定位闪烁逐条消费） */}
+            {/* 当前页批注 chips（本页有批注才渲染；定位闪烁逐条消费） */}
             {(pdfAnnotationsByPage.get(activePdfPage)?.length ?? 0) > 0 && (
               <div className="px-3 pt-2">
                 <PdfPageAnnotations
@@ -470,9 +467,9 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
               </div>
             )}
             {currentRev.snapshotAvailable && pdfViewMode === 'structured' ? (
-              /* B04：页级文本结构化视图（/revisions/{id}/pdf）——
-                 页码导航、扫描页诚实标注、pdfAnchor 直达高亮与 #page=N 引用。
-                 D04：mouseup 采集页内选中文字 → 「批注选中文字」浮条 */
+              /* 页级文本结构化视图（/revisions/{id}/pdf）：
+                 页码导航、扫描页诚实标注、pdfAnchor 直达高亮与 #page=N 引用；
+                 mouseup 采集页内选中文字 → 「批注选中文字」浮条 */
               <div
                 className={`flex-1 overflow-y-auto p-3 ${
                   paperLightMode ? 'bg-white' : 'bg-[#1A1917]'

@@ -1,10 +1,10 @@
 /**
- * V08 · 弹层与抽屉统一出口（原 1,510 行巨石已拆解至 components/modals/* 独立模块）。
+ * 弹层与抽屉统一出口（各模块实现位于 components/modals/*）。
  *
- * 保持既有导出名与类型签名 100% 向后兼容：
+ * 保持既有导出名与类型签名向后兼容：
  * - WorkspaceSettingsModal → ./modals/WorkspaceSettingsModal（垂直 Tabs + Frame 分栏表单）
  * - McpConsoleModal        → ./modals/McpConsoleModal（8 项 MCP 工具契约调试台）
- * - AgentContextDrawer     → ./modals/AgentContextDrawer（证道阁悬浮 Sheet inset 证据篮）
+ * - AgentContextDrawer     → ./modals/AgentContextDrawer（悬浮 Sheet inset 上下文清单抽屉）
  */
 
 export {

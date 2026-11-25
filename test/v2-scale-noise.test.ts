@@ -1,5 +1,5 @@
 /**
- * V2 批次 · V04 存量降噪、智能中段省略、>= 15 高密边界、批量已读基线与撤销还原、LeftSidebar coss 升级单测
+ * 存量降噪、智能中段省略、>= 15 高密边界、批量已读基线与撤销还原、LeftSidebar coss 升级单测
  */
 
 import test from 'node:test';
@@ -92,7 +92,7 @@ function makeFile(
   };
 }
 
-test('V04 · formatMiddleEllipsisName 覆盖中英文、带扩展名、短文件名与同前缀差异保留', () => {
+test('formatMiddleEllipsisName 覆盖中英文、带扩展名、短文件名与同前缀差异保留', () => {
   // 短文件名原样返回
   assert.equal(formatMiddleEllipsisName('README.md', 0, 22), 'README.md');
   assert.equal(formatMiddleEllipsisName('架构设计说明.md', 0, 22), '架构设计说明.md');
@@ -141,7 +141,7 @@ test('V04 · formatMiddleEllipsisName 覆盖中英文、带扩展名、短文件
   assert.ok(cnNoExt.endsWith('终版'), '应保留尾部差异词');
 });
 
-test('V04 · 高密目录降噪阈值调优至 >= 15（14 否、15 是、16 是）', () => {
+test('高密目录降噪阈值调优至 >= 15（14 否、15 是、16 是）', () => {
   assert.equal(SIDEBAR_DENSE_FOLDER_THRESHOLD, 15);
   const makeBatch = (n: number) =>
     Array.from({ length: n }, (_, i) => makeFile(`f_${i}`, `doc-${i}`));
@@ -169,7 +169,7 @@ test('V04 · 高密目录降噪阈值调优至 >= 15（14 否、15 是、16 是�
   assert.equal(s16.isDense, true, '16 份直接子文件触发高密降噪');
 });
 
-test('V04 · 批量确立已读基线不伪造 scrollPercent、不丢收藏批注、撤销 100% 无损还原且新改文件重新亮起未读', () => {
+test('批量确立已读基线不伪造 scrollPercent、不丢收藏批注、撤销 100% 无损还原且新改文件重新亮起未读', () => {
   const f1 = makeFile('f1', '已读旧版', '01-方案', 'r1_v2');
   const f2 = makeFile('f2', '从未读过', '01-方案', 'r2_v1');
 
@@ -226,7 +226,7 @@ test('V04 · 批量确立已读基线不伪造 scrollPercent、不丢收藏批�
   assert.equal(merged.f2.baselineOnly, true);
 });
 
-test('V04 · LeftSidebar 渲染 coss SegmentedControl / ScrollArea / 确立已读基线入口，且目录右键菜单含「本目录全部标为已读」', () => {
+test('LeftSidebar 渲染 coss SegmentedControl / ScrollArea / 确立已读基线入口，且目录右键菜单含「本目录全部标为已读」', () => {
   const files = [
     makeFile('f1', '2D与3D绘制预览优化方案-v1.svg', '.', 'r1', 'svg'),
     makeFile('f2', '2D与3D绘制预览优化方案-v2.svg', '.', 'r1', 'svg'),
@@ -280,7 +280,7 @@ test('V04 · LeftSidebar 渲染 coss SegmentedControl / ScrollArea / 确立已�
   assert.ok(menuHtml.includes('本目录全部标为已读'));
 });
 
-// ===== V05 · 5,500+ 高密日历 CardFrame 重构、零碰撞分流、四档窗口、域过滤守恒与空月归档 =====
+// ===== 5,500+ 高密日历 CardFrame 重构、零碰撞分流、四档窗口、域过滤守恒与空月归档 =====
 
 function makeDatedFile(
   id: string,
@@ -307,7 +307,7 @@ function makeEvent(id: string, fileId: string, day: string): TimelineEvent {
   } as unknown as TimelineEvent;
 }
 
-test('V05 · resolveCalendarSlotMode 四档列宽零碰撞分流与 15 天连续百文日渲染验证', () => {
+test('resolveCalendarSlotMode 四档列宽零碰撞分流与 15 天连续百文日渲染验证', () => {
   assert.deepEqual([...CALENDAR_WINDOW_OPTIONS], [7, 14, 30, 90]);
   assert.equal(CALENDAR_WINDOW_WEEK, 7);
   assert.equal(CALENDAR_WINDOW_FORTNIGHT, 14);
@@ -360,7 +360,7 @@ test('V05 · resolveCalendarSlotMode 四档列宽零碰撞分流与 15 天连续
   assert.ok(stickyIdx > 0 && eventsRowIdx > stickyIdx, '事件刻度行应纳入 sticky bottom-0 栈顶，杜绝裁切');
 });
 
-test('V05 · 域过滤 SSOT 严格满足 MECE 计数守恒（all === business + code）并一键滤除工程代码噪点', () => {
+test('域过滤 SSOT 严格满足 MECE 计数守恒（all === business + code）并一键滤除工程代码噪点', () => {
   const files: FileRecord[] = [
     ...Array.from({ length: 120 }, (_, i) => makeDatedFile(`biz_md_${i}`, '2026-11-20', '01-产品方案', 'md')),
     ...Array.from({ length: 40 }, (_, i) => makeDatedFile(`biz_svg_${i}`, '2026-11-20', '02-图纸', 'svg')),
@@ -403,7 +403,7 @@ test('V05 · 域过滤 SSOT 严格满足 MECE 计数守恒（all === business + 
   assert.equal(all.events.length, 4);
 });
 
-test('V05 · 迷你热力月历超 12 个连续空月折叠为「更早归档」胶囊，消除「跳过 149 个空月」噪音', () => {
+test('迷你热力月历超 12 个连续空月折叠为「更早归档」胶囊，消除「跳过 149 个空月」噪音', () => {
   const partitioned = partitionCalendarDensityMonths([
     { month: '2026-11' },
     { month: '2026-10' }, // 0 空月：不折叠
@@ -439,10 +439,10 @@ test('V05 · 迷你热力月历超 12 个连续空月折叠为「更早归档」
 });
 
 // =========================================================================
-// V06 · 目录级静默与忽略治理 UI + 左栏 InputGroup 快筛、三态排序与 PreviewCard 速览
+// 目录级静默与忽略治理 UI + 左栏 InputGroup 快筛、三态排序与 PreviewCard 速览
 // =========================================================================
 
-test('V06 · 目录静默清单同源过滤一致性（星图/日历/列表 + EventPage + EventDays + 嵌套子目录继承）', () => {
+test('目录静默清单同源过滤一致性（星图/日历/列表 + EventPage + EventDays + 嵌套子目录继承）', () => {
   // 工作区私有存储键独立隔离（不向业务目录写磁盘文件）
   assert.equal(mutedFoldersStorageKey('ws_alpha'), 'guanlan.mutedFolders.v1.ws_alpha');
   assert.notEqual(mutedFoldersStorageKey('ws_alpha'), mutedFoldersStorageKey('ws_beta'));
@@ -650,7 +650,7 @@ test('V06 · 目录静默清单同源过滤一致性（星图/日历/列表 + Ev
   assert.deepEqual(restored, []);
 });
 
-test('V06 · 目录三态排序（name / active7d / unread）确定性与子树指标聚合上浮', () => {
+test('目录三态排序（name / active7d / unread）确定性与子树指标聚合上浮', () => {
   const files: FileRecord[] = [
     makeFile('f_a', '方案A', '01-归档', 'r1'),
     makeFile('f_b', '接口B', '02-研发/子模块', 'r2'),
@@ -685,7 +685,7 @@ test('V06 · 目录三态排序（name / active7d / unread）确定性与子树�
   );
 });
 
-test('V06 · 左栏即时快筛 + 关键词高亮切分 + 5,500 份文件单遍快筛响应 < 30ms', () => {
+test('左栏即时快筛 + 关键词高亮切分 + 5,500 份文件单遍快筛响应 < 30ms', () => {
   const segs = splitQuickFilterHighlight('2D与3D绘制预览优化方案-v2.svg', '优化方案');
   assert.deepEqual(segs, [
     { text: '2D与3D绘制预览', hit: false },
@@ -712,7 +712,7 @@ test('V06 · 左栏即时快筛 + 关键词高亮切分 + 5,500 份文件单遍�
   assert.ok(elapsedMs < 30, `5,500 份目录即时快筛应 < 30ms，实测：${elapsedMs.toFixed(2)}ms`);
 });
 
-test('V06 · UI 渲染验收：左栏 InputGroup 快筛/三态排序/静默徽标与胶囊 + FileContextMenu + PreviewCard', () => {
+test('UI 渲染验收：左栏 InputGroup 快筛/三态排序/静默徽标与胶囊 + FileContextMenu + PreviewCard', () => {
   const f1 = makeFile('f1', '架构方案', '01-方案', 'r1', 'md');
   const f2 = makeFile('f2', 'agent_runner', '04-智能体代码', 'r2', 'ts');
 

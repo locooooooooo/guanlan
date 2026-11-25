@@ -1,5 +1,5 @@
 /**
- * V10 · 「司辰手记」沉淀简报抽屉（coss Sheet inset + Tabs 切 今日 / 近 7 日 + 可溯源 Markdown 一键复制）。
+ * 「司辰手记」沉淀简报抽屉（coss Sheet inset + Tabs 切 今日 / 近 7 日 + 可溯源 Markdown 一键复制）。
  *
  * 全部条目源自真实 SQL 事件、版本链、决策断言与已排空 L4A 摘要（chronosDigest 纯函数引擎，零造数）；
  * 每条文档/决策均可一键点击直达原文溯源，支持一键复制标准 Markdown 日报/周报并经 AnchoredToast 反馈。
@@ -116,7 +116,7 @@ export const ChronosDigestDrawer: React.FC<ChronosDigestDrawerProps> = ({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* V10：coss Sheet (variant="inset") 悬浮抽屉材质 */}
+      {/* coss Sheet (variant="inset") 悬浮抽屉材质 */}
       <div
         data-sheet-variant="inset"
         className="glx-drawer-in flex h-full w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border/85 bg-popover/95 text-foreground backdrop-blur-2xl"

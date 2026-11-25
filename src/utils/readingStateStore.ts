@@ -2,10 +2,10 @@ import type { FileRecord, ReadingState } from '../types/guanlan';
 import type { ReadingStateEntryDto } from '../services/apiTypes';
 
 /**
- * 阅读状态本机持久化（PM 清单 pm_1 · A02 多工作区独立保留）。
+ * 阅读状态本机持久化（多工作区独立保留）。
  *
  * 只存 ReadingState（含 personalNote / bookmark），不存正文；
- * A02 起按 `workspaceId` 分桶持久化（`guanlan.readingState.v1.<workspaceId>`），
+ * 按 `workspaceId` 分桶持久化（`guanlan.readingState.v1.<workspaceId>`），
  * 确保在多个工作区之间来回切换并执行 `pruneReadingStates` 时，各自阅读进度、
  * 收藏与批注独立保留、绝不互相覆盖或清空。
  */
@@ -114,7 +114,7 @@ export function readingRecency(state?: ReadingState): number {
 }
 
 /**
- * V04 · 合并服务端已读基线记录到本地 ReadingStateMap：
+ * 合并服务端已读基线记录到本地 ReadingStateMap：
  * - 仅补齐/推进 `last_read_revision_id`，绝不伪造 `scrollPercent` 或 `isFullyRead`；
  * - 服务端独有的基线记录标记 `baselineOnly: true` 且 `updated_at: ''`，
  *   避免 5,000+ 存量建基线污染「继续阅读」与 Ctrl+K「最近浏览」；
@@ -233,7 +233,7 @@ export function applyBatchMarkUnread(
 }
 
 /**
- * V04 · 前端应用批量确立已读基线结果，并返回逐文件的原状快照（用于 8 秒 Toast 一键 100% 撤销）。
+ * 前端应用批量确立已读基线结果，并返回逐文件的原状快照（用于 8 秒 Toast 一键 100% 撤销）。
  */
 export function applyBatchReadingBaseline(
   local: ReadingStateMap,
@@ -272,7 +272,7 @@ export function applyBatchReadingBaseline(
 }
 
 /**
- * V04 · 按原状快照 100% 撤销还原本地 ReadingStateMap：
+ * 按原状快照 100% 撤销还原本地 ReadingStateMap：
  * - 精准回退已读基线字段（last_read_revision_id / isFullyRead / baselineOnly）；
  * - 若用户在 8 秒撤销窗口内对某文档新增了收藏、个人批注或滚动位置，还原时予以保留（不丢并发编辑）；
  * - 原未读且未产生任何附加数据的文件彻底删键（无残留）。

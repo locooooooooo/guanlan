@@ -1,4 +1,4 @@
-//! C02 混合倒排索引 · 纯函数分词器（契约 contract-query-api.md §2.4）。
+//! 混合倒排索引 · 纯函数分词器（契约 contract-query-api.md §2.4）。
 //!
 //! 建索引侧（`index/search_index.rs`）与查询侧（`query/search.rs`）共用同一套
 //! 归一化与分词规则——词项进得去就一定查得出，这是「中文双字与专有编号召回

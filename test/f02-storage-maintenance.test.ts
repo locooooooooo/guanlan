@@ -35,7 +35,7 @@ function sampleDryRun(overrides: Partial<StorageGcResponse> = {}): StorageGcResp
   };
 }
 
-describe('F02：全量开放导出、决定证据铁律保护 GC 与 SHA-256 完整性核验', () => {
+describe('全量开放导出、决定证据铁律保护 GC 与 SHA-256 完整性核验', () => {
   it('GC 执行门禁：未预演、参数变动或无可清理项时一律禁用真实执行', () => {
     const dry = sampleDryRun();
     assert.equal(

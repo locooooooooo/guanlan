@@ -1,5 +1,5 @@
 /**
- * D04 · 阅读器锚点批注纯函数层单测（src/utils/readerAnnotations.ts）。
+ * 阅读器锚点批注纯函数层单测（src/utils/readerAnnotations.ts）。
  * 锁定契约：本地证据表按版本哈希绑定 / 有界上限丢最旧如实计数 / 框选区域归一
  * 与退化拒绝 / 决定块插入逐字节不动既有行 / 插入点推算。
  */

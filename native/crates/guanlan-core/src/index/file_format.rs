@@ -1,7 +1,6 @@
-//! 文件格式分类与快照配额策略（B01 · 全文件类型分级入库）。
+//! 文件格式分类与快照配额策略（全文件类型分级入库，参见 `contract-storage.md` §4.5）。
 //!
-//! B01 之前，采集白名单只有 `md / svg / pdf` 三种，`files.format` 也只有这三个取值。
-//! B01 放开白名单后，`files.format` 承载**细粒度扩展名 token**（小写、无点）：
+//! `files.format` 承载**细粒度扩展名 token**（小写、无点）：
 //!
 //! - 既有三值 `md / svg / pdf` **逐字不变**——老库里的 `file_id`、`revision_id`、
 //!   `statement_id` 与既有事件身份不受影响（契约 §2.1 第 2 条：不生成第二套历史）。
@@ -177,7 +176,7 @@ impl FileFormat {
         self.class == FormatClass::Markdown
     }
 
-    /// 是否为受支持的结构化 OOXML Office 文档（`.docx` / `.xlsx` 等，B03 走 L2 抽取）。
+    /// 是否为受支持的结构化 OOXML Office 文档（`.docx` / `.xlsx` 等，走 L2 结构化抽取）。
     pub fn is_office_structured(&self) -> bool {
         matches!(
             self.token.as_str(),

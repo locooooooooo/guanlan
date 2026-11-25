@@ -1,5 +1,5 @@
 /**
- * R1-identity-dedup · 文档身份聚合共享工具（纯函数，无依赖）。
+ * 文档身份聚合共享工具（纯函数，无依赖）。
  *
  * 工作区里同一份文档常以多份拷贝存在（PLAN.md/HANDOFF.md 被复制进每个 run 目录、
  * 每日开发计划每天一份），逐份渲染让日历日清单、时间线、星图详情、右栏引用被同貌卡淹没。
@@ -32,7 +32,7 @@ export function dirSegmentsOf(path: string): string[] {
   return parts.slice(0, -1).filter((seg) => seg.length > 0);
 }
 
-// ---------- 工具脚本噪音判定（DoD3 单一出口） ----------
+// ---------- 工具脚本噪音判定（单一出口） ----------
 
 /**
  * draw 形态段：draw 后跟 _ . - 数字或结尾（拦 draw_edge / draw_ms / draw / draw_2）。
@@ -46,8 +46,7 @@ const TOOL_NOISE_SEGMENT_RE = /^draw([_.\-\d]|$)/i;
  * 运行态缓存 run 段（列表净化扩展）：run- 后跟 ≥8 位纯数字——epoch 毫秒
  * （run-1758…）、纯数字日期（run-20261109）这类机器生成的轮次缓存目录。
  * 刻意要求「纯数字且 ≥8 位」：既有合法任务包名 run-20261109T0928（带 T，任务包
- * G2 形态，task-packages/highValueReading 既有夹具）与 run-42 这类短人工 id
- * 都不会命中——向后兼容由 test/listfix-core-filter.test.ts 锁定。
+ * 既有夹具形态）与 run-42 这类短人工 id 都不会命中——向后兼容由对应单测锁定。
  */
 const RUN_CACHE_SEGMENT_RE = /^run-\d{8,}$/i;
 
@@ -76,7 +75,7 @@ function isMachineHashSegment(segment: string): boolean {
 }
 
 /**
- * 工具脚本噪音判定（DoD3：首页待读清单与任务包统计共用的单一出口——
+ * 工具脚本噪音判定（首页待读清单与任务包统计共用的单一出口——
  * 高价值待阅聚合与 groupFilesIntoPackages 分桶都从这里取口径；列表页
  * 「仅看核心文档与计划」开关亦消费本函数，不另设第二口径）：
  * basename 或任一路径段命中 draw 形态，或任一路径段以 `_` 开头

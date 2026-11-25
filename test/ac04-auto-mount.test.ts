@@ -1,7 +1,7 @@
 /**
- * AC-04：证道阁三入口默认包「默认自动勾选」接线测试。
+ * 智能体上下文三入口默认包「默认自动勾选」接线测试。
  *
- * 验收口径（PRD 4.1 / AC-04）：从任意页面打开证道阁时，默认上下文包应在
+ * 验收口径：从任意页面打开上下文清单抽屉时，默认上下文包应在
  * 抽屉首帧即已勾选（典型工作区已选 ≥2），不再要求用户先点「带入默认上下文」，
  * 也不再出现「一键复制上下文清单 (0 项已选)」。
  *
@@ -46,7 +46,7 @@ const presets = [
   pointer('f_ac04_plan', '04-智能体代码/PLAN.md'),
 ];
 
-test('AC-04 抽屉 SSR：默认包已挂载时首帧显示已自动带入，复制计数 ≥2', () => {
+test('上下文抽屉 SSR：默认包已挂载时首帧显示已自动带入，复制计数 ≥2', () => {
   const html = stripComments(
     renderToString(
       createElement(AgentContextDrawer, {
@@ -84,8 +84,8 @@ test('AC-04 抽屉 SSR：默认包已挂载时首帧显示已自动带入，复�
   );
 });
 
-test('AC-04 接线：所有打开入口先挂载默认包再打开抽屉；抽屉保留晚到补挂兜底', () => {
-  // D01-a 拆层后 App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
+test('上下文抽屉接线：所有打开入口先挂载默认包再打开抽屉；抽屉保留晚到补挂兜底', () => {
+  // 拆层后 App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
   const app = ['../src/App.tsx', '../src/stores/useWorkspaceStore.tsx', '../src/components/app/AppBanners.tsx', '../src/components/app/AppMainViews.tsx', '../src/components/app/AppLibraryStage.tsx', '../src/components/app/AppModalsStack.tsx']
     .map((p) => readFileSync(new URL(p, import.meta.url), 'utf8'))
     .join(String.fromCharCode(10))
@@ -106,7 +106,7 @@ test('AC-04 接线：所有打开入口先挂载默认包再打开抽屉；抽�
     '所有打开入口（顶栏/证据篮/回写通知等）统一走 openContextDrawer'
   );
 
-  // V08 拆解 ModalsAndDrawers 后，AgentContextDrawer 实现位于 components/modals/AgentContextDrawer.tsx
+  // 拆解 ModalsAndDrawers 后，AgentContextDrawer 实现位于 components/modals/AgentContextDrawer.tsx
   const drawer = [
     '../src/components/ModalsAndDrawers.tsx',
     '../src/components/modals/AgentContextDrawer.tsx',

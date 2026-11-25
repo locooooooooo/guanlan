@@ -1,4 +1,4 @@
-//! B02 · QuickLook 轻预览查询与恒定内存头部/切片解析。
+//! QuickLook 轻预览查询与恒定内存头部/切片解析。
 //!
 //! 职责边界：
 //! - DB 查询（[`revision_preview`]）只读 SQLite 元数据与版本历史，不直接读磁盘 blob；
@@ -124,7 +124,7 @@ pub fn revision_preview_tx(
             kind,
         )
     } else if format_token == "pdf" {
-        // B04：PDF 页级文本摘要（预览主体仍走原版 PDF 流，摘要只补充状态与页统计）
+        // PDF 页级文本摘要（预览主体仍走原版 PDF 流，摘要只补充状态与页统计）
         let rec = crate::query::pdf::load_pdf_extract_for_revision(store, &rev);
         (
             None,
@@ -606,24 +606,20 @@ pub fn format_hex_head(bytes: &[u8]) -> String {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-D01-a ⑤ · /thumbnail 逐行流式下采样引擎（纯函数，供服务层缩略端点接线）
+/thumbnail 逐行流式下采样引擎（纯函数，供服务层缩略端点调用）
 
-任务卡 D01-a ⑤「为后端 query/preview.rs /thumbnail 补齐图片逐行流式下采样」：
+实现说明：
 - PNG（8-bit / color_type 0 灰度、2 RGB、6 RGBA / 非隔行）逐行解码——unfilter
   只依赖前一行（prev_row + cur_row 两行常量内存），按输出行 box 平均后即弃，
   绝不物化整幅像素（对比整图解码常驻 O(W×H×ch)，本引擎 O(row×ch)）；
-- JPEG 不在本引擎范围（DCT 域解码非零依赖可实现）：`downsample_png_rows` 仅吃
-  PNG，调用方对 JPEG 诚实回退原始字节流（缩略端点既有行为不变，绝不拿
-  「伪缩略」冒充降采样产物）；
+- JPEG 不在本引擎范围（DCT 域解码非零依赖可实现）：`downsample_png_rows` 仅处理
+  PNG，调用方对 JPEG 诚实回退原始字节流，绝不拿「伪缩略」冒充降采样产物；
 - 重新编码走同一 PNG 容器（flate2 zlib + 手写 CRC-32，零新依赖），filter=0 行。
-服务层接线（revision_thumbnail 命中本引擎）在 D01-b 一行调用完成——本轮围栏
-仅含 core/query/preview.rs，服务层不动，端点行为零变化。
 ══════════════════════════════════════════════════════════════════════════ */
 
 /// PNG 下采样产物（字节 + 实际尺寸；格式恒 PNG 8-bit 同色型）
 #[derive(Debug, Clone, PartialEq, Eq)]
-/// PNG 下采样产物（字节 + 实际尺寸；格式恒 PNG 8-bit 同色型）
-#[allow(dead_code)] // D01-b：revision_thumbnail 一行接线；本轮引擎仅单测消费
+#[allow(dead_code)] // 预留给服务层 /thumbnail 端点调用；目前由单元测试覆盖
 pub struct DownsampledPng {
     pub bytes: Vec<u8>,
     pub width: u32,
@@ -632,7 +628,7 @@ pub struct DownsampledPng {
 
 /// PNG 下采样失败原因（诚实拒绝，绝不出「伪缩略」）
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)] // D01-b 接线前仅测试消费
+#[allow(dead_code)] // 预留给服务层 /thumbnail 端点调用；目前由单元测试覆盖
 pub enum DownsampleError {
     /// 魔数不是 PNG
     NotPng,
@@ -749,7 +745,7 @@ fn unfilter_row(
 /// PNG 逐行流式下采样：8-bit（灰度/RGB/Gray+Alpha/RGBA）、非隔行。
 /// 内存 O(行×通道)：unfilter 只持 prev/cur 两行 + 一个输出行累加器（u64 和），
 /// 与源图像总像素量无关——「逐行流式」的结构保证（单测锁定行为正确性）。
-#[allow(dead_code)] // D01-b：revision_thumbnail 一行接线
+#[allow(dead_code)] // 预留给服务层 /thumbnail 端点调用；目前由单元测试覆盖
 pub fn downsample_png_rows(
     source: &[u8],
     target_w: u32,
@@ -1020,7 +1016,7 @@ mod tests {
         assert_eq!(detect_magic_signature(b"abcd"), None);
     }
 
-    /* ═══ D01-a ⑤：PNG 逐行流式下采样 ═══ */
+    /* ═══ PNG 逐行流式下采样 ═══ */
 
     /// 测试夹具：用生产编码路径（write_chunk + zlib）构造一张 filter 全 0 的 PNG。
     /// 每像素 = f(x, y, ch)，供 box 平均的精确断言。

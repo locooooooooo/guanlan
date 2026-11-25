@@ -54,7 +54,7 @@ function pageKindBadge(kind: string): { label: string; cls: string } {
 }
 
 /**
- * B04 · PDF 页级正文只读结构化子视图。
+ * PDF 页级正文只读结构化子视图。
  * - 1-based 精确页码导航与 `#page=N` 引用生成 / 证据入篮；
  * - 决定或 Markdown 链接传入 `pdfAnchor` 时自动跳到目标页并高亮；
  * - 扫描页（image_only）、字符提取失败页诚实标注，绝不假阳性；

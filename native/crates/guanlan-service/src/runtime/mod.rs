@@ -1,14 +1,12 @@
-//! 运行时（方案 §2：工作区锁、队列、线程、生命周期）。
+//! 运行时：工作区排他锁、静态资源目录解析、实例身份与 SSE 通知中枢。
 //!
-//! 批次一落地：
-//! - [`WorkspaceLock`]：同工作区 OS 级排他锁（方案 §7，:151——「用操作系统持有的
-//!   排他锁，不能只靠可能残留的 PID 文件判断占用」）。锁经 fs2 的
+//! - [`WorkspaceLock`]：同工作区 OS 级排他锁（使用操作系统持有的排他锁，
+//!   不依赖可能残留的 PID 文件判断占用）。锁经 fs2 的
 //!   `try_lock_exclusive` 取得（Windows = LockFileEx 独占 + 立即失败；Unix = flock），
 //!   由内核在进程退出/崩溃时随句柄自动释放，锁文件残留不构成占用。
 //!   第二个实例对同一数据目录抢锁失败 → `ROOT_IN_USE`（契约 §0.2，409）。
 //! - [`resolve_dist_dir`]：dist 静态资源目录解析（存在才挂载，见 http 模块）。
-//! - [`generate_instance_id`]：服务实例身份（方案 §6 SSE 三元组之一；契约 §1.2
-//!   「批次一生成即可」）。
+//! - [`generate_instance_id`]：服务实例身份（SSE 三元组之一；契约 §1.2）。
 //!
 //! 查询侧的有界队列与饱和反馈（INDEX_BUSY，契约 §0.2）在
 //! [`crate::http::query_exec`]；写侧的任务队列在 [`crate::index_jobs`]。
@@ -73,10 +71,10 @@ const ERROR_LOCK_VIOLATION: i32 = 33;
 /// 对数据目录取得同工作区排他锁。
 ///
 /// 数据目录即工作区数据身份（rootKey，契约 §3.1）：同一 root 的两个实例
-/// 解析到同一目录 → 同一锁文件 → 第二个实例 `ROOT_IN_USE`。锁文件是方案 §7
-/// 明确要求的运行时构件（非 index.db 写入）。
+/// 解析到同一目录 → 同一锁文件 → 第二个实例 `ROOT_IN_USE`。锁文件是独立的
+/// 运行时构件（非 index.db 写入）。
 ///
-/// 数据目录不存在时**先建目录**：批次二起写入侧会自己建库（首次运行没有
+/// 数据目录不存在时**先建目录**：写入侧会在首次运行时建库（首次运行没有
 /// 既有 index.db），锁必须先于库存在，否则首跑会在打开锁文件时失败。
 pub fn acquire_workspace_lock(data_dir: &Path) -> Result<WorkspaceLock, GuanlanError> {
     if !data_dir.is_dir() {
@@ -104,9 +102,8 @@ pub fn acquire_workspace_lock(data_dir: &Path) -> Result<WorkspaceLock, GuanlanE
             GuanlanError::Internal(format!("获取服务锁失败 {}：{e}", path.display()))
         });
     }
-    // 写入诊断信息（非占用判定依据，见 LOCK_FILE_NAME 注释）
-    // 锁信息入库登记（实例身份/端点/接口版本，方案 §7）属批次二——
-    // 批次一不写 index.db，运行信息只落 stderr 与 stdout 端点行（见 main.rs）。
+    // 写入诊断信息（非占用判定依据，见 LOCK_FILE_NAME 注释）；
+    // 运行信息只落 stderr 与 stdout 端点行，不在此处写 index.db（见 main.rs）。
     let pid_line = format!(
         "pid={}\nacquired_at_epoch_ms={}\n",
         std::process::id(),
@@ -133,7 +130,7 @@ fn now_epoch_ms() -> u128 {
         .unwrap_or(0)
 }
 
-/// dist 静态资源目录解析（方案 §7：发布时由 Rust 提供 dist）。
+/// dist 静态资源目录解析（发布时由 Rust 服务提供 dist）。
 ///
 /// 解析顺序：`GUANLAN_DIST_DIR` 环境变量（显式指定）→ 可执行文件同级的
 /// `dist/`。返回的目录**存在且是目录**才返回 Some；http 层据此决定是否
@@ -151,8 +148,8 @@ pub(crate) fn resolve_dist_dir() -> Option<PathBuf> {
     candidate.is_dir().then_some(candidate)
 }
 
-/// 生成服务实例身份（方案 §6 SSE 三元组 `instance_id + notice_seq + index_generation`
-/// 之一；契约 contract-query-api.md §1.2：批次一生成即可）。
+/// 生成服务实例身份（SSE 三元组 `instance_id + notice_seq + index_generation`
+/// 之一；契约 contract-query-api.md §1.2）。
 /// 由进程号 + 纳秒时钟 + 端口 + 根目录派生 16 位 hex，不引入随机数依赖。
 pub fn generate_instance_id(root: &Path, port: u16) -> String {
     let nanos = std::time::SystemTime::now()
@@ -168,7 +165,6 @@ pub fn generate_instance_id(root: &Path, port: u16) -> String {
     format!("inst_{}", hex::encode(&digest[..8]))
 }
 
-/// 进程内单调计数（批次二 SSE notice_seq 的取号器占位；本批无 SSE 不参与 wire）
 #[allow(dead_code)]
 #[cfg(test)]
 mod tests {
@@ -241,7 +237,7 @@ mod tests {
     }
 }
 
-// ===== SSE 通知中枢（冻结契约 J：hello/workspace-change/心跳）=====
+// ===== SSE 通知中枢（contract-query-api.md §2.2：hello/workspace-change/心跳）=====
 
 /// 计算工作区根目录的稳定 16 位 hex 身份键（与存储层 `default_data_dir` 同源）。
 pub fn workspace_root_key(root: &str) -> Result<String, GuanlanError> {
@@ -273,9 +269,9 @@ pub fn read_lock_diagnostics(data_dir: &Path) -> Option<String> {
     None
 }
 
-/// SSE 通知中枢：写线程经 `index_jobs::SseNotice` 桥投递，广播给全部订阅者。
+/// SSE 通知中枢：写线程经 `index_jobs::SseNotice` 桥投递，广播给全部
 /// `/api/v1/stream` 订阅者。`notice_seq` 是传输层取号器（与业务 events.seq 无关，
-/// 方案 §6/契约 §6-6：通知传输序号独立于业务序号）。
+/// 契约 contract-storage.md §6-6：通知传输序号独立于业务序号）。
 #[derive(Clone)]
 pub struct NoticeHub {
     sender:

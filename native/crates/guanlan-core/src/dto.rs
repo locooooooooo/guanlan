@@ -7,7 +7,7 @@
 //! - 决定、关系、工作区配置沿用 `src/types/guanlan.ts` 现有字段名
 //!   （契约 §1.9/§1.10/§1.1），Rust 侧用 `#[serde(rename)]` 逐字段镜像。
 //!
-//! 前端镜像类型：`src/services/apiTypes.ts`（本批手工镜像，改任一侧必须同步另一侧）。
+//! 前端镜像类型：`src/services/apiTypes.ts`（手工镜像，改任一侧必须同步另一侧）。
 
 use std::collections::HashMap;
 
@@ -167,7 +167,7 @@ pub struct EventDayGroup {
     pub count: u64,
     pub by_kind: HashMap<String, u64>,
     pub formats: HashMap<String, u64>,
-    /// 桶内决定样本（issue #25：受独立上限约束，不再随桶内决定数无界增长）
+    /// 桶内决定样本（受独立上限约束，不再随桶内决定数无界增长）
     pub decisions: Vec<EventDayDecision>,
     /// 桶内决定总数（去重 decision_id 数；与 `decisions.len()` 不同即表示被截断）
     pub decision_total: u64,
@@ -249,7 +249,7 @@ pub struct FileFacets {
 pub struct FileSummaryPage {
     pub ok: bool,
     pub index_generation: u64,
-    /// 游标绑定代际；续页时 != 当前代际 → CURSOR_STALE（契约 §1.3，方案 §6）
+    /// 游标绑定代际；续页时 != 当前代际 → CURSOR_STALE（契约 §1.3）
     pub snapshot_generation: u64,
     pub items: Vec<FileSummary>,
     pub next_cursor: Option<String>,
@@ -352,14 +352,14 @@ pub struct FileRevisionsResponse {
     /// include=edges：`project.ts:500-510`
     #[serde(skip_serializing_if = "Option::is_none")]
     pub edges: Option<Vec<EdgeRef>>,
-    /// include=aliases：文件历史/当前路径别名列表（A05）
+    /// include=aliases：文件历史/当前路径别名列表
     #[serde(skip_serializing_if = "Option::is_none")]
     pub aliases: Option<Vec<String>>,
 }
 
 /// 阅读器兼容视图的版本行（契约 §1.7 末段：FileRecord.revisions[] 的 camelCase
 /// 派生字段，`types/guanlan.ts:46-70` + `project.ts:132-172 toRevision`）。
-/// 批次一仍只对 SVG 内联正文（`project.ts:136-139` 明文「契约不动」）。
+/// 仅对 SVG 内联正文（与 `project.ts:136-139` 保持一致）。
 #[derive(Debug, Clone, Serialize)]
 pub struct FileRecordRevision {
     pub revision_id: String,
@@ -379,8 +379,7 @@ pub struct FileRecordRevision {
     pub is_baseline_protected: bool,
     /// 仅 SVG 且快照可读时内联（≤256KiB，`project.ts:124-139`）。
     /// wire 名 `svgSource`（契约 §0.1/§1.7：FileRecord.revisions 的 camelCase
-    /// 派生字段 1:1 保留，`types/guanlan.ts:58`）——批次一服务联调时补的
-    /// rename，此前序列化误为 snake_case，与契约冲突。
+    /// 派生字段 1:1 保留，`types/guanlan.ts:58`）。
     #[serde(rename = "svgSource", skip_serializing_if = "Option::is_none")]
     pub svg_source: Option<String>,
     #[serde(rename = "svgExtractedTexts", skip_serializing_if = "Option::is_none")]
@@ -395,9 +394,9 @@ pub struct FileRecordRevision {
     pub summary_note: String,
 }
 
-/// GET /api/v1/files/{file_id}/detail（契约 §1.7 末段「阅读器兼容视图」，过渡层）：
+/// GET /api/v1/files/{file_id}/detail（契约 §1.7 末段「阅读器兼容视图」）：
 /// 同 §1.7 数据集（文件级非分页，events/statements/edges 一并带回）
-/// + SVG 内联正文等 camelCase 派生字段。批次三收敛项。
+/// + SVG 内联正文等 camelCase 派生字段。
 #[derive(Debug, Clone, Serialize)]
 pub struct FileDetailResponse {
     pub ok: bool,
@@ -410,7 +409,7 @@ pub struct FileDetailResponse {
 }
 
 /// GET /api/v1/revisions/{revision_id}/content（契约 §1.8）。
-/// 批次一核心只定位快照路径：text 恒空，正文/原始字节由服务层按
+/// 核心查询层只定位快照路径：text 留空，正文/原始字节由服务层按
 /// [`RevisionContentResponse::snapshot_path`] 流式返回（不整读大文件）。
 #[derive(Debug, Clone, Serialize)]
 pub struct RevisionContentResponse {
@@ -418,17 +417,17 @@ pub struct RevisionContentResponse {
     /// md | svg | pdf
     pub format: String,
     pub revision_id: String,
-    /// PDF：`/api/v1/revisions/<id>/content?raw=1`（契约 §1.8：v1 改指自身路径）
+    /// PDF：`/api/v1/revisions/<id>/content?raw=1`（契约 §1.8）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub raw_url: Option<String>,
-    /// MD/SVG：utf-8 读快照（`project.ts:564-569`）；批次一由服务层按路径填充
+    /// MD/SVG：utf-8 读快照（`project.ts:564-569`），由服务层按路径填充
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
     /// 快照文件绝对路径。仅供服务层流式读取，不序列化进 JSON
     /// （服务端绝对路径不进 UI，`project.ts:465` 注释同义）
     #[serde(skip_serializing)]
     pub snapshot_path: Option<std::path::PathBuf>,
-    /// 内容哈希（issue #37）：服务层据此生成稳定 ETag；不进 wire（客户端用不到，
+    /// 内容哈希：服务层据此生成稳定 ETag；不进 wire（客户端用不到，
     /// 版本身份已由 revision_id 表达）
     #[serde(skip_serializing)]
     pub content_hash: String,
@@ -453,7 +452,7 @@ pub struct DecisionAssertion {
     #[serde(rename = "impactAllowed")]
     pub impact_allowed: Vec<String>,
     /// 可选字段缺省不出现键（types/guanlan.ts:167 `confirmationBasis?` 的 undefined 口径，
-    /// 与 pdf_status 的 skip 口径一致；冻结期望由 Node wire 省略键产出）
+    /// 与 pdf_status 的 skip 口径及 Node wire 省略键口径一致）
     #[serde(rename = "confirmationBasis", skip_serializing_if = "Option::is_none")]
     pub confirmation_basis: Option<DecisionConfirmationBasis>,
     pub evidences: Vec<DecisionSourceEvidence>,
@@ -520,7 +519,7 @@ pub struct DecisionsResponse {
     pub next_cursor: Option<String>,
     pub has_more: bool,
     pub total: u64,
-    /// V03 SSOT：全库活跃文件未决待拍板总数（来源不一致 + 待确认），不受 limit=100 截断
+    /// 全库活跃文件未决待拍板总数（来源不一致 + 待确认），不受 limit=100 截断
     pub unresolved_total: u64,
 }
 
@@ -555,8 +554,7 @@ pub struct RelationEdge {
     pub locator: Option<RelationLocator>,
 }
 
-/// GET /api/v1/relations（契约 §1.10：批次一过渡全量，只下发可落文件的
-/// explicit_reference 边；批次三换 `/graph` 局部关系）
+/// GET /api/v1/relations（契约 §1.10：全量下发可落文件的 explicit_reference 边）
 #[derive(Debug, Clone, Serialize)]
 pub struct RelationsResponse {
     pub ok: bool,
@@ -667,14 +665,14 @@ pub struct BootstrapResponse {
     pub files_total: u64,
     /// §1.9 首批（前端首屏要 selectedDecisionId，`App.tsx:336-338`）
     pub decisions: Vec<DecisionAssertion>,
-    /// V03 SSOT：全库活跃文件未决待拍板总数（与 MultiProjectOverviewStrip 同口径）
+    /// 全库活跃文件未决待拍板总数（与 MultiProjectOverviewStrip 同口径）
     pub decisions_unresolved_total: u64,
-    /// 关系总数；全量关系批次一仍走 §1.10
+    /// 关系总数；全量关系走 §1.10
     pub relations_total: u64,
     pub config: WorkspaceConfig,
-    /// 批次一恒为空数组；批次二接入任务表（契约 §1.1）
+    /// 当前索引任务列表（契约 §1.1）
     pub index_jobs: Vec<serde_json::Value>,
-    /// 当前处于可恢复态（missing / trashed）的 file_id 列表，供前端剪枝阅读进度时保留（A05）
+    /// 当前处于可恢复态（missing / trashed）的 file_id 列表，供前端剪枝阅读进度时保留
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub recoverable_file_ids: Vec<String>,
 }
@@ -690,10 +688,10 @@ pub struct IndexCoverage {
 #[derive(Debug, Clone, Serialize)]
 pub struct StatusResponse {
     pub ok: bool,
-    /// 服务实例身份（方案 §6 SSE 三元组之一；批次一生成即可）
+    /// 服务实例身份（SSE 游标三元组之一）
     pub instance_id: String,
     pub api_version: String,
-    /// 数据库 schema 版本（现状无，首批定为 1；契约 §1.2）
+    /// 数据库 schema 版本（契约 §1.2）
     pub schema_version: u32,
     pub workspace_id: String,
     pub root_path: String,
@@ -705,15 +703,15 @@ pub struct StatusResponse {
     /// camelCase 键保留现状（契约 §1.1）
     pub time_range: EventTimeRange,
     pub index_coverage: IndexCoverage,
-    /// 进行中的索引任务（批次二接入任务表；批次一恒空）
+    /// 进行中的索引任务
     pub active_jobs: Vec<serde_json::Value>,
-    /// 文件监听（冻结契约 I；watcher 未装配时 enabled=false）
+    /// 文件监听状态（watcher 未装配时 enabled=false）
     pub watcher: WatcherStatus,
-    /// L4A 后台沉淀进度（冻结契约 I）
+    /// L4A 后台沉淀进度
     pub l4a_progress: L4aProgress,
 }
 
-/// watcher 段（冻结契约 I：enabled/last_poll_at/changed_paths_pending/l4a_queue_depth）
+/// watcher 状态段（enabled/last_poll_at/changed_paths_pending/l4a_queue_depth）
 #[derive(Debug, Clone, Serialize)]
 pub struct WatcherStatus {
     pub enabled: bool,
@@ -722,10 +720,10 @@ pub struct WatcherStatus {
     pub l4a_queue_depth: u32,
 }
 
-// ===== 索引任务（契约 §2：批次二）=====
+// ===== 索引任务（契约 §2）=====
 
-/// POST /api/v1/index-jobs 请求体（冻结契约 G：外部可提
-/// verify_all|changed_paths|l4a_summary|set_initiative_dirs；内部 kind 直提 400）
+/// POST /api/v1/index-jobs 请求体（外部允许提交
+/// verify_all|changed_paths|l4a_summary|set_initiative_dirs；内部 kind 直接提交返回 400）
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct IndexJobRequest {
     /// 任务类型；缺省视为 `verify_all`
@@ -734,7 +732,7 @@ pub struct IndexJobRequest {
     /// changed_paths 必填（≤2000 条）：增量对账的相对路径
     #[serde(default)]
     pub paths: Option<Vec<String>>,
-    /// set_initiative_dirs 必填（≤64 条）：写入 meta.initiative_dirs——建议1
+    /// set_initiative_dirs 必填（≤64 条）：写入 meta.initiative_dirs
     #[serde(default)]
     pub dirs: Option<Vec<String>>,
 }
@@ -777,7 +775,7 @@ pub struct IndexJobStatusResponse {
     pub error: Option<String>,
     /// 本轮统计
     pub report: Option<IndexJobReport>,
-    /// 各 kind 的结果分支（writeback/proposal/adopt/diff/l4a/initiative；冻结契约 G）
+    /// 各 kind 的结果分支（writeback/proposal/adopt/diff/l4a/initiative）
     pub result: Option<serde_json::Value>,
 }
 
@@ -799,23 +797,23 @@ pub struct IndexJobReport {
     pub statements_upserted: u64,
     pub edges_upserted: u64,
     pub snapshots_written: u64,
-    /// B01：仅记元数据未写快照的版本数
+    /// 仅记元数据未写快照的版本数
     #[serde(default)]
     pub metadata_only_revisions: u64,
-    /// B01：被 .gitignore 排除的路径数
+    /// 被 .gitignore 排除的路径数
     #[serde(default)]
     pub ignored_paths: u64,
     pub generation: u64,
     pub duration_ms: u64,
 }
 
-// ===== 统一状态机投影（PRD v2.0 §2.2 / apiContract A：GET /api/v1/state-overview） =====
+// ===== 统一状态机投影（GET /api/v1/state-overview） =====
 //
 // 四视图唯一数据源：专项卡片、详情下拉、星图节点、文档顶栏共用同一投影。
 // 存储层 = initiatives / artifact_states（contract-storage.md §4.3）；
 // 规则层 = index::state_machine（SSOT 纯函数）；本节是 wire 形状。
 
-/// 专项级投影行（apiContract A：initiatives[]）
+/// 专项级投影行（initiatives[]）
 #[derive(Debug, Clone, Serialize)]
 pub struct InitiativeOverview {
     pub initiative_id: String,
@@ -832,7 +830,7 @@ pub struct InitiativeOverview {
     pub updated_at: String,
 }
 
-/// 文档级投影行（apiContract A：artifacts[]）
+/// 文档级投影行（artifacts[]）
 #[derive(Debug, Clone, Serialize)]
 pub struct ArtifactOverview {
     pub file_id: String,
@@ -857,9 +855,9 @@ pub struct StateOverview {
     pub artifacts: Vec<ArtifactOverview>,
 }
 
-// ===== PRD v2.0 长任务批次新端点 DTO（冻结契约 A/C/D/E/F/G/H/I/J；snake_case） =====
+// ===== 长任务与上下文基座端点 DTO（snake_case） =====
 
-/// GET /api/v1/state-overview 响应（契约 A：四视图唯一数据源）
+/// GET /api/v1/state-overview 响应（四视图唯一数据源）
 #[derive(Debug, Clone, Serialize)]
 pub struct StateOverviewResponse {
     pub ok: bool,
@@ -870,7 +868,7 @@ pub struct StateOverviewResponse {
     pub artifacts: Vec<ArtifactOverview>,
 }
 
-/// GET /api/v1/statements 响应（契约 C：拍板表单数据源）
+/// GET /api/v1/statements 响应（拍板表单数据源）
 #[derive(Debug, Clone, Serialize)]
 pub struct StatementsResponse {
     pub ok: bool,
@@ -878,8 +876,8 @@ pub struct StatementsResponse {
     pub items: Vec<StatementDetail>,
 }
 
-/// 陈述详情（契约 C StatementDetailDTO：options/recommendation/confirmer_hint
-/// 自 detail_json；impact 拆两字段不合并——建议8）
+/// 陈述详情（options/recommendation/confirmer_hint 自 detail_json 解析；
+/// impact 拆分为 impact_blocked 与 impact_allowed 两字段，不合并）
 #[derive(Debug, Clone, Serialize)]
 pub struct StatementDetail {
     pub statement_id: String,
@@ -898,7 +896,7 @@ pub struct StatementDetail {
     pub confirmer_hint: Option<String>,
 }
 
-/// POST /api/v1/decisions/{statement_id}/resolve 响应（恒 202，契约 C：端点永不 409）
+/// POST /api/v1/decisions/{statement_id}/resolve 响应（恒 202，端点永不返回 409）
 #[derive(Debug, Clone, Serialize)]
 pub struct ResolveAccepted {
     pub ok: bool,
@@ -914,7 +912,7 @@ pub struct ProposalAccepted {
     pub job_id: String,
     pub draft_id: String,
     pub conflict: bool,
-    /// E02：独立草案分支版本标签（`v(N+1)-agent-draft`）
+    /// 独立草案分支版本标签（`v(N+1)-agent-draft`）
     pub draft_version_label: String,
 }
 
@@ -925,7 +923,7 @@ pub struct JobAccepted {
     pub job_id: String,
 }
 
-/// GET /api/v1/revision-proposals 响应（契约 D：只读分页）
+/// GET /api/v1/revision-proposals 响应（只读分页）
 #[derive(Debug, Clone, Serialize)]
 pub struct DraftsPage {
     pub ok: bool,
@@ -934,7 +932,7 @@ pub struct DraftsPage {
     pub next_cursor: Option<String>,
 }
 
-/// 修订草案行（契约 D / E02 列表项）
+/// 修订草案列表项
 #[derive(Debug, Clone, Serialize)]
 pub struct DraftDetail {
     pub draft_id: String,
@@ -942,11 +940,11 @@ pub struct DraftDetail {
     pub path: String,
     pub base_revision_id: String,
     pub proposed_content_hash: String,
-    /// E02：独立草案分支标签（`v(N+1)-agent-draft`）
+    /// 独立草案分支标签（`v(N+1)-agent-draft`）
     pub draft_version_label: String,
-    /// E02：提交本次草案所依赖的输入上下文哈希清单
+    /// 提交本次草案所依赖的输入上下文哈希清单
     pub input_context_hashes: Vec<String>,
-    /// E02：Agent 回执摘要
+    /// Agent 回执摘要
     pub receipt_summary: Option<String>,
     /// mcp | agent
     pub source: String,
@@ -957,7 +955,7 @@ pub struct DraftDetail {
     pub created_at: String,
 }
 
-/// GET /api/v1/revision-proposals/{draft_id}/content 响应（E02 多模态 Diff 审阅面）
+/// GET /api/v1/revision-proposals/{draft_id}/content 响应（多模态 Diff 审阅面）
 #[derive(Debug, Clone, Serialize)]
 pub struct DraftContentResponse {
     pub ok: bool,
@@ -988,7 +986,7 @@ pub struct DraftContentResponse {
     pub created_at: String,
 }
 
-/// POST /api/v1/checkpoints 响应（同步 201，契约 E：阻塞2）
+/// POST /api/v1/checkpoints 响应（同步 201）
 #[derive(Debug, Clone, Serialize)]
 pub struct CheckpointAccepted {
     pub ok: bool,
@@ -997,7 +995,7 @@ pub struct CheckpointAccepted {
     pub node_state: Option<String>,
 }
 
-/// GET /api/v1/checkpoints 响应（契约 E：恢复=取节点最新 SUCCESS）
+/// GET /api/v1/checkpoints 响应（恢复时取节点最新 SUCCESS 记录）
 #[derive(Debug, Clone, Serialize)]
 pub struct CheckpointsPage {
     pub ok: bool,
@@ -1006,7 +1004,7 @@ pub struct CheckpointsPage {
     pub next_cursor: Option<String>,
 }
 
-/// checkpoint 行（契约 E 列表项，字段按 PRD 3.2）
+/// checkpoint 列表项
 #[derive(Debug, Clone, Serialize)]
 pub struct CheckpointDetail {
     pub checkpoint_id: String,
@@ -1016,9 +1014,9 @@ pub struct CheckpointDetail {
     pub status: String,
     pub input_context_hash: String,
     pub output_revision_id: Option<String>,
-    /// PRD 3.2「output_artifact_version（版本号如 v2）」：由产出修订的 per-file
-    /// seq 派生（TS versionNumber 同源口径）；无产出修订 → null。字段名登记：
-    /// 行存储仍为 output_revision_id（语义等价、版本号查询时派生）。
+    /// 产出文档版本号（如 v2），由产出修订的 per-file seq 派生（与前端
+    /// versionNumber 同源口径）；无产出修订时为 null。行存储保留
+    /// output_revision_id，版本号在查询时派生。
     pub output_artifact_version: Option<String>,
     pub token_usage: Option<i64>,
     pub elapsed_ms: Option<i64>,
@@ -1027,7 +1025,7 @@ pub struct CheckpointDetail {
 }
 
 /// GET /api/v1/initiatives/{initiative_id}/resume-context 响应
-/// （PRD 3.2 恢复：最近 SUCCESS checkpoint + 增量变更 + 最新决策结果）。
+/// （恢复上下文：最近 SUCCESS checkpoint + 增量变更 + 最新决策结果）。
 #[derive(Debug, Clone, Serialize)]
 pub struct ResumeContextResponse {
     pub ok: bool,
@@ -1077,7 +1075,7 @@ pub struct ResumeDecision {
     pub line_end: i64,
 }
 
-/// GET /api/v1/initiatives/{initiative_id}/tasks 响应（契约 E：五槽位 DAG）
+/// GET /api/v1/initiatives/{initiative_id}/tasks 响应（五槽位 DAG）
 #[derive(Debug, Clone, Serialize)]
 pub struct TasksResponse {
     pub ok: bool,
@@ -1085,7 +1083,7 @@ pub struct TasksResponse {
     pub nodes: Vec<TaskNodeDetail>,
 }
 
-/// 子任务节点行（契约 E 列表项）
+/// 子任务节点列表项
 #[derive(Debug, Clone, Serialize)]
 pub struct TaskNodeDetail {
     pub node_id: String,
@@ -1098,7 +1096,7 @@ pub struct TaskNodeDetail {
     pub error: Option<String>,
 }
 
-/// GET /api/v1/summary/{file_id} 响应（契约 I：L4A 确定性摘要）
+/// GET /api/v1/summary/{file_id} 响应（L4A 确定性摘要）
 #[derive(Debug, Clone, Serialize)]
 pub struct FileSummaryResponse {
     pub ok: bool,
@@ -1111,7 +1109,7 @@ pub struct FileSummaryResponse {
     pub queued: bool,
 }
 
-/// 摘要体（契约 I：generated_by 恒 local_deterministic——禁新 crate 无外部模型调用）
+/// 摘要体（generated_by 恒为 local_deterministic，纯本地确定性生成、无外部模型调用）
 /// Deserialize：summary_json 落库后按行回读（query/longtasks.rs）
 #[derive(Debug, Clone, serde::Deserialize, Serialize)]
 pub struct SummaryDetail {
@@ -1139,7 +1137,7 @@ pub struct DecisionsDigest {
     pub p1: u32,
 }
 
-/// L4A 队列进度（契约 I：total=0 时 percent=100）
+/// L4A 队列进度（total=0 时 percent=100）
 #[derive(Debug, Clone, Serialize)]
 pub struct L4aProgress {
     pub done: u32,
@@ -1149,7 +1147,7 @@ pub struct L4aProgress {
     pub queue_depth: u32,
 }
 
-/// POST /api/v1/context 响应（契约 B + E03：证道阁 Token 预算感知上下文包）
+/// POST /api/v1/context 响应（Token 预算感知上下文包）
 #[derive(Debug, Clone, Serialize)]
 pub struct ContextResponse {
     pub ok: bool,
@@ -1159,20 +1157,20 @@ pub struct ContextResponse {
     pub initiative_id: Option<String>,
     pub preset: ContextPreset,
     pub decisions: ContextDecisions,
-    /// E03：上游规范/引用片段（随焦点/已选文档自动抽取，脱敏后随包交付）
+    /// 上游规范/引用片段（随焦点/已选文档自动抽取，脱敏后随包交付）
     #[serde(default)]
     pub upstream_snippets: Vec<UpstreamReferenceSnippet>,
     pub token_budget: TokenBudget,
-    /// E03：脱敏护栏拦截并替换的疑似密钥/敏感凭证计数（0 = 干净）
+    /// 脱敏护栏拦截并替换的疑似密钥/敏感凭证计数（0 = 干净）
     #[serde(default)]
     pub redacted_secrets_count: u32,
-    /// 仅 mode 含 markdown（PRD 4.3 模式 A）
+    /// 仅 mode 包含 markdown 时填充
     pub markdown: Option<String>,
-    /// 仅 mode 含 structured（PRD 4.3 模式 B）
+    /// 仅 mode 包含 structured 时填充
     pub payload: Option<serde_json::Value>,
 }
 
-/// E03：上游规范/关联引用片段（由星图 edges 自动溯源抽取，绝不含密钥）
+/// 上游规范/关联引用片段（由星图 edges 自动溯源抽取，绝不含密钥）
 #[derive(Debug, Clone, Serialize)]
 pub struct UpstreamReferenceSnippet {
     pub file_id: String,
@@ -1187,7 +1185,7 @@ pub struct UpstreamReferenceSnippet {
     pub est_tokens: u64,
 }
 
-/// 预设清单 + 推荐挂载（契约 B）
+/// 预设清单 + 推荐挂载
 #[derive(Debug, Clone, Serialize)]
 pub struct ContextPreset {
     pub items: Vec<ContextItem>,
@@ -1195,7 +1193,7 @@ pub struct ContextPreset {
     pub recommended: Vec<RecommendedItem>,
 }
 
-/// 上下文条目（契约 B + E03；支持 full | summary | diff_only | metadata_only | decisions_only）
+/// 上下文条目（支持 full | summary | diff_only | metadata_only | decisions_only）
 #[derive(Debug, Clone, Serialize)]
 pub struct ContextItem {
     pub file_id: String,
@@ -1205,7 +1203,7 @@ pub struct ContextItem {
     pub seq: Option<i64>,
     /// 如 v1 / v3（"v"+seq）
     pub version_label: Option<String>,
-    /// 真实内容哈希（SHA-256 十六进制；E03 对齐 E02 input_context_hashes）
+    /// 真实内容哈希（SHA-256 十六进制，与草案 input_context_hashes 口径一致）
     #[serde(default)]
     pub content_hash: Option<String>,
     /// 文档级状态（artifact_states.state）
@@ -1213,12 +1211,12 @@ pub struct ContextItem {
     /// full | summary | diff_only | metadata_only | decisions_only
     pub granularity: String,
     pub snapshot_available: bool,
-    /// E03：当前粒度下估算字符数（实时字符/Token 预算）
+    /// 当前粒度下估算字符数（用于实时字符/Token 预算）
     #[serde(default)]
     pub est_chars: u64,
     pub est_tokens: u64,
     pub content: Option<String>,
-    /// E03：当前粒度渲染后的脱敏摘要/Diff/元数据片段（与 markdown 同源）
+    /// 当前粒度渲染后的脱敏摘要/Diff/元数据片段（与 markdown 同源）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub snippet: Option<String>,
 }
@@ -1232,14 +1230,14 @@ pub struct RecommendedItem {
     pub reason: String,
 }
 
-/// 未决/已确认决策汇总（契约 B decisions）
+/// 未决/已确认决策汇总
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct ContextDecisions {
     pub pending: Vec<PendingDecision>,
     pub confirmed: Vec<ConfirmedDecision>,
 }
 
-/// 未决事项行（契约 B）
+/// 未决事项行
 #[derive(Debug, Clone, Serialize)]
 pub struct PendingDecision {
     pub decision_id: String,
@@ -1253,17 +1251,17 @@ pub struct PendingDecision {
     pub line_start: i64,
 }
 
-/// 已确认决定行（契约 B）
+/// 已确认决定行
 #[derive(Debug, Clone, Serialize)]
 pub struct ConfirmedDecision {
     pub decision_id: String,
-    /// v1 = 已确认陈述的 quote（原文口径）
+    /// 已确认陈述的 quote（原文口径）
     pub decision_text: String,
     pub confirmer: Option<String>,
     pub effective_date: Option<String>,
 }
 
-/// Token 预算（契约 B + E03；公式双端逐字 est_tokens=ceil(cjk*0.7+non_cjk_bytes/3.5)）
+/// Token 预算（前后端统一公式 est_tokens=ceil(cjk*0.7+non_cjk_bytes/3.5)）
 #[derive(Debug, Clone, Serialize)]
 pub struct TokenBudget {
     pub selected: u32,
@@ -1276,7 +1274,7 @@ pub struct TokenBudget {
     pub downgrade_suggestions: Vec<String>,
 }
 
-/// A05 身份保真文件操作响应（POST /api/v1/files/{file_id}/rename | /move | /trash）
+/// 身份保真文件操作响应（POST /api/v1/files/{file_id}/rename | /move | /trash）
 #[derive(Debug, Clone, Serialize)]
 pub struct FileMutationResponse {
     pub ok: bool,
@@ -1294,9 +1292,9 @@ pub struct FileMutationResponse {
     pub trash_recoverable: bool,
 }
 
-// ===== B01 · 存储占用与三档快照配额统计（GET /api/v1/storage/stats · POST /api/v1/storage/policy）=====
+// ===== 存储占用与三档快照配额统计（GET /api/v1/storage/stats · POST /api/v1/storage/policy）=====
 
-/// 三档快照配额策略（B01）
+/// 三档快照配额策略
 #[derive(Debug, Clone, Serialize)]
 pub struct SnapshotTierPolicyDto {
     pub text_max_bytes: i64,
@@ -1307,7 +1305,7 @@ pub struct SnapshotTierPolicyDto {
     pub metadata_only_classes: Vec<String>,
 }
 
-/// 按格式族统计的文件/版本/快照占用明细（B01）
+/// 按格式族统计的文件/版本/快照占用明细
 #[derive(Debug, Clone, Serialize)]
 pub struct FormatClassUsage {
     pub format_class: String,
@@ -1318,7 +1316,7 @@ pub struct FormatClassUsage {
     pub snapshot_bytes: u64,
 }
 
-/// GET /api/v1/storage/stats 响应（B01：真实本地快照磁盘占用与全格式分布）
+/// GET /api/v1/storage/stats 响应（真实本地快照磁盘占用与全格式分布）
 #[derive(Debug, Clone, Serialize)]
 pub struct StorageStatsResponse {
     pub ok: bool,
@@ -1347,7 +1345,7 @@ pub struct StorageStatsResponse {
     pub by_format: HashMap<String, u64>,
 }
 
-/// POST /api/v1/storage/policy 响应（B01：更新当前工作区快照阈值）
+/// POST /api/v1/storage/policy 响应（更新当前工作区快照阈值）
 #[derive(Debug, Clone, Serialize)]
 pub struct UpdateStoragePolicyResponse {
     pub ok: bool,
@@ -1355,7 +1353,7 @@ pub struct UpdateStoragePolicyResponse {
     pub policy: SnapshotTierPolicyDto,
 }
 
-// ===== B02 · QuickLook 轻预览与流式缩略（GET /api/v1/revisions/{id}/preview）=====
+// ===== QuickLook 轻预览与流式缩略（GET /api/v1/revisions/{id}/preview）=====
 
 /// 位图 / SVG 尺寸元数据（仅解析文件头前 ≤64KiB，零整图解码）
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1378,7 +1376,7 @@ pub struct RevisionPreviewHistoryItem {
     pub snapshot_available: bool,
 }
 
-/// GET /api/v1/revisions/{revision_id}/preview 响应（B02 L1 轻预览）
+/// GET /api/v1/revisions/{revision_id}/preview 响应（L1 轻预览）
 #[derive(Debug, Clone, Serialize)]
 pub struct RevisionPreviewResponse {
     pub ok: bool,
@@ -1429,7 +1427,7 @@ pub struct RevisionPreviewResponse {
     pub snapshot_path: Option<std::path::PathBuf>,
 }
 
-// ===== B03 · Office（.docx / .xlsx）L2 结构化提取与证据锚定 =====
+// ===== Office（.docx / .xlsx）L2 结构化提取与证据锚定 =====
 
 /// QuickLook 轻预览卡附带的紧凑 Office 摘要
 #[derive(Debug, Clone, Serialize)]
@@ -1448,7 +1446,7 @@ pub struct OfficePreviewSummary {
     pub text_preview: String,
 }
 
-/// GET /api/v1/revisions/{revision_id}/office 响应（B03 · Office L2 结构化阅读）
+/// GET /api/v1/revisions/{revision_id}/office 响应（Office L2 结构化阅读）
 #[derive(Debug, Clone, Serialize)]
 pub struct OfficeContentResponse {
     pub ok: bool,
@@ -1473,7 +1471,7 @@ pub struct OfficeContentResponse {
     pub plain_text: String,
 }
 
-// ===== B04 · PDF 页级正文抽取与页码证据锚定 =====
+// ===== PDF 页级正文抽取与页码证据锚定 =====
 
 /// QuickLook 轻预览卡附带的紧凑 PDF 摘要
 #[derive(Debug, Clone, Serialize)]
@@ -1491,7 +1489,7 @@ pub struct PdfPreviewSummary {
     pub text_preview: String,
 }
 
-/// GET /api/v1/revisions/{revision_id}/pdf 响应（B04 · PDF 页级文本阅读）
+/// GET /api/v1/revisions/{revision_id}/pdf 响应（PDF 页级文本阅读）
 #[derive(Debug, Clone, Serialize)]
 pub struct PdfContentResponse {
     pub ok: bool,
@@ -1517,7 +1515,7 @@ pub struct PdfContentResponse {
     pub plain_text: String,
 }
 
-// ===== C01 · 候选事项（多信号编织；采纳前绝不写正式归属） =====
+// ===== 候选事项（多信号编织；采纳前绝不写正式归属） =====
 
 /// 候选成员（含理由胶囊明细）
 #[derive(Debug, Clone, Serialize)]
@@ -1555,7 +1553,7 @@ pub struct InitiativeCandidatesResponse {
     pub items: Vec<InitiativeCandidateItem>,
 }
 
-// ===== C02 有界检索（契约 §2.4）=====
+// ===== 有界检索（契约 §2.4）=====
 
 /// 检索命中定位器（serde tag=kind；语义对齐前端 SearchHit.locator，
 /// `guanlanEngine.ts:78-86`；行号/页码一律 1-based）
@@ -1568,7 +1566,7 @@ pub enum SearchLocator {
     SvgText { fragment: String },
     /// PDF 页级命中（page 1-based，来自行→页锚）
     PdfPage { page: u64 },
-    /// Office 结构化命中（anchor = `#para=N` 或 `Sheet!A3`，对齐 B03 officeAnchor）
+    /// Office 结构化命中（anchor = `#para=N` 或 `Sheet!A3`，对齐前端 officeAnchor）
     Office { anchor: String },
     /// 仅文件级命中（标题/路径命中，无正文定位）
     File,
@@ -1594,14 +1592,13 @@ pub struct SearchHit {
     pub score: i64,
     /// 恒 false：服务端索引只命中最新的已入库版本（诚实语义占位）
     pub stale: bool,
-    /// C05：命中来源工作区（仅挂载区命中携带；主区命中缺省该字段——逐字节
-    /// 兼容 C02 既有 /search wire 形状）
+    /// 命中来源工作区（仅挂载区命中携带；主区命中省略该字段，保持 `/search` wire 形状兼容）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_workspace: Option<SearchHitSource>,
 }
 
-/// C05：挂载区命中的来源标注（来源工作区名 + 身份哈希，验收「明确标注来源工作区名
-/// 与快照哈希」；root_key 为参考区库内工作区行身份，即其索引快照库的稳定哈希）
+/// 挂载区命中的来源标注（来源工作区名与身份哈希；root_key 为参考区库内
+/// 工作区行身份，即其索引快照库的稳定哈希）
 #[derive(Debug, Clone, Serialize)]
 pub struct SearchHitSource {
     /// 参考区库内 workspace_id（`ws_<root_key>`）
@@ -1630,7 +1627,7 @@ pub struct SearchResponse {
     pub search_state: String,
 }
 
-// ===== C05 跨项目只读挂载与联合检索（契约 contract-query-api.md §2.5）=====
+// ===== 跨项目只读挂载与联合检索（契约 contract-query-api.md §2.5）=====
 
 /// 挂载参考工作区条目（GET /api/v1/mounts 列表项 / POST /api/v1/mounts 返回体）。
 /// 离线语义：参考区目录或索引库暂不可达时 `online=false`，其余字段为
@@ -1700,9 +1697,9 @@ pub struct CrossSearchResponse {
     pub mounts: Vec<MountedWorkspaceInfo>,
 }
 
-// ===== E04 · 原位拍板（HITL）唤醒任务与批次批阅看板 =====
+// ===== 原位拍板（HITL）唤醒任务与批次批阅看板 =====
 
-/// E04：批阅看板五态 + 失联未知统计（承接轮序七态精简版）
+/// 批阅看板五态 + 失联未知统计
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct ReviewBoardCounts {
     pub pending_decision: u32,
@@ -1714,7 +1711,7 @@ pub struct ReviewBoardCounts {
     pub total: u32,
 }
 
-/// E04：看板卡片上的待拍板语句（支持跳转原文或一键「已知悉」）
+/// 看板卡片上的待拍板语句（支持跳转原文或一键「已知悉」）
 #[derive(Debug, Clone, Serialize)]
 pub struct ReviewBoardPendingStatement {
     pub statement_id: String,
@@ -1727,7 +1724,7 @@ pub struct ReviewBoardPendingStatement {
     pub line_start: i64,
 }
 
-/// E04：看板卡片上的待审 Agent 修订草案摘要
+/// 看板卡片上的待审 Agent 修订草案摘要
 #[derive(Debug, Clone, Serialize)]
 pub struct ReviewBoardDraftBrief {
     pub draft_id: String,
@@ -1739,7 +1736,7 @@ pub struct ReviewBoardDraftBrief {
     pub created_at: String,
 }
 
-/// E04：专项五槽位状态简报
+/// 专项五槽位状态简报
 #[derive(Debug, Clone, Serialize)]
 pub struct ReviewBoardSlotBrief {
     pub node_id: String,
@@ -1751,7 +1748,7 @@ pub struct ReviewBoardSlotBrief {
     pub updated_at: String,
 }
 
-/// E04：失联 / 无回执孤儿节点诊断（诚实标 unknown，附可执行的合法修复动作）
+/// 失联 / 无回执孤儿节点诊断（诚实标 unknown，附可执行的合法修复动作）
 #[derive(Debug, Clone, Serialize)]
 pub struct OrphanDiagnostic {
     pub node_id: String,
@@ -1762,7 +1759,7 @@ pub struct OrphanDiagnostic {
     pub repair_actions: Vec<String>,
 }
 
-/// E04：批阅看板单个事项卡
+/// 批阅看板单个事项卡
 #[derive(Debug, Clone, Serialize)]
 pub struct ReviewBoardCard {
     pub initiative_id: String,
@@ -1786,7 +1783,7 @@ pub struct ReviewBoardCard {
     pub updated_at: String,
 }
 
-/// E04：GET /api/v1/review-board 响应
+/// GET /api/v1/review-board 响应
 #[derive(Debug, Clone, Serialize)]
 pub struct ReviewBoardResponse {
     pub ok: bool,
@@ -2030,7 +2027,7 @@ pub struct CrossProjectSearchResponse {
     pub items: Vec<CrossProjectSearchHit>,
 }
 
-// ===== V04 · 存量工作区批量确立已读基线与撤销还原 =====
+// ===== 存量工作区批量确立已读基线与撤销还原 =====
 
 /// 单文件服务端已读基线记录（仅记录已读版本与时刻，绝不伪造 scrollPercent）
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

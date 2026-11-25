@@ -39,7 +39,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SRC_ROOT = path.resolve(__dirname, '../src');
 
-describe('B01 · formatMeta 统一格式分类与优雅降级', () => {
+describe('formatMeta 统一格式分类与优雅降级', () => {
   it('能正确归一化扩展名并映射至 13 个语义大类', () => {
     assert.equal(normalizeFormatToken('.TSX '), 'tsx');
     assert.equal(normalizeFormatToken(''), 'bin');
@@ -96,7 +96,7 @@ describe('B01 · formatMeta 统一格式分类与优雅降级', () => {
   });
 });
 
-describe('B01 · fileOps 全格式识别、默认排除与重命名同簇校核', () => {
+describe('fileOps 全格式识别、默认排除与重命名同簇校核', () => {
   it('formatFromFileName 支持常见扩展名、无扩展名已知文件及 dotfiles', () => {
     assert.equal(formatFromFileName('notes.txt'), 'txt');
     assert.equal(formatFromFileName('Makefile'), 'make');
@@ -119,7 +119,7 @@ describe('B01 · fileOps 全格式识别、默认排除与重命名同簇校核'
   });
 });
 
-describe('B01 · L0/L1 非传统文件预览分型', () => {
+describe('L0/L1 非传统文件预览分型', () => {
   it('按快照可用性与格式大类分流 image / text / metadata_only', () => {
     assert.equal(resolveNonLegacyPreviewMode('png', true), 'image');
     assert.equal(resolveNonLegacyPreviewMode('png', false), 'metadata_only');
@@ -138,7 +138,7 @@ describe('B01 · L0/L1 非传统文件预览分型', () => {
   });
 });
 
-describe('B01 · /api/v1/storage/stats 与 /api/v1/storage/policy 客户端联调', () => {
+describe('/api/v1/storage/stats 与 /api/v1/storage/policy 客户端联调', () => {
   let prevBase = '';
   let server: http.Server | null = null;
   let lastPostBody = '';
@@ -250,9 +250,9 @@ describe('B01 · /api/v1/storage/stats 与 /api/v1/storage/policy 客户端联�
   });
 });
 
-describe('B01 · 前端视图接线防退化断言', () => {
-  it('设置弹层、阅读器与侧栏已接入 B01 全格式与存储统计组件', () => {
-    // V08 拆解 ModalsAndDrawers 后，WorkspaceSettingsModal 实现位于 components/modals/WorkspaceSettingsModal.tsx
+describe('前端视图接线防退化断言', () => {
+  it('设置弹层、阅读器与侧栏已接入全格式与存储统计组件', () => {
+    // 拆解 ModalsAndDrawers 后，WorkspaceSettingsModal 实现位于 components/modals/WorkspaceSettingsModal.tsx
     const modals = [
       'components/ModalsAndDrawers.tsx',
       'components/modals/WorkspaceSettingsModal.tsx',

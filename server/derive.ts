@@ -1,7 +1,7 @@
 /**
- * 观澜 v0.4 第一轮 —— 服务端派生：决策陈述与引用关系
+ * 观澜 Node 对拍基线 —— 服务端派生：决策陈述与引用关系
  *
- * 对应方案 §1 的具体标识问题与 §5「将决定的业务 ID 与陈述 ID 分开」：
+ * 将决定的业务 ID 与陈述 ID 分开：
  * - 每条来源陈述都有独立 statement_id（同编号不同问题绝不共用身份）
  * - 业务决定 ID 由「命名空间 + 归一化问题」推导，只有同问题才归入同一决定
  * - 引用绑定到来源版本，并记录目标版本是否已知
@@ -225,7 +225,7 @@ export function deriveStatements(input: DeriveInput): StatementRow[] {
 
 /**
  * 抽取引用关系并绑定到来源版本。
- * 相对路径按当前文档所在目录解析（避免 v0.3 已修的 endsWith 误匹配）。
+ * 相对路径按当前文档所在目录解析（避免 endsWith 误匹配）。
  */
 export function deriveEdges(input: DeriveInput): EdgeRow[] {
   if (input.format !== 'md') return [];
@@ -356,7 +356,7 @@ export function deriveDocumentTime(content: string): {
     const cleaned = raw.trim().replace(/["']/g, '');
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(cleaned);
     if (m) {
-      // 只有日期：保留到天，不补零点时刻（方案 §3「只到日的事项归在日期组，不补零点」）
+      // 只有日期：保留到天，不补零点时刻（只到日的事项归在日期组）
       return { occurredAt: `${m[1]}-${m[2]}-${m[3]}`, precision: 'day', source: 'document_self' };
     }
   }

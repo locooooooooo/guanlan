@@ -524,7 +524,7 @@ export function buildProjectFolderTree(
   return { nodes: root.children, rootFiles: root.directFiles };
 }
 
-// ===== V04 · 同前缀长文件名智能中段省略（保留开头主题词 + 结尾差异词与扩展名） =====
+// ===== 同前缀长文件名智能中段省略（保留开头主题词 + 结尾差异词与扩展名） =====
 
 function commonPrefixLengthOfTwo(a: string, b: string): number {
   const limit = Math.min(a.length, b.length);
@@ -556,7 +556,7 @@ export function computeSiblingSharedPrefixMap(names: readonly string[]): Map<str
 }
 
 /**
- * 智能中段省略纯函数（V04）：
+ * 智能中段省略纯函数：
  * - 短文件名（`name.length <= maxChars`）原样返回；
  * - 存在显著共享前缀（`sharedPrefixLen >= 4`）时，优先保护前缀之后「真正区分彼此的差异尾段 + 扩展名」，
  *   把重复的公共前缀中段折叠为 `…`，避免同目录下全列都是 `2D与3D绘制预览优…`；
@@ -624,7 +624,7 @@ export function formatMiddleEllipsisName(
     .join('')}${ext}`;
 }
 
-// ===== V06 · 工作区私有「目录静默清单（Muted Folders）」SSOT（磁盘零写入用户业务目录） =====
+// ===== 工作区私有「目录静默清单（Muted Folders）」SSOT（磁盘零写入用户业务目录） =====
 
 export const MUTED_FOLDERS_STORAGE_KEY = 'guanlan.mutedFolders.v1';
 
@@ -720,7 +720,7 @@ export function isFileInMutedFolder(
 }
 
 /**
- * V06 · 全景三视图（星图 / 日历 / 列表）共享的静默目录排除 SSOT：
+ * 全景三视图（星图 / 日历 / 列表）共享的静默目录排除 SSOT：
  * - 仅过滤全景时间线与星图噪点，左栏仍以灰阶「已静默」保留，且可随时点击阅读或 Ctrl+K 检索；
  * - 关联文件处于静默目录的事件同步过滤，保证三视图数字与资产 100% 同源一致。
  */
@@ -776,7 +776,7 @@ function isPanoramaWireItemKept(
 }
 
 /**
- * V06 · 全景列表分页查询 EventPage 同源过滤：
+ * 全景列表分页查询 EventPage 同源过滤：
  * 保证服务端分页加载的 TimelineView 与星图/日历执行完全一致的「静默目录 + 资产域」口径。
  */
 export function filterPanoramaEventPage(
@@ -796,7 +796,7 @@ export function filterPanoramaEventPage(
 }
 
 /**
- * V06 · 全景日桶 EventDaysResult 同源过滤：
+ * 全景日桶 EventDaysResult 同源过滤：
  * 保证星图时间标尺与列表日期筛选下拉框不泄露已静默目录或被排除资产域的样本。
  */
 export function filterPanoramaEventDays(
@@ -832,7 +832,7 @@ export function filterPanoramaEventDays(
   };
 }
 
-// ===== V06 · 左栏目录树三态排序（名称 / 近 7 日活跃 / 未读数）与即时快筛 + 高亮 =====
+// ===== 左栏目录树三态排序（名称 / 近 7 日活跃 / 未读数）与即时快筛 + 高亮 =====
 
 export type SidebarTreeSortMode = 'name' | 'active7d' | 'unread';
 
@@ -907,7 +907,7 @@ export function sortFolderTreeNodes(
 }
 
 /**
- * V06 · 左栏即时目录/文件名快筛（线性单遍，5,500 份文件 < 30ms）：
+ * 左栏即时目录/文件名快筛（线性单遍，5,500 份文件 < 30ms）：
  * - 目录名命中时整棵子树保留；
  * - 文件名/路径命中时保留祖先链并记入 `autoExpandedPaths` 自动展开定位。
  */

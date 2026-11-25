@@ -1,19 +1,19 @@
 /**
- * 统一状态机投影层（SSOT）—— PRD §2.2 六态文档状态机的前端唯一事实来源（方案 F2）。
+ * 统一状态机投影层（SSOT）—— 六态文档状态机的前端唯一事实来源。
  *
- * 三层分工（契约 stateMachine 节）：
+ * 三层分工：
  *  - ① 存储与纯函数权威在 Rust：native/crates/guanlan-core/src/index/state_machine.rs
  *    （DocState 六态 / StateSignals / next_artifact_state / slot_state）。迁移规则的
  *    权威判定在该文件；本文件的 nextDocState 是其逐字 TS 镜像——双端改迁移规则必须
- *    两侧同步，且由 state-machine-01 测试锁词。
+ *    两侧同步，且由单测锁定一致。
  *  - ② 本文件 = 前端投影 SSOT：六态词表（DOC_STATE_LABEL）、DOC_STATE↔StageRole 映射、
  *    双层投影 projectInitiativeState（服务端 /state-overview 优先，断连回退
- *    dominantStage——回退路径行为与现状逐字一致，不破坏既有基线）、阶段徽标短语
+ *    dominantStage——回退路径行为保持兼容）、阶段徽标短语
  *    （STAGE_BADGE_PHRASE，taskPackages 原私有词表上移）、文档态徽标/胶囊样式单一出口、
  *    task_node 状态词表、决策未决口径词表（DecisionRadar/HomeView 双份实现收敛）、
  *    版本「（最新）」后缀词（ReaderView/RightInspector 双份实现收敛）、
- *    陈述状态 wire 词映射（契约 C/建议 2）。
- *  - ③ 消费层（专项卡片 / 专项详情下拉 / 星图节点 / 文档顶栏四处徽标，AC-01）：
+ *    陈述状态 wire 词映射。
+ *  - ③ 消费层（专项卡片 / 专项详情下拉 / 星图节点 / 文档顶栏四处徽标）：
  *    taskPackages、TaskPackageGallery、GraphCanvasView、ReaderView、RightInspector、
  *    HomeView、DecisionRadar 一律从本文件取词，禁止再自造状态文案。
  *
@@ -31,7 +31,7 @@ import type {
   TaskNodeState,
 } from '../services/apiTypes';
 
-// ================= 六态文档状态机（PRD §2.2 逐字） =================
+// ================= 六态文档状态机 =================
 
 /** 文档六态（wire 词；Rust DocState 逐字镜像） */
 export type DocState = DocStateWire;
@@ -40,7 +40,7 @@ export type DocState = DocStateWire;
  *  StageRole 本身经 taskPackages 再导出，两处共享同一 wire 定义） */
 export type StageRole = StageWire;
 
-/** 六态展示顺序（PRD §2.2 状态图自上而下） */
+/** 六态展示顺序（按生命周期自上而下） */
 export const DOC_STATE_ORDER: readonly DocState[] = [
   'draft',
   'pending_review',
@@ -50,7 +50,7 @@ export const DOC_STATE_ORDER: readonly DocState[] = [
   'archived',
 ];
 
-/** 六态词表（PRD §2.2 逐字；AC-01 四视图同词的唯一出口）：
+/** 六态词表（四视图同词的唯一出口）：
  *  draft=草稿、pending_review=待用户确认、approved_revision=选中修订、
  *  executing=执行中、delivered=已交付、archived=已归档。 */
 export const DOC_STATE_LABEL: Record<DocState, string> = {
@@ -63,8 +63,7 @@ export const DOC_STATE_LABEL: Record<DocState, string> = {
 };
 
 /**
- * DOC_STATE → StageRole 映射（裁定值，登记于方案风险：PRD 2.2 六态与既有五阶段
- * StageRole 无同构映射，映射表待 PRD 作者确认；确认前所有出口可回退）。
+ * DOC_STATE → StageRole 映射（六态与五阶段无严格同构映射，按推进主阶段对齐）：
  * 语义：该文档态的推进主战场阶段——draft=蓝图制定、pending_review=待拍板（决策）、
  * approved_revision=定稿归入计划产物、executing=执行、delivered/archived=交付。
  */
@@ -78,9 +77,9 @@ export const DOC_STATE_STAGE: Record<DocState, StageRole> = {
 };
 
 /**
- * StageRole → DOC_STATE 回退映射（双层投影断连路径使用；裁定值同上）。
+ * StageRole → DOC_STATE 回退映射（双层投影断连路径使用）。
  * 语义：按 dominantStage 的进行时短语对位六态——蓝图/计划制定中=草稿、
- * 待拍板=待用户确认、执行中=执行中、待用户验收=已交付（PRD 流：Delivered 后
+ * 待拍板=待用户确认、执行中=执行中、待用户验收=已交付（Delivered 后
  * 用户确认验收→Archived，故「待用户验收」最接近 delivered）、待分类=草稿。
  */
 export const STAGE_DOC_STATE: Record<StageRole, DocState> = {
@@ -93,9 +92,9 @@ export const STAGE_DOC_STATE: Record<StageRole, DocState> = {
 };
 
 /** 状态机信号（Rust StateSignals 逐字镜像；signals 不落持久列）。
- *  三个可选字段为「一次性入参」语义（契约 stateMachine 节）：
+ *  三个可选字段为「一次性入参」语义：
  *  - exec_slot_completed / deliver_slot_completed：Executing→Delivered 的具体槽位判据
- *    （阻塞 1 收口：不再用泛化 !task_running），由五槽位重算方传入；
+ *    （不用泛化的 !task_running），由五槽位重算方传入；
  *  - user_accepted：Delivered→Archived 的唯一人工来源 = 归档任务写线程置位。 */
 export interface StateSignals {
   pending_p0: number;
@@ -112,7 +111,7 @@ export interface StateSignals {
 }
 
 /**
- * 迁移判断（Rust next_artifact_state 的逐字 TS 镜像；穷举表见契约 stateMachine 节）：
+ * 迁移判断（Rust next_artifact_state 的逐字 TS 镜像）：
  *  - Draft→PendingReview 当 (pending_p0+pending_p1)>0；
  *  - PendingReview→ApprovedRevision 当 p0==0&&p1==0&&has_selected_revision；
  *  - ApprovedRevision→Executing 当 task_running（=执行槽或交付槽 running，持久跨轮）；
@@ -123,7 +122,7 @@ export interface StateSignals {
  *    （优先于一切正向边判定）；
  *  - Archived 终态：唯一离开通道 = 人工重开（reopen 写线程），本函数恒返回 null。
  * 返回 null = 无迁移（保持现态）。纯函数：同输入恒同输出（running 持久性的
- * 声明式重算语义由幂等性证明，state-machine-01 测试锁定）。
+ * 声明式重算语义由幂等性保证）。
  */
 export function nextDocState(current: DocState, signals: StateSignals): DocState | null {
   const blocking = signals.pending_p0 + signals.pending_p1;
@@ -159,13 +158,12 @@ export function nextDocState(current: DocState, signals: StateSignals): DocState
   }
 }
 
-// ================= 阶段徽标短语（专项卡片等橱窗票词表，单一出口） =================
+// ================= 阶段徽标短语（专项卡片等词表，单一出口） =================
 
 /**
- * 阶段徽标短语（原 taskPackages.ts:672-679 STAGE_BADGE_PHRASE 上移至此，
- * 数值逐字不动——回退路径行为与现状一致，295 基线不破坏）：
+ * 阶段徽标短语（从 taskPackages 上移至此，数值逐字不动以保持回退路径兼容）：
  * 执行中＝画廊筛选胶囊既有词；待用户验收＝「待验收」筛选的同语义展开；
- * 待拍板＝首页卡 A「待你拍板的决策」同族；蓝图制定中/计划制定中为本层新词；
+ * 待拍板＝首页「待你拍板的决策」同族；蓝图制定中/计划制定中为本层补充词；
  * 待分类不造短语（空串降级）。消费：taskPackages.packageBadgeLine /
  * stageBadgeLine / TaskPackageGallery GALLERY_FILTERS。
  */
@@ -215,7 +213,7 @@ export function initiativeStateBadgeLine(
  * 状态徽标胶囊公共排版骨架（唯一出口）：w-fit/截断/圆角/内距/微字号/行高/中字重
  * ——六态胶囊（DOC_STATE_PILL_CLASS）与橱窗卡阶段徽标胶囊
  * （TaskPackageGallery 的 STAGE_BADGE_PILL_CLASS，颜色与阴影件各配）同用本骨架，
- * 消灭「同族排版参数」分叉（AC-01 样式同源登记项）。
+ * 避免同族排版参数分叉。
  */
 export const PILL_LAYOUT_BASE =
   'w-fit max-w-full truncate rounded-full px-2 py-0.5 ' +
@@ -312,7 +310,7 @@ export function projectInitiativeState(
   };
 }
 
-// ================= /state-overview 前端索引（四视图共享接线，F1） =================
+// ================= /state-overview 前端索引（四视图共享接线） =================
 
 /**
  * /state-overview 的前端索引：一次构建，按 file_id / initiative_id / root_dir
@@ -425,10 +423,10 @@ export function artifactStageBadgeText(
   return isDecisionCard ? '决策' : '';
 }
 
-// ================= 五槽位任务节点词表（F3 专项详情下拉数据源） =================
+// ================= 五槽位任务节点词表（专项详情下拉数据源） =================
 
 /**
- * task_node 状态词表（契约 E 六态；suspended_on_hitl 是 HITL 挂起持久态，
+ * task_node 状态词表（六态；suspended_on_hitl 是 HITL 挂起持久态，
  * 下拉/详情面高亮展示）。词表为 v1 裁定值；未知状态词原样返回（诚实透传，
  * 不造「未知」假词掩盖 wire 演进）。
  */
@@ -496,7 +494,7 @@ export function revisionVersionLabel(versionNumber: number, isLatest: boolean): 
   return `v${versionNumber}${isLatest ? LATEST_REVISION_SUFFIX : ''}`;
 }
 
-// ================= 陈述状态 wire 词映射（契约 C / 建议 2） =================
+// ================= 陈述状态 wire 词映射 =================
 
 /**
  * wire 词 → 库内中文词（拍板表单/列表展示用；query 只传 wire 词，

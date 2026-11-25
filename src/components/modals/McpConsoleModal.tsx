@@ -23,7 +23,7 @@ import { safeStorageGet } from "../../utils/safeStorage";
 import { Button, IconButton, Tabs } from "../ui/primitives";
 
 /* ============================================================================
- * 1. MCP 8-Tool Contract Debugger Modal (§9, §10)
+ * 1. MCP 8-Tool Contract Debugger Modal
  * ==========================================================================*/
 export interface McpConsoleModalProps {
   isOpen: boolean;
@@ -54,7 +54,7 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
   const [simulateStaleGen, setSimulateStaleGen] = useState<boolean>(false);
   const [simulateDiskDrift, setSimulateDiskHashDrift] = useState<boolean>(false);
 
-  // T01：/scan 去 MD 内联后，search/read/diff 工具的正文按需回退缓存（revision_id → 正文）。
+  // /scan 不再内联 MD 正文后，search/read/diff 工具的正文按需回退缓存（revision_id → 正文）。
   // 镜像 ReaderView 的按需回退模式：先预取缺失正文，再喂给 executeMcpTool 的 contentCache。
   const [toolContentCache, setToolContentCache] = useState<Record<string, string>>({});
   const [toolFetchFailed, setToolFetchFailed] = useState<Record<string, boolean>>({});
@@ -72,9 +72,9 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
       missing.push(id);
     };
     if (selectedTool === 'search') {
-      // 批次一调整②（方案 §5）：全库批量补正文的旧链路已移除——search 保持 guanlanEngine
-      // 本地计算，但只基于已取回的数据（文件名/路径 + 已并入缓存的正文）；
-      // 全文检索待批次三 GET /api/v1/search 有界检索承接（契约 §3.2）
+      // 不再执行全库批量预取正文——search 保持 guanlanEngine 本地计算，
+      // 仅基于已取回的数据（文件名/路径 + 已并入缓存的正文）；
+      // 全文检索由服务端 GET /api/v1/search 有界检索承接
     } else if (selectedTool === 'read' || selectedTool === 'diff') {
       // read/diff 仅补「当前文件版本链范围」的正文（过渡通道允许范围）
       const target = files.find(
@@ -133,8 +133,8 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
 
   if (!isOpen) return null;
 
-  // P0-4 提示文本治理：弹层与 TopHeader 入口钮同键门控（guanlan.debug.mcp），
-  // 默认对用户隐藏——§9/§10 章节号随门控隐去，标题文案不改（开发向）。
+  // 调试入口与 TopHeader 入口钮同键门控（guanlan.debug.mcp），
+  // 默认对用户隐藏，标题文案保留开发向表述。
   // 开法：控制台执行 localStorage.setItem('guanlan.debug.mcp', '1') 后刷新。
   if (safeStorageGet('guanlan.debug.mcp') !== '1') return null;
 
@@ -201,7 +201,7 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
       simulateDiskHashDrift: simulateDiskDrift,
     },
     { config, files, events, decisions, relations },
-    // T01：MD 正文不再内联——search/read/diff 经 contentCache 按需回退
+    // MD 正文不再内联——search/read/diff 经 contentCache 按需回退
     { contentCache: toolContentCache }
   );
 
@@ -227,7 +227,7 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
               <Terminal className="w-4 h-4" />
             </span>
             <h2 className="text-[length:var(--text-item-title)] leading-[var(--lh-item-title)] font-semibold tracking-[-0.01em]">
-              MCP 工具契约与 Magpie 接入边界验证 (§9, §10)
+              MCP 工具契约与客户端接入边界验证
             </h2>
           </div>
           <IconButton label="关闭 MCP 调试台" onClick={onClose} className="cursor-pointer">
@@ -236,7 +236,7 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          {/* 8 Standard Tools Selector——§4.2 ModeTabs（工具选择＝切换下方参数/响应面板，
+          {/* 8 Standard Tools Selector——采用 ModeTabs（工具选择切换下方参数/响应面板，
               标线为界；每卡 inputs 预览行收敛为选中工具的单行 inputs，信息不丢失） */}
           <div className="space-y-1.5">
             <Tabs
@@ -261,7 +261,7 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
             </div>
           </div>
 
-          {/* Preset Boundary Test Cases——杂钮归 Button·secondary（§4.1 映射表 #10） */}
+          {/* Preset Boundary Test Cases——辅助操作统一用 Button·secondary */}
           <div className="p-3.5 rounded-[var(--r-block)] border border-[color:var(--glass-hairline)] bg-white/60 space-y-2.5 text-xs">
             <div className="font-semibold text-[color:var(--ink-strong)]">
               一键验证标准错误类型与协议边界（stdout 仅输出协议消息，诊断输出到 stderr）：
@@ -385,7 +385,7 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
               <span className="text-[color:var(--ink-soft)]">
                 工具说明：{toolDescriptions[selectedTool].desc}
               </span>
-              {/* 状态字走语义 -text 深档（§3.1 六色双层：文字不用 graphic 原值） */}
+              {/* 状态字走语义 -text 深档（文字不直接使用图形高亮原值） */}
               <span
                 className={
                   response.ok

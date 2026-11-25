@@ -1,16 +1,16 @@
 /**
- * D05 · 文件操作专属 Undo/Redo 账本（FileOpHistory）——纯函数模块（零 UI / 零 IO）。
+ * 文件操作专属 Undo/Redo 账本（FileOpHistory）——纯函数模块（零 UI / 零 IO）。
  *
- * 吸收 quiet-md `file_history.rs` 无鼠操控增强①（任务卡 D05 改动与产物②）：
- *  - 独立于正文编辑的账本：只记 A05 身份保真 rename / move 两类 Delta（trash 不可撤销，
+ * 设计口径：
+ *  - 独立于正文编辑的账本：只记身份保真 rename / move 两类 Delta（trash 不可撤销，
  *    绝不入账——删除走系统回收站有独立确认链路）；
  *  - 默认保留最近 100 步（超出丢最旧并如实返回被丢计数）；
  *  - 支持关联动作合并：同 file_id 同 kind 且路径续接（上一步 new_path = 这一步 old_path）
  *    且间隔 ≤ FILE_OP_MERGE_WINDOW_MS 的相邻链合并为一步（改名链 A→B→C 记一步 A→C；
  *    若净零变化 A→B→A 则自动抵消弹栈，绝不存入自环 A→A）；
  *  - planUndo / planRedo 只产「请求 + 守卫判定」，绝不执行 IO——执行在 useFileOpHistory
- *    （复用 A05 原子接口 postRenameFile / postMoveFile，file_id 不裂链由服务端保证）；
- *  - 外部冲突守卫（停机线「撤销静默覆盖外部新文件即停」的结构兑现）：
+ *    （复用原子接口 postRenameFile / postMoveFile，file_id 不裂链由服务端保证）；
+ *  - 外部冲突守卫（严禁撤销静默覆盖外部新文件）：
  *      ① 当前索引里该文件不在了 → 中止；
  *      ② 文件当前路径 ≠ 账本记录（已被再次改名/移动）→ 中止；
  *      ③ 原路径已被其他文件占用 → 中止（绝不覆盖他人新文件）。
@@ -40,7 +40,7 @@ export interface FileOpHistoryState {
   nextId: number;
 }
 
-/** 默认保留最近 100 步（任务卡 D05 口径）。 */
+/** 默认保留最近 100 步。 */
 export const MAX_FILE_OP_HISTORY = 100;
 /** 关联合并窗口：间隔 ≤5s 的同文件同 kind 路径续接链并步。 */
 export const FILE_OP_MERGE_WINDOW_MS = 5000;
@@ -138,7 +138,7 @@ export function recordFileOp(
   };
 }
 
-/** Undo/Redo 对 A05 原子接口的请求描述（执行方 useFileOpHistory 消费）。 */
+/** Undo/Redo 对原子文件接口的请求描述（执行方 useFileOpHistory 消费）。 */
 export interface FileOpUndoRequest {
   kind: 'rename' | 'move';
   fileId: string;

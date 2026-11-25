@@ -1,6 +1,5 @@
 /**
- * D01-a 拆解 · Sources 面板 · Instructions(MD) 展开清单（自 GraphSourcesPanel.tsx
- * 原样迁入，行数护栏 <600；迁移纪律：JSX 与类名逐字一致）。
+ * Sources 面板 · Instructions(MD) 展开清单组件。
  */
 import React from 'react';
 import { hasUnreadChanges } from '../../utils/guanlanEngine';
@@ -46,7 +45,7 @@ export function GraphSourcesMdList({
         const matchedCard = subAgentCards.find((c) => c.fileId === file.file_id);
         const isSelected = (activeFileRecord?.file_id || '') === file.file_id;
         const latestRev = file.revisions[file.revisions.length - 1];
-        // wf_2（DoD1）：行首不再裸显截断的完整 relative_path——改为「任务包 chip + 核心文档名」，
+        // 行首不再直接展示截断的完整 relative_path，改为「任务包 chip + 核心文档名」，
         // 完整路径收进 title 悬浮（与卡片同源同口径 taskPackageOf/stageOfPath）
         const pkg = taskPackageOf(file.relative_path);
         const docBase = basenameOf(file.relative_path);

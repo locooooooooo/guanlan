@@ -1,5 +1,5 @@
 /**
- * D05 · 全键盘无鼠工作流、来源栈 Esc、FileOpHistory Undo/Redo、画布空间漫游与无障碍动效纯函数单测。
+ * 全键盘无鼠工作流、来源栈 Esc、FileOpHistory Undo/Redo、画布空间漫游与无障碍动效纯函数单测。
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';

@@ -23,13 +23,12 @@ import {
 } from '../src/components/DocumentTimeMachineView';
 
 /**
- * 画布主题契约（v0.7 设计增补 §4-5 新建，补勘察 §5.4-2 零测试覆盖）：
+ * 画布主题契约：
  *
  * 1) canvasThemeStore 三类回退：非法值回 xray-dark / 非 JSON 裸值宽容收下 /
- *    读异常回默认；写失败静默——持久化是增强能力，绝不让画布起不来（§1.2 表）。
- * 2) 泳道/时光机色常量值契约：值必须是 `var(--cv-*)` 令牌引用（增补 §1.1「TSX
- *    零 hex/rgba」红线；泳道=文档分类数据编码轴，令牌名逐字锁定，别名化会静默
- *    串写编码——V7-D15 白名单登记理由）。
+ *    读异常回默认；写失败静默——持久化是增强能力，绝不让画布起不来。
+ * 2) 泳道/时光机色常量值契约：值必须是 `var(--cv-*)` 令牌引用（TSX 零 hex/rgba 红线；
+ *    泳道=文档分类数据编码轴，令牌名逐字锁定，别名化会静默串写编码）。
  *
  * node 裸环境无 window：store 的 DOM 守卫直接回默认；回退逻辑用 mock window
  * 驱动真实代码路径（store 在调用时才读 window.localStorage，导入期零副作用）。
@@ -229,8 +228,8 @@ test('契约：浅档覆写块与泳道软滤镜块的选择器逐字= xray-ligh
   );
 });
 
-test('契约：App.tsx 命令式挂 store 枚举值，不做 light/dark 转译（评审第 2 轮）', () => {
-  // D01-a 拆层后 App 实现 = 装配层 + 单一 Store——联合文本断言（语义不变）
+test('契约：App.tsx 命令式挂 store 枚举值，不做 light/dark 转译', () => {
+  // 拆层后 App 实现 = 装配层 + 单一 Store——联合文本断言（语义不变）
   const app = [readSrc('App.tsx'), readSrc('stores/useWorkspaceStore.tsx')].join(String.fromCharCode(10))
   assert.ok(
     app.includes('porthole.dataset.canvasTheme = next'),
@@ -238,7 +237,7 @@ test('契约：App.tsx 命令式挂 store 枚举值，不做 light/dark 转译�
   );
   assert.ok(
     !app.includes('data-canvas-theme={canvasTheme}'),
-    'App.tsx 不得把主题作 React prop 传递（整树重渲是切换延迟根源，评审 v0.7r2-1）',
+    'App.tsx 不得把主题作 React prop 传递（避免整树重渲导致切换延迟）',
   );
 });
 

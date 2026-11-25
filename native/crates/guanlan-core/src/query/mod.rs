@@ -1,13 +1,12 @@
-//! 有界查询（方案 §2：分成有界查询，停止构建整个工作区的大投影）。
+//! 有界查询：按端点拆分有界只读查询，避免每次构建整个工作区的大投影。
 //!
-//! 契约来源：native/docs/contract-query-api.md §1 批次一端点定义；
-//! 现行为准绳：`server/queries.ts`、`server/project.ts`。
+//! 契约来源：`native/docs/contract-query-api.md`；
+//! 行为基准：`server/queries.ts`、`server/project.ts`。
 //!
-//! 批次一实现完成：全部函数只执行只读 SQL（contract-storage.md §4 边界），
-//! 遵守 §0.3 分页游标总语义（snapshot_max_seq/代际绑定 + 筛选指纹 → CURSOR_STALE）。
+//! 全部函数只执行只读 SQL（`contract-storage.md` §4 边界），
+//! 遵守 §0.3 分页游标总语义（`snapshot_max_seq`/代际绑定 + 筛选指纹 → `CURSOR_STALE`）。
 //!
-//! 码表说明：契约 §0.2 把事件游标指纹不符从现状 `INDEX_STALE` 拆给
-//! `CURSOR_STALE`（§0.3-3、§1.4），本实现按契约执行。
+//! 码表说明：游标筛选指纹不符统一返回 `CURSOR_STALE`（契约 §0.2/§0.3-3/§1.4）。
 
 pub mod candidates;
 pub mod cross_search;
@@ -96,7 +95,7 @@ pub enum RevisionOrder {
     SeqDesc,
 }
 
-/// 版本链附加数据段（契约 §1.7 include=events,statements,edges 逗号分隔可选；A05 扩展 aliases）
+/// 版本链附加数据段（契约 §1.7 `include=events,statements,edges,aliases` 逗号分隔可选）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RevisionIncludeSection {
     Events,
@@ -111,8 +110,8 @@ pub struct EventQuery {
     /// YYYY-MM-DD 含端点，按本地日归属（契约 §0.3-7：`localDayExpr`，不能统一按 UTC 取日）
     pub from: Option<String>,
     pub to: Option<String>,
-    /// 逗号分隔事件种类（EventKind 枚举，`WorkspaceStore.ts:21-29`；v1 只保留 kinds，
-    /// 旧别名 kind 不迁，契约 §5 风险 5）
+    /// 逗号分隔事件种类（EventKind 枚举，`WorkspaceStore.ts:21-29`；只接受 `kinds`，
+    /// 旧别名 `kind` 不再兼容，见契约 §5 风险 5）
     pub kinds: Vec<String>,
     /// md | svg | pdf；工作区级事件不计入
     pub format: Option<String>,
@@ -190,6 +189,3 @@ pub struct DecisionsQuery {
 pub struct RevisionContentQuery {
     pub raw: bool,
 }
-
-// 局部关系查询（契约 §2：`center_id + depth(1|2)`）属批次三，签名届时补入本模块。
-// 全库检索（契约 §2 /api/v1/search）同样属批次三。

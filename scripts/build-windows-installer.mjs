@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * F03 · 观澜（Guanlan）Windows 正式 MSI / NSIS 安装包工程化构建与校验脚本。
+ * 观澜（Guanlan）Windows 正式 MSI / NSIS 安装包工程化构建与校验脚本。
  *
  * 职责：
  * 1. `--check-only`：零副作用校验打包工程配置完整性（tauri.conf.json / tauri.release.conf.json /
@@ -132,7 +132,7 @@ if (checkOnly) {
 }
 
 // 1. 构建精简前端 dist
-// U12：Node ≥18.20/20.12 出于 CVE-2024-27980 直接 spawn `.cmd`/`.bat` 会抛 EINVAL，
+// Node ≥18.20/20.12 出于 CVE-2024-27980 直接 spawn `.cmd`/`.bat` 会抛 EINVAL，
 // 且本项目未把 npm 声明为本地依赖——`npm run build` 本义即 `vite build`，
 // 故直接以 process.execPath + node_modules/vite/bin/vite.js 执行（零 shell、零 PATH 依赖）。
 console.log('[guanlan-installer] 1/3 构建精简前端生产包 (vite build)...');

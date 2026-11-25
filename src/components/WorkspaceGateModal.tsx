@@ -15,7 +15,7 @@ interface WorkspaceGateModalProps {
 }
 
 /**
- * 桌面壳零配置首启引导与 ROOT_IN_USE 锁冲突恢复面板（A02）。
+ * 桌面壳零配置首启引导与 ROOT_IN_USE 锁冲突恢复面板。
  *
  * - `unconfigured`：首次无配置启动（或记忆目录已不存在），引导选择或输入本地项目目录；
  * - `root_in_use`：目标工作区被另一观澜实例占用，展示锁文件与 PID 诊断，提供重试/切回/另选；

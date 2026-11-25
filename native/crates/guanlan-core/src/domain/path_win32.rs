@@ -1,15 +1,13 @@
 //! Node `path.win32` 的逐字移植（resolve / join / normalize / normalizeString）。
 //!
-//! 移植依据：Node v24 源码 lib/path.js（本会话从
-//! https://raw.githubusercontent.com/nodejs/node/main/lib/path.js 取得原文）：
+//! 移植依据：Node v24 源码 lib/path.js：
 //! - `resolve`：190-344 行；`normalize`：350-481 行；`join`：506-599 行；
 //! - `normalizeString`：92-154 行；`isPathSeparator`/`isWindowsReservedName`/
 //!   `isWindowsDeviceRoot`：65-89 行。
 //!
 //! 契约要求（contract-storage.md §2.1，全部逐字兼容）：rootKey 的哈希输入是
 //! `path.resolve(rootPath)` 的返回字符串；Rust 严禁用 `std::fs::canonicalize` 或
-//! `dunce::canonicalize` 替代（Windows 会引入 `\\?\` 前缀导致哈希不同，
-//! docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:140）。
+//! `dunce::canonicalize` 替代（Windows 会引入 `\\?\` 前缀导致哈希不同）。
 //!
 //! 实现说明：
 //! - Node 按 UTF-16 码元处理字符串；本移植按 UTF-8 字节处理。所有下标运算只落在

@@ -1,4 +1,4 @@
-//! F02 · 全量开放导出、决定证据铁律保护存储瘦身（GC）、全量 SHA-256 完整性核验与一键脱敏诊断包 ZIP。
+//! 全量开放导出、决定证据铁律保护存储瘦身（GC）、全量 SHA-256 完整性核验与一键脱敏诊断包 ZIP。
 //!
 //! 停机红线：
 //! 1. **决定证据铁律保护**：任何被 `statements`、`edges`（`source_revision_id`/`target_revision_id`）、
@@ -34,7 +34,7 @@ use crate::storage::{internal_sql, ReadonlyStore};
 /// 工作区全量开放导出协议版本
 pub const OPEN_EXPORT_SCHEMA_VERSION: &str = "guanlan.open_export.v1";
 
-/// 触发治理/决定保护的关键事件类型（与 E05 账本事件族一致 + decision_detected）
+/// 触发治理/决定保护的关键事件类型（与账本事件族一致 + decision_detected）
 const PROTECTED_GOVERNANCE_EVENT_KINDS: &[&str] = &[
     "decision_detected",
     "decision_confirmed",
@@ -1615,7 +1615,7 @@ pub struct DiagnosticZipResponse {
     pub sandbox_ok: bool,
 }
 
-/// 确定性脱敏诊断文本：替换工作区根目录、数据目录、用户主目录并执行 E03 密钥/凭据清洗
+/// 确定性脱敏诊断文本：替换工作区根目录、数据目录、用户主目录并执行密钥/凭据清洗
 fn redact_diagnostic_text(raw: &str, ws_root: &str, data_dir: &str) -> (String, usize) {
     let mut text = raw.to_owned();
     let mut hits: usize = 0;

@@ -4,7 +4,7 @@ import { diffSummaryCardOf, formatDiffMetric } from '../utils/diffResultAdapter'
 import type { DiffResult } from '../services/apiTypes';
 
 /**
- * 语义 Diff 摘要卡（PRD 3.5 / 方案 F7）：Agent 变更提炼——
+ * 语义 Diff 摘要卡：Agent 变更提炼——
  *   「新增交付项 (+2)、关闭未决事项 (+1)、修改接口契约 (3处)」+ 触发该版本的
  *   Checkpoint ID。数据源=任务队列口径 DiffResult（POST /diff 202 → job result）；
  *   端点不可用时 error 如实展示（本地 computeMarkdownDiff 快路径不受影响）。

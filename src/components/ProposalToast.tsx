@@ -10,7 +10,7 @@ import {
 import { Button } from './ui/primitives';
 
 /**
- * 回写通知条（PRD 4.3 双向回写闭环 / 方案 F6 / E02 CAS 安全网与独立草案分支）：
+ * 回写通知条（双向回写闭环、CAS 安全网与独立草案分支）：
  * 外部智能体经 guanlan.propose_revision 提交修订草案后，默认落入独立草案态
  * `v(N+1)-agent-draft`（附输入上下文哈希清单与回执摘要），不直接污染工作树正式定稿；
  * 右下角非侵入式通知提供：
@@ -26,11 +26,11 @@ export interface ProposalToastData {
   /** 草案版本标签（如 `v3-agent-draft`；受理初判无版本号时为 null——文案不造假） */
   versionLabel: string | null;
   conflict: boolean;
-  /** E02：Agent 回执摘要（可选） */
+  /** Agent 回执摘要（可选） */
   receiptSummary?: string | null;
-  /** E02：变更说明备注（可选） */
+  /** 变更说明备注（可选） */
   note?: string | null;
-  /** E02：提交本草案所依赖的输入上下文哈希清单（可选） */
+  /** 提交本草案所依赖的输入上下文哈希清单（可选） */
   inputContextHashes?: string[];
 }
 
@@ -43,13 +43,13 @@ export function proposalToastTitle(data: {
   return `智能体已提交《${data.fileName}》修订草案${suffix}`;
 }
 
-/** E02 内联多模态 Diff 摘要行（纯数据，无 DOM/CSS 依赖，node --test 可直跑） */
+/** 内联多模态 Diff 摘要行（纯数据，无 DOM/CSS 依赖，node --test 可直跑） */
 export interface ProposalDiffPreviewLine {
   kind: 'added' | 'removed' | 'meta';
   text: string;
 }
 
-/** E02 多模态 Diff 审阅摘要（复用 D03 multimodalDiff 有界纯函数引擎） */
+/** 多模态 Diff 审阅摘要（复用 multimodalDiff 有界纯函数引擎） */
 export interface ProposalMultimodalDiffSummary {
   modeLabel: string;
   compareLabel: string;
@@ -70,10 +70,10 @@ export function shortContextHash(raw: string): string {
 }
 
 /**
- * E02：把 `/api/v1/revision-proposals/{id}/content` 转换为面向人类批阅的多模态 Diff 摘要。
+ * 把 `/api/v1/revision-proposals/{id}/content` 转换为面向人类批阅的多模态 Diff 摘要。
  * - 当检测到 CAS 冲突（磁盘已被人工并行修改）时，优先以 `disk_text` 作为左栏基线
  *   （`磁盘现态 ↔ 草案分支`），避免把人工最新修改藏在旧基准背后；
- * - 严格尊重 2 MiB 截断标记与 D03 DP 预算，绝不静默伪造「无变更」。
+ * - 严格尊重 2 MiB 截断标记与 DP 预算，绝不静默伪造「无变更」。
  */
 export function summarizeProposalMultimodalDiff(
   content: RevisionProposalContentResponse
@@ -263,19 +263,19 @@ export interface ProposalToastProps {
   onAdopt: (draftId: string) => void;
   onViewDiff: (draftId: string) => void;
   onDismiss: () => void;
-  /** E02：退回重做处理态（可选，保持旧调用方 100% 兼容） */
+  /** 退回重做处理态（可选，保持调用方兼容） */
   rejecting?: boolean;
-  /** E02：点击「退回重做」正式驳回草案（绝不触碰磁盘原稿） */
+  /** 点击「退回重做」正式驳回草案（绝不触碰磁盘原稿） */
   onReject?: (draftId: string) => void;
-  /** E02：内联多模态 Diff 面板展开状态 */
+  /** 内联多模态 Diff 面板展开状态 */
   diffExpanded?: boolean;
-  /** E02：内联 Diff 拉取中 */
+  /** 内联 Diff 拉取中 */
   diffLoading?: boolean;
-  /** E02：内联 Diff 错误提示 */
+  /** 内联 Diff 错误提示 */
   diffError?: string | null;
-  /** E02：草案多模态 Diff 载荷 */
+  /** 草案多模态 Diff 载荷 */
   diffContent?: RevisionProposalContentResponse | null;
-  /** E02：在阅读器中打开全文/历史对比 */
+  /** 在阅读器中打开全文/历史对比 */
   onOpenInReader?: (fileId: string) => void;
 }
 

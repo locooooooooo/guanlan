@@ -1,5 +1,5 @@
 /**
- * issue #28 —— 局部关系图限界验收测试：
+ * 局部关系图限界验收测试：
  * - 节点用 ID Map 解析（不再对 files/decisions 线性 find）；
  * - 邻接表 + 边 Set：邻居查询只走本节点边，二跳不重复扫描；
  * - 回滚标记单遍历史索引（A→B→A 与相邻相同 hash 语义保持）；
@@ -69,7 +69,7 @@ function edgeOf(id: string, source: string, target: string): RelationEdge {
   } as RelationEdge;
 }
 
-test('#28 节点经 ID Map 解析：1 跳邻居与决定节点都能命中，未知 id 被忽略', () => {
+test('节点经 ID Map 解析：1 跳邻居与决定节点都能命中，未知 id 被忽略', () => {
   const files = [fileOf('f_a', [revision({ revision_id: 'f_a_r1' })]), fileOf('f_b', [revision({ revision_id: 'f_b_r1' })])];
   const decisions = [decisionOf('dec_1', 'Q1')];
   const edges = [
@@ -86,7 +86,7 @@ test('#28 节点经 ID Map 解析：1 跳邻居与决定节点都能命中，未
   assert.equal(graph.truncatedCount, 0);
 });
 
-test('#28 邻接表：二跳只从一跳节点出发，canExpandTwoHop 与 depth 语义保持', () => {
+test('邻接表：二跳只从一跳节点出发，canExpandTwoHop 与 depth 语义保持', () => {
   const files = ['f_a', 'f_b', 'f_c', 'f_d'].map((id) => fileOf(id, [revision({ revision_id: `${id}_r1` })]));
   const edges = [
     edgeOf('e1', 'f_a', 'f_b'),
@@ -108,7 +108,7 @@ test('#28 邻接表：二跳只从一跳节点出发，canExpandTwoHop 与 depth
   assert.equal(depth2.nodes.some((n) => n.id === 'f_d'), false);
 });
 
-test('#28 边去重：同一事件对间的多条边不重复入列（边 Set 语义）', () => {
+test('边去重：同一事件对间的多条边不重复入列（边 Set 语义）', () => {
   const files = ['f_a', 'f_b'].map((id) => fileOf(id, [revision({ revision_id: `${id}_r1` })]));
   // 邻接表会把同一条边挂到两端；1 跳遍历时同一条边只应出现一次
   const edges = [edgeOf('e1', 'f_a', 'f_b')];
@@ -117,7 +117,7 @@ test('#28 边去重：同一事件对间的多条边不重复入列（边 Set �
   assert.equal(graph.truncatedCount, 0);
 });
 
-test('#28 回滚标记单遍索引：A→B→A 恢复与相邻相同 hash 两种语义保持', () => {
+test('回滚标记单遍索引：A→B→A 恢复与相邻相同 hash 两种语义保持', () => {
   const H_A = 'hash-a';
   const H_B = 'hash-b';
   // A→B→A：第三版与首版同 hash → 恢复
@@ -151,7 +151,7 @@ test('#28 回滚标记单遍索引：A→B→A 恢复与相邻相同 hash 两种
   );
 });
 
-test('#28 预算在物化过程中生效：maxNodes 限制节点数，truncatedCount 独立统计不虚报', () => {
+test('预算在物化过程中生效：maxNodes 限制节点数，truncatedCount 独立统计不虚报', () => {
   // 中心 + 20 个邻居，maxNodes=5 → 只物化 5 个，其余计入 truncatedCount
   const center = fileOf('f_center', [revision({ revision_id: 'f_center_r1' })]);
   const neighbors = Array.from({ length: 20 }, (_, i) =>
@@ -176,7 +176,7 @@ test('#28 预算在物化过程中生效：maxNodes 限制节点数，truncatedC
   );
 });
 
-test('#28 版本演进节点同样受预算约束：版本多时不突破 maxNodes', () => {
+test('版本演进节点同样受预算约束：版本多时不突破 maxNodes', () => {
   const revs = Array.from({ length: 10 }, (_, i) =>
     revision({ revision_id: `rr${i}`, versionNumber: i + 1, content_sha256: `h${i}` })
   );
@@ -185,7 +185,7 @@ test('#28 版本演进节点同样受预算约束：版本多时不突破 maxNod
   assert.equal(graph.truncatedCount, 10 - 3, '未物化的 7 个版本节点进入溢出计数');
 });
 
-test('#28 中心节点不存在：返回空图且不虚报 canExpandTwoHop', () => {
+test('中心节点不存在：返回空图且不虚报 canExpandTwoHop', () => {
   const graph = buildLocalRelationGraph('nope', 2, [fileOf('f_a', [revision({ revision_id: 'r1' })])], [], []);
   assert.deepEqual(graph.nodes, []);
   assert.deepEqual(graph.edges, []);

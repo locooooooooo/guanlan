@@ -63,7 +63,7 @@ interface EvidenceReaderState {
 }
 
 /**
- * F01 · 事项资料胶囊（Context Capsule）两阶段预览/脱敏导出 + 另一台观澜秒开核验面板。
+ * 事项资料胶囊（Context Capsule）两阶段预览/脱敏导出 + 另一台观澜秒开核验面板。
  *
  * 停机红线护栏：
  * 1. 打开后先执行只读预览（POST /api/v1/capsules/preview），展示预估体积、敏感目录自动排除项与脱敏计数；
@@ -321,8 +321,8 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
       className="glx-backdrop-in fixed inset-0 z-50 flex items-center justify-center bg-[color:var(--ink-anchor)]/40 dark:bg-black/62 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
-      {/* U09 + V08：与轻预览 / 命令面板统一琉璃浮层配方 + coss 嵌套景深栈（--nested-dialogs），明暗双态自适应。
-          F01 门禁锚点（data-capsule-mode/confirm/submit、confirmed_preview: true）原样保留。 */}
+      {/* 与轻预览 / 命令面板统一琉璃浮层配方 + coss 嵌套景深栈（--nested-dialogs），明暗双态自适应。
+          门禁锚点（data-capsule-mode/confirm/submit、confirmed_preview: true）保持不变。 */}
       <div
         data-dialog-nested-stack=""
         style={{ '--nested-dialogs': 0 } as React.CSSProperties}

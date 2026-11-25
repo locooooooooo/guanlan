@@ -1,5 +1,5 @@
 /**
- * D05 + V11 · 全局键盘分发层——window keydown 监听（挂载一次）+ 单键/两键和弦解析
+ * 全局键盘分发层——window keydown 监听（挂载一次）+ 单键/两键和弦解析
  * （keyboardShortcuts 单一语义源）。
  *
  * 消费 STORE_SHORTCUT_ACTIONS（store 级动作）：
@@ -9,7 +9,7 @@
  *  - undo-op / redo-op：文件操作专属 Undo/Redo 账本（Ctrl+Z / Ctrl+Shift+Z）
  *  - deep-read-focus：Enter 深度阅读当前焦点文件
  *  - open-version-diff：D 打开版本对比 / 时光机 / 版本链
- *  - add-focus-to-basket：C 加入证道阁上下文篮
+ *  - add-focus-to-basket：C 加入上下文篮
  *
  * Z 归阅读器专注纸面（useReaderController，与全局键正交）；
  * J/K/H/L 归时间轴视图监听（useTimelineKeyboardNav）或星图聚光灯（GraphSpotlightBar）；
@@ -57,7 +57,7 @@ export function useGlobalShortcuts({
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
       if (!enabledRef.current) return;
-      // 停机线①：编辑面（input/textarea/select/contenteditable）里一切键让路——
+      // 护栏：编辑面（input/textarea/select/contenteditable）里一切键让路——
       // Ctrl+Z 恒留给原生文本撤销，绝不抢占（keyboardShortcuts.isEditableLikeTarget 同源）
       const editableTarget = isEditableLikeTarget(event.target);
       const overlayOpen = hasBlockingDomOverlay();

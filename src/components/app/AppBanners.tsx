@@ -1,6 +1,6 @@
 /**
- * D01-a 拆解 · App 横幅栈与冷启动进度（原 App.tsx 3379-3548 逐字迁入）。
- * 手动重扫进度 / L4A 沉淀 / HITL 清零恢复 / Delivered 归档提示 / Archived 重开 /
+ * App 横幅栈与冷启动进度：
+ * 手动重扫进度 / 后台语义整理 / HITL 清零恢复 / Delivered 归档提示 / Archived 重开 /
  * 监听提示 / 冷启动首扫进度。数据一律来自 useWorkspaceStore ctx。
  */
 
@@ -186,8 +186,8 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
         </div>
       )}
 
-      {/* Inline 拍板闭环（AC-03）：阻塞性事项（P0/P1）全部拍板清零 → 长任务恢复提示。
-          语义＝deliver 绿（§3.1 stage-ink 双层），非阻塞告知 8s 自动收起——
+      {/* Inline 拍板闭环：阻塞性事项（P0/P1）全部拍板清零后的长任务恢复提示。
+          语义采用 deliver 绿，非阻塞告知 8s 自动收起——
           槽位唤醒由后端写线程 recompute_slots 完成，本横幅只陈述该事实 */}
       {hitlClearedAt && (
         <div
@@ -202,9 +202,9 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
         </div>
       )}
 
-      {/* F24（PRD §2.2）：Delivered 已交付 → 提示一键归档。
+      {/* Delivered 已交付 → 提示一键归档。
           数据源 /state-overview；归档走 202 job + 轮询，完成后刷新状态投影。
-          非阻塞横幅：不锁阅读/拍板/证道阁，失败就地展示并允许重试。 */}
+          非阻塞横幅：不锁阅读/拍板/上下文清单，失败就地展示并允许重试。 */}
       {deliveredInitiative && (
         <div
           data-initiative-archive-prompt=""
@@ -242,7 +242,7 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
         </div>
       )}
 
-      {/* F24：当前文档所属专项已归档 → 提供人工重开入口（Archived 终态唯一离开通道）。
+      {/* 当前文档所属专项已归档 → 提供人工重开入口（Archived 终态唯一离开通道）。
           仅在阅读归档专项内文档时出现，不对全局归档列表刷屏。 */}
       {activeInitiative?.state === 'archived' && (
         <div
@@ -275,8 +275,8 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
       )}
 
       {/* 冷启动首扫（千份级资料约一分钟）：首页上有明确的进度态；其余页签仍显示各自空态。
-          U11：裸旋转图标升级为琉璃骨架屏——司辰线稿（静态）+ 流光骨架条（reduce 降级为
-          静态玻璃条，motion.css §3.29）；role="status" 与两句诚实文案原样保留，
+          采用琉璃骨架屏——司辰线稿（静态）+ 流光骨架条（prefers-reduced-motion 下退化为
+          静态玻璃条）；role="status" 与两句诚实文案原样保留，
           骨架只是视觉占位，不吞任何真实错误态（dataError 分支整块不渲染骨架）。 */}
       {dataSource === 'loading' && files.length === 0 && !dataError && activeTab === 'home' && (
         <div

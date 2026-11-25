@@ -1,5 +1,5 @@
 /**
- * v0.8 任务空间桌面 · 画布右上角缩略小地图（R5 / 组件契约 C6）。
+ * 画布右上角缩略小地图。
  *
  * world = zoom 层内容包围盒（宿主收集节点/扇出盒/分组横排计算），viewport = 当前
  * transform 折算的用户空间可视矩形；点击/拖框跳转走宿主既有运镜
@@ -10,8 +10,7 @@
  */
 
 import React, { useCallback, useRef } from 'react';
-// css 装载上移 App.tsx（总装，指挥授权）：node --test/tsx 测试链加载不了 .css 扩展名，
-// 组件内 import 会让 gc-12/wf2/canvas-theme 文件级失败；由 App 常驻装载兜底，零视觉变化
+// 样式文件统一由 App.tsx 装载：Node 测试链不解析 .css 导入，由 App 常驻装载兜底
 
 export interface CanvasMiniMapProps {
   worldWidth: number;

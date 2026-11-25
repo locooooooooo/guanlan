@@ -1,19 +1,19 @@
-//! MCP stdio 代理（契约 K，AC-05「外部调用 MCP 回写」的承载实现）。
+//! MCP stdio 代理（contract-query-api.md §2.2；外部智能体通过 MCP 读取与回写的承载实现）。
 //!
-//! 契约口径（contract-query-api.md §K + 方案 §2 mcp 模块 + PRD 4.3）：
+//! 设计约定：
 //! - 手写 JSON-RPC 2.0 over stdio（无 SDK；stdio 传输 = 按行分隔的 JSON 消息）；
 //! - 端点 = `--endpoint` 参数或 `GUANLAN_ENDPOINT` env，两者皆缺 → stderr 一行
 //!   统一错误包络 + 退出码 1（不猜端口：serve 缺省 port=0 内核随机分配，端点
 //!   权威值仅在启动 stdout 的 GUANLAN_ENDPOINT 行）；
-//! - 6 工具：PRD 4.3 四工具逐字序（`guanlan.read_artifact` /
+//! - 6 工具：四个基础读写与检查点工具（`guanlan.read_artifact` /
 //!   `guanlan.propose_revision` / `guanlan.resolve_decision` / `guanlan.commit_checkpoint`）
-//!   加 E03 `guanlan.get_context_bundle` 与 E05 `guanlan.search_workspace`，
+//!   加上下文包组装 `guanlan.get_context_bundle` 与全文检索 `guanlan.search_workspace`，
 //!   全部转发到同一工作区服务的 HTTP 等价端点——代理不开数据库、
-//!   不扫目录、不维护另一套历史（方案 §1）；
+//!   不扫目录、不维护另一套历史；
 //! - HTTP 客户端同样手写（std::net::TcpStream 阻塞 + Connection: close）：
-//!   端点恒为本地 http（127.0.0.1），无新 crate 依赖（PRD 附则「不新增第三方 crate」）。
+//!   端点恒为本地 http（127.0.0.1），不引入额外第三方 crate。
 //!
-//! 工具语义（与冻结契约端点一一对应）：
+//! 工具语义（与服务端 HTTP 端点一一对应）：
 //! - read_artifact：path/uri（guanlan://<相对路径>）→ GET /files?q= 精确匹配 →
 //!   GET /revisions/{id}/content（md/svg 内联 text；413 超预算回退 raw=1 纯文本；
 //!   pdf 返回 raw_url 指引）；
@@ -39,7 +39,7 @@ use serde_json::{json, Value};
 
 use guanlan_core::error::GuanlanError;
 
-/// PRD 4.3 四工具（逐字序）+ E03 上下文包组装 + E05 全文检索（全量受路径沙箱护栏约束）
+/// 四个基础读写/检查点工具（固定顺序）+ 上下文包组装 + 全文检索（全量受路径沙箱护栏约束）
 pub(crate) const TOOL_NAMES: [&str; 6] = [
     "guanlan.read_artifact",
     "guanlan.propose_revision",
@@ -65,7 +65,7 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const JOB_POLL_ATTEMPTS: u32 = 33;
 const JOB_POLL_INTERVAL: Duration = Duration::from_millis(300);
 
-// ================= 端点解析（契约 K：不猜端口） =================
+// ================= 端点解析（不猜端口） =================
 
 /// `--endpoint <url>` 参数优先，其次 `GUANLAN_ENDPOINT` env（测试注入，不读进程环境）；
 /// 两者皆缺 → Err（调用方 stderr 包络 + 退出码 1）。仅接受 http://（本地回环口径；
@@ -317,8 +317,8 @@ fn find_crlf(raw: &[u8]) -> Option<usize> {
 
 // ================= JSON-RPC 2.0 over stdio（手写，无 SDK） =================
 
-/// `guanlan mcp` 子命令入口（main.rs 调用）：端点缺失 → stderr 包络 + 退出码 1
-/// （契约 K）；stdio 通道结束（EOF/写失败）以非零码退出。
+/// `guanlan mcp` 子命令入口（main.rs 调用）：端点缺失 → stderr 包络 + 退出码 1；
+/// stdio 通道结束（EOF/写失败）以非零码退出。
 pub fn run(args: &[String]) {
     let endpoint = match resolve_endpoint(args, std::env::var("GUANLAN_ENDPOINT").ok().as_deref()) {
         Ok(endpoint) => endpoint,
@@ -483,7 +483,7 @@ fn dispatch_request(method: &str, params: &Value, id: &Value, backend: &dyn McpB
     }
 }
 
-// ================= 工具定义（PRD 4.3 四工具 + E03/E05 扩展工具） =================
+// ================= 工具定义（4 个基础工具 + 上下文包/检索扩展工具） =================
 
 fn tool_definitions() -> Vec<Value> {
     vec![
@@ -558,7 +558,7 @@ fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "guanlan.get_context_bundle",
-            "description": "获取证道阁 Token 预算感知上下文包（与观澜 UI 预览区/一键复制逐字节同源一致）。支持按 document / initiative / global 意图自动预选定稿全文、关联决定摘要、上游规范引用片段与未决问题清单，支持按文件指定 full / summary / diff_only / metadata_only / decisions_only 粒度，并经密钥与环境变量脱敏护栏过滤。",
+            "description": "获取 Token 预算感知上下文包（与观澜 UI 预览区/一键复制逐字节同源一致）。支持按 document / initiative / global 意图自动预选定稿全文、关联决定摘要、上游规范引用片段与未决问题清单，支持按文件指定 full / summary / diff_only / metadata_only / decisions_only 粒度，并经密钥与环境变量脱敏护栏过滤。",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -661,7 +661,7 @@ fn resolve_file(
         .ok_or_else(|| "需要 file_id 或 path/uri 定位目标文件".to_owned())?
         .trim()
         .to_owned();
-    // E05 权限沙箱：在发出任何 HTTP 请求前阻断路径逃逸、绝对路径、UNC、编码穿越与敏感凭据文件
+    // 权限沙箱：在发出任何 HTTP 请求前阻断路径逃逸、绝对路径、UNC、编码穿越与敏感凭据文件
     let path = guanlan_core::storage::sandbox::validate_mcp_rel_path(&raw_ref)
         .map_err(|e| e.to_string())?;
     let response = backend.call(McpHttpRequest {
@@ -1034,7 +1034,7 @@ fn tool_commit_checkpoint(args: &Value, backend: &dyn McpBackend) -> Result<Valu
     Ok(response.body)
 }
 
-/// E03：`guanlan.get_context_bundle` — 转发至 POST /api/v1/context，与观澜前端预览/复制逐字节同源
+/// `guanlan.get_context_bundle` — 转发至 POST /api/v1/context，与观澜前端预览/复制逐字节同源
 fn tool_get_context_bundle(args: &Value, backend: &dyn McpBackend) -> Result<Value, String> {
     let mut focus_file_id = args
         .get("focus_file_id")
@@ -1126,7 +1126,7 @@ fn tool_get_context_bundle(args: &Value, backend: &dyn McpBackend) -> Result<Val
     Ok(response.body)
 }
 
-/// E05：`guanlan.search_workspace` — 全文/路径/编号有界检索（带路径沙箱校验与敏感凭据路径结果过滤）
+/// `guanlan.search_workspace` — 全文/路径/编号有界检索（带路径沙箱校验与敏感凭据路径结果过滤）
 fn tool_search_workspace(args: &Value, backend: &dyn McpBackend) -> Result<Value, String> {
     let q = args
         .get("q")

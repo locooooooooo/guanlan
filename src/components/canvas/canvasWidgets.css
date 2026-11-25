@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════════════
-   v0.8 任务空间桌面 · 画布 chrome 组件样式（画布工匠）
+   画布 chrome 组件样式
    作用域：唯一消费者 = components/canvas/ 五件（PackageGroupFrame / RichDocPreviewCard /
    CanvasPillToolbar / CanvasMiniMap / CanvasNarrativeDrawer），全部在 .dark-porthole
    内渲染（舷窗纪律）。
@@ -10,10 +10,9 @@
      --ease-fade），不新增 keyframes；电流流动复用 index.css 的 .anim-pulse-flow 类本体。
    ══════════════════════════════════════════════════════════════════════════ */
 
-/* ── R1 · 任务包分组容器（画布 L1 分组语义：浅灰圆角、无边框无阴影） ───────────
-   starfix T1 消费方对号：本容器=画布上的「展开容器」——改吃 --cv-panel（工票冻结值：
-   夜航 #161922 深灰半透玻璃 / 纸面 #F0F2F5 浅灰），不再用 --cv-slot（slot 是卡内
-   chip/键帽档，语义错位且旧值 #222228 偏「浅灰卡片」）；层级 void < panel < card。 */
+/* ── 任务包分组容器（画布分组语义：浅色圆角、无边框无阴影） ───────────
+   容器使用 --cv-panel（夜航深灰半透玻璃 / 纸面浅灰），避免与卡内 chip/键帽
+   --cv-slot 语义混淆；画布层级满足 void < panel < card。 */
 .cvw-package-frame {
   display: flex;
   flex-direction: column;
@@ -23,7 +22,7 @@
   box-sizing: border-box;
   border-radius: 16px;
   background: color-mix(in srgb, var(--cv-panel) 94%, transparent);
-  /* 分组容器语义：无边框、无阴影——层级只由底色阶表达（R1 分组语义，色阶档位改 panel） */
+  /* 分组容器语义：无边框、无阴影——层级只由底色阶表达 */
   border: none;
   box-shadow: none;
 }
@@ -83,12 +82,12 @@
 }
 
 /* 选中分组：底色微亮 + 头行主色描边点（无边框纪律不破——描边只落在阶段点上）；
-   starfix T1：底阶随容器档位从 slot→panel 同步改 mix 基准，选中仍向 card 方向提亮一档 */
+   底阶以 panel 为基准向 card 方向提亮一档 */
 .cvw-package-frame[data-selected='true'] {
   background: color-mix(in srgb, var(--cv-panel) 55%, var(--cv-card));
 }
 
-/* ── R2 · 280px 富预览卡（L2 内容实体：实底卡面 + 弥散阴影） ─────────────────── */
+/* ── 280px 富预览卡（内容实体：实底卡面 + 弥散阴影） ─────────────────── */
 .cvw-rich-card {
   width: 280px;
   height: 158px;
@@ -124,8 +123,8 @@
   box-shadow: 0 0 16px color-mix(in srgb, var(--cv-lane-md) 22%, transparent);
 }
 
-/* ── D02 · 增量聚光灯（画布节点样式）：已读未变退低对比度背景骨架 / 当前批阅条目琥珀描边。
-   两属性关闭态不落 DOM（undefined），像素基线零扰动；降亮度保留 hover 与点击（只退视觉不夺功能） */
+/* ── 增量聚光灯（画布节点样式）：已读未变退低对比度背景骨架 / 当前批阅条目琥珀描边。
+   两属性关闭态不落 DOM（undefined），不影响常态样式；降亮度保留 hover 与点击（只退视觉不夺功能） */
 .cvw-rich-card[data-dimmed='true'] {
   opacity: 0.38;
   filter: saturate(0.35);
@@ -264,7 +263,7 @@
   color: var(--cv-ink-dim);
 }
 
-/* ── R4 · 底部药丸工具栏（磨砂悬浮；定位类由宿主 Tailwind 提供） ─────────────── */
+/* ── 底部药丸工具栏（磨砂悬浮；定位类由宿主 Tailwind 提供） ─────────────── */
 .cvw-pill-toolbar {
   display: flex;
   align-items: center;
@@ -310,9 +309,8 @@
   transform: scale(0.95);
 }
 
-/* 双态钮激活段：starfix T1/T3 改吃底部药丸专属选中令牌（--cv-pill-active-*：夜航
-   #3B82F6 底+void 字 / 纸面 #1F2937 底+白字，工票冻结值）。不再借 --cv-seg-*——那是
-   顶栏分段钮语法（黑/白反转），药丸选中态要的是品牌强调底。aria-pressed 语义不变 */
+/* 双态钮激活段：使用底部药丸专属选中令牌（--cv-pill-active-*），
+   与顶栏分段钮 --cv-seg-* 区分以突出药丸品牌强调底；aria-pressed 语义不变 */
 .cvw-pill-btn[aria-pressed='true'] {
   background: var(--cv-pill-active-bg);
   color: var(--cv-pill-active-ink);
@@ -326,7 +324,7 @@
   background: color-mix(in srgb, var(--cv-hairline-ink) 14%, transparent);
 }
 
-/* starfix T3：缩放簇读数（mono 等宽数字，min-width 防抖动）与纯图标钮（无文字时收窄内边距） */
+/* 缩放簇读数（mono 等宽数字，min-width 防抖动）与纯图标钮（无文字时收窄内边距） */
 .cvw-pill-scale {
   min-width: 40px;
   text-align: center;
@@ -381,7 +379,7 @@
   padding: 1px 6px;
 }
 
-/* ── R5 · 右上小地图（世界框 + 视口框；点击/拖拽跳转） ───────────────────────── */
+/* ── 右上小地图（世界框 + 视口框；点击/拖拽跳转） ───────────────────────── */
 .cvw-minimap {
   position: relative;
   width: 164px;
@@ -417,7 +415,7 @@
     width var(--dur-1) var(--ease-fade), height var(--dur-1) var(--ease-fade);
 }
 
-/* ── R3/R9 · 叙事抽屉（取代 334px 常驻检视器；右侧滑出） ─────────────────────── */
+/* ── 叙事抽屉（取代 334px 常驻检视器；右侧滑出） ─────────────────────── */
 .cvw-narrative-drawer {
   position: absolute;
   top: 0;
@@ -434,7 +432,7 @@
   border: none;
   border-left: 1px solid color-mix(in srgb, var(--cv-hairline-ink) 10%, transparent);
   box-shadow: var(--cv-shadow-elevated);
-  /* R3④：translateX+opacity --dur-3 --ease-spring；关闭态藏于右缘外且不吃指针 */
+  /* translateX+opacity --dur-3 --ease-spring；关闭态藏于右缘外且不吃指针 */
   transform: translateX(108%);
   opacity: 0;
   pointer-events: none;
@@ -453,7 +451,7 @@
   border-bottom: 1px solid color-mix(in srgb, var(--cv-hairline-ink) 8%, transparent);
 }
 
-/* 「已选中 · 层级」逐字迁移自旧检视器（R9；mono 小字形态同源） */
+/* 标题下 mono 小字行（如「已选中 · 层级 N」） */
 .cvw-narrative-level {
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -758,7 +756,7 @@
   color: var(--cv-ink);
 }
 
-/* 返回主轴钮（自旧检视器 :4029-4038 迁入，动作不丢失） */
+/* 返回主轴钮 */
 .cvw-narrative-back {
   display: inline-flex;
   align-items: center;

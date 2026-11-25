@@ -1,5 +1,5 @@
 /**
- * TA-03 · 时间口径统一的单一出口。
+ * 时间口径统一的单一出口。
  *
  * 背景：observed_at 由服务端 reconcile 以 `new Date().toISOString()` 写入（UTC），
  * 直接 slice 会显示 UTC 挂钟（本机 +08 下慢 8 小时、跨零点错日）；occurred_at 可能是
@@ -100,7 +100,7 @@ export function formatLocalDateTime(iso: string, timeZone?: string): string {
 }
 
 /**
- * 契约⑧①：observed_at（ISO 毫秒串）→ 人话相对时间（ReaderView 域迁入，
+ * observed_at（ISO 毫秒串）→ 人话相对时间（ReaderView 域迁入，
  * 消解与 documentDiff.formatObservedAt（绝对戳口径）的同名异义）。
  * 一律按本地时区手拼字段，勿用 toISOString 截断（防 UTC 偏移）。
  * 供阅读器/顶栏/时间线等「多久以前」叙述位复用；绝对戳位走 formatLocalStamp。

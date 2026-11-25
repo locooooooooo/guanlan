@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 
 interface ChronosMascotNodeProps {
-  /** v0.4：真实事件模式下的时间口径文案（紧凑日期 + 条数/沉淀） */
+  /** 真实事件模式下的时间口径文案（紧凑日期 + 条数/沉淀） */
   epochLabel?: string;
   x: number;
   y: number;

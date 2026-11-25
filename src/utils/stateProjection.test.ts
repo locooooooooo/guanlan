@@ -1,7 +1,7 @@
 /**
- * 统一状态机 SSOT 单测（方案 F2；node:test/tsx，node:assert/strict，禁 import .css）：
+ * 统一状态机 SSOT 单测（node:test/tsx，node:assert/strict，禁 import .css）：
  *  - 六态迁移穷举（正向五边 + 逆向回流唯一边 + Archived 终态 + 槽位判据门禁）；
- *  - 阶段徽标短语回退路径与现状逐字一致（295 基线锁）；
+ *  - 阶段徽标短语回退路径与现状逐字一致；
  *  - 双层投影（server 优先 / fallback dominantStage）；
  *  - 决策未决口径、版本「（最新）」后缀、task_node 词表、陈述 wire 词映射。
  */
@@ -62,7 +62,7 @@ describe('nextDocState 六态迁移穷举', () => {
   it('Draft→PendingReview 当未决 P0/P1>0；否则保持', () => {
     expectMove('draft', { pending_p1: 1 }, 'pending_review');
     expectMove('draft', { pending_p0: 2 }, 'pending_review');
-    // P2 不构成 Draft→PendingReview 门禁（与 PRD 一致：P2 非阻塞）
+    // P2 不构成 Draft→PendingReview 门禁（P2 非阻塞）
     expectMove('draft', { pending_p2: 3 }, null);
     expectMove('draft', {}, null);
   });
@@ -137,7 +137,7 @@ describe('nextDocState 六态迁移穷举', () => {
 // ---------------- 词表与映射 ----------------
 
 describe('词表与映射', () => {
-  it('DOC_STATE_LABEL 六态词表逐字（PRD §2.2）', () => {
+  it('DOC_STATE_LABEL 六态词表逐字', () => {
     assert.deepEqual(DOC_STATE_LABEL, {
       draft: '草稿',
       pending_review: '待用户确认',
@@ -155,7 +155,7 @@ describe('词表与映射', () => {
     }
   });
 
-  it('STAGE_BADGE_PHRASE 回退词表与现状逐字一致（295 基线锁）', () => {
+  it('STAGE_BADGE_PHRASE 回退词表与现状逐字一致', () => {
     assert.deepEqual(STAGE_BADGE_PHRASE, {
       蓝图: '蓝图制定中',
       计划: '计划制定中',
@@ -450,7 +450,7 @@ describe('版本后缀与 wire 词映射', () => {
     assert.equal(revisionVersionLabel(1, true), 'v1（最新）');
   });
 
-  it('STATEMENT_STATUS_LABEL wire→库内中文词映射表（契约 C/建议 2）', () => {
+  it('STATEMENT_STATUS_LABEL wire→库内中文词映射表', () => {
     assert.deepEqual(STATEMENT_STATUS_LABEL, {
       pending: '待确认',
       confirmed: '已确认',

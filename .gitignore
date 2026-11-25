@@ -13,11 +13,11 @@ coverage/
 native/target/
 native/crates/guanlan-desktop/binaries/
 native/testdata/fixture/
-# B05 体量基准夹具与数据（seed-bench-volume.ts / bench-v1.ts 可重复生成）
+# 体量基准夹具与数据（seed-bench-volume.ts / bench-v1.ts 可重复生成）
 native/testdata/bench/
 # seed-fixture.ts 生成的期望结果与身份向量（可用脚本重复生成）
 native/testdata/expected/
 native/testdata/identity-vectors.json
 
-# 设计走查会话截图（repair-r1/r2 等评审轮产物，可用走查流程重新采集）
+# 设计走查会话截图（可用走查流程重新采集）
 .design-review/

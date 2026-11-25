@@ -1,5 +1,5 @@
 /**
- * vm_1 · 文档版本时光机的纯函数层：版本链组装（契约A）+ 章节级 Diff（契约B）。
+ * 文档版本时光机的纯函数层：版本链组装 + 章节级 Diff。
  *
  * 契约边界：
  * - 不 import guanlanEngine.ts（其 computeMarkdownDiff 的 currentHeading 只从新版行跟踪，
@@ -26,7 +26,7 @@ export function formatObservedAt(iso: string): string {
 
 export { timeBasisLabel };
 
-// ---------- 版本链（契约A） ----------
+// ---------- 版本链 ----------
 
 export interface VersionNode {
   revisionId: string;
@@ -145,7 +145,7 @@ export function detectDateDisorder(chain: VersionNode[]): boolean {
   return false;
 }
 
-// ---------- 章节级 Diff（契约B） ----------
+// ---------- 章节级 Diff ----------
 
 export type SectionChangeKind = '修改' | '新增' | '删除';
 

@@ -1,15 +1,13 @@
 /**
- * D01-a 拆解 · 阅读器 diff 子模式面板（任务卡 D01-a ②）。
- *
- * 从 ReaderView.tsx（原 3096-3536）原样迁入：语义摘要卡 + 版本选择条 +
- * unified/split 逐行 diff + PDF 二进制元数据对照 + 各错误/加载态。
- * 迁移纪律：JSX 与类名逐字一致（像素回归护栏）。
+ * 阅读器 diff 子模式面板：
+ * 包含语义摘要卡、版本选择条、unified/split 逐行 diff、PDF 二进制元数据对照
+ * 及加载/错误态。
  */
 
 import React from 'react';
 import { AlertTriangle, Columns, Code } from 'lucide-react';
 import { Button } from '../ui/primitives';
-// 语义 Diff 摘要卡（PRD 3.5 / F7）：版本历史区任务队列口径摘要
+// 语义 Diff 摘要卡：版本历史区任务队列口径摘要
 import DiffSummaryCard from '../DiffSummaryCard';
 import { revisionVersionLabel } from '../../utils/stateProjection';
 import { formatRelativeObservedAt } from '../../utils/timeFormat';
@@ -45,8 +43,8 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
       }`}
     >
       <div className="max-w-5xl mx-auto space-y-4">
-        {/* 语义 Diff 摘要卡（PRD 3.5 / F7）：任务队列口径三项指标 + Checkpoint。
-            仅历史对比子模式渲染；端点未落地时如实提示（本地逐行对比不受影响） */}
+        {/* 语义 Diff 摘要卡：任务队列口径三项指标 + Checkpoint。
+            仅历史对比子模式渲染；服务端未返回时如实提示（本地逐行对比不受影响） */}
         {subMode === 'diff_versions' && (
           <DiffSummaryCard
             result={semanticDiff.result}
@@ -173,7 +171,7 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
           </div>
         </div>
 
-        {/* pm_6：单版本文件没有可比较的历史基线时不展示空 diff，
+        {/* 单版本文件没有可比较的历史基线时不展示空 diff，
             明确说明「无可比较的版本」——从时间线「对比差异」直接进来也走这里 */}
         {subMode === 'diff_since_read' && !canCompareSinceRead ? (
           <div
@@ -202,7 +200,7 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
             </Button>
           </div>
         ) : activeFile.format === 'pdf' ? (
-          // PDF Binary Metadata Comparison (§5.4: 二进制变化不能伪装成语义差异)
+          // PDF 二进制元数据对照（二进制变化不能伪装成语义差异）
           <div
             className={`p-5 rounded-lg border space-y-4 ${
               paperLightMode
@@ -272,7 +270,7 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
           </div>
         ) : !diffResult.ok ? (
           diffResult.errorCode === 'CONTENT_NOT_LOADED' ? (
-            /* issue #18：对比正文尚未取回——中性加载态（预取完成后自动更新），
+            /* 对比正文尚未取回——中性加载态（预取完成后自动更新），
                 不是错误；绝不用空串冒充空文档把整份文档报成「全新增」 */
             <div
               role="status"

@@ -1,8 +1,8 @@
 /**
- * Quiet.md 风格全局常驻目录侧栏外壳：
+ * 全局常驻目录侧栏外壳：
  * - 在「首页 / 全景溯源 / 知识资产库」全视图常驻可见（可一键折叠，桌面端可拖动右缘改宽 220–480px）；
  * - 点击任意文件直接打开深度阅读（切入 library/read）；点击任意目录直接进入目录工作区视图；
- * - 聚合真实目录树（含空文件夹）、置顶、内联新建/改名、文件夹与文件拖拽、批量整理栏与 C05 挂载目录树。
+ * - 聚合真实目录树（含空文件夹）、置顶、内联新建/改名、文件夹与文件拖拽、批量整理栏与挂载目录树。
  */
 
 import React, { useRef, useState } from 'react';
@@ -216,7 +216,7 @@ export function GlobalDirectorySidebar({ ctx }: { ctx: WorkspaceStoreCtx }) {
 
   return (
     <>
-      {/* 桌面常驻侧栏（全景/画布视图默认让位收起，可随时一键展开）+ Quiet.md 可拖拽调宽把手 */}
+      {/* 桌面常驻侧栏（全景/画布视图默认让位收起，可随时一键展开）+ 可拖拽调宽把手 */}
       {!desktopCollapsed && (
         <div className="hidden lg:flex h-full shrink-0 relative z-20">
           {sidebarElement}

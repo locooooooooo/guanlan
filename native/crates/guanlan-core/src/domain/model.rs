@@ -1,12 +1,11 @@
-//! 领域模型补齐（PRD v2.0 §2.1 四层资产与任务层级模型）。
+//! 领域模型（四层资产与任务层级模型）。
 //!
 //! - [`Initiative`]：跨天长任务的一级容器（专项），贯穿五个标准阶段
-//!   （PRD 2.1；阶段枚举以 apiContract A 冻结的「蓝图|计划|决策|执行|交付」为准，
-//!   PRD 文案中的「提案」对应「蓝图」——裁定值，已登记 contract-storage.md §4.3）。
+//!   （「蓝图|计划|决策|执行|交付」，详见 contract-storage.md §4.3）。
 //! - [`Artifact`]：隶属于特定专项与阶段的文档/产出物，支持多版本演进
 //!   （v1…vN，每版本唯一内容哈希）。
 //! - [`DecisionItem`]：嵌入文档中的结构化卡点（P0/P1/P2），是控制长任务挂起与
-//!   恢复的核心门禁（Gate，PRD 2.1/3.3）；由 [`crate::index::decision_block`]
+//!   恢复的核心门禁（Gate）；由 [`crate::index::decision_block`]
 //!   解析器从 `[P0/P1/P2 - 待确认]` 块产出。
 //!
 //! 本模块是纯领域模型：不含 serde wire 形状（wire 镜像在 [`crate::dto`]），
@@ -15,7 +14,7 @@
 
 use crate::index::state_machine::{DocState, Stage};
 
-/// 专项（PRD 2.1）：跨天长任务的一级容器。
+/// 专项：跨天长任务的一级容器。
 ///
 /// 持久载体：`initiatives` 表（contract-storage.md §4.3）。`initiative_id`
 /// 生成规则：`init_` + stable_key(首段目录名)（与 decision_id 同源，
@@ -24,7 +23,7 @@ use crate::index::state_machine::{DocState, Stage};
 pub struct Initiative {
     pub initiative_id: String,
     pub workspace_id: String,
-    /// 展示名（v1 = 首段目录名本身）
+    /// 展示名（默认取首段目录名本身）
     pub name: String,
     /// 专项根目录（首段目录名，相对工作区根）
     pub root_dir: String,
@@ -40,7 +39,7 @@ pub struct Initiative {
     pub updated_at: String,
 }
 
-/// 文档/产出物（PRD 2.1）：隶属于特定专项与阶段，多版本演进。
+/// 文档/产出物：隶属于特定专项与阶段，多版本演进。
 ///
 /// 持久载体：`artifact_states` 表。`file_id` 复用 `files` 主键——禁止第二套
 /// 文件身份（contract-storage.md §4.3）。
@@ -55,22 +54,22 @@ pub struct Artifact {
     pub stage: Stage,
     /// 文档级状态（六态）
     pub state: DocState,
-    /// 选中的修订（v1 口径 = files.last_revision_id，裁定值已登记）
+    /// 选中的修订（默认取 files.last_revision_id）
     pub selected_revision_id: Option<String>,
     pub checklist_done: u32,
     pub checklist_total: u32,
     pub pending_p0: u32,
     pub pending_p1: u32,
     pub pending_p2: u32,
-    /// 最近活动时刻（v1 口径 = 最新版本的 occurred_at，材料时间口径）
+    /// 最近活动时刻（默认取最新版本的 occurred_at，材料时间口径）
     pub last_activity_at: Option<String>,
 }
 
-/// 决策优先级（PRD 3.3：P0/P1/P2）。
+/// 决策优先级（P0/P1/P2）。
 ///
 /// P0/P1 是阻塞级（控制长任务挂起），P2 非阻塞。来源陈述若无优先级证据
-/// （既有抽取规则产出的陈述 detail_json 无 priority 键），按 P2 计——
-/// 裁定值，已登记 contract-storage.md §4.3。
+/// （既有抽取规则产出的陈述 detail_json 无 priority 键），按 P2 计
+/// （见 contract-storage.md §4.3）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DecisionPriority {
     P0,
@@ -99,7 +98,7 @@ impl DecisionPriority {
     }
 }
 
-/// 结构化决策项（PRD 3.3）：解析 `[P0/P1/P2 - 待确认]` 标准块的产出。
+/// 结构化决策项：解析 `[P0/P1/P2 - 待确认]` 标准块的产出。
 ///
 /// 占位字段（决定/确认人等仍是下划线）为 `None`；已填写的为 `Some`。
 /// `pending` 表示该卡点块仍处于待人工填写状态（决定字段仍是占位符）。
@@ -120,7 +119,7 @@ pub struct DecisionItem {
     pub decision: Option<String>,
     pub confirmer: Option<String>,
     pub role: Option<String>,
-    /// 现运行条件（PRD 3.3「现/新运行条件」）
+    /// 现运行条件
     pub current_condition: Option<String>,
     pub new_condition: Option<String>,
     /// 生效范围与日期

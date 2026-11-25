@@ -16,7 +16,7 @@ import {
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const SRC_ROOT = path.resolve(TEST_DIR, '../src');
 
-describe('C01 · fetchInitiativeCandidates 客户端契约请求', () => {
+describe('fetchInitiativeCandidates 客户端契约请求', () => {
   let server: http.Server | null = null;
 
   afterEach(async () => {
@@ -112,7 +112,7 @@ describe('C01 · fetchInitiativeCandidates 客户端契约请求', () => {
   });
 });
 
-describe('C01 · 独立面板组件与接线检查', () => {
+describe('独立面板组件与接线检查', () => {
   it('InitiativeCandidatePanel 独立落地并接入 RightInspector，理由胶囊非黑盒', () => {
     const panelSrc = fs.readFileSync(
       path.join(SRC_ROOT, 'components/InitiativeCandidatePanel.tsx'),

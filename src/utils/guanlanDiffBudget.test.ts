@@ -1,5 +1,5 @@
 /**
- * issue #18 —— 阅读/未读统计与差异计算拆分的验收测试：
+ * 阅读/未读统计与差异计算拆分单测：
  * - 未读判定只比较版本身份（O(1)），不再触发二维 LCS；
  * - computeMarkdownDiff 同版本/同内容快捷退出（不分配 DP、保留行号）；
  * - 正文未加载 ≠ 空文档（CONTENT_NOT_LOADED，不把整份文档误报成全新增）；
@@ -80,7 +80,7 @@ const readState = (baselineId: string, currentId: string): ReadingState =>
     current_revision_id: currentId,
   }) as unknown as ReadingState;
 
-test('#18 快捷退出①：同版本 ID 不分配 DP，返回全 unchanged 且行号稳定', () => {
+test('快捷退出①：同版本 ID 不分配 DP，返回全 unchanged 且行号稳定', () => {
   const text = Array.from({ length: 500 }, (_, i) => `第 ${i + 1} 行`).join('\n');
   const file = twoVersionFile(text, text);
   const res = computeMarkdownDiff(file, 'rev_base', 'rev_base');
@@ -98,7 +98,7 @@ test('#18 快捷退出①：同版本 ID 不分配 DP，返回全 unchanged 且�
   assert.equal(res.lines[499].newLineNumber, 500);
 });
 
-test('#18 快捷退出②：不同版本但已就绪内容逐字相同 → 无变化，不冒充有差异', () => {
+test('快捷退出②：不同版本但已就绪内容逐字相同 → 无变化，不冒充有差异', () => {
   const text = '# 标题\n同样的内容。\n## 章节 A\nA。';
   const file = twoVersionFile(text, text);
   assert.notEqual('rev_base', 'rev_curr');
@@ -110,7 +110,7 @@ test('#18 快捷退出②：不同版本但已就绪内容逐字相同 → 无�
   assert.equal(res.lines.every((l) => l.type === 'unchanged'), true);
 });
 
-test('#18 未加载守卫：基线正文未取回时返回 CONTENT_NOT_LOADED，不把文档误报成全新增', () => {
+test('未加载守卫：基线正文未取回时返回 CONTENT_NOT_LOADED，不把文档误报成全新增', () => {
   const currentText = '# 新标题\n全部看起来像新增？不。';
   const file = twoVersionFile(BASELINE_TEXT, currentText, {
     baselineContentLoaded: false,
@@ -123,7 +123,7 @@ test('#18 未加载守卫：基线正文未取回时返回 CONTENT_NOT_LOADED，
   assert.equal(res.addedCount, 0);
 });
 
-test('#18 未加载守卫：目标正文未取回同样拒绝；占位版本行（空 hash+0 字节）不算确认空文档', () => {
+test('未加载守卫：目标正文未取回同样拒绝；占位版本行（空 hash+0 字节）不算确认空文档', () => {
   const file = twoVersionFile(BASELINE_TEXT, '# 目标\n内容。', {
     baselineContentLoaded: true,
     currentContentLoaded: false,
@@ -148,7 +148,7 @@ test('#18 未加载守卫：目标正文未取回同样拒绝；占位版本行�
   assert.equal(res2.errorCode, 'CONTENT_NOT_LOADED');
 });
 
-test('#18 确认空文档（0 字节且 hash 非空）可以参与对比：空 → 有内容按真实新增报告', () => {
+test('确认空文档（0 字节且 hash 非空）可以参与对比：空 → 有内容按真实新增报告', () => {
   const empty = revision({
     revision_id: 'rev_empty',
     content_sha256: 'sha-of-empty',
@@ -169,7 +169,7 @@ test('#18 确认空文档（0 字节且 hash 非空）可以参与对比：空 �
   assert.equal(res.removedCount, 1);
 });
 
-test('#18 预算①：DP 单元数超限明确拒绝 DIFF_TOO_LARGE，不用空 diff 冒充成功', () => {
+test('预算①：DP 单元数超限明确拒绝 DIFF_TOO_LARGE，不用空 diff 冒充成功', () => {
   // (m+1)(n+1) > DIFF_MAX_DP_CELLS：两侧 2200 行 → 2201² ≈ 4.84M > 4M
   const side = Math.min(2200, Math.floor(Math.sqrt(DIFF_MAX_DP_CELLS)));
   const oldText = Array.from({ length: side }, (_, i) => `旧 ${i}`).join('\n');
@@ -181,7 +181,7 @@ test('#18 预算①：DP 单元数超限明确拒绝 DIFF_TOO_LARGE，不用空 
   assert.equal(res.lines.length, 0);
 });
 
-test('#18 预算②：单侧行数超限同样拒绝', () => {
+test('预算②：单侧行数超限同样拒绝', () => {
   const long = Array.from({ length: DIFF_MAX_LINES_PER_SIDE + 1 }, (_, i) => `行 ${i}`).join('\n');
   const file = twoVersionFile(long, '短内容');
   const res = computeMarkdownDiff(file, 'rev_base', 'rev_curr');
@@ -189,7 +189,7 @@ test('#18 预算②：单侧行数超限同样拒绝', () => {
   assert.equal(res.errorCode, 'DIFF_TOO_LARGE');
 });
 
-test('#18 预算内真实变更照常计算（Int32Array DP 回归）', () => {
+test('预算内真实变更照常计算（Int32Array DP 回归）', () => {
   const oldText = ['# 标题', '第一段内容。', '', '## 章节 A', 'A 的旧内容。', '', '## 章节 B', 'B 的内容。'].join('\n');
   const newText = ['# 标题', '第一段内容。', '', '## 章节 A', 'A 的新内容。', '新增行。', '', '## 章节 B', 'B 的内容。', '', '## 章节 C', '新章节。'].join('\n');
   const file = twoVersionFile(oldText, newText);
@@ -206,7 +206,7 @@ test('#18 预算内真实变更照常计算（Int32Array DP 回归）', () => {
   assert.equal(res.lines[0].newLineNumber, 1);
 });
 
-test('#18 未读判定只比较版本身份：基线落后但两侧正文都未取回也如实报未读、不触发 diff', () => {
+test('未读判定只比较版本身份：基线落后但两侧正文都未取回也如实报未读、不触发 diff', () => {
   const file = twoVersionFile(BASELINE_TEXT, '# 当前\n内容。', {
     baselineContentLoaded: false,
     currentContentLoaded: false,
@@ -218,7 +218,7 @@ test('#18 未读判定只比较版本身份：基线落后但两侧正文都未�
   assert.deepEqual(info.changedSectionsSinceRead, []);
 });
 
-test('#18 未读判定三态回归：never_read / up_to_date / updated', () => {
+test('未读判定三态回归：never_read / up_to_date / updated', () => {
   const file = twoVersionFile(BASELINE_TEXT, '# 当前\n内容。');
   const never = hasUnreadChanges(file, undefined);
   assert.equal(never.reason, 'never_read');
@@ -232,7 +232,7 @@ test('#18 未读判定三态回归：never_read / up_to_date / updated', () => {
   assert.equal(updated.reason, 'updated_since_last_read');
 });
 
-test('#18 章节指纹：按需计算变更章节（改 A、增 C、删 D 各归其位）', () => {
+test('章节指纹：按需计算变更章节（改 A、增 C、删 D 各归其位）', () => {
   const baselineText = [
     '# 头',
     '引言。',
@@ -265,7 +265,7 @@ test('#18 章节指纹：按需计算变更章节（改 A、增 C、删 D 各归
   assert.deepEqual(sections.sort(), ['章节 A', '章节 C', '章节 D']);
 });
 
-test('#18 章节指纹：正文未取回返回 []（诚实未知，不误报全文档变更）', () => {
+test('章节指纹：正文未取回返回 []（诚实未知，不误报全文档变更）', () => {
   const file = twoVersionFile(BASELINE_TEXT, '# 当前\n内容。', {
     baselineContentLoaded: false,
   });
@@ -280,7 +280,7 @@ test('#18 章节指纹：正文未取回返回 []（诚实未知，不误报全�
   assert.deepEqual(computeChangedSectionsSinceRead(evictedFile, st), []);
 });
 
-test('#18 章节指纹：同内容不同版本 → []；从未读过 / 已读最新 → []', () => {
+test('章节指纹：同内容不同版本 → []；从未读过 / 已读最新 → []', () => {
   const text = '# 标题\n内容。\n## A\nA。';
   const file = twoVersionFile(text, text);
   const st = readState('rev_base', 'rev_curr');
@@ -292,7 +292,7 @@ test('#18 章节指纹：同内容不同版本 → []；从未读过 / 已读最
   );
 });
 
-test('#18 章节指纹：contentCache 回退链生效（MD 正文未内联时按 revision_id 补）', () => {
+test('章节指纹：contentCache 回退链生效（MD 正文未内联时按 revision_id 补）', () => {
   const file = twoVersionFile(BASELINE_TEXT, '# 标题\n第一段内容。\n\n## 章节 A\nA 改了。', {
     baselineContentLoaded: false,
     currentContentLoaded: false,

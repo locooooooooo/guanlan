@@ -1,4 +1,4 @@
-//! V04 · 工作区服务端已读基线只读查询（兼容旧库无 reading_states 表时的零写降级）。
+//! 工作区服务端已读基线只读查询（兼容旧库无 reading_states 表时的零写降级）。
 
 use crate::dto::{ReadingStateEntry, ReadingStateListResponse};
 use crate::error::GuanlanError;

@@ -10,7 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
 const guanlanDir = repoRoot;
 
-describe('F03：Windows MSI/NSIS 安装包工程化、右键菜单与迁移备份契约', () => {
+describe('Windows MSI/NSIS 安装包工程化、右键菜单与迁移备份契约', () => {
   it('build-windows-installer.mjs --check-only 完整校验通过', () => {
     const out = execFileSync(
       process.execPath,

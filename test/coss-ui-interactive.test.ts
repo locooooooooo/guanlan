@@ -1,5 +1,5 @@
 /**
- * V02 · coss.com/ui 高阶交互原语层（Base UI）+ ReadingIsland 非遮挡 Sheet(inset) 契约测试
+ * coss.com/ui 高阶交互原语层（Base UI）+ ReadingIsland 非遮挡 Sheet(inset) 契约测试
  *
  * 覆盖：
  * 1. ScrollArea / SegmentedControl / Tabs / Popover / PreviewCard / Tooltip / Menu /
@@ -57,7 +57,7 @@ function readSrc(relPath: string): string {
   return readFileSync(fileURLToPath(new URL(`../src/${relPath}`, import.meta.url)), 'utf8');
 }
 
-test('V02 ScrollArea / SegmentedControl / Tabs / InputGroup / Switch 原语 SSR 契约', () => {
+test('ScrollArea / SegmentedControl / Tabs / InputGroup / Switch 原语 SSR 契约', () => {
   const scrollHtml = renderToStaticMarkup(
     createElement(ScrollArea, { scrollFade: true }, createElement('div', null, '可滚内容')),
   );
@@ -116,7 +116,7 @@ test('V02 ScrollArea / SegmentedControl / Tabs / InputGroup / Switch 原语 SSR 
   assert.ok(switchHtml.includes('data-slot="switch-thumb"'));
 });
 
-test('V02 Popover / PreviewCard / Tooltip / Menu / Dialog / AlertDialog / Sheet / Command / Toast 原语 SSR 契约', () => {
+test('Popover / PreviewCard / Tooltip / Menu / Dialog / AlertDialog / Sheet / Command / Toast 原语 SSR 契约', () => {
   const html = renderToStaticMarkup(
     createElement(
       ToastProvider,
@@ -161,7 +161,7 @@ test('V02 Popover / PreviewCard / Tooltip / Menu / Dialog / AlertDialog / Sheet 
   assert.ok(cmdHtml.includes('data-slot="command-shortcut"'));
 });
 
-test('V02 全量交互原语遵循 prefers-reduced-motion 降级契约', () => {
+test('全量交互原语遵循 prefers-reduced-motion 降级契约', () => {
   const files = [
     'components/ui/scroll-area.tsx',
     'components/ui/segmented-control.tsx',
@@ -187,7 +187,7 @@ test('V02 全量交互原语遵循 prefers-reduced-motion 降级契约', () => {
   }
 });
 
-test('V02 ReadingIsland 根治右缘遮挡：零 fixed right-0 悬浮条 + Sheet inset + 中文三项总览', () => {
+test('ReadingIsland 根治右缘遮挡：零 fixed right-0 悬浮条 + Sheet inset + 中文三项总览', () => {
   const islandSrc = readSrc('components/ReadingIsland.tsx').replace(/\/\*[\s\S]*?\*\//g, '');
   assert.ok(!islandSrc.includes('fixed right-0'), '代码体彻底移除压盖右侧栏的 fixed right-0 悬浮条');
   assert.ok(islandSrc.includes('variant="inset"'), '展开抽屉走 coss Sheet inset 悬浮圆角形态');

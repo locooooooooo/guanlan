@@ -1,5 +1,5 @@
 /**
- * v0.8 任务空间桌面 · 280px 富预览卡（R2 / 组件契约 C4）。
+ * 280px 富预览卡。
  *
  * 「不点开就能看懂」的画布卡面：头部=标题（truncate）+版本胶囊（versionLabel 原串，
  * 如「BUILD · v8」）；主体=💡核心结论行（clamp 2）+ 前 3 行正文预览或变更章节行
@@ -7,16 +7,12 @@
  * [data-kind] 档）；SVG 文档直出缩略图（svgThumbDataUri 由调用方经
  * sanitizeSvgForPreview 清洗后编码）。
  *
- * 验收锚点：data-cv-rich-card（卡根）、data-cv-rich-card-version（值=versionLabel
- * 原串——与画布票 R2 统一口径，评审 #8 裁决）。
+ * 锚点：data-cv-rich-card（卡根）、data-cv-rich-card-version（值为 versionLabel 原串）。
  * 舷窗纪律：样式全走 .cvw-*（canvasWidgets.css），本文件零内联色值。
  */
 
-// v0.8 总装：本文件的 css 装载上移 App.tsx（指挥授权越权单行修复）——node --test/tsx
-// 测试链（gc-12/wf2/canvas-theme 经 GraphCanvasView 导出常量）无法加载 .css 扩展名，
-// 组件内 import 会令三个测试文件级失败（ERR_UNKNOWN_FILE_EXTENSION）；画布五件全部
-// 渲染在 App 舷窗子树内，css 收敛到 App 常驻装载后 Vite 打包零视觉变化
-// （C3-C7「由所在文件 import」条款与 node 测试链冲突，修订建议记入总装 deviations）。
+// 样式文件统一由 App.tsx 装载：Node 测试链无法直接加载 .css 扩展名，
+// 组件内 import 会导致引用画布常量的测试文件加载失败；由 App 常驻装载兜底。
 
 export interface RichDocPreviewCardProps {
   title: string;
@@ -33,14 +29,14 @@ export interface RichDocPreviewCardProps {
   /** SVG 缩略图 dataUri（sanitizeSvgForPreview → encodeURIComponent，AtlasView 同式） */
   svgThumbDataUri?: string;
   selected?: boolean;
-  /** D02 增量聚光灯：已读未变 → 低对比度背景骨架（样式走 canvasWidgets.css [data-dimmed]） */
+  /** 增量聚光灯：已读未变 → 低对比度背景骨架（样式走 canvasWidgets.css [data-dimmed]） */
   dimmed?: boolean;
-  /** D02 增量聚光灯：当前批阅条目 → 琥珀描边行动信号（[data-spotlight-current]） */
+  /** 增量聚光灯：当前批阅条目 → 琥珀描边行动信号（[data-spotlight-current]） */
   spotlightCurrent?: boolean;
   onClick: () => void;
-  /** 双击=查看详情（v0.8 画布双击语义：打开叙事抽屉，不再直开原文） */
+  /** 双击查看详情（打开叙事抽屉，不直接跳原文） */
   onDoubleClick?: () => void;
-  /** A04：右键呼出系统文件操作菜单 */
+  /** 右键呼出系统文件操作菜单 */
   onContextMenu?: (e: React.MouseEvent<HTMLButtonElement>) => void;
 }
 

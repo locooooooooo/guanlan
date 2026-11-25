@@ -3,7 +3,7 @@ import type { MountedWorkspaceDto } from '../services/apiTypes';
 import { latestMountedReadings, type MountedReadingEntry } from '../utils/mountReadingPositions';
 
 /**
- * C05 · 挂载参考工作区管理面板（独立组件；App 只留最薄接线）。
+ * 挂载参考工作区管理面板（独立组件；App 只留最薄接线）。
  *
  * - 列表：展示名 + 规范化根路径 + root_key 8 位短哈希（快照哈希标识）+
  *   在线/离线徽标 + 最后已知摘要（文件数 / 索引代 / 检索索引状态）+

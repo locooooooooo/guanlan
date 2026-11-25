@@ -8,7 +8,7 @@ import type { AffectedReferenceItem } from '../hooks/useReferencePathRepair';
 import type { FileRecord, ReadingState } from '../types/guanlan';
 
 /**
- * C04 行为锁定（SSR 冒烟，与 commandPaletteView.test.ts 同风格）：
+ * 面板行为锁定（SSR 冒烟，与 commandPaletteView.test.ts 同风格）：
  * · FileOpsModal 升级面——可输入过滤的目标目录选择器常驻、隐藏当前所在目录
  *   （防成环）、受影响引用清单与确认制 checkbox（保存桥不可用时禁用）；
  * · LeftSidebar 智能视图区——五视图行 + 守恒计数徽标 + 清空/撤销结构。

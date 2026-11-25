@@ -70,7 +70,7 @@ export function formatByteSize(bytes: number): string {
 const MAX_INLINE_TEXT_CHARS = 120_000;
 
 /**
- * B01 · 非 MD/SVG/PDF 文件的 L0/L1 原位预览面板（全格式可见，绝不将大二进制读入内存）。
+ * 非 MD/SVG/PDF 文件的 L0/L1 原位预览面板（全格式可见，绝不将大二进制读入内存）。
  * - 第一档 UTF-8 文本 / 源码 / 配置 / CSV：拉取受配额保护的去重快照正文并展示截断保护代码/文本视口；
  * - 第二档可浏览位图（PNG/JPG/WEBP/GIF/AVIF 等）：直接流式挂载 <img src="/api/v1/revisions/.../raw" />；
  * - 第三档或超出配额（snapshotAvailable=false）：诚实呈现 L0 元数据卡片（路径 / SHA-256 / 尺寸 / 策略说明），支持系统默认应用直开。

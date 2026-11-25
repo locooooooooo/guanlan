@@ -1,4 +1,4 @@
-//! PRD v2.0 长任务批次端点的 http 集成测试（冻结契约 A-K）。
+//! 长任务引擎与上下文基座端点的 http 集成测试（contract-query-api.md §2.2）。
 //!
 //! 与 http_tests.rs 的区别：本模块用**真实写线程**（IndexJobManager::start +
 //! Writer::open_at 同一夹具库），覆盖 202 → 轮询 → 终态的全链路（回写 CAS 两
@@ -293,7 +293,7 @@ fn sha256_of(content: &str) -> String {
     hex::encode(Sha256::digest(content.as_bytes()))
 }
 
-// ===== 契约 A：状态投影 =====
+// ===== 状态投影 =====
 
 #[tokio::test]
 async fn state_overview_returns_projection() {
@@ -355,7 +355,7 @@ fn app_for_readonly(fixture: &Fixture, root: &str) -> axum::Router {
     })
 }
 
-// ===== 契约 C：statements + resolve 全链 =====
+// ===== statements + resolve 全链 =====
 
 #[tokio::test]
 async fn statements_wire_mapping_and_detail_projection() {
@@ -450,7 +450,7 @@ async fn resolve_returns_202_and_writeback_completes_with_new_revision() {
         r#"{"priority":"P1"}"#,
     );
     // 前置门禁链（蓝图→计划→决策）：上游槽位未 completed 会把决策槽门禁在
-    // queued——补齐蓝图与计划两个阶段的文档，AC-03 链才完整
+    // queued——补齐蓝图与计划两个阶段的文档，拍板唤醒链路才完整
     let blueprint_content = "# 需求单
 
 范围与边界
@@ -480,7 +480,7 @@ async fn resolve_returns_202_and_writeback_completes_with_new_revision() {
         plan_content,
     )
     .expect("写计划阶段磁盘文件");
-    // AC-03 前置态：上一轮 reconcile 已把决策槽置 suspended_on_hitl（持久态）
+    // 拍板前前置态：上一轮 reconcile 已把决策槽置 suspended_on_hitl（持久态）
     let decision_node_id = format!(
         "node_{}",
         guanlan_core::index::ident::stable_key(&format!("{initiative_id}|决策|await_decision"))
@@ -505,7 +505,7 @@ async fn resolve_returns_202_and_writeback_completes_with_new_revision() {
         r#"{"decision":"采用两阶段状态锁","confirmer":"架构组","effective_date":"2026-11-18"}"#,
     )
     .await;
-    // 冻结契约 C：恒 202（端点永不 409）
+    // 拍板端点恒返回 202（端点永不 409）
     assert_eq!(status, StatusCode::ACCEPTED, "{json}");
     assert_eq!(json["ok"], true);
     assert_eq!(json["statement_id"], "stmt_p1");
@@ -534,7 +534,7 @@ async fn resolve_returns_202_and_writeback_completes_with_new_revision() {
     assert!(updated.contains("确认人：架构组"));
     assert!(updated.contains("revision: 2"));
 
-    // 决策槽唤醒机械化（AC-03）：决策槽由 suspended → completed（本轮重算）
+    // 决策槽机械唤醒：决策槽由 suspended → completed（本轮重算）
     // ——迁移事件在 events 表可查
     let (status, events) = get(&app, "/api/v1/events?kinds=task_node_moved&limit=50").await;
     assert_eq!(status, StatusCode::OK);
@@ -661,7 +661,7 @@ async fn resolve_on_archived_initiative_is_conflict() {
     assert_eq!(json["code"], "CONFLICT");
 }
 
-// ===== 契约 E：checkpoint 同步受理 + tasks =====
+// ===== checkpoint 同步受理 + tasks =====
 
 #[tokio::test]
 async fn checkpoint_commit_is_synchronous_201_and_advances_node() {
@@ -698,7 +698,7 @@ async fn checkpoint_commit_is_synchronous_201_and_advances_node() {
         .as_str()
         .expect("ckpt")
         .starts_with("ckpt_"));
-    // node_id 缺省按 (initiative_id, stage) 反查（约束1）→ 推进 completed
+    // node_id 缺省按 (initiative_id, stage) 反查 → 推进 completed
     assert_eq!(json["node_state"], "completed", "{json}");
 
     // 恢复查询：最近一次 SUCCESS 在列
@@ -732,7 +732,7 @@ async fn checkpoint_commit_is_synchronous_201_and_advances_node() {
     assert_eq!(json["code"], "NOT_FOUND");
 }
 
-// ===== 契约 D：Agent 草案全链 =====
+// ===== Agent 草案全链 =====
 
 #[tokio::test]
 async fn revision_proposals_full_chain() {
@@ -817,7 +817,7 @@ async fn revision_proposals_full_chain() {
     assert_eq!(dismiss_final["result"]["dismiss"]["status"], "dismissed");
 }
 
-// ===== AC-05：采纳落版 → 自动生成执行槽 Checkpoint（含 output_artifact_version）=====
+// ===== 采纳落版 → 自动生成执行槽 Checkpoint（含 output_artifact_version）=====
 
 #[tokio::test]
 async fn adopt_auto_generates_execution_checkpoint_with_artifact_version() {
@@ -866,7 +866,7 @@ async fn adopt_auto_generates_execution_checkpoint_with_artifact_version() {
         .expect("落版 id")
         .to_owned();
 
-    // AC-05：采纳报告应带自动检查点（checkpoint_id + 推进后槽位态）
+    // 采纳报告应带自动检查点（checkpoint_id + 推进后槽位态）
     let auto_ckpt = &adopt_final["result"]["adopt"]["auto_checkpoint"];
     let checkpoint_id = auto_ckpt["checkpoint_id"]
         .as_str()
@@ -875,7 +875,7 @@ async fn adopt_auto_generates_execution_checkpoint_with_artifact_version() {
     assert!(checkpoint_id.starts_with("ckpt_"), "{auto_ckpt}");
     assert_eq!(auto_ckpt["node_state"], "completed", "{auto_ckpt}");
 
-    // checkpoint 行：执行槽 SUCCESS、产出指向新版本，且带版本号 v2（PRD 3.2）
+    // checkpoint 行：执行槽 SUCCESS、产出指向新版本，且带版本号 v2
     let (_, list) = get(
         &app,
         &format!("/api/v1/checkpoints?initiative_id={initiative_id}&status=SUCCESS"),
@@ -888,7 +888,7 @@ async fn adopt_auto_generates_execution_checkpoint_with_artifact_version() {
     assert_eq!(items[0]["output_revision_id"], new_revision);
     assert_eq!(
         items[0]["output_artifact_version"], "v2",
-        "版本号由产出修订 seq 派生（PRD 3.2）：{list}"
+        "版本号由产出修订 seq 派生：{list}"
     );
     assert!(
         items[0]["note"]
@@ -905,7 +905,7 @@ async fn adopt_auto_generates_execution_checkpoint_with_artifact_version() {
     assert_eq!(committed[0]["subject_id"], checkpoint_id);
 }
 
-// ===== 契约 F：archive / reopen =====
+// ===== archive / reopen =====
 
 #[tokio::test]
 async fn archive_then_reopen_initiative() {
@@ -966,7 +966,7 @@ async fn archive_then_reopen_initiative() {
     );
 }
 
-// ===== 契约 H：diff =====
+// ===== diff =====
 
 #[tokio::test]
 async fn diff_job_produces_summary_card_and_sections() {
@@ -1020,7 +1020,7 @@ async fn diff_job_produces_summary_card_and_sections() {
     assert_eq!(result_json["next_cursor"], serde_json::Value::Null);
 }
 
-// ===== E02：外部智能体写入 CAS 安全网、独立草案分支与 derived_from_context 因果边 =====
+// ===== 外部智能体写入 CAS 安全网、独立草案分支与 derived_from_context 因果边 =====
 
 #[tokio::test]
 async fn e02_propose_creates_independent_draft_branch_without_touching_disk_and_exposes_diff_content(
@@ -1384,7 +1384,7 @@ async fn e02_dismiss_rejects_draft_with_reason_and_never_touches_disk() {
     assert_eq!(events["items"].as_array().expect("events").len(), 1);
 }
 
-// ===== 契约 B：context =====
+// ===== context =====
 
 #[tokio::test]
 async fn context_assembles_initiative_preset_with_both_modes() {
@@ -1411,7 +1411,7 @@ async fn context_assembles_initiative_preset_with_both_modes() {
         6,
         r#"{"priority":"P1"}"#,
     );
-    // 第二份文档（蓝图阶段）：阶段摘要 + 当前阶段全量 → AC-04 的 ≥2 条
+    // 第二份文档（蓝图阶段）：阶段摘要 + 当前阶段全量 → 默认预设应含 ≥2 条
     let plan_content = "# 需求单
 
 范围与边界
@@ -1441,7 +1441,7 @@ async fn context_assembles_initiative_preset_with_both_modes() {
     let items = json["preset"]["items"].as_array().expect("items");
     assert!(
         items.len() >= 2,
-        "AC-04：默认勾选 ≥2（各阶段摘要 + 当前阶段全量）：{json}"
+        "默认勾选 ≥2（各阶段摘要 + 当前阶段全量）：{json}"
     );
     assert!(
         items.iter().any(|item| item["granularity"] == "full"),
@@ -1501,7 +1501,7 @@ async fn e03_context_four_granularities_upstream_snippets_secret_redaction_and_z
     fixture.file(
         &ws_id,
         "f_spec",
-        "02-证道阁/01-系统架构规范.md",
+        "02-上下文引擎/01-系统架构规范.md",
         Some(&spec_rev),
     );
 
@@ -1525,7 +1525,7 @@ async fn e03_context_four_granularities_upstream_snippets_secret_redaction_and_z
     fixture.file(
         &ws_id,
         "f_plan",
-        "02-证道阁/02-实施计划.md",
+        "02-上下文引擎/02-实施计划.md",
         Some(&plan_rev2),
     );
 
@@ -1542,7 +1542,7 @@ async fn e03_context_four_granularities_upstream_snippets_secret_redaction_and_z
         .conn
         .execute(
             "INSERT INTO initiatives (initiative_id, workspace_id, name, root_dir, current_stage, state, created_at, updated_at) \
-             VALUES (?1, ?2, '02-证道阁', '02-证道阁', '待分类', 'draft', '2026-11-21T10:00:00Z', '2026-11-21T10:00:00Z')",
+             VALUES (?1, ?2, '02-上下文引擎', '02-上下文引擎', '待分类', 'draft', '2026-11-21T10:00:00Z', '2026-11-21T10:00:00Z')",
             rusqlite::params![init_id, ws_id],
         )
         .expect("插专项");
@@ -1763,7 +1763,7 @@ async fn e03_mcp_host_config_merges_existing_servers_and_rejects_remote_endpoint
     assert!(fixture.dir.join(".cursor").join("mcp.json").exists());
 }
 
-// ===== E04：原位拍板（HITL）唤醒任务与批次批阅看板联动 =====
+// ===== 原位拍板（HITL）唤醒任务与批阅看板联动 =====
 
 #[tokio::test]
 async fn e04_hitl_writeback_syncs_md_sqlite_and_review_board_under_200ms_and_unlocks_downstream() {
@@ -1969,7 +1969,7 @@ async fn e04_review_board_unknown_orphan_detection_repair_and_anti_skip_review_g
     );
 }
 
-// ===== 契约 I：summary =====
+// ===== summary =====
 
 #[tokio::test]
 async fn file_summary_reads_persisted_summary() {
@@ -2006,7 +2006,7 @@ async fn file_summary_reads_persisted_summary() {
     assert_eq!(summary["decisions_digest"]["p0"], 1);
 }
 
-// ===== 契约 G：index-jobs 扩展 + cancel =====
+// ===== index-jobs 扩展 + cancel =====
 
 #[tokio::test]
 async fn index_jobs_external_kinds_and_validation() {
@@ -2040,7 +2040,7 @@ async fn index_jobs_external_kinds_and_validation() {
         "l4a 结果分支可空可对象"
     );
 
-    // 内部 kind 直提 → 400（冻结契约 G）
+    // 内部 kind 直提 → 400
     let (status, json) = post_json(
         &app,
         "/api/v1/index-jobs",
@@ -2066,7 +2066,7 @@ async fn index_jobs_external_kinds_and_validation() {
         .expect("err")
         .contains("metadata_reconcile"));
 
-    // cancel：已结束任务 → 409 CONFLICT（冻结契约 G/F）
+    // cancel：已结束任务 → 409 CONFLICT
     let (_, done) = post_json(&app, "/api/v1/index-jobs", r#"{"kind":"l4a_summary"}"#).await;
     let final_json = poll_job(&app, done["job_id"].as_str().expect("job_id")).await;
     assert_eq!(final_json["state"], "completed");
@@ -2087,7 +2087,7 @@ async fn index_jobs_external_kinds_and_validation() {
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
-// ===== 契约 J：SSE =====
+// ===== SSE =====
 
 #[tokio::test]
 async fn sse_stream_sends_hello() {
@@ -2113,7 +2113,7 @@ async fn sse_stream_sends_hello() {
             .get("content-type")
             .and_then(|v| v.to_str().ok()),
         Some("text/event-stream"),
-        "SSE content-type（冻结契约 J）"
+        "SSE content-type 应为 text/event-stream"
     );
     // hello 帧（立即到达）
     let mut body = response.into_body();
@@ -2197,7 +2197,7 @@ async fn resume_context_endpoint_returns_delta_and_latest_decisions() {
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
-// ===== A05：身份保真文件操作（rename / move / trash + 还原重连）=====
+// ===== 身份保真文件操作（rename / move / trash + 还原重连）=====
 
 struct IsolatedTrashDriver {
     trash_dir: PathBuf,
@@ -2398,7 +2398,7 @@ async fn a05_file_rename_move_trash_and_restore_roundtrip() {
     jobs.shutdown();
 }
 
-/// F01 端到端测试：两阶段预览门禁（未预览/过期令牌 400 PREVIEW_REQUIRED）、敏感目录自动排除、
+/// 事项资料胶囊端到端测试：两阶段预览门禁（未预览/过期令牌 400 PREVIEW_REQUIRED）、敏感目录自动排除、
 /// 正文脱敏、双模式输出（with_snapshots / manifest_only）以及另一台观澜秒开核验与沙箱文件读取。
 #[tokio::test]
 async fn f01_context_capsule_preview_export_inspect_and_file_read() {
@@ -2569,7 +2569,7 @@ async fn f01_context_capsule_preview_export_inspect_and_file_read() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// F02 端到端测试：SHA-256 完整性校验、决定证据铁律保护 GC（预演+执行）、
+/// 存储运维端到端测试：SHA-256 完整性校验、决定证据铁律保护 GC（预演+执行）、
 /// 全量开放导出与一键脱敏诊断包 ZIP 下载/落盘。
 #[tokio::test]
 async fn f02_storage_integrity_iron_law_gc_open_export_and_diagnostic_zip() {

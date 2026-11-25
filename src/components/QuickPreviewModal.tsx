@@ -138,11 +138,10 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
   const canGoPrev = currentIndex > 0;
   const canGoNext = currentIndex >= 0 && currentIndex < queue.length - 1;
 
-  // U09 队列切换轻交叉淡入：只有「已打开后的 ←/→ 导航沿」才递增 navSeq——内容区
-  // wrapper 以 key={navSeq} 重挂并挂既有 .glx-fade-in（--dur-1 纯 opacity，数据区
-  // 唯一入场式）完成轻量交叉淡变；首次 Space 呼出（isOpen 翻转/首个目标）零重挂
-  // 零动画，缓存命中首帧 <100ms 零闪烁。80ms spinner 阈值与同步缓存命中路径
-  // （getCachedQuickPreview）原样不动（停机红线）。
+  // 队列切换轻交叉淡入：只有「已打开后的 ←/→ 导航沿」才递增 navSeq——内容区
+  // wrapper 以 key={navSeq} 重挂并挂 .glx-fade-in（--dur-1 纯 opacity）完成轻量交叉淡变；
+  // 首次 Space 呼出（isOpen 翻转/首个目标）零重挂零动画，缓存命中首帧 <100ms 零闪烁。
+  // 80ms spinner 阈值与同步缓存命中路径（getCachedQuickPreview）保持不变。
   // 渲染期调整 state（React 官方「依据上次渲染信息调整」范式）：第二趟渲染 navPrev
   // 已同步 → isQueueNav 归 false，无循环；两趟均在提交前完成，不会闪帧。
   const [navSeq, setNavSeq] = useState(0);
@@ -522,7 +521,7 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
 
   const imageDims = preview?.image_meta ?? naturalImageSize;
 
-  // U09 底栏队列进度胶囊（纯函数派生；单份队列/非法索引诚实回 null → 不渲染胶囊）
+  // 底栏队列进度胶囊（纯函数派生；单份队列/非法索引诚实回 null → 不渲染胶囊）
   const queueProgress = buildQuickQueueProgress(queue, files, currentIndex);
 
   const handleCopyHash = async () => {
@@ -1070,7 +1069,7 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
       );
     }
 
-    // 4) PDF 轻预览（B04：页级文本摘要条——扫描件诚实标注，绝不假阳性）
+    // 4) PDF 轻预览（页级文本摘要条——扫描件诚实标注，绝不假阳性）
     if (snapshotAvailable && effectiveKind === 'pdf') {
       const pdfSummary = preview?.pdf_summary;
       const scannedWhole =
@@ -1457,7 +1456,7 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
       }}
       className="glx-backdrop-in fixed inset-0 z-[85] flex items-center justify-center bg-[color:var(--ink-anchor)]/40 dark:bg-black/62 backdrop-blur-sm p-4 sm:p-6"
     >
-      {/* U09 + V08：glass-pop 琉璃浮层统一材质 + coss Dialog 嵌套景深栈（--nested-dialogs） */}
+      {/* glass-pop 琉璃浮层统一材质 + coss Dialog 嵌套景深栈（--nested-dialogs） */}
       <div
         data-dialog-nested-stack=""
         style={{ '--nested-dialogs': 0 } as React.CSSProperties}
@@ -1557,7 +1556,7 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
             </span>
           </div>
 
-          {/* U09 底栏紧凑队列进度胶囊：「3 / 18」等宽进度 + 前后文档预览提示
+          {/* 底栏紧凑队列进度胶囊：「3 / 18」等宽进度 + 前后文档预览提示
               （静态文本 + tabular-nums，零布局动画，不拖慢首帧） */}
           {queueProgress && (
             <div
@@ -1642,7 +1641,7 @@ function useMemoTextSlice(firstSlice: string | undefined, extraSlices: string[])
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// U09 · 底栏紧凑队列进度胶囊（纯函数出口，零 DOM 依赖，测试直接 import）
+// 底栏紧凑队列进度胶囊（纯函数出口，零 DOM 依赖，测试直接 import）
 // ── 胶囊 = 「3 / 18」等宽进度 + 前后文档预览提示；单份队列/非法索引诚实不出胶囊。
 // ══════════════════════════════════════════════════════════════════════════
 

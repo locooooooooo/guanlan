@@ -1,22 +1,18 @@
-# 观澜存储层契约 —— Rust 移植（批次一：只读服务）
+# 观澜存储层契约
 
-- 勘察日期：2026-11-13
-- 依据材料：
-  - `docs/guanlan/观澜-Rust服务拆分方案-v0.1.md` §2（41–81 行）、§6（135–147 行）、§8（161–173 行）、§9（175–185 行）
-  - `server/WorkspaceStore.ts` 全文（784 行）
-  - `server/reconcile.ts` 身份与候选判定及历史写入部分（915 行）
-  - `server/watcher.ts` 信号语义（171 行，简要）
-  - `server/derive.ts:339-364`（纯日期抽取，服务于 §5 时间语义）
-- 用途：`guanlan-core` 的 `storage` / `domain` 模块第一批实现的逐条规范。凡标 **[逐字兼容]** 的规则，Rust 实现必须与 Node 现行为完全一致（字节级），不得用等价近似替代。
-- 每条规则附来源 `文件:行号`。无法从现有代码确定的项集中列在 §8「待确认」。
+- 参照基线：
+  - `server/WorkspaceStore.ts`（持久层参照实现）
+  - `server/reconcile.ts`（身份与候选判定及历史写入）
+  - `server/watcher.ts`（文件监听信号语义）
+  - `server/derive.ts`（纯日期抽取，服务于 §5 时间语义）
+- 用途：`guanlan-core` 的 `storage` / `domain` / `index` 模块存储契约。凡标 **[逐字兼容]** 的规则，Rust 实现必须与旧 Node 管线保持字节级一致，不得用等价近似替代。
 
 ---
 
-## 0. 总体写入顺序（Rust 第二批实现写入时必须遵守，读取侧需理解其不变量）
+## 0. 总体写入顺序（写入侧不变量，读取侧依赖其成立）
 
 稳定读取 → 事务外保存并校验内容快照 → 事务内提交版本、事件、证据 → 发出更新通知。
-来源：`server/reconcile.ts:4`（头注释）、方案 §6 `docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:143`。
-本轮对账中的具体分段（批次一读取侧需理解的不变量：**读取请求永远不会见到「已有版本但对应快照尚未写好」的半成品**，方案 `docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:143`）：
+读取侧依赖该不变量：**读取请求永远不会见到「已有版本但对应快照尚未写好」的半成品**：
 
 1. 第一遍（纯内存）：识别文件身份、规划候选新版本 —— `reconcile.ts:211-336`。
 2. 第二遍（事务外 IO）：逐个读文件内容、写快照到磁盘并校验 —— `reconcile.ts:338-365`。
@@ -90,10 +86,10 @@ CREATE TABLE IF NOT EXISTS revisions (
   UNIQUE (file_id, seq)
 );
 CREATE INDEX IF NOT EXISTS idx_rev_hash ON revisions(content_hash);
--- issue #39：`revisions` 的 UNIQUE (file_id, seq) 已自带同序 B-tree，
+-- `revisions` 的 UNIQUE (file_id, seq) 已自带同序 B-tree，
 -- 历史上另建的 idx_rev_file 与其完全重复（同列同序），只增加存储与写入维护成本。
 -- 已从新库 schema 与测试夹具移除；旧库由写入侧幂等迁移 DROP INDEX IF EXISTS 清理
--- （只读服务启动不执行结构变更，契约 §4-1 边界不变）。版本分页仍走该唯一索引。
+-- （只读服务启动不执行结构变更，契约 §4.1 边界不变）。版本分页仍走该唯一索引。
 
 CREATE TABLE IF NOT EXISTS blobs (
   content_hash   TEXT PRIMARY KEY,
@@ -127,7 +123,7 @@ CREATE INDEX IF NOT EXISTS idx_events_kind ON events(workspace_id, kind);
 CREATE INDEX IF NOT EXISTS idx_events_ws_occurred_sort
   ON events(workspace_id, COALESCE(occurred_at, ''), seq);
 CREATE INDEX IF NOT EXISTS idx_events_ws_observed_sort ON events(workspace_id, observed_at, seq);
--- issue #26：文件事件关联四路各自的匹配访问结构（UNION 各分支可走索引，
+-- 文件事件关联四路各自的匹配访问结构（UNION 各分支可走索引，
 -- 不再对整个工作区逐条求值四路 OR）
 CREATE INDEX IF NOT EXISTS idx_events_ws_subject_seq
   ON events(workspace_id, subject_id, seq);
@@ -201,31 +197,24 @@ PRAGMA foreign_keys = ON;
 PRAGMA busy_timeout = 5000;
 ```
 
-### 1.3 schema 版本与迁移现状 [读取侧必读]
+### 1.3 schema 版本与迁移
 
-- **当前实现没有任何显式 schema 版本**：全 `server` 与 `guanlan/src` 内 grep `user_version|schema_version|schemaVersion` 无结果（本次会话执行，见 §7）。`PRAGMA user_version` 未被使用。
-- 现行「迁移」= 每次打开连接执行一遍幂等 `SCHEMA`（全部 `CREATE ... IF NOT EXISTS`）：`WorkspaceStore.ts:293`。
-
-  **issue #21/#22/#26/#39 新增的幂等结构**（2026-11 整改，全部走同一条写入侧迁移路径，
-  只读服务启动不执行任何结构变更）：
+- 幂等建表：写入侧打开连接时按 `CREATE ... IF NOT EXISTS` 确保表与索引存在，并检查列级增量迁移（如 `statements.detail_json`）。
+  写入侧同时维护以下幂等索引迁移（只读连接绝不执行任何结构变更）：
   - `idx_files_ws_status_normpath`：规范化路径表达式索引（默认文件分页的排序/游标访问路径）；
   - `idx_events_ws_occurred_sort` / `idx_events_ws_observed_sort`：两种事件排序各一条；
   - `idx_events_ws_subject_seq` / `idx_events_ws_revision_seq` / `idx_events_ws_payload_file`：
     文件事件关联四路 UNION 各自的可检索路径；
   - `DROP INDEX IF EXISTS idx_rev_file`：删除与 `UNIQUE (file_id, seq)` 完全重复的冗余索引。
-
-- 唯一的列级迁移：`ensureColumn('statements', 'detail_json', "TEXT NOT NULL DEFAULT '{}'")` —— 读 `PRAGMA table_info` 判断缺列后 `ALTER TABLE ... ADD COLUMN`：`WorkspaceStore.ts:294-303`，调用在 `295`。
-- `meta` 键值表（DDL 见 §1.1，`WorkspaceStore.ts:263-266`；读写 API `748-762`）目前存的键：`extract_rule_version`，由 `rebuildDerivedIfNeeded` 写入（`reconcile.ts:737-739` 读、`794` 写）。抽取规则版本常量 `EXTRACT_RULE_VERSION = 'v0.4.3'`（`WorkspaceStore.ts:131`）；规则升级时按版本号差异删除旧派生数据并全量重建（`reconcile.ts:750-755`）。
-- **PRD v2.0 长任务批次起，`user_version` 由写入侧条件登记**（0/1 → 2，只升不降），
-  读侧白名单扩为 `[0, 1, 2]`：依据与迁移规则见 §4.3.1（Node 管线从不读该值，行为不变）。
-- **批次一（只读服务）禁止执行以上任何写路径**：不 `exec(SCHEMA)`、不 `ALTER TABLE`、不写 `meta`。详见 §4。
-- 方案 §8 要求切换批次建立 schema 版本门禁（`docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:171`），现库无版本记录可依据 → 列入 §8 待确认。
+- `meta` 键值表存储 `extract_rule_version` 等运行元数据。抽取规则版本常量 `EXTRACT_RULE_VERSION = 'v0.4.3'`；规则升级时按版本号差异删除旧派生数据并全量重建。
+- **`PRAGMA user_version` 由写入侧条件登记**（0/1 → 2，只升不降），读侧白名单为 `[0, 1, 2]`（见 §4.3.1；旧 Node 管线不读写该值）。
+- **只读连接禁止执行任何写路径**：不执行 `SCHEMA`、不 `ALTER TABLE`、不写 `meta`。详见 §4。
 
 ### 1.4 统计口径的既有怪癖（读取侧照抄行为即可）
 
-`counts()`（`WorkspaceStore.ts:766-779`）：`files / events / statements / edges` 按 `workspace_id` 过滤计数，但 **`revisions` 与 `blobs` 是全表计数（无 WHERE）**（`WorkspaceStore.ts:771-773, 775`）。Rust 提供统计接口时若要与旧 `/api` 输出一致，需保留此口径。
+`counts()`（`WorkspaceStore.ts:766-779`）：`files / events / statements / edges` 按 `workspace_id` 过滤计数，但 **`revisions` 与 `blobs` 是全表计数（无 WHERE）**（`WorkspaceStore.ts:771-773, 775`）。Rust 提供统计接口时保持同一口径。
 
-### 1.5 upsert 冲突行为 [逐字兼容]（写入批次实现时）
+### 1.5 upsert 冲突行为 [逐字兼容]
 
 - `path_aliases`：`ON CONFLICT (workspace_id, path) DO UPDATE SET file_id, last_observed_at`（**不更新** `first_observed_at` 与 `evidence`）—— `WorkspaceStore.ts:494-504`。
 - `statements`：`ON CONFLICT (revision_id, code, line_start) DO UPDATE SET status, quote, line_end, decision_id, detail_json`（**不更新** `namespace/question/observed_at` 等）—— `WorkspaceStore.ts:666-696`。
@@ -245,8 +234,8 @@ rootKeyOf(rootPath) = createHash('sha256').update(path.resolve(rootPath)).digest
 ```
 
 精确语义，逐项写死：
-1. **输入**是 `path.resolve(rootPath)` 的返回字符串，不是原始参数、不是 canonicalize 结果。Rust **禁止**用 `std::fs::canonicalize` 或 `dunce::canonicalize` 替代（Windows 会引入 `\\?\` 前缀导致哈希不同）——方案明文要求：`docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:140`。
-2. `path.resolve` 语义（Node 在 win32 上的实测行为，本次会话运行验证，见 §7）：
+1. **输入**是 `path.resolve(rootPath)` 的返回字符串，不是原始参数、不是 canonicalize 结果。Rust **禁止**用 `std::fs::canonicalize` 或 `dunce::canonicalize` 替代（Windows 会引入 `\\?\` 前缀导致哈希不同）。
+2. `path.resolve` 语义（Node 在 win32 上的规则）：
    - 正斜杠输入规范化为反斜杠：`resolve('d:/notebooks/demo')` → `d:\notebooks\demo`；
    - **盘符大小写原样保留**：`d:\...` 与 `D:\...` 是两个不同字符串 → 两个不同 rootKey（实测）；
    - 去掉结尾分隔符：`D:\notebooks\demo\` → `D:\notebooks\demo`；
@@ -266,7 +255,7 @@ rootKey（16 位）   : 6d74a29df40616ec
 ### 2.2 workspace_id 与工作区行 [逐字兼容]
 
 - `workspace_id = 'ws_' + rootKeyOf(resolved)`（`WorkspaceStore.ts:336`）。上例 → `ws_6d74a29df40616ec`。
-- `ensureWorkspace` 按 **`root_path` 精确字符串匹配**查重（`WHERE root_path = ?`，`WorkspaceStore.ts:329-333`），**不是**按 `root_key`；未命中才插入新行，`created_at = new Date().toISOString()`、`last_scan_at = NULL`、`index_generation = 0`（`335-348`）。注意：同目录用不同盘符大小写打开会生成第二个工作区行（`root_path` UNIQUE 挡不住大小写差异）；Rust 读取侧只按库内已有行认领，不新建（方案：`docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:140`「既有目录优先依据库内身份认领」）。
+- `ensureWorkspace` 按 **`root_path` 精确字符串匹配**查重（`WHERE root_path = ?`，`WorkspaceStore.ts:329-333`），**不是**按 `root_key`；未命中才插入新行，`created_at = new Date().toISOString()`、`last_scan_at = NULL`、`index_generation = 0`（`335-348`）。注意：同目录用不同盘符大小写打开会生成第二个工作区行（`root_path` UNIQUE 挡不住大小写差异）；Rust 读取侧只按库内已有行认领，不新建。
 
 ### 2.3 file_id [逐字兼容]
 
@@ -282,11 +271,11 @@ stableFileId(rootKey, relativePath) =
 ```
 
 精确语义：
-1. 拼接串为 `rootKey + '|' + 斜杠规范化后的小写相对路径`，分隔符是**竖线 `|`**（方案 §6 只说「做哈希」，分隔符以代码为准：`reconcile.ts:86`）。
+1. 拼接串为 `rootKey + '|' + 斜杠规范化后的小写相对路径`，分隔符是**竖线 `|`**（`reconcile.ts:86`）。
 2. 大小写：`toLowerCase()` 是 JS 默认 Unicode 小写化（非 locale 感知；ASCII 即简单小写）。目的：适配 Windows 大小写不敏感匹配（`reconcile.ts:81-83` 注释）。
 3. 编码 UTF-8；hex 小写；取**前 24 个十六进制字符**（12 字节），前缀 `f_`。总长 26 字符。
-4. 相对路径来自扫描器的 `relativePath`（批次一读取侧不需要重算，只需能校验既有 ID）。
-5. 示例（本次会话实际计算）：
+4. 相对路径来自扫描器的 `relativePath`。
+5. 示例：
 
 ```
 rootKey          : 6d74a29df40616ec
@@ -323,7 +312,7 @@ file_id          : f_b967338b81904b60abf8374e
 
 ### 2.6 events.seq 与事件去重身份 [逐字兼容]
 
-- `events.seq` 是 `INTEGER PRIMARY KEY AUTOINCREMENT`（§1.1，`WorkspaceStore.ts:199`）：SQLite 行号自增，全表**全局**单调（不按 workspace 分段），删除后不复用。插入成功后取 `lastInsertRowid` 作为 seq 返回（`WorkspaceStore.ts:639`）。历史 `events.seq` 必须原样保留（方案：`docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:139`）。
+- `events.seq` 是 `INTEGER PRIMARY KEY AUTOINCREMENT`（§1.1，`WorkspaceStore.ts:199`）：SQLite 行号自增，全表**全局**单调（不按 workspace 分段），删除后不复用。插入成功后取 `lastInsertRowid` 作为 seq 返回（`WorkspaceStore.ts:639`）。历史 `events.seq` 必须原样保留。
 - 每工作区当前最大 seq：`SELECT COALESCE(MAX(seq),0) ... WHERE workspace_id = ?`（`WorkspaceStore.ts:657-662`）。
 - 去重身份唯一索引（`WorkspaceStore.ts:218-220`）：
 
@@ -332,16 +321,16 @@ CREATE UNIQUE INDEX uniq_event_identity
   ON events(workspace_id, kind, subject_id, COALESCE(revision_id, ''), COALESCE(occurred_at, ''));
 ```
 
-  即「同一工作区、同一类事实、同一主体、同一版本、同一发生时间」只记一次；重扫与任务重试沿用同一记录标识，不得再次新增（方案：`docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:144`）。Rust 写入侧对冲突的处理：跳过并计数，见 §1.5。
+  即「同一工作区、同一类事实、同一主体、同一版本、同一发生时间」只记一次；重扫与任务重试沿用同一记录标识，不得再次新增。Rust 写入侧对冲突的处理：跳过并计数，见 §1.5。
 
 ### 2.7 generation（index_generation）演进 [逐字兼容]
 
 - 初始 0（DDL DEFAULT，§1.1；`ensureWorkspace` 插入 0：`WorkspaceStore.ts:346`）。
 - `bumpGeneration`：`index_generation = index_generation + 1` 且同时写 `last_scan_at = now`（`WorkspaceStore.ts:358-366`）。
 - 对账结尾的条件推进：仅当 `newRevisions > 0 || eventsInserted > 0 || derivedRebuilt || initialBaseline` 才 bump，否则保持原值；随后无条件 `markScan`（只更新 `last_scan_at`，不 bump）：`reconcile.ts:645-654`、`WorkspaceStore.ts:368-372`。理由：「索引代只在校验到变化时推进：重复扫描不应让『代』无意义地增长」（`reconcile.ts:645` 注释）。
-- 读取侧语义：generation 是「已提交内容代」通知载体，不是历史数据库快照（方案：`docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:146-147`）。
+- 读取侧语义：generation 是「已提交内容代」通知载体，不是历史数据库快照。
 
-### 2.8 候选判定（文件认领顺序）[逐字兼容]（写入批次实现时；读取侧需理解 file_id 稳定性来源）
+### 2.8 候选判定（文件认领顺序）[逐字兼容]
 
 对每个采集到的文件按序判定（`reconcile.ts:218-268`）：
 1. `findFileByPath`：`files` 表 `workspace_id + current_path` 精确匹配（`WorkspaceStore.ts:478-482`；调用 `reconcile.ts:221-222`）。
@@ -367,14 +356,14 @@ defaultDataDir(rootPath)（WorkspaceStore.ts:269-274）:
 ```
 
 - **顺序**：显式参数（服务装配层 `workspace-plugin.ts:59`）→ `GUANLAN_DATA_DIR` → `%LOCALAPPDATA%` → `homedir\AppData\Local` 兜底。`GUANLAN_DATA_DIR` **整体替换** base（含 `Guanlan/workspaces` 段），不是在其后追加。
-- 与方案一致：沿用 `%LOCALAPPDATA%/Guanlan/workspaces/<rootKey>/index.db` 和 `blobs`，兼容 `GUANLAN_DATA_DIR`（`docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:139`）。
+- 沿用 `%LOCALAPPDATA%/Guanlan/workspaces/<rootKey>/index.db` 和 `blobs`，兼容 `GUANLAN_DATA_DIR`。
 
 ### 3.2 布局
 
 - `<dataDir>/index.db`（`WorkspaceStore.ts:289`），WAL 模式（含 `index.db-wal`、`index.db-shm`）。
 - `<dataDir>/blobs/<hash 前 2 位>/<完整 hash>`：`blobPathFor = join(blobsDir, hash.slice(0,2), hash)`（`WorkspaceStore.ts:287-288`（blobsDir）、`383-385`（两级路径））。
 - `blobs.rel_path` 存相对 dataDir 的**正斜杠**路径：`path.relative(dataDir, blobPath).replace(/\\/g,'/')`，如 `blobs/6d/6d74a29d...`（`WorkspaceStore.ts:423`）。
-- 目录在打开时确保存在：`mkdirSync(blobsDir, { recursive: true })`（`WorkspaceStore.ts:288`）——批次一只读打开时**不得**做这步（见 §4）。
+- 目录在写入侧打开时确保存在：`mkdirSync(blobsDir, { recursive: true })`（只读打开时**不得**创建目录，见 §4.1）。
 
 ### 3.3 快照落盘规则：「临时写入 → 校验 → 同卷原子改名 → 事务内登记」
 
@@ -389,72 +378,57 @@ defaultDataDir(rootPath)（WorkspaceStore.ts:269-274）:
 
 读取：`readSnapshot(hash)` 直接读 blob 路径，不存在返回 null（`WorkspaceStore.ts:470-474`）；对外路径 `snapshotPath(hash)`（`388-390`），PDF/SVG 按需读取走它（`project.ts:557-568`、`workspace-plugin.ts:350-354`）。
 
-### 3.4 引用计数与回收（现状，供批次一边界引用）
+### 3.4 引用计数与回收
 
-- `blobs.ref_count` 只在 `registerBlobRef` 维护（§3.3 第 6 步）；`evictUnreferencedSnapshots`（删除 `content_hash NOT IN (SELECT content_hash FROM revisions)` 的 blob 文件与行，`WorkspaceStore.ts:451-468`）**当前没有任何调用方**（本次 grep 全仓证实，§7）。
-- `storeSnapshot`（写盘+登记组合入口，`444-448`）与 `markRevisionSnapshotUnavailable`（置 `snapshot_available = 0`，`606-610`）同样**无调用方**；`snapshot_available` 目前恒为 1（`reconcile.ts:331`），读取端有对应分支（`project.ts:125,154,164`）。
-- 方案的处置：崩溃留下的无引用快照**可延后回收**；已被提交引用的快照**不能在恢复时误删**（`docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:144`）。批次一明确不做回收（§4）。
+- `blobs.ref_count` 只在 `registerBlobRef` 维护（§3.3 第 6 步）；崩溃留下的无引用快照可延后回收，已被 `revisions` 引用的快照绝不能在恢复或回收时误删。
 
 ---
 
-## 4. 批次边界
+## 4. 读写职责边界
 
-### 4.1 批次一（只读服务）边界
+### 4.1 读取侧边界
 
-依据方案 §8 第一批完成条件与 §6 规则（`docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:163,125`）：
+1. **零写 SQL**：只读连接对 `index.db` 不执行任何写 SQL——不 `exec(SCHEMA)`、不 `ALTER`、不写 `meta`、不 bump generation、不 `markScan`。服务层通过工作区排他锁保护同一数据目录。
+2. **不生成第二套历史。** 不创建新的 workspaces/files/revisions/events 行，不重算 file_id/revision_id 去认领已有数据；身份读取直接以库内行为准，写入侧沿用 §2 全部身份规则在同一套表上追加。
+3. **打开已有数据零扫描。** 启动后立即开放读取，展示最近已保存状态；后台对账不阻塞正文读取与事件查询，不得在 bootstrap 或任何 `/api/v1` 读路径里触发目录枚举或内容哈希。
+   - 启动时的整库核验与 File Watcher 由 `ServeConfig::background_index` 显式控制。**CLI `guanlan serve` 默认关闭**（`--watch` 打开），保持「零扫描」语义；桌面壳（`guanlan-desktop`）显式打开，以实现打开即见已存数据并后台并入改动。
+   - 与开关无关：Inline 拍板 / MCP 回写等写回端点始终可用（自带写线程队列）。
+4. **无引用快照回收**：回收语义以 §3.4 为准（`blobs` 中 `content_hash NOT IN revisions` 者可删），且恢复/回收流程永远不得删除已被 `revisions` 引用的快照；读侧不做任何删除动作。
+5. 快照缺失的版本按 `snapshot_available = 0` 呈现（绝不拿当前文件内容冒充旧版本）。
+6. 读取完整性依赖 §0 不变量：任何时刻读到「版本行存在」即可断言对应快照已在事务前落盘校验。
 
-1. **不写库。** 批次一 Rust 服务对 `index.db` 不执行任何写 SQL：不 `exec(SCHEMA)`（即便幂等）、不 `ensureColumn` 式 `ALTER`、不写 `meta`、不 bump generation、不 `markScan`。打开已有库即用现状 schema（§1.3）。实现注意（列入 §8 风险）：WAL 库的纯只读连接在 Windows 上对 `-shm`/`-wal` 有可写性要求，需在「`SQLITE_OPEN_READONLY`」与「打开但保证零写 SQL」之间做出明确选择，并配服务级排他锁（方案 §7：`docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:151`）。
-2. **不生成第二套历史。** 不创建新的 workspaces/files/revisions/events 行，不重算 file_id/revision_id 去「认领」已有数据；身份读取直接以库内行为准（方案 `docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:140,163`「此批不创建另一套扫描历史」）。第二批 Rust 索引上线后，也必须沿用 §2 全部身份规则在**同一套表**上追加。
-3. **打开已有数据零扫描。** 完成（必要的）锁定后立即开放读取，展示「最近已保存状态」；后台对账（第二批起）不阻塞正文读取与事件查询，不得在 bootstrap/任何 `/api/v1` 读路径里触发目录枚举或内容哈希（方案 `docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:125,163`）。
-   - 批次二实现口径（PRD v2.0 §3.4）：启动时的整库核验与 File Watcher 由 `ServeConfig::background_index` 显式控制。**CLI `guanlan serve` 默认关闭**（`--watch` 打开），保持本条「零扫描」语义——否则每次启动都会把 `last_observed_at` 等观测事实改写成当前时刻，使 API 输出与库内既有事实不再逐字一致（`scripts/smoke-v1.ts` 正是以该口径做 Node↔Rust 端点比对）。桌面壳（`guanlan-desktop`）显式打开，因为它是 PRD §3.4「打开即见已存数据、后台并入改动」的目标载体。
-   - 与开关无关：Inline 拍板 / MCP 回写等写回端点始终可用（自带 job 队列），只是不自动感知外部文件改动。
-4. **无引用快照回收本批不做，但必须写明**：回收语义以 §3.4 现有实现为准（`blobs` 中 `content_hash NOT IN revisions` 者可删），且恢复/回收流程永远不得删除已被 `revisions` 引用的快照；批次一不做任何删除动作（方案 `docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:144`）。
-5. 批次一交付物覆盖既有画布所需：事件、文件、决定、已存引用、历史版本与三种资料（md/svg/pdf）的读取；快照缺失的版本按 `snapshot_available = 0` 呈现（`project.ts:125,154,164` 的既有展示语义）。
-6. 读取完整性依赖 §0 不变量：任何时刻读到「版本行存在」即可断言对应快照已在事务前落盘校验；批次一无须为此加额外校验逻辑。
-
-### 4.2 批次二（Rust 索引与唯一写入者）边界
-
-批次二把写入侧交给 Rust（方案 §4-§6，`docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:89,114,165`）：
+### 4.2 写入侧边界（Rust 索引与唯一写入者）
 
 1. **唯一写入线程。** 库内只有一条可写连接，由专用写线程独占（`core::index::writer::Writer` + `service::index_jobs`）；读侧仍是独立的只读连接池，两侧靠 WAL 并行。写事务一律 `BEGIN IMMEDIATE`（§0）。
 2. **沿用 §2 全部身份规则，在同一套表上追加。** 不新建表、不新建第二套历史：`file_id` / `revision_id` / `event_id` / `statement_id` / `decision_id` / `edge_id` 的生成公式与旧 Node 管线（`server/reconcile.ts`、`server/derive.ts`）逐字一致。**唯一写入路径的硬保证**是 Node↔Rust 写入对拍脚本（`scripts/parity-reconcile.ts`）：同一工作区两侧各跑一轮，逐表导出比对，任何身份偏差都会让对拍失败。
-3. **打开即最新，后台对账不阻塞读取。** 服务启动即在写线程上排一轮整库核验（`verify_all`）；读路径立即可用，索引在后台推进（§3 阶段二「完成（必要的）锁定后立即开放读取」）。
-4. **幂等 DDL 由写入侧拥有。** 写入侧按 §1.1 的 `CREATE … IF NOT EXISTS` 集合确保 schema，并做 `statements.detail_json` 的增量列迁移；这是幂等空操作，不改变既有库的结构语义。`PRAGMA user_version` 不动（读侧接受 0/1）——**本条已被 §4.3 部分取代**：PRD v2.0 长任务批次起写入侧条件升版到 2（见 §4.3.1）。
+3. **打开即最新，后台对账不阻塞读取。** 开启后台索引时，服务启动即在写线程上排一轮整库核验（`verify_all`）；读路径立即可用，索引在后台推进。
+4. **幂等 DDL 由写入侧拥有。** 写入侧按 §1.1 与 §4.3.2 的 `CREATE … IF NOT EXISTS` 集合确保 schema，做 `statements.detail_json` 增量列迁移，并在末尾条件写入 `PRAGMA user_version = 2`（见 §4.3.1）。
 5. **写入顺序不变**：稳定读取 → 保存并校验内容快照 → 事务提交版本与事件及证据（§0）。
-6. **采集范围不完整时不判缺失**（§0 末条与 `reconcile.ts:472-497`）：文件数上限（`GUANLAN_MAX_FILES`，批次二默认 5000，B01 起为 200000）或深度上限（`GUANLAN_MAX_DEPTH`，批次二默认 14，B01 起为 32）触顶时，本轮 `complete=false`，只报告已扫到的范围，**不**把范围外的文件标为缺失。
+6. **采集范围不完整时不判缺失**（§0 末条与 `reconcile.ts:472-497`）：文件数上限（`GUANLAN_MAX_FILES`，默认 200000）或深度上限（`GUANLAN_MAX_DEPTH`，默认 32）触顶时，本轮 `complete=false`，只报告已扫到的范围，**不**把范围外的文件标为缺失。
 
 ---
 
-## 4.3 schema v2：长任务引擎与状态机新表（PRD v2.0 长任务批次）
+## 4.3 schema v2：长任务引擎与状态机新表
 
-> 本节由「观澜-长任务引擎与证道阁上下文基座」批次加入。依据：
-> `docs/guanlan/观澜-长任务引擎与证道阁上下文基座-PRD-v2.0.md` §2/§3；
-> 冻结契约 apiContract v1.2（第三轮修订）与评审强制约束 1–5 的裁定。
 > 实现载体：`guanlan-core/src/index/state_machine.rs`（SSOT 纯函数）、
 > `guanlan-core/src/index/state_engine.rs`（落库执行器）、
 > `guanlan-core/src/index/writer.rs`（DDL 与全部写语句）。
 
 ### 4.3.1 schema 版本门禁：`user_version` 0/1 → 2 [单向条件升级]
 
-- **依据**：`server/` 目录 grep `user_version|schema_version|schemaVersion` 零命中
-  （Node 管线从不读该值，§1.3 同证）；`scripts/parity-reconcile.ts` 两侧各自写
-  独立临时库逐表 dump 比对，不写共享库——`user_version` 作为版本载体对 Node 侧零影响。
+- **兼容性**：旧 Node 管线（`server/`）不读写 `user_version`；`scripts/parity-reconcile.ts` 两侧各自写独立临时库逐表 dump 比对，`user_version` 对对拍零影响。
 - **写入时机**：`Writer::ensure_schema` 末尾，全部新表幂等建表后**条件写**
   `PRAGMA user_version = 2`——只在当前值 < 2 时写（只升不降，已是 2+ 不回写）。
 - **读侧白名单**：`ReadonlyStore::SUPPORTED_SCHEMA_VERSIONS = [0, 1, 2]`（`storage/mod.rs`）。
-  未知版本（含 3+）仍拒绝打开：不迁移、不写入（§4-1 边界不变）。
-- **混部署约束（登记）**：旧批次 Rust 二进制（白名单仍 [0,1]）打开已升版库会先报
-  schema 错——**写侧升级与读侧同包发布**；Node 侧不受影响（从不读该值）。
-- 本次实测：Rust 扫描器对既有 Node 建库（user_version=0）执行一轮增量对账后，
-  `PRAGMA user_version` 0→2，7 张新表就绪，events/statements/edges/revisions 四表
-  逐字段与扫描前全等（events 71/71、statements 10/10、edges 9/9、revisions 63/63）。
+  未知版本（含 3+）拒绝打开：不迁移、不写入（§4.1 边界不变）。
+- **同包发布约束**：写侧升级与读侧必须同包发布；更早版本的读侧遇到更高版本库会以 `SCHEMA_TOO_NEW` 拒绝打开。
 
 ### 4.3.2 新表 DDL（7 张，全部幂等 `IF NOT EXISTS`，对既有库空操作）
 
 以下 SQL 与 `guanlan-core/src/index/writer.rs` 的 `SCHEMA` 尾段逐字一致（实现以此为准）：
 
 ```sql
--- ① 专项（PRD 2.1）：跨天长任务的一级容器。UNIQUE(workspace_id, root_dir)
+-- ① 专项：跨天长任务的一级容器。UNIQUE(workspace_id, root_dir)
 --    保证同一工作区同一根目录只有一行。
 CREATE TABLE IF NOT EXISTS initiatives (
   initiative_id    TEXT PRIMARY KEY,
@@ -473,7 +447,7 @@ CREATE TABLE IF NOT EXISTS initiatives (
 );
 CREATE INDEX IF NOT EXISTS idx_initiatives_ws ON initiatives(workspace_id);
 
--- ② 文档级状态投影（PRD 2.2 统一状态机 SSOT 存储层）。file_id 复用 files 主键
+-- ② 文档级状态投影（统一状态机 SSOT 存储层）。file_id 复用 files 主键
 --    ——禁止第二套文件身份。
 CREATE TABLE IF NOT EXISTS artifact_states (
   file_id               TEXT PRIMARY KEY,
@@ -493,8 +467,8 @@ CREATE TABLE IF NOT EXISTS artifact_states (
 CREATE INDEX IF NOT EXISTS idx_astates_ws_state ON artifact_states(workspace_id, state);
 CREATE INDEX IF NOT EXISTS idx_astates_initiative ON artifact_states(initiative_id);
 
--- ③ 子任务节点（PRD 3.1 五槽位 DAG）。state 是声明式跨轮持久态，每轮
---    reconcile 由 state_engine::recompute 幂等重算维持（阻塞1 修复）。
+-- ③ 子任务节点（五槽位 DAG）。state 是声明式跨轮持久态，每轮
+--    reconcile 由 state_engine::recompute 幂等重算维持。
 CREATE TABLE IF NOT EXISTS task_nodes (
   node_id               TEXT PRIMARY KEY,
   workspace_id          TEXT NOT NULL,
@@ -512,8 +486,8 @@ CREATE TABLE IF NOT EXISTS task_nodes (
 );
 CREATE INDEX IF NOT EXISTS idx_nodes_init ON task_nodes(initiative_id, stage, state);
 
--- ④ 执行快照（PRD 3.2 断点续跑）。checkpoint_id 主键的 seq 由库内既有行数派生
---    （约束2：重启安全）；恢复 = 取节点/initiative+stage 最近一次 SUCCESS。
+-- ④ 执行快照（断点续跑）。checkpoint_id 主键的 seq 由库内既有行数派生
+--    （重启安全）；恢复 = 取节点/initiative+stage 最近一次 SUCCESS。
 CREATE TABLE IF NOT EXISTS checkpoints (
   checkpoint_id        TEXT PRIMARY KEY,
   node_id              TEXT,
@@ -531,7 +505,7 @@ CREATE TABLE IF NOT EXISTS checkpoints (
 CREATE INDEX IF NOT EXISTS idx_ckpt_init ON checkpoints(initiative_id, stage, created_at);
 CREATE INDEX IF NOT EXISTS idx_ckpt_node ON checkpoints(node_id);
 
--- ⑤ 修订草案（PRD 5.1 人机并发冲突：Agent 写入存为草案分支，绝不静默覆盖）
+-- ⑤ 修订草案（人机并发冲突：Agent 写入存为草案分支，绝不静默覆盖）
 CREATE TABLE IF NOT EXISTS revision_drafts (
   draft_id               TEXT PRIMARY KEY,
   workspace_id           TEXT NOT NULL,
@@ -549,7 +523,7 @@ CREATE TABLE IF NOT EXISTS revision_drafts (
 );
 CREATE INDEX IF NOT EXISTS idx_drafts_file ON revision_drafts(file_id, status);
 
--- ⑥ L4A 后台沉淀队列（PRD 3.4；v1 = local_deterministic，登记偏差）
+-- ⑥ L4A 后台沉淀队列（本地确定性摘要引擎）
 CREATE TABLE IF NOT EXISTS summary_jobs (
   job_id         TEXT PRIMARY KEY,
   workspace_id   TEXT NOT NULL,
@@ -585,13 +559,13 @@ CREATE INDEX IF NOT EXISTS idx_runs_state ON job_runs(workspace_id, state);
 `POST /api/v1/index-jobs {kind:"set_initiative_dirs"}`（服务态写线程）→
 seed-fixture 示例值（含 `BOM与图纸联动方案`）。既有键 `extract_rule_version` 不动。
 
-### 4.3.3 状态机迁移事件的身份与记账规则（阻塞4 裁定落地）
+### 4.3.3 状态机迁移事件的身份与记账规则
 
 新增事件 kind：`state_changed` / `task_node_moved`（迁移类）与 `checkpoint_committed`；
 新增事件主体 subject_kind：`artifact` / `initiative` / `task_node` / `checkpoint`；
 新增 occurred_source：`state_machine`（§5.5 来源枚举扩展）。
 
-- **subject_id 编码迁移方向**（阻塞4 修复核心）：
+- **subject_id 编码迁移方向**：
   - `task_node_moved`：`{node_id}:{from_state}->{to_state}`，如 `node_ab12:queued->running`；
   - `state_changed`（artifact）：`{file_id}:{from_state}->{to_state}`，如
     `f_ab12cd:pending_review->executing`；
@@ -604,70 +578,50 @@ seed-fixture 示例值（含 `BOM与图纸联动方案`）。既有键 `extract_
   全部记账。
 - `occurred_at` = 迁移时刻（`clock::now_iso`，毫秒三位 ISO）；`occurred_precision` =
   `'second'`、`occurred_source` = `'state_machine'`。
-- **首建静默（评审约束4 裁定 a，本契约钉死）**：`initiatives` / `artifact_states` /
-  `task_nodes` **无既有行**时首次落库不发迁移事件、不计 changed、不 bump generation。
-  多级迁移记账仅适用于**两个已持久状态之间**的重算。依据：seed-fixture.ts 以 Node
-  管线建夹具库、smoke-v1.ts 以 Rust serve 对同一库增量对账——首轮必然全量首建，
-  若发事件则 events 期望比对与 parity 对拍必红。**recompute 在 reconcile 的代际判定
-  之前执行**（`index/mod.rs`，`backfill_document_self_events` 之后、`changed` 计算之前），
-  迁移事件计入 `events_inserted`，由既有「有变化才 bump」口径统一推进代际——无二次
-  bump 口径。
-- 本次实测：对既有 Node 夹具库跑 Rust 增量对账，`events` 表 71 行逐字段不变、
-  `index_generation` 不动（首轮全量首建静默）。
+- **首建静默**：`initiatives` / `artifact_states` / `task_nodes` **无既有行**时首次落库不发迁移事件、不计 changed、不 bump generation。多级迁移记账仅适用于**两个已持久状态之间**的重算。`recompute` 在 `reconcile` 的代际判定之前执行（`index/mod.rs`，`backfill_document_self_events` 之后、`changed` 计算之前），迁移事件计入 `events_inserted`，由「有变化才 bump」口径统一推进代际。
 
-### 4.3.4 checkpoints：seq 派生与重复 SUCCESS 语义（评审约束2 裁定落地）
+### 4.3.4 checkpoints：seq 派生与重复 SUCCESS 语义
 
-- `checkpoint_id = 'ckpt_' + stable_key(initiative_id|stage|node_id|seq)`（冻结契约 E
-  模板不变），其中 **seq 由库内派生**：`COUNT(*)` 该
+- `checkpoint_id = 'ckpt_' + stable_key(initiative_id|stage|node_id|seq)`，其中 **seq 由库内派生**：`COUNT(*)` 该
   `(workspace_id, initiative_id, stage, COALESCE(node_id,''))` 既有行数 + 1。
   进程内 AtomicU64 计数器在重启后归零会让同节点第二次 SUCCESS 生成与重启前相同的
-  主键——**禁止**（`new_job_id` 先例不可照抄到此处）。
+  主键——**禁止**。
 - 防御：`stable_key` 是 32 位哈希，主键冲突时按 seq 递增重试（上限 64 次，超限报
   INTERNAL）。
-- **重复 SUCCESS 语义（v1 裁定）**：追加新行（每轮执行一个快照），**不覆盖**；
+- **重复 SUCCESS 语义**：追加新行（每轮执行一个快照），**不覆盖**；
   「最近一次 SUCCESS」恢复查询 = 按 `created_at DESC, rowid DESC` 取首个
   `status='SUCCESS'` 且 stage（可选 node_id）匹配的行（`Writer::latest_success_checkpoint`）。
 - `node_id` 可缺省：缺省时由 `state_engine::commit_checkpoint` 按
-  `(workspace_id, initiative_id, stage)` 反查槽位节点推进（评审约束1：外部 agent 的
-  `guanlan.commit_checkpoint` 载荷与 PRD 3.2 结构均不含 node_id；五槽位模型下
+  `(workspace_id, initiative_id, stage)` 反查槽位节点推进（外部 agent 的
+  `guanlan.commit_checkpoint` 载荷不含 node_id；五槽位模型下
   initiative+stage 唯一命中）。给定时必须存在且属于该专项（否则 404 回传 reply）。
 - 非 SUCCESS（FAILED_RETRYABLE / SUSPENDED_HITL）只落行与事件，不推进节点；
   derive/await_decision/deliver 槽为声明式重算，SUCCESS 行不改变其重算判据（仅
   generate 槽以 SUCCESS checkpoint 为唯一完成通道）。
 - 校验（initiative/stage 存在、status ∈ `SUCCESS|FAILED_RETRYABLE|SUSPENDED_HITL`）
-  与插行、`checkpoint_committed` 事件、槽位推进、recompute 同事务（阻塞2：受理与
-  校验原子；校验失败 checkpoint 不落库、无 job_id）。
+  与插行、`checkpoint_committed` 事件、槽位推进、recompute 同事务（校验失败不落库）。
 
-### 4.3.5 决策解析器与抽取规则版本（评审约束5 三难裁定的本批落地）
+### 4.3.5 决策解析器与抽取规则版本
 
-- 卡点块解析（PRD 3.3）：`index/decision_block.rs` 解析 `[P0/P1/P2 - 待确认|已确认]`
+- 卡点块解析：`index/decision_block.rs` 解析 `[P0/P1/P2 - 待确认|已确认]`
   标准块（决定/确认人/角色/现·新运行条件/生效范围与日期/推荐/选项行），产出
   领域模型 `domain::model::DecisionItem`（decision_id 与 statements 同源：
   `dec_` + stable_key(命名空间::归一化问题)）。
-- `derive_statements` 新增第三条抽取路径（格式 C）：每卡点块一条陈述，`code` =
+- `derive_statements` 支持第三条抽取路径（格式 C）：每卡点块一条陈述，`code` =
   优先级词（`P0|P1|P2`），`detail_json` 在既有五键序尾部追加 `priority` 键。
   **既有 A/B 两条路径输出逐字不变**（priority=None）。
-- `detect_status` 新增括号形态 `\[\s*P\s*\d\s*[-—–]?\s*已确认\s*\]` → 「已确认」
+- `detect_status` 支持括号形态 `\[\s*P\s*\d\s*[-—–]?\s*已确认\s*\]` → 「已确认」
   （回写后的块状态判定）。
-- **EXTRACT_RULE_VERSION 维持 `v0.4.3` 不 bump**：仅 Rust 侧 bump 会让 parity
-  statements 的 `extract_rule_version` 列不一致（对拍红）；双侧同 bump 需改
-  `server/WorkspaceStore.ts:131`，超出 PRD 附则「后端改动只涉及 native crates」的
-  文件范围。**代价（显式登记）**：存量工作区已含卡点块的文件要等内容变化产生新版本
-  后才抽出 P0/P1/P2 陈述；`rebuild_derived_if_needed` 版本相同即跳过。**待办**：
-  Node+Rust 双侧同版本 bump（`v0.4.4`）在允许改 `server/` 的批次一次性闭合，并在
-  方案登记 server/ 一行改动为附则豁免。当前夹具不含卡点块（seed-fixture.ts grep
-  `[P0/P1/P2`、`决定：`、`确认人：` 零命中），本批对 parity/冒烟零影响（已实测）。
+- **EXTRACT_RULE_VERSION 维持 `v0.4.3` 不 bump**：与 `server/WorkspaceStore.ts` 保持一致以维持 Node↔Rust 写入对拍，且避免触发存量工作区全量重派生。存量工作区已含卡点块的文件在内容变化产生新版本后抽取 P0/P1/P2 陈述。
 
-### 4.3.6 本批裁定值（确定性口径，待 PRD 作者确认的项一并登记）
+### 4.3.6 状态机确定性口径
 
-1. **阶段枚举**：`蓝图|计划|决策|执行|交付|待分类`（apiContract A 冻结词）；PRD 2.1
-   文案的「提案」对应「蓝图」。阶段序 `待分类 < 蓝图 < 计划 < 决策 < 执行 < 交付`。
+1. **阶段枚举**：`蓝图|计划|决策|执行|交付|待分类`；阶段序 `待分类 < 蓝图 < 计划 < 决策 < 执行 < 交付`。
 2. **文档阶段判定**（`state_machine::stage_from_path`）：按相对路径关键词短路——
    决策（待确认/已确认/决策/回执）→ 计划（方案/计划/设计）→ 交付（交付/清单/验收）→
    蓝图（需求/提案/蓝图/概要）→ 执行（执行/实现/联调）→ 待分类。
 3. **专项 current_stage**：已归类文档阶段的最靠后者；无文档为「待分类」。
-4. **selected_revision_id / has_selected_revision**：v1 = `files.last_revision_id`
-   （当前版本即选中修订；「多版本择优」语义后继批次引入）。
+4. **selected_revision_id / has_selected_revision**：取 `files.last_revision_id`（当前版本即选中修订）。
 5. **last_activity_at**：该文件最新版本的 `occurred_at`（材料时间口径，§5.5）；无
    版本为 NULL；`last_activity_days` = UTC 天差，无活动记录按 0（不做超期归档）。
 6. **未决分级**：待确认陈述按 `detail_json.priority` 键归 P0/P1/P2；无键（既有 A/B
@@ -678,17 +632,12 @@ seed-fixture 示例值（含 `BOM与图纸联动方案`）。既有键 `extract_
 9. **交付槽完成判据**：交付段文档 checklist 聚合 `total>0 && done==total` 且该专项
    阻塞级未决清零；`total==0`（无清单项）视为未满（与文档级 Executing→Delivered 需
    `total>0` 一致）。
-10. **identity-vectors 降级**（评审约束3）：`domain/vectors_fixture_test.rs` 在
-    `identity-vectors.json` 缺失（干净 checkout 无 seed）时**显式降级跳过**（stderr
-    打点 + return），不再 panic；身份公式由该文件的内嵌 SESSION_VECTORS 与契约值
-    测试覆盖，不因夹具缺失失守。`native/testdata/token-vectors.json` 为 git
-    内静态文件（`git check-ignore` exit=1 可提交），Rust 侧
-    `include_str!("../../../../testdata/token-vectors.json")` 编译期读取（缺文件=
-    编译错误而非运行时 panic），TS 侧 `fs.readFileSync` 同源。
+10. **identity-vectors 降级**：`domain/vectors_fixture_test.rs` 在
+    `identity-vectors.json` 缺失（干净 checkout 无 seed）时显式跳过（经 `note_skipped` 记入跳测日志）；核心身份公式另由内嵌 `SESSION_VECTORS` 覆盖。`native/testdata/token-vectors.json` 为仓库内静态向量文件，Rust 侧 `include_str!` 编译期读取，TS 侧 `fs.readFileSync` 同源读取。
 
 ---
 
-## 4.4 A05 身份保真文件操作与回收站还原契约
+## 4.4 身份保真文件操作与回收站还原契约
 
 不变更 SQLite 表结构（仍保持 `user_version = 2`），在既有 `files`、`path_aliases`、`events` 之上固化以下不变量（实现见 `guanlan-core/src/index/file_ops.rs`）：
 
@@ -706,9 +655,9 @@ seed-fixture 示例值（含 `BOM与图纸联动方案`）。既有键 `extract_
 
 ---
 
-## 4.5 B01 全文件类型分级入库与三档快照配额契约
+## 4.5 全文件类型分级入库与三档快照配额契约
 
-不改变既有 `files / revisions / blobs` 表 DDL（维持 `user_version = 2`），从 B01 起放开采集白名单并落实三档存储隔离（实现见 `guanlan-core/src/index/file_format.rs`、`ignore.rs`、`collector.rs`、`storage/mod.rs`）：
+不改变既有 `files / revisions / blobs` 表 DDL（维持 `user_version = 2`），放开采集白名单并落实三档存储隔离（实现见 `guanlan-core/src/index/file_format.rs`、`ignore.rs`、`collector.rs`、`storage/mod.rs`）：
 
 1. **全格式采集与 `.gitignore` 遵守**：
    - 采集白名单放开至工作区全部常规文件；仅排除系统/依赖目录黑名单（`DEFAULT_EXCLUDED`，含 `node_modules` / `.git` / `target` / `__pycache__` / `.venv` / `dist` 等）及工作区根与逐层子目录 `.gitignore` 命中的路径（越深越优先，支持 `!` 取反、`#` 注释、`dir/` 仅目录、`/` 锚定与 `**` 跨目录）。
@@ -729,20 +678,20 @@ seed-fixture 示例值（含 `BOM与图纸联动方案`）。既有键 `extract_
 
 ### 5.1 内容未变 ⇒ 不增版本、不增业务事件
 
-- 判定式：`latest.content_hash === file.sha256`（`reconcile.ts:273`）→ 仅事务内 `touchFile`（更新 `last_observed_at / last_mtime_ms / last_revision_id / status='active'`，`WorkspaceStore.ts:527-534`；调用 `reconcile.ts:276-285`），**不插入 revision、不插入内容事件**。连续重扫不增事件（`reconcile.ts:8` 头注释「内容哈希相同 ⇒ 不新增版本、不新增事件」；方案 `docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:141`）。
+- 判定式：`latest.content_hash === file.sha256`（`reconcile.ts:273`）→ 仅事务内 `touchFile`（更新 `last_observed_at / last_mtime_ms / last_revision_id / status='active'`，`WorkspaceStore.ts:527-534`），**不插入 revision、不插入内容事件**。连续重扫不增事件。
 - 例外（语义上是「恢复」不是「内容」事件）：文件此前 `status='missing'` 且原内容重现 → 追加一条 `read_recovered` 事件（`reconcile.ts:286-304`），identity 为 `(ws,'read_recovered',file_id,last_revision,NULL)` ⇒ 同一文件同一版本终生只此一条。
 
 ### 5.2 仅 mtime 变化 ⇒ 不增版本、不增事件
 
-- 内容哈希相同而 `last_mtime_ms !== file.mtimeMs` 时：只更新采集元数据（touchFile），不登记内容版本、不产生事件（`reconcile.ts:275` 与空分支注释 `282-284`「仅时间戳变化：不登记内容版本，也不产生事件」；方案 `docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:141`）。仅计数 `mtimeOnly`（`reconcile.ts:305`）。
+- 内容哈希相同而 `last_mtime_ms !== file.mtimeMs` 时：只更新采集元数据（touchFile），不登记内容版本、不产生事件。仅计数 `mtimeOnly`。
 
 ### 5.3 A → B → A ⇒ 三次版本出现、两份去重内容
 
-- 三个 `revisions` 行（seq 1/2/3，`content_hash` h1/h2/h1），`blobs` 里 h1 只有一行、`ref_count` 累加为 2，磁盘上只有一份 h1 快照（方案 `docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:141`；表设计注释 `WorkspaceStore.ts:8-9`、`reconcile.ts:9`；去重落盘 `WorkspaceStore.ts:402-407`）。读取端版本链按 `revisions(file_id, seq)` 排序展示三次出现（`WorkspaceStore.ts:558-562, 570-574`）。
+- 三个 `revisions` 行（seq 1/2/3，`content_hash` h1/h2/h1），`blobs` 里 h1 只有一行、`ref_count` 累加为 2，磁盘上只有一份 h1 快照。读取端版本链按 `revisions(file_id, seq)` 排序展示三次出现。
 
 ### 5.4 缺失判定只认完整范围（读取端语义）
 
-- 只有当本轮扫描 `collected.complete`（范围枚举完整、无截断）时才对未见到路径标 `missing` 并发事件；中断或失败不得批量误报删除/缺失（`reconcile.ts:472-497`，判定行 `473`；方案 `docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:145`）。读取端可把 `missing` 事件视为「完整范围扫描的结论」。
+- 只有当本轮扫描 `collected.complete`（范围枚举完整、无截断）时才对未见到路径标 `missing` 并发事件；中断或失败不得批量误报删除/缺失。读取端可把 `missing` 事件视为完整范围扫描的结论。
 
 ### 5.5 时间字段：发生 / 采集 / 来源 / 精度 四者独立
 
@@ -759,16 +708,16 @@ seed-fixture 示例值（含 `BOM与图纸联动方案`）。既有键 `extract_
 - 正文自述日期抽取（`derive.ts:339-364`）：候选依次为 front matter `date|updated|created` 行（`344-349`）、`文档日期：YYYY-MM-DD`（`350-351`）、正文前 1200 字符内首个 ISO 日期（`352-353`）；引号剥离后按 `^(\d{4})-(\d{2})-(\d{2})` 前缀匹配（`356-357`）。
 - 命中即返回**纯日期字符串** `YYYY-MM-DD`，`precision = 'day'`，`source = 'document_self'`——「只有日期：保留到天，不补零点时刻」（`derive.ts:359-360`）。因此 `document_self` 来源的 `occurred_at` 当前恒为纯日期；即使原文带时刻也会被截断为日期（见 §8 待确认 6）。
 - 无候选 → `null / 'unknown' / null`，由 mtime 兜底（`derive.ts:363` + `reconcile.ts:359-363`）。
-- 全程不做时区换算、不补 `T00:00:00`：基线卡发生时间也是 `observedAt.slice(0,10)` 纯日期，precision `'day'`、source `'collector'`（`reconcile.ts:512-514`）；事件文案显式声明「未补零点时刻」（`reconcile.ts:444,707`）；方案要求：`docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:142`。读取端按精度分组展示，日级事项归日期组。
+- 全程不做时区换算、不补 `T00:00:00`：基线卡发生时间也是 `observedAt.slice(0,10)` 纯日期，precision `'day'`、source `'collector'`（`reconcile.ts:512-514`）；事件文案显式声明「未补零点时刻」。读取端按精度分组展示，日级事项归日期组。
 
 ### 5.7 基线与逐文件事件的分工（首扫语义，读取端会遇到）
 
 - 首次扫描（无 `workspace_baseline` 事件，`reconcile.ts:176` + `WorkspaceStore.ts:374-379`）：正文有自述日期的材料各自发 `appeared` 事件入轴；无日期依据的新文件不发逐文件事件，统一由一条基线卡覆盖（`reconcile.ts:411-412`，事件 `504-531`，headline「首次纳入 N 份资料」）。
-- `appeared/modified` 事件 `payload_json` 字段（`reconcile.ts:449-463`）：`path, format, size_bytes, content_hash, mtime_ms, time_basis('document_self'|'file_mtime'|'collector'), changed_sections, added_lines, removed_lines`。`batch_id` 目前**恒为 null**（全部 8 个插入点核实，本次 grep，§7；方案 §6 提到的「每轮扫描标识」尚未落地）。
+- `appeared/modified` 事件 `payload_json` 字段（`reconcile.ts:449-463`）：`path, format, size_bytes, content_hash, mtime_ms, time_basis('document_self'|'file_mtime'|'collector'), changed_sections, added_lines, removed_lines`。`batch_id` 当前恒为 null。
 
 ### 5.8 重放与决策事件幂等
 
-- 任务重试依赖 §2.6 去重身份，不得再次新增同一事件（方案 `docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:144`；实现 `WorkspaceStore.ts:615-655`）。
+- 任务重试依赖 §2.6 去重身份，不得再次新增同一事件（实现 `WorkspaceStore.ts:615-655`）。
 - 决策事件只在**状态转换**时新增：每业务决定取最新来源陈述的状态与上一次决策事件 payload 的 `status` 比较，相同则只留 statements 证据、不插事件（`reconcile.ts:833-906`，跳过判定 `871-872`）；状态→事件种类映射 `810-825`。
 
 ---
@@ -782,39 +731,22 @@ seed-fixture 示例值（含 `BOM与图纸联动方案`）。既有键 `extract_
 3. 忽略规则：路径任一段属于默认集 `['node_modules','.git','.venv','dist','runtime','backups','tmp']` 或以 `.` 开头（`watcher.ts:81-84`）。
 4. 调度：目录级防抖默认 1500ms（`88`）；距上次核验不足 `minIntervalMs`（默认 8000ms）则合并为一次延后核验（`93-98`）；单飞——上一轮未完成只排队一次，不并发对账（`100-104, 121-127`）。
 5. flush 时清空并快照待处理路径集，随 `WatchChange { at, scanned, newEvents, newRevisions, generation, paths }` 发出（`107-118`）；对账异常发 `reconcile-error` 不中断后续（`119-120`）。
-6. SSE 广播：`ChangeBroadcaster` 向所有客户端写 `data: <JSON>\n\n`，写失败即移除；新连接补发最新 generation，断线重连不丢通知（`131-155`）。通知传输序号独立于业务 `events.seq`（方案：`docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:147`）。
+6. SSE 广播：`ChangeBroadcaster` 向所有客户端写 `data: <JSON>\n\n`，写失败即移除；新连接补发最新 generation，断线重连不丢通知（`131-155`）。通知传输序号独立于业务 `events.seq`。
 
 ---
 
-## 7. 本次勘察实际执行的验证
+## 7. 存储兼容与注意事项
 
-| 验证 | 命令/方式 | 结果 |
-|---|---|---|
-| rootKey/file_id/revision_id 示例值 | `node -e` 用与源码逐字相同的算法（sha256 + `path.resolve` + `slice`）计算 `D:\notebooks\demo` 与 `Notes\ReadMe.MD` | §2.1/§2.3 所列值即实际输出 |
-| `path.resolve` win32 行为 | `node -e` 对正斜杠/小写盘符/尾分隔符/相对路径/纯盘符分别调用 | §2.1 第 2 点所列 5 条行为均为实测 |
-| schema 版本缺失 | `grep -rn "user_version\|schema_version\|schemaVersion" server/ src/`（在 `仓库根目录` 下） | 零命中 |
-| 回收/组合入口无调用方 | `grep -rn "evictUnreferencedSnapshots\|storeSnapshot\|markRevisionSnapshotUnavailable" --include="*.ts" .`（排除 node_modules） | 仅 `server/WorkspaceStore.ts` 内定义处命中 |
-| `batch_id` 恒 null | `grep -rn "batch_id" server/`（排除 WorkspaceStore.ts） | reconcile.ts 全部 8 个插入点均为 `batch_id: null` |
-
-未运行项：未启动旧服务或执行测试套件（勘察任务为只读代码分析，未要求运行）；`queries.ts` / `project.ts` 的分页与投影契约不在本次范围（见 §8 待确认 3）。
+1. **事件去重身份含 `occurred_at`**：`uniq_event_identity` 把 `COALESCE(occurred_at,'')` 纳入身份（§2.6）；当前 `batch_id` 恒为 null。
+2. **`events.seq` 为全表全局自增**，不按 workspace 分段。
+3. **时间戳格式**：`occurred_at`（mtime 来源）与 `observed_at` 均为 `Date.toISOString()` 输出（含毫秒 `.SSS`），precision 标 `'second'`（§5.5）；读取端按 RFC3339 宽容解析。
+4. **自述日期截断行为**：`deriveDocumentTime` 对带时刻的字符串（如 `2026-01-02T10:30`）取前 10 字符、标 `day` 精度，Rust 写入侧保持逐字兼容。
+5. **`root_path` 精确匹配认领**：盘符大小写差异会产生第二个工作区行（§2.2）；读取侧按库内已有行认领。
+6. **`statements`/`edges` upsert 不回填的列**（§1.5）：`namespace/question/observed_at` 等首插后不再更新。
 
 ---
 
-## 8. 待确认（实现前需用户/后续批次裁定）
-
-1. **schema 版本门禁缺位**：现库无任何版本标记（§7 grep 证实），方案却要求「旧实现若不能理解新结构，禁止直接重新写当前库」（`docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:171`）。第四批切换前需决定版本载体（`meta` 表键 vs `PRAGMA user_version`）及首批 Rust 写入是否补登记。
-2. **事件去重身份含 `occurred_at`**：`uniq_event_identity` 把 `COALESCE(occurred_at,'')` 纳入身份（§2.6）。若未来引入方案 §6 的「每轮扫描标识」（batch_id/扫描标识）改变同一事实的重试身份，需确认不破坏既有去重语义；当前 `batch_id` 恒为 null（§7）。
-3. **`events.seq` 为全表全局自增**，不按 workspace 分段；分页游标 `snapshot_max_seq` / `CURSOR_STALE` 的具体口径在 `queries.ts`（本次未精读），批次一实现 `/api/v1/events` 分页时必须另行核对 `queries.ts` 后再定契约。
-4. **时间戳格式**：`occurred_at`（mtime 来源）与 `observed_at` 均为 `Date.toISOString()` 输出，**含毫秒** `.SSS`，precision 却标 `'second'`（§5.5）。Rust 生成需保持一致；仅读取则按 RFC3339 宽容解析即可。
-5. **`snapshot_available = 0` 的写入路径不存在**（§3.4）：恢复/回收流程（第二、四批）实现时需确认何时置 0 及读取端提示文案（现提示「快照已过保留期」，`project.ts:154`）。
-6. **自述日期截断行为**：`deriveDocumentTime` 对带时刻的字符串（如 `2026-01-02T10:30`）也只取前 10 字符、标 `day` 精度（`derive.ts:357-360` 是前缀正则）。Rust 第二批照抄即可保证兼容；是否要「带时刻则用时刻」属产品决策，不在本契约内擅自更改。
-7. **只读打开 WAL 库的可行性**：SQLite 对 WAL 库的只读连接要求 `-shm`/`-wal` 可用（或 `immutable=1`，但后者假设库不变，与本服务生命周期矛盾）。批次一实现者需在「真只读连接」与「读写连接但零写 SQL + 服务级排他锁」间选定并写明依据（方案 §7 排他锁要求：`docs/guanlan/观澜-Rust服务拆分方案-v0.1.md:151`）。
-8. **`root_path` 精确匹配认领**：盘符大小写差异会产生第二个工作区行（§2.2）。读取侧按库内行认领即可，但若用户以不同大小写路径再次启动，`/api/v1/bootstrap` 会看到空工作区——是否在 Rust 侧做 rootKey 归一提示，需产品确认。
-9. **`statements`/`edges` upsert 不回填的列**（§1.5）：`namespace/question/observed_at` 等首插后不再更新。Rust 写入批次若发现旧数据缺这些列值，应视为「按设计如此」，不得擅自补写。
-
----
-
-## 9. B03 · `office_extracts` 内容寻址 L2 结构缓存表
+## 9. `office_extracts` 内容寻址 L2 结构缓存表
 
 - DDL 位于 `writer.rs` `SCHEMA`（通过 `CREATE TABLE IF NOT EXISTS office_extracts` 幂等追加，不破坏现有 7 张核心对账表结构与 v0/v1/v2 只读兼容）：
   - `content_hash TEXT PRIMARY KEY`（与 `blobs`/`revisions.content_hash` 同源，跨路径与 A→B→A 共享零重复解析）
@@ -830,7 +762,7 @@ seed-fixture 示例值（含 `BOM与图纸联动方案`）。既有键 `extract_
 
 ---
 
-## 10. B04 · `pdf_extracts` 内容寻址页级文本缓存表
+## 10. `pdf_extracts` 内容寻址页级文本缓存表
 
 - DDL 位于 `writer.rs` `SCHEMA`（通过 `CREATE TABLE IF NOT EXISTS pdf_extracts` 幂等追加，不破坏现有核心对账表结构与 v0/v1/v2 只读兼容；附 `idx_pdf_status` 索引）：
   - `content_hash TEXT PRIMARY KEY`（与 `blobs`/`revisions.content_hash` 同源，跨路径与 A→B→A 共享零重复解析）
@@ -842,11 +774,11 @@ seed-fixture 示例值（含 `BOM与图纸联动方案`）。既有键 `extract_
   - `extract_rule_version TEXT NOT NULL DEFAULT 'v0.4.3'`
   - `updated_at TEXT NOT NULL`
 - 提取解析在 `reconcile()` 的 `writer.transaction(...)` **外部**完成（流解压/页面解析绝不占用 SQLite 写锁持有期），事务内仅写入 `pdf_extracts` 行与派生的 `statements`；`snapshot_available = 0` 的大文件只落 `metadata_only` 行，绝不把全文读入内存。
-- Markdown `path.pdf#page=N` 链接在 `derive.rs` 派生为陈述 `detail` 的 `linkedPdf` 字段（`{ file_id, revision_id, relative_path, pdf_anchor: { kind: "pdf_page", page } }`），与 B03 `linkedOffice` 同构。
+- Markdown `path.pdf#page=N` 链接在 `derive.rs` 派生为陈述 `detail` 的 `linkedPdf` 字段（`{ file_id, revision_id, relative_path, pdf_anchor: { kind: "pdf_page", page } }`），与 `linkedOffice` 同构。
 
 ---
 
-## 11. C01 · 候选事项三表（多信号编织；采纳前绝不写正式归属）
+## 11. 候选事项三表（多信号编织；采纳前绝不写正式归属）
 
 - `initiative_candidates`：`candidate_id TEXT PK`（`cand_<簇键16>`）、`workspace_id`、`candidate_key`（排序成员 file_id 的 sha 前 16，重扫幂等键）、`title / reason_summary`、`signal_mask`（0x01 目录前缀 | 0x02 显式链接 | 0x04 同名主干 | 0x08 会话共现 | 0x10 Agent 批次）、`score`（0-100）、`member_count`、`state`（`candidate | adopted | dismissed`）、`created_at / updated_at`；索引 `idx_icand_ws_state(workspace_id, state)`。
 - `initiative_candidate_members`：`(candidate_id, file_id) PK`、`role`（`member | excluded`）、`signals_json`（理由胶囊数组 `[{signal, detail}]`）；索引 `idx_icand_member_file(file_id)`。
@@ -855,18 +787,18 @@ seed-fixture 示例值（含 `BOM与图纸联动方案`）。既有键 `extract_
 
 ---
 
-## 12. C02 · 混合倒排检索索引两表（可随时丢弃重建的派生层）
+## 12. 混合倒排检索索引两表（可随时丢弃重建的派生层）
 
 - **派生定位**：两表完全可由 `files + revisions + blobs 快照 + pdf_extracts/office_extracts` 重算，任意损坏经 `POST /api/v1/search/rebuild`（内部 `JobKind::rebuild_search_index`）或下一轮对账尾部自动全量重建恢复；**派生行变化不推进 `index_generation`**（代际只属事实层）。
 - `search_docs`：`file_id TEXT PRIMARY KEY`（**每文件仅最新版本**——`revisions.seq` 最大者；检索语义为「找到当前文件」）、`workspace_id`、`revision_id`、`content_hash`、`format`、`title`、`rel_path`（normalize_rel_path 口径）、`status`（同步差分键；非 active 不留行）、`has_body INTEGER`（0=仅标题/路径可检索：metadata_only、无文本层 SVG、无 extracts 缓存）、`body_text TEXT`（按 `\n` 连接的原文行，尾部空行裁除；行号=下标+1 与 statements.line_start 同口径）、`anchor_json TEXT`（行级锚点：`{"v":1,"kind":"pdf","pages":[行→页码]}` / `{"kind":"docx","paras":[行→段号]}` / `{"kind":"xlsx","cells":[{s,n,r} 行→单元格]}`；文本族为空串）、`line_count`、`truncated`（正文保险丝：行数 20,000 / 字节 512KiB）、`indexed_at`；索引 `idx_sdocs_ws(workspace_id)`。DDL 单一来源：`guanlan-core/src/index/search_index.rs SEARCH_DDL`，由 `Writer::ensure_schema` 幂等执行。
 - `search_postings`：`(term, field, file_id) PRIMARY KEY`（WITHOUT ROWID）+ `weight`；`field ∈ {title, path, content}`；权重 `title=60 / path=45 / content=10 / 编号整词=15 / 单字=5`；词项构成：中文双字 Bigram + CJK 单字（有界回退）+ 英文词元（`[a-z0-9_#-]+` 小写）+ 专有编号整词（内部 ID 四式 `q\d+|t-\d+|cand-\d+|rev_\w+|file_\w+`、通用 `word[-_]digits`、`#digits`）+ 路径/标题分段词（`/` 与 `.` 切段、段内保 `-_` 连接）+ 首字母缩写（`user-auth-service`→`uas`，≤12 字符）；单文档 content 词项上限 4096（编号词优先保留）；索引 `idx_spost_file(file_id)`。
 - **meta 键**：`search_rule_version`（现行 `s1`——分词/权重/正文编码规则版本，变更即全量重建）、`search_state`（`ready | building`，缺失视作 `absent`——查询侧非 ready 诚实空结果）、`search_docs_count`。
 - **同步时机与差分**：`reconcile_collected` 尾部（状态机重算后、代际判定前）`sync_after_reconcile`——差分键 = `(revision_id, rel_path, status)` 与 files 权威值不一致的文件 + `search_docs` 侧孤儿行；全量重建按 500 文件/事务分批。
-- 快照正文读取复用 B01 三档口径：`snapshot_available=0` 或快照不可读一律 `has_body=0`，绝不拿当前文件冒充其他版本、绝不谎报正文命中。
+- 快照正文读取复用三档快照口径：`snapshot_available=0` 或快照不可读一律 `has_body=0`，绝不拿当前文件冒充其他版本、绝不谎报正文命中。
 
 ---
 
-## 13. C05 · 参考工作区只读挂载（mounts.json 侧车与路径规范化）
+## 13. 参考工作区只读挂载（mounts.json 侧车与路径规范化）
 
 - **只读第二库**：参考工作区经 `ReadonlyStore::open_at(<参考区数据目录>, <规范化根路径>)` 以 `SQLITE_OPEN_READONLY` 打开，**参考区索引库零写入**（不建表、不写 meta、不动 blobs）；挂载/卸载只增删服务内存登记与侧车文件，绝不动参考区磁盘内容。参考区数据目录解析与生产索引侧同源（GUANLAN_DATA_DIR 整体替换 base）；挂载时解析出的目录随侧车持久化，重启按原目录重开（不受后续环境变量漂移影响）。
 - **挂载身份与路径规范化（core `domain/mounts.rs` 纯函数）**：

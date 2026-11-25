@@ -10,7 +10,7 @@ import type {
 } from '../../utils/multimodalDiff';
 
 /**
- * D03 ① · Markdown「结论结构」人类可读 Diff 面板。
+ * Markdown「结论结构」人类可读 Diff 面板。
  *
  * 默认视图 = 标题结构（逐章变更徽标）+ 决定/待办变化（人话 chip）+ 关键增删段（聚簇 ±2 行）；
  * mode='source' 切源码行 Diff（unchanged 长连续段折叠为「省略 N 行未变」，DOM 有界）。

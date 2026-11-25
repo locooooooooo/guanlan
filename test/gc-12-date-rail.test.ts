@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-// 1.2：星图左侧日期汇总卡「独立左侧轨道」几何常量 + 主干日期唯一锚点判定
-// （与 wf2-same-day-merge.test.ts / tl02-machine-geometry.test.ts 同款：
-//  组件导出几何常量与纯函数，测试只断言口径，不渲染 SVG）
+// 星图左侧日期汇总卡「独立左侧轨道」几何常量 + 主干日期唯一锚点判定
+// （组件导出几何常量与纯函数，测试只断言口径，不渲染 SVG）
 import {
   CHRONOS_MASCOT_WIDTH,
   DATE_CARD_CHRONOS_MIN_GAP,

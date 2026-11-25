@@ -24,7 +24,7 @@ import type { DecisionAssertion, FileRecord } from '../src/types/guanlan';
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const SRC_ROOT = path.resolve(TEST_DIR, '../src');
 
-describe('B03 · Office（.docx / .xlsx）证据锚点与路径解析纯函数', () => {
+describe('Office（.docx / .xlsx）证据锚点与路径解析纯函数', () => {
   it('parseCellRef / parseXlsxRangeBounds / isCellInRange / buildCellRangeFromCoords 精确互逆', () => {
     assert.deepEqual(parseCellRef('A1'), { col: 1, row: 1 });
     assert.deepEqual(parseCellRef('$AB$12'), { col: 28, row: 12 });
@@ -150,7 +150,7 @@ describe('B03 · Office（.docx / .xlsx）证据锚点与路径解析纯函数',
   });
 });
 
-describe('B03 · fetchRevisionOffice 客户端契约请求', () => {
+describe('fetchRevisionOffice 客户端契约请求', () => {
   let server: http.Server | null = null;
 
   afterEach(async () => {
@@ -229,7 +229,7 @@ describe('B03 · fetchRevisionOffice 客户端契约请求', () => {
   });
 });
 
-describe('B03 · 独立组件架构与端到端证据直达接线检查', () => {
+describe('独立组件架构与端到端证据直达接线检查', () => {
   it('OfficeReaderView 独立落地并通过 NonLegacyFilePreviewPanel / QuickPreviewModal / 决定卡片接线', () => {
     const officeViewSrc = fs.readFileSync(
       path.join(SRC_ROOT, 'components/OfficeReaderView.tsx'),

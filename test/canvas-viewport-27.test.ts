@@ -1,5 +1,5 @@
 /**
- * issue #27 —— 画布视口渲染与卡片物化验收测试：
+ * 画布视口渲染与卡片物化验收测试：
  * - 包容器按视口 + 预留边距挂载（不再「每包限 6 卡但全渲染所有包」）；
  * - 焦点包即使出视口也保留挂载（选中态/叙事抽屉不断链）；
  * - 包间流向线只在两端都挂载时画（不产生指向空白的悬空线）；
@@ -20,7 +20,7 @@ import {
 } from '../src/utils/canvasViewport';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// D01-a 巨石拆层后，画布实现 = 薄装配层（GraphCanvasView）+ 行为控制器 + Scene 五分节——
+// 拆层后，画布实现 = 薄装配层（GraphCanvasView）+ 行为控制器 + Scene 五分节——
 // 组件契约断言读取联合文本（断言原文与语义不变，路径跟随拆分）。
 const CANVAS_SRC = [
   'components/GraphCanvasView.tsx',
@@ -156,7 +156,7 @@ test('#27 卡片描述：按 shown 截断（每包上限沿用 PACKAGE_GROUP_MAX
 });
 
 test('#27 组件契约：画布按 visible 门控渲染与派生计算，逐卡不再线性查文件', () => {
-  // 隐藏时早退（组件仍挂载，state 不丢；D01-a 拆层后早退在装配层，写法 props.visible）
+  // 隐藏时早退（组件仍挂载，state 不丢；拆层后早退在装配层，写法 props.visible）
   assert.match(
     CANVAS_SRC,
     /if \(!props\.visible\) return null;/,

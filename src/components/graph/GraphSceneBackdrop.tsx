@@ -1,8 +1,8 @@
 /**
- * D01-a 拆解 · Scene 层 · GraphSceneBackdrop（从 GraphCanvasView.tsx 原样迁入的 defs 渐变/滤镜 + 流星雨星闪层 + 布局星轨 + 主干左上固定文字组/粒度切换 + 司辰传导线）。
- * 迁移纪律：JSX 与类名逐字一致（像素回归护栏）；数据一律来自 controller ctx；
- * d3 zoom/drag effect 仍在控制器（按 data-node-id / .d3-draggable-node 类选择器跨
- * 子组件查询，DOM 结构不变即行为不变）。
+ * Scene 背景层 · GraphSceneBackdrop：
+ * 承载 defs 渐变/滤镜、流星雨星闪层、布局星轨、主干左上固定文字组与司辰传导线。
+ * 数据一律来自 controller ctx；d3 zoom/drag effect 仍在控制器（按 data-node-id /
+ * .d3-draggable-node 类选择器跨子组件查询，保持稳定 DOM 结构）。
  */
 import React from 'react';
 import { ChronosMascotNode } from '../ChronosMascotNode';
@@ -10,7 +10,7 @@ import PackageGroupFrame, { PACKAGE_GROUP_FRAME_H } from '../canvas/PackageGroup
 import RichDocPreviewCard from '../canvas/RichDocPreviewCard';
 import { cleanDisplayText } from '../../utils/displayText';
 import { computeDynamicEdgePath, hasUnreadChanges, unreadStatusLabel } from '../../utils/guanlanEngine';
-// issue #27：视口裁剪纯函数（Scene 层消费挂载判定与连接线判定）
+// 视口裁剪纯函数（Scene 层消费挂载判定与连接线判定）
 import { shouldDrawGroupConnector } from '../../utils/canvasViewport';
 import {
   artifactStageBadgeText,
@@ -121,9 +121,9 @@ export function GraphSceneBackdrop({ ctx }: { ctx: GraphCanvasCtx }) {
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
-        {/* v0.7（§1.4）浅档柔光滤镜：泳道光束在白底上强发光是糊化不是增益。
-            光束经 .cv-stream-glow 类按主题引用（index.css），默认块仍指本文件的
-            d3-stream-glow——stdDeviation 永不量化（勘察 §5.1 红线），只增 Second filter */}
+        {/* 浅档柔光滤镜：泳道光束在白底上强发光易糊化。
+            光束经 .cv-stream-glow 类按主题引用（index.css），暗档沿用 d3-stream-glow，
+            浅档切换为本柔光滤镜（stdDeviation 保持常量不变）。 */}
         <filter id="d3-stream-glow-soft" x="-40%" y="-40%" width="180%" height="180%">
           <feGaussianBlur stdDeviation="1.2" result="blur" />
           <feMerge>
@@ -131,16 +131,13 @@ export function GraphSceneBackdrop({ ctx }: { ctx: GraphCanvasCtx }) {
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
-        {/* 司辰悬停光环渐变（ChronosMascotNode 引用的既有装饰）。D15/B5：id 更名
-            claude-terracotta-grad → chronos-halo-grad（评审第 1 轮复核：前轮「已更名」
-            结论不实，本批补齐；2 处引用同批改，渐变定义与视觉零变化） */}
+        {/* 司辰悬停光环渐变（供 ChronosMascotNode 引用） */}
         <linearGradient id="chronos-halo-grad" x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%" style={{ stopColor: 'var(--cv-brand)' }} stopOpacity="0.95" />
           <stop offset="50%" style={{ stopColor: 'var(--cv-brand-hover)' }} stopOpacity="0.75" />
           <stop offset="100%" style={{ stopColor: 'var(--cv-brand)' }} stopOpacity="0.9" />
         </linearGradient>
-        {/* C4：旧 claude-lavender/amber/slate 泳道渐变已随泳道语义化移除——
-            四根光束改挂 14-hex 纯色 + d3-stream-glow（见泳道渲染与 LANE_COLORS） */}
+        {/* 四根泳道光束直接使用语义令牌纯色 + d3-stream-glow（见泳道渲染与 LANE_COLORS） */}
         <linearGradient id="xray-laser-grad" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" style={{ stopColor: 'var(--cv-brand)' }} stopOpacity="0" />
           <stop offset="25%" style={{ stopColor: 'var(--cv-brand)' }} stopOpacity="0.65" />
@@ -387,18 +384,15 @@ export function GraphSceneBackdrop({ ctx }: { ctx: GraphCanvasCtx }) {
         )}
 
         {/* 1. "open in reader ->" + Minimalist Geek Telemetry Waveform
-            C3④：迁离 Sources 面板带，锚定主干左上（trunkX-170, TRUNK_META_TEXT_Y=10），
-            平移钳制保证其屏幕位置绝不进面板。
-            starfix2 T3：y 36→10 让位「工程事件轴」主卡——旧第二行基线 54 落进主卡横带
-            （32..108），「· N 条事件」后缀把文字推过卡左缘后被后绘制的卡面盖住；
-            现行2 基线 28 < 卡顶 32，CHRONOS·SHA256 · … 全串同屏可读零重叠（取舍登记见常量注） */}
+            锚定主干左上（trunkX-170, TRUNK_META_TEXT_Y=10），平移钳制保证其屏幕位置绝不进左侧 Sources 面板；
+            y=10 让第二行基线（28）位于主卡顶部（32）之上，保证文字与主卡零重叠。 */}
         <g
           className="d3-no-pan cursor-pointer"
           data-trunk-open-reader-chip=""
           transform={`translate(${trunkX + FIXED_TEXT_TRUNK_DX}, ${TRUNK_META_TEXT_Y})`}
           onClick={() => openFileReader((activeFileRecord?.file_id || ''))}
         >
-          {/* V09：收整顶部「打开阅读器 →」错位裸文字为锚定胶囊徽标（保持 TRUNK_META_TEXT_Y=10 零重叠基线） */}
+          {/* 顶部「打开阅读器 →」锚定胶囊徽标（保持 TRUNK_META_TEXT_Y=10 零重叠基线） */}
           <rect
             x="-6"
             y="-12"
@@ -435,10 +429,10 @@ export function GraphSceneBackdrop({ ctx }: { ctx: GraphCanvasCtx }) {
           </text>
         </g>
 
-        {/* T03：标尺粒度切换（月/周/日）已迁至 GraphTopBar 分段胶囊控件，画布左上不再悬浮零散字符 */}
+        {/* 标尺粒度切换（月/周/日）位于 GraphTopBar 分段胶囊控件，画布左上不再悬浮零散字符 */}
 
         {/* 2.5 Temporal Energy Conduits from Chronos (God of Time) -> Timeline & River
-            R6：司辰去常驻后随司辰显隐（收起时不画两条指向空位的悬空导线） */}
+            随司辰显隐同步切换（收起时不绘制指向空位的悬空导线） */}
         <g style={{ display: chronosSliderOpen ? undefined : 'none' }}>
           {/* Staff Gem -> Timeline Scrubber */}
           <path

@@ -1,12 +1,8 @@
 /**
- * D01-a 拆解 · 阅读器 Markdown 行模型层（纯函数，零 React 依赖）。
- *
- * 从 ReaderView.tsx（原 267-1143）原样迁入：来源行锚点定位与 GU-CC-01 就近回退、
- * perf① 链接解析索引、perf② markdown 行模型（buildMarkdownBlocks）、决策回执
- * T1 解析（parseDecisionFormItems）、T2 本机持久化、T3 指令组装与桌面壳写回桥。
- * 消费方：useReaderController（行为层）、readerSections（渲染层）；
- * 测试兼容再导出保留在 ReaderView.tsx（test/decision-receipt-01、02 与 gu-cc-01 既有导入路径）。
- * 迁移纪律：函数体与拆解前逐字一致。
+ * 阅读器 Markdown 行模型层（纯函数，零 React 依赖）：
+ * 提供来源行锚点定位与就近回退、链接解析索引及 Markdown 行模型（buildMarkdownBlocks）。
+ * 消费方为 useReaderController（行为层）与 readerSections（渲染层）；
+ * 测试兼容再导出保留在 ReaderView.tsx。
  */
 
 import type { FileRecord, OfficeEvidenceAnchor, PdfEvidenceAnchor } from '../../types/guanlan';
@@ -14,7 +10,7 @@ import { parseOfficeLinkHref, resolveMarkdownFileTarget } from '../../utils/offi
 import { parsePdfLinkHref, resolveMarkdownFileTargetPdf } from '../../utils/pdfAnchor';
 import type { StageRole } from '../../utils/taskPackages';
 
-/** wf_4：五阶段 Stepper 文案（ask 五阶段槽位逐字；short=步点短标签，full=完整阶段名）。 */
+/** 五阶段 Stepper 文案（short 为步点短标签，full 为完整阶段名）。 */
 export const STAGE_STEPS: ReadonlyArray<{ role: StageRole; short: string; full: string }> = [
   { role: '蓝图', short: '蓝图', full: '蓝图与需求' },
   { role: '计划', short: '计划', full: '计划与排期' },
@@ -23,15 +19,14 @@ export const STAGE_STEPS: ReadonlyArray<{ role: StageRole; short: string; full: 
   { role: '交付', short: '交付', full: '交付与复验' },
 ];
 
-/** pm_1：把来源行滚到视口（章节定位与大纲点击共用同一条路径）。 */
+/** 把来源行滚到视口（章节定位与大纲点击共用同一条路径）。 */
 export function scrollToSourceLine(line: number, block: ScrollLogicalPosition = 'start') {
   document.querySelector(`[data-event-source-line="${line}"]`)?.scrollIntoView({ block });
 }
 
 /**
- * GU-CC-01：证据行定位「就近回退」——确定性规则，抽为纯函数
- * （单测：test/gu-cc-01-source-line-fallback.test.ts）。
- * 锚点粒度不变：围栏/表格整块只在起始行挂一个锚（wrapLine 于 ReaderView 的 codeStart/tableStart），
+ * 证据行定位「就近回退」确定性规则（纯函数，便于单测）。
+ * 锚点粒度：围栏/表格整块只在起始行挂一个锚（wrapLine 的 codeStart/tableStart），
  * 因此围栏内部行、表格分隔行、空行都无锚点，但正文存在。
  * 目标行无锚点时：
  * ① 取目标行之前最近的已存在锚点（升序扫描取 ≤ 目标的最大行号）；
@@ -56,7 +51,7 @@ export function pickNearestSourceLineAnchor(
 }
 
 /**
- * GU-CC-01：回退提示文案（中性）。
+ * 定位回退提示文案（中性）。
  * 围栏内部行正文存在，缺的只是「定位点」——措辞绝不出现「无正文」
  * （把定位缺失误诊为内容缺失），也不用「附近」等未量化词，行号一律写实。
  */
@@ -68,7 +63,7 @@ export function formatSourceLineFallbackNotice(
 }
 
 /**
- * GU-CC-01：从已渲染 DOM 收集全部行号锚点（升序去重）。仅浏览器侧 effect 使用；
+ * 从已渲染 DOM 收集全部行号锚点（升序去重）。仅浏览器侧 effect 使用；
  * node 单测不经过此函数（无 DOM），决策逻辑收敛在 pickNearestSourceLineAnchor。
  */
 export function collectRenderedSourceLineAnchors(root: {
@@ -85,30 +80,25 @@ export function collectRenderedSourceLineAnchors(root: {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   perf①② · markdown 行模型层（纯数据，无 React 元素）
+   markdown 行模型层（纯数据，无 React 元素）
 
-   背景：<article> 内的「markdownContent→JSX」IIFE 在每次渲染全量重跑——长文 +
-   多链接时是万级字符串切分/正则回放 + 2200 文件逐链接线性扫；且 App 常驻保活
-   （libraryMode='overview' 隐藏阅读器）时同样重跑。现把解析阶段提为纯函数层：
+   背景：避免每次渲染全量重跑「markdownContent → JSX」解析（长文 + 多链接时
+   开销高，且隐藏保活时也会触发），将解析阶段抽为纯函数层：
 
    · buildMarkdownBlocks（只依赖 markdownContent 与链接索引）产出行模型
      MarkdownBlock[]，组件内 useMemo 缓存；sourceLine 高亮 / activeSectionId /
      showLineNumbers / paperLightMode 等易变输入一律不进模型，留在渲染期叠加
      （className/参数计算），易变态抖动不再触发重新解析。
-   · 链接目标在模型期一次解析完（resolveMarkdownHref），渲染期只消费解析结果；
-     六处 renderMarkdownLineWithLinks 调用点（表格单元格/任务项/引用/无序/有序/
-     段落）语义不变。
-   · DOM 结构零改动：data-event-source-line 锚点粒度（围栏/表格整块只挂起始行、
-     表格正文行挂 tr 行）、wrapLine 行锚 div、键方案（seg-N 与 href-偏移）全部
-     保持；GU-CC-01 的模块级导出（pickNearestSourceLineAnchor 与
-     formatSourceLineFallbackNotice）不受影响（test/gu-cc-01 直接 import）。
+   · 链接目标在模型期一次解析完（resolveMarkdownHref），渲染期只消费解析结果，
+     表格单元格、任务项、引用、无序/有序列表与段落共用同一套解析口径。
+   · 保持 data-event-source-line 锚点粒度（围栏/表格整块只挂起始行、
+     表格正文行挂 tr 行）、wrapLine 行锚 div、键方案（seg-N 与 href-偏移）一致；
+     pickNearestSourceLineAnchor 与 formatSourceLineFallbackNotice 保持模块级导出供单测调用。
    ══════════════════════════════════════════════════════════════════════════ */
 
 /**
- * perf① · 链接解析索引（useMemo(files) 建）：relative_path → 首个 exact 命中
- * 的文件与序次，加 href→结果缓存。语义锚定旧实现
- * `files.find((f) => f.relative_path === href || f.relative_path.endsWith(href))`
- * ＝「files 顺序首个 exact||endsWith 命中」，解析结果必须逐一同源（见 resolveMarkdownHref）。
+ * 链接解析索引（useMemo(files) 构建）：记录 relative_path → 首个精确匹配
+ * 的文件与序次，并缓存 href → 解析结果。保持按 files 顺序取首个精确或后缀命中的语义。
  */
 export interface MarkdownLinkIndex {
   files: FileRecord[];
@@ -125,9 +115,9 @@ export interface MarkdownLinkIndex {
 }
 
 /**
- * perf① · href 解析：与旧 find 逐一同源的等价重写。
- * B03 扩展：若链接携带 `#Sheet!Range` / `#para=N` 或 `../` 相对片段，在保留原无锚点路径
- * 100% 等价语义的前提下，额外解析目标文件与 `officeAnchor`。
+ * href 解析：按 files 顺序匹配精确路径或后缀路径。
+ * 若链接携带 `#Sheet!Range` / `#para=N` 或 `../` 相对片段，在保留无锚点路径
+ * 原有匹配语义的前提下，额外解析目标文件与 `officeAnchor`。
  */
 export function resolveMarkdownHref(
   href: string,
@@ -156,7 +146,7 @@ export function resolveMarkdownHref(
     }
   }
 
-  // B04：`.pdf#page=N` 链接在无 Office 锚点时补解 PDF 页码锚点
+  // `.pdf#page=N` 链接在无 Office 锚点时补解 PDF 页码锚点
   const pdfParsed = parsed.anchor ? null : parsePdfLinkHref(href);
 
   let out: {
@@ -188,13 +178,13 @@ export function resolveMarkdownHref(
   return out;
 }
 
-/** 行内 **bold** / `code` 预切分令牌：at=令牌在片段内的偏移（回放旧键 seg-*-b/c-偏移）。 */
+/** 行内 **bold** / `code` 预切分令牌：at 为令牌在片段内的偏移（用于生成稳定 React key）。 */
 export type InlineToken =
   | { kind: 'plain'; text: string }
   | { kind: 'bold'; text: string; at: number }
   | { kind: 'code'; text: string; at: number };
 
-/** 行内格式化（旧 renderInlineFormatting）的模型期：纯切分，不建元素。 */
+/** 行内格式化模型期：纯切分，不构建 React 元素。 */
 export function tokenizeInline(textSegment: string): InlineToken[] {
   const tokenRegex = /(\*\*[^*]+\*\*|`[^`]+`)/g;
   const tokens: InlineToken[] = [];
@@ -220,8 +210,7 @@ export function tokenizeInline(textSegment: string): InlineToken[] {
 
 /**
  * 一行文本的渲染分段：链接目标已在模型期解析完（target 供渲染期建导航闭包）；
- * inline 段存预切分令牌。键方案逐字沿用旧实现（seg-{偏移}/seg-end/seg-all、
- * {href}-{偏移}），保证 React 调和产物与旧版一致。
+ * inline 段存预切分令牌，key 方案保持稳定（seg-{偏移}/seg-end/seg-all、{href}-{偏移}）。
  */
 export type LinkPart =
   | { kind: 'inline'; key: string; text: string; tokens: InlineToken[] }
@@ -235,7 +224,7 @@ export type LinkPart =
       pdfAnchor?: PdfEvidenceAnchor;
     };
 
-/** 链接行渲染（旧 renderMarkdownLineWithLinks）的模型期：链接正则切分 + 目标解析。 */
+/** 链接行渲染的模型期：正则切分链接并解析目标文件。 */
 export function buildLinkParts(lineText: string, index: MarkdownLinkIndex): LinkPart[] {
   const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
   const parts: LinkPart[] = [];
@@ -313,9 +302,8 @@ export type MarkdownBlock =
   | { kind: 'p'; line: number; parts: LinkPart[]; excerpt: string };
 
 /**
- * perf② · markdownContent → 行模型（纯函数）：逐字对应旧解析循环的控制流与
- * 切分规则（围栏聚块、表格聚块、分隔行滤除、空行跳过、各级标题/任务项/引用/
- * 分隔线/列表/段落），只是产物从 React 元素换成数据。
+ * markdownContent → 行模型（纯函数）：按块切分围栏代码块、表格（滤除分隔行）、
+ * 空行、各级标题、任务项、引用、分隔线、列表与段落，只输出纯数据结构。
  */
 export function buildMarkdownBlocks(
   markdownContent: string,

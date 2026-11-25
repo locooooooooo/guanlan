@@ -1,8 +1,8 @@
-//! PRD v2.0 §3.2 恢复机制：最近 SUCCESS checkpoint 的增量变更（Delta）与
+//! 恢复机制：最近 SUCCESS checkpoint 的增量变更（Delta）与
 //! 最新决策结果装配（GET /api/v1/initiatives/{id}/resume-context）。
 //!
-//! 边界（与 PRD 字面缺口登记一致）：引擎不组装/注入外部 Agent 的 Prompt，
-//! 只输出可直接注入的恢复上下文文本 + 结构化字段；实际注入与编排属外部智能体。
+//! 边界：引擎不组装或注入外部 Agent 的 Prompt，只输出可直接注入的恢复上下文文本
+//! 与结构化字段；实际注入与编排属外部智能体。
 //!
 //! 数据源（只读 SQL，单读事务）：
 //! - 最近 SUCCESS checkpoint（可按 stage 过滤，created_at/rowid 倒序取首条）；

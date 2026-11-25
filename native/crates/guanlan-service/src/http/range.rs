@@ -1,4 +1,4 @@
-//! HTTP Range / 条件请求纯函数（issue #37）。
+//! HTTP Range 与条件请求纯函数。
 //!
 //! PDF 快照已是 64KiB 分块流式（内存方向正确），但此前不接收请求头：
 //! 只有 Content-Type，永远 200 全量，缺 Range / Content-Length / ETag / 条件请求——

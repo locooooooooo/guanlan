@@ -1,8 +1,8 @@
 /**
- * D01-a 拆解 · Scene 层 · GraphSceneNodes（从 GraphCanvasView.tsx 原样迁入的 扇出虚线容器盒（组头胶囊/收起钮）+ 司辰立绘 + 主节点 + 左侧日期导航卡）。
- * 迁移纪律：JSX 与类名逐字一致（像素回归护栏）；数据一律来自 controller ctx；
- * d3 zoom/drag effect 仍在控制器（按 data-node-id / .d3-draggable-node 类选择器跨
- * 子组件查询，DOM 结构不变即行为不变）。
+ * Scene 节点层 · GraphSceneNodes：
+ * 承载扇出虚线容器盒（组头胶囊/收起钮）、司辰立绘、主节点与左侧日期导航卡。
+ * 数据一律来自 controller ctx；d3 zoom/drag effect 仍在控制器（按 data-node-id /
+ * .d3-draggable-node 类选择器跨子组件查询，保持稳定 DOM 结构）。
  */
 import React from 'react';
 import { Hourglass } from 'lucide-react';
@@ -11,7 +11,7 @@ import PackageGroupFrame, { PACKAGE_GROUP_FRAME_H } from '../canvas/PackageGroup
 import RichDocPreviewCard from '../canvas/RichDocPreviewCard';
 import { cleanDisplayText } from '../../utils/displayText';
 import { computeDynamicEdgePath, hasUnreadChanges, unreadStatusLabel } from '../../utils/guanlanEngine';
-// issue #27：视口裁剪纯函数（Scene 层消费挂载判定与连接线判定）
+// 视口裁剪纯函数（Scene 层消费挂载判定与连接线判定）
 import { shouldDrawGroupConnector } from '../../utils/canvasViewport';
 import {
   artifactStageBadgeText,
@@ -138,11 +138,9 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
             <g
               transform={`translate(12, ${fanOutHeaderCapsuleY(fanOutBounds.y, chronosPos.y)})`}
             >
-              {/* starfix T1 消费方对号：事件轴标题框改吃 --cv-axis-title-* 三件套
-                  （夜航=lav 调制原样收编、纸面=#FFFFFF 底+#1F2937 深灰字，工票冻结值）。
-                  starfix2 T2：胶囊宽改 fanOutHeaderCapsuleWidth 按全量文本自适应
-                  （旧「盒宽-96 固定宽 + 文本预算截断」退役——正是「^ 2026-11-13 · …」
-                  被截成省略号的根因），右缘恒在「收起」按钮左缘之前 ≥14px */}
+              {/* 事件轴标题框采用 --cv-axis-title-* 三件套（夜航=lav 调制、纸面=白底深灰字）；
+                  胶囊宽经 fanOutHeaderCapsuleWidth 按全量文本自适应，避免标题被提前截断，
+                  右缘恒在「收起」按钮左缘之前 ≥14px */}
               <rect
                 x="0"
                 y="0"
@@ -155,14 +153,11 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
                 }}
                 strokeWidth="1"
               />
-              {/* T05：日期组头可点击 —— 一步切到 Timeline 看当天全部。
-                  starfix2 T2：全量渲染新措辞（fanOutDayHeaderLine 单一出口）——
+              {/* 日期组头可点击，一步切到列表态查看当天全部。
+                  文案统一由 fanOutDayHeaderLine 生成：
                   「⑃ {日期} · 共 {n} 条事件（已合并为 {m} 份活跃文档 · 点击查看全天 →）」，
-                  n=当日事件总数（active.count）、m=合并后活跃文档数（active.cards.length，
-                  同日同文件合并/同基名并组后每卡一份活跃文档），皆真实计算不造假；
-                  收起态「⑃」前缀保留；旧「· N 条待展开 · 点击看全天 →」措辞按工票废弃
-                  （starfix2 授权留痕，待展开余量由卡片行3/叙事抽屉承载）。
-                  胶囊纵位经 fanOutHeaderCapsuleY 保证与司辰留白 ≥20px（不改司辰派生）。 */}
+                  n 为当日事件总数（active.count），m 为合并后活跃文档数（active.cards.length）；
+                  胶囊纵位经 fanOutHeaderCapsuleY 保证与司辰留白 ≥20px。 */}
               <text
                 x={FANOUT_HEADER_TEXT_LEFT}
                 y="16.5"
@@ -189,8 +184,7 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
                       0,
                       fanOutHeaderLine.length - FANOUT_DAY_HEADER_TAIL.length
                     )}
-                    {/* starfix T1：尾串用文字档 --cv-lav-ink（纸面 #5E4BC0，白底 6.3:1）——
-                        原 --cv-lav 图形档在新 #FFFFFF 标题框上 4.18 小字不达标 */}
+                    {/* 尾串使用文字档 --cv-lav-ink（白底对比度 6.3:1），避免图形档 --cv-lav 在浅底上对比度不足 */}
                     <tspan style={{ fill: 'var(--cv-lav-ink)' }}>
                       {FANOUT_DAY_HEADER_TAIL}
                     </tspan>
@@ -200,8 +194,7 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
                 )}
               </text>
 
-              {/* W06：事件缺失/加载中时展示空态文案，不再回退样本卡片
-                  （starfix2 T2：居中基准随自适应胶囊宽，不再用旧固定宽 盒宽-96） */}
+              {/* 事件缺失/加载中时展示空态文案，不回退样本卡片（居中基准随自适应胶囊宽） */}
               {subAgentCards.length === 0 && (
                 <text
                   x={Math.max(
@@ -272,7 +265,7 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
             isHovered={hoveredCanvasNodeId === 'chronos_deity'}
             isSelected={selectedCanvasNodeId === 'chronos_deity'}
             onMouseEnter={() => {
-              // W16：司辰悬停卡不依赖文件预览数据，锚定第一个文件仅为兼容锚点结构
+              // 司辰悬停卡不依赖文件预览数据，锚定第一个文件仅为兼容锚点结构
               const anchorFileId = files[0]?.file_id;
               if (anchorFileId) handleNodeMouseEnter(anchorFileId, 'chronos_deity');
               else handleNodeMouseEnter('', 'chronos_deity');
@@ -381,7 +374,7 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
               }}
               onMouseLeave={handleNodeMouseLeave}
               onClick={() => {
-                // v0.4：日期导航节点切换当前日期；文件入口保持原行为
+                // 日期导航节点切换当前日期；文件入口保持原行为
                 if (src.date !== undefined) {
                   selectDate(src.date);
                   return;
@@ -392,7 +385,7 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
                 exploreAfterClick(src.fileId);
               }}
               onDoubleClick={() => {
-                // v0.8 R3③：双击=查看详情（叙事抽屉），不再直开原文
+                // 双击查看详情（打开叙事抽屉），不直接跳转原文
                 if (src.fileId) openNarrativeDrawer({ fileId: src.fileId });
               }}
               onContextMenu={(e) => {

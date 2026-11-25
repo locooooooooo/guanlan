@@ -1,26 +1,22 @@
-//! 应用服务（方案 §2：bootstrap、索引任务、diff、context）。
+//! 应用服务：bootstrap、status、diff、context、草案、批阅看板与资料胶囊。
 //!
-//! 批次一落地 bootstrap / status（契约 §1.1/§1.2）；索引任务（/index-jobs、
-//! /jobs/*）属批次二，diff/context 属批次三（契约 §2 端点清单）。
-//!
-//! bootstrap 在一个短读快照内生成（契约 §1.1「一个短读事务」）：
-//! 配置、统计、首批文件摘要、首批事件、决定首批、关系总数与任务状态占位，
-//! 全部在同一 BEGIN DEFERRED 读事务内完成；响应任何位置不出现 svgSource、
-//! markdownContent、revisions[]（不含正文、完整版本链、全量关系、历史 SVG 原文）。
+//! bootstrap 在一个短读快照内生成：配置、统计、首批文件摘要、首批事件、决定首批、
+//! 关系总数与任务状态，全部在同一 BEGIN DEFERRED 读事务内完成；响应任何位置不出现
+//! svgSource、markdownContent、revisions[]（不含正文、完整版本链、全量关系、历史 SVG 原文）。
 
-/// 证道阁上下文组装（PRD v2.0 §4；冻结契约 B）
+/// 智能体上下文组装（POST /api/v1/context）
 pub mod context;
 
-/// 语义级版本 Diff（PRD v2.0 §3.5；冻结契约 H）
+/// 语义级版本 Diff
 pub mod diff;
 
-/// 外部智能体修订草案 CAS 安全网与 `derived_from_context` 因果边（E02）
+/// 外部智能体修订草案 CAS 安全网与 `derived_from_context` 因果边
 pub mod proposals;
 
-/// 原位拍板（HITL）唤醒任务与五态批阅看板 + 孤儿/失联诚实诊断与修复（E04）
+/// 原位拍板（HITL）唤醒任务与五态批阅看板 + 孤儿/失联诚实诊断与修复
 pub mod review_board;
 
-/// 事项资料胶囊（Context Capsule）两阶段预览/脱敏/导出与离线秒开核验（F01）
+/// 事项资料胶囊（Context Capsule）两阶段预览/脱敏/导出与离线秒开核验
 pub mod capsule;
 
 use std::sync::OnceLock;
@@ -88,7 +84,7 @@ pub fn bootstrap(
         let counts = store.counts(ws_id)?;
         let time_range = event_time_range_inner(conn, ws_id)?;
 
-        // issue #33：bootstrap 已在自身 read_txn 内，调 *_tx 变体避免嵌套事务
+        // bootstrap 已在自身 read_txn 内，调 *_tx 变体避免嵌套事务
         let event_days = query_event_days_tx(
             store,
             &EventDaysQuery {
@@ -99,7 +95,7 @@ pub fn bootstrap(
                 ..Default::default()
             },
         )?;
-        // issue #22：bootstrap 已在自身 read_txn 内，调 query_events_tx 避免嵌套事务
+        // bootstrap 已在自身 read_txn 内，调 query_events_tx 避免嵌套事务
         let events = query_events_tx(
             store,
             &EventQuery {
@@ -115,7 +111,7 @@ pub fn bootstrap(
             },
         )?;
         // 决定首批（前端首屏要 selectedDecisionId，App.tsx:336-338；批量上限取
-        // §1.9 默认 limit 100），同时透出全库未决待拍板真实总数（V03 SSOT）
+        // §1.9 默认 limit 100），同时透出全库未决待拍板真实总数
         let decisions_page = decisions_tx(store, &DecisionsQuery::default())?;
         let decisions_unresolved_total = decisions_page.unresolved_total;
         let decisions = decisions_page.items;
@@ -275,7 +271,7 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
     (if m <= 2 { y + 1 } else { y }, m, d)
 }
 
-/// 服务实例身份（契约 §1.2「批次一生成即可」）：进程内 OnceLock 缓存，
+/// 服务实例身份（契约 §1.2）：进程内 OnceLock 缓存，
 /// 以「进程号 + 纳秒时钟」的 SHA-256 前 16 hex 生成。
 fn instance_id() -> String {
     static INSTANCE: OnceLock<String> = OnceLock::new();
@@ -321,7 +317,7 @@ pub fn status(store: &ReadonlyStore) -> Result<StatusResponse, GuanlanError> {
         ok: true,
         instance_id: instance_id(),
         api_version: "v1".to_owned(),
-        // 数据库 schema 版本：PRD v2.0 长任务批次起为 2（冻结契约 I；contract-storage.md §4.3.1）
+        // 数据库 schema 版本（contract-storage.md §4.3.1）
         schema_version: 2,
         workspace_id: ws.workspace_id,
         root_path: ws.root_path,
@@ -336,7 +332,7 @@ pub fn status(store: &ReadonlyStore) -> Result<StatusResponse, GuanlanError> {
             missing_files: missing_files.max(0) as u64,
         },
         active_jobs: Vec::new(),
-        // 冻结契约 I：watcher 与 L4A 进度由服务装配层填充（core 侧先给中性默认值）
+        // watcher 与 L4A 进度由服务装配层填充（core 侧先给中性默认值）
         watcher: crate::dto::WatcherStatus {
             enabled: false,
             last_poll_at: None,
@@ -368,7 +364,7 @@ pub fn policy_dto(policy: SnapshotPolicy) -> SnapshotTierPolicyDto {
     }
 }
 
-/// GET /api/v1/storage/stats（B01：真实本地快照磁盘占用、三档策略与全格式分布统计）。
+/// GET /api/v1/storage/stats（真实本地快照磁盘占用、三档策略与全格式分布统计）。
 pub fn storage_stats(store: &ReadonlyStore) -> Result<StorageStatsResponse, GuanlanError> {
     store.read_txn(|_conn| {
         let ws = store.workspace()?.clone();

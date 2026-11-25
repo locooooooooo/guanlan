@@ -1,5 +1,5 @@
 /**
- * E03 · 证道阁「Token 预算感知组装器」与零冷启动交接前端契约单测。
+ * Token 预算感知组装器与零冷启动交接前端契约单测。
  *
  * 覆盖：
  *  1. 停机红线护栏：密钥/环境变量脱敏器（PEM/API Key/Bearer/URL 密码/.env 路径拦截）与零误杀；
@@ -34,9 +34,9 @@ import {
   MCP_HOST_TARGETS,
   mergeMcpHostConfigJson,
   normalizeLoopbackEndpoint,
-} from '../src/utils/zhendaogeExport';
+} from '../src/utils/agentContextExport';
 
-describe('E03 停机红线护栏：本机密钥与环境变量脱敏器', () => {
+describe('停机红线护栏：本机密钥与环境变量脱敏器', () => {
   test('精准拦截 API Key / Bearer / URL 密码 / PEM 私钥 / .env 赋值，普通哈希与占位符零误杀', () => {
     const raw = [
       '# 架构说明',
@@ -68,13 +68,13 @@ describe('E03 停机红线护栏：本机密钥与环境变量脱敏器', () => 
     assert.equal(isSensitiveSecretPath('certs/server.pem'), true);
     assert.equal(isSensitiveSecretPath('keys/id_ed25519'), true);
     assert.equal(isSensitiveSecretPath('.env.example'), false);
-    assert.equal(isSensitiveSecretPath('02-证道阁/01-架构规范.md'), false);
+    assert.equal(isSensitiveSecretPath('02-上下文引擎/01-架构规范.md'), false);
   });
 
   test('离线降级 buildGuanlanContextMarkdown 也强制过脱敏护栏', () => {
     const md = buildGuanlanContextMarkdown({
       workspaceRoot: 'H:/ws',
-      initiative: { name: '02-证道阁', stage: '执行' },
+      initiative: { name: '02-上下文引擎', stage: '执行' },
       objective: '使用 OPENAI_API_KEY=sk-proj-NeverLeakThisSecret1234567890 调试',
       confirmedDecisions: [],
       pendingBlockers: [],
@@ -86,7 +86,7 @@ describe('E03 停机红线护栏：本机密钥与环境变量脱敏器', () => 
   });
 });
 
-describe('E03 四档注入粒度字符与 Token 实时预算', () => {
+describe('四档注入粒度字符与 Token 实时预算', () => {
   test('full > summary > diff_only > metadata_only 严格递减，附带 estChars', () => {
     assert.equal(DIFF_ONLY_GRANULARITY_FACTOR, 0.15);
     assert.equal(METADATA_ONLY_GRANULARITY_FACTOR, 0.02);
@@ -112,7 +112,7 @@ describe('E03 四档注入粒度字符与 Token 实时预算', () => {
   });
 });
 
-describe('E03 三大宿主 .mcp.json 零冷启动生成与无损合并', () => {
+describe('三大宿主 .mcp.json 零冷启动生成与无损合并', () => {
   test('覆盖 ZCode / Claude Code / Cursor 三宿主，env 严格只含 GUANLAN_ENDPOINT', () => {
     assert.deepEqual(
       MCP_HOST_TARGETS.map((h) => [h.id, h.targetPath]),
@@ -151,11 +151,11 @@ describe('E03 三大宿主 .mcp.json 零冷启动生成与无损合并', () => {
   });
 });
 
-describe('E03 AgentContextDrawer 服务端逐字节同源与四档粒度 UI', () => {
+describe('AgentContextDrawer 服务端逐字节同源与四档粒度 UI', () => {
   const pointer: EvidencePointer = {
     file_id: 'f_plan',
     revision_id: 'rev_f_plan_r2',
-    relative_path: '02-证道阁/02-实施计划.md',
+    relative_path: '02-上下文引擎/02-实施计划.md',
     content_sha256: '0123456789abcdef0123456789abcdef',
     locator: { kind: 'file' },
     evidence_kind: 'metadata_only',
@@ -169,15 +169,15 @@ describe('E03 AgentContextDrawer 服务端逐字节同源与四档粒度 UI', ()
   };
 
   const serverCanonicalMarkdown =
-    '<guanlan_context workspace="H:/ws" initiative="02-证道阁" stage="执行">\n' +
-    '  <objective>\n    基于服务端同源包推进 E03 实施\n  </objective>\n' +
+    '<guanlan_context workspace="H:/ws" initiative="02-上下文引擎" stage="执行">\n' +
+    '  <objective>\n    基于服务端同源包推进上下文组装实施\n  </objective>\n' +
     '  <upstream_references count="1">\n' +
-    '    <reference path="02-证道阁/01-系统架构规范.md" version="v1" relation="explicit_reference">\n' +
+    '    <reference path="02-上下文引擎/01-系统架构规范.md" version="v1" relation="explicit_reference">\n' +
     '      结论：全部写回须过 CAS 与脱敏护栏。\n' +
     '    </reference>\n' +
     '  </upstream_references>\n' +
     '  <reference_files count="1">\n' +
-    '    1. [仅变更 Diff] 02-证道阁/02-实施计划.md (v2 · 选中修订)\n' +
+    '    1. [仅变更 Diff] 02-上下文引擎/02-实施计划.md (v2 · 选中修订)\n' +
     '  </reference_files>\n' +
     '</guanlan_context>\n';
 
@@ -191,7 +191,7 @@ describe('E03 AgentContextDrawer 服务端逐字节同源与四档粒度 UI', ()
       items: [
         {
           file_id: 'f_plan',
-          path: '02-证道阁/02-实施计划.md',
+          path: '02-上下文引擎/02-实施计划.md',
           title: '02-实施计划',
           revision_id: 'rev_f_plan_r2',
           seq: 2,
@@ -212,7 +212,7 @@ describe('E03 AgentContextDrawer 服务端逐字节同源与四档粒度 UI', ()
     upstream_snippets: [
       {
         file_id: 'f_spec',
-        path: '02-证道阁/01-系统架构规范.md',
+        path: '02-上下文引擎/01-系统架构规范.md',
         title: '01-系统架构规范',
         version_label: 'v1',
         content_hash: 'fedcba9876543210fedcba9876543210',
@@ -237,10 +237,10 @@ describe('E03 AgentContextDrawer 服务端逐字节同源与四档粒度 UI', ()
       protocol: 'guanlan-mcp/v1',
       session_checkpoint_id: null,
       workspace_root: 'H:/ws',
-      initiative: { id: 'init_02', name: '02-证道阁', current_stage: '执行' },
+      initiative: { id: 'init_02', name: '02-上下文引擎', current_stage: '执行' },
       context_bundle: [
         {
-          uri: 'guanlan://02-证道阁/02-实施计划.md',
+          uri: 'guanlan://02-上下文引擎/02-实施计划.md',
           granularity: 'diff_only',
           version: 'v2',
           hash: 'sha256:0123456789abcdef',
@@ -266,7 +266,7 @@ describe('E03 AgentContextDrawer 服务端逐字节同源与四档粒度 UI', ()
         onClearPointers: () => {},
         workspaceRoot: 'H:/ws',
         focusFileId: 'f_plan',
-        initiative: { id: 'init_02', name: '02-证道阁', stage: '执行' },
+        initiative: { id: 'init_02', name: '02-上下文引擎', stage: '执行' },
         sessionCheckpointId: null,
         referenceMetaOf: () => ({ versionLabel: 'v2', stateLabel: '选中修订' }),
         intent: 'document',
@@ -305,7 +305,7 @@ describe('E03 AgentContextDrawer 服务端逐字节同源与四档粒度 UI', ()
 
     // 3. 上游规范片段、实时字符/Token 预算、脱敏护栏提示、三大宿主选项
     assert.ok(html.includes('data-context-upstream-snippets'));
-    assert.ok(html.includes('02-证道阁/01-系统架构规范.md'));
+    assert.ok(html.includes('02-上下文引擎/01-系统架构规范.md'));
     assert.ok(html.includes('338 字符'));
     assert.ok(html.includes('data-context-redacted-notice'));
     assert.ok(html.includes('拦截并隐藏 2 处疑似密钥'));

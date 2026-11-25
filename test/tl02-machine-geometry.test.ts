@@ -27,7 +27,7 @@ function revision(
   seq: number,
   over: Partial<FileHistoryRevision> = {}
 ): FileHistoryRevision {
-  // TA-01：fixture 的 seq 与 occurred 日同向（seq 越大日期越晚）；
+  // fixture 的 seq 与 occurred 日同向（seq 越大日期越晚）；
   // buildVersionChain 主序为 seq 降序，故链天然新→旧，日期恰好同向（几何断言与排序口径无关）
   const day = String(seq).padStart(2, '0');
   return {
@@ -128,9 +128,9 @@ test('TL-02：节点自上而下严格单调（上新下旧视觉方向）', () 
   }
 });
 
-// ---------- TA-01：版本轴强制标注排序口径 ----------
+// ---------- 版本轴强制标注排序口径 ----------
 
-test('TA-01：版本轴恒显示『按修订链』角标；occurred 与收录顺序矛盾时强制提示', () => {
+test('版本轴恒显示『按修订链』角标；occurred 与收录顺序矛盾时强制提示', () => {
   // 顺序 fixture：seq 越大 occurred 日越晚 → 无矛盾，但角标仍必须出现
   const ordered = fixtureChain(6);
   const orderedNotice = versionAxisNotice(ordered);

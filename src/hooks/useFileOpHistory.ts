@@ -1,17 +1,17 @@
 /**
- * D05 · 文件操作 Undo/Redo 账本执行 Hook（账本状态 + A05 原子接口执行 + 诚实回滚）。
+ * 文件操作 Undo/Redo 账本执行 Hook（账本状态 + 原子文件操作接口执行 + 诚实回滚）。
  *
- * 与 useFileOps（A05 弹窗正向操作）正交互补：
+ * 与 useFileOps（弹窗正向操作）正交互补：
  *  - 正向链：FileOpsModal / 树内拖拽 → useFileOps.submitFileOp → postRenameFile/postMoveFile；
  *    成功回调（store 的 handleFileMutationSuccess）里调 recordOp 落账；
  *  - 逆向链：Ctrl+Z / Ctrl+Shift+Z（useGlobalShortcuts）→ undo()/redo() →
  *    fileOpHistory.planUndo/planRedo 纯守卫（文件消失/路径漂移/目标被占三道诚实中止）→
- *    复用同一对 A05 原子接口。file_id 不裂链由服务端 rename/move 语义保证
- *    （contract-query-api.md §A05：同写事务更新 current_path + 双 path_aliases）；
+ *    复用同一对原子重命名/移动接口。file_id 不裂链由服务端 rename/move 语义保证
+ *    （同写事务更新 current_path 与双向 path_aliases）；
  *  - 成功后经 onApplied 同步刷新前端 fileCacheRef / publishFiles / contextPointers / 事件，
  *    绝不把逆向操作重新写回 recordOp——支持连续 3 次改名/移动后瞬间连按 3 次 Ctrl+Z。
  *
- * 失败语义（任务卡 D05 停机线③「撤销静默覆盖外部新文件即停」的结构兑现）：
+ * 失败语义（撤销绝不静默覆盖外部新文件）：
  *  - plan 失败 → 账本【原样不动】（undo/redo 栈都不推进）+ toast 如实说明原因；
  *  - API 失败（含 409 CONFLICT 目标已存在）→ nextState 不提交，条目留在原栈，
  *    toast 服务端错误原文；下次按键仍可重试。

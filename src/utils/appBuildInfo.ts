@@ -1,5 +1,5 @@
 /**
- * V12 · 应用构建与发行身份单一真相源（编译期注入 `v1.2.2` + `git-sha` + 构建时间戳）。
+ * 应用构建与发行身份单一真相源（编译期注入版本、`git-sha` 与构建时间戳）。
  *
  * - 生产构建（vite build / Tauri bundle）由 vite.config.ts `define` 静态注入三项真实字段；
  * - Node SSR / tsx 单测环境无 Vite define 替换时自动回退至安全常量，绝不抛 ReferenceError；

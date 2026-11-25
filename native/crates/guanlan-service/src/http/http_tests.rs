@@ -121,7 +121,7 @@ CREATE INDEX IF NOT EXISTS idx_events_kind ON events(workspace_id, kind);
 CREATE INDEX IF NOT EXISTS idx_events_ws_occurred_sort
   ON events(workspace_id, COALESCE(occurred_at, ''), seq);
 CREATE INDEX IF NOT EXISTS idx_events_ws_observed_sort ON events(workspace_id, observed_at, seq);
--- issue #26：文件事件关联四路各自的匹配访问结构（UNION 各分支可走索引，
+-- 文件事件关联四路各自的匹配访问结构（UNION 各分支可走索引，
 -- 不再对整个工作区逐条求值四路 OR）
 CREATE INDEX IF NOT EXISTS idx_events_ws_subject_seq
   ON events(workspace_id, subject_id, seq);
@@ -761,7 +761,7 @@ fn setup_workspace(tag: &str) -> (Fixture, String, String) {
     (fixture, root, ws_id)
 }
 
-/// 组装路由（无 dist 口径）。issue #4：单连接执行器 + 显式配置（不读 env，测试确定性）
+/// 组装路由（无 dist 口径）。单连接执行器 + 显式配置（不读 env，测试确定性）
 fn app_for(fixture: &Fixture, root: &str, instance: &str) -> axum::Router {
     let mut store = ReadonlyStore::open(&fixture.db_path).expect("打开夹具库失败");
     store.claim_workspace(root).expect("认领夹具工作区失败");
@@ -927,7 +927,7 @@ async fn bootstrap_composes_snapshot() {
         json.pointer("/relations_total").and_then(|v| v.as_u64()),
         Some(1)
     );
-    // 批次一任务占位
+    // 只读装配无进行中的索引任务
     assert_eq!(
         json.pointer("/index_jobs")
             .and_then(|v| v.as_array())
@@ -959,7 +959,7 @@ async fn status_reports_instance_and_coverage() {
         json.pointer("/api_version").and_then(|v| v.as_str()),
         Some("v1")
     );
-    // 冻结契约 I：PRD v2.0 长任务批次起 schema_version=2（contract-storage.md §4.3.1）
+    // schema_version=2（contract-storage.md §4.3.1）
     assert_eq!(
         json.pointer("/schema_version").and_then(|v| v.as_u64()),
         Some(2)
@@ -1136,7 +1136,7 @@ async fn files_marks_unavailable_snapshot() {
     );
 }
 
-/// issue #21/#22：默认分页拥有与排序匹配的表达式索引访问路径（EXPLAIN QUERY PLAN）。
+/// 默认分页拥有与排序匹配的表达式索引访问路径（EXPLAIN QUERY PLAN）。
 /// 索引经写入侧幂等 SCHEMA 迁移交付（contract-storage.md §1.1 与 server/WorkspaceStore.ts
 /// 同源），只读服务启动不改库；行为口径（反斜杠兼容、目录边界、字面通配符、
 /// 游标语义）由既有 files/events 测试覆盖。
@@ -1199,7 +1199,7 @@ async fn pagination_uses_expression_sort_indexes() {
     );
 }
 
-/// issue #37：PDF/raw 快照的范围读取与条件请求
+/// PDF/raw 快照的范围读取与条件请求
 #[tokio::test]
 async fn snapshot_stream_supports_range_and_conditional_requests() {
     let (fixture, root, _ws) = setup_workspace("http-range");
@@ -1303,7 +1303,7 @@ async fn snapshot_stream_supports_range_and_conditional_requests() {
     assert_eq!(bytes, b"%PDF".to_vec());
 }
 
-/// issue #36：非法 content_hash 不再 panic，返回明确错误
+/// 非法 content_hash 不再 panic，返回明确错误
 #[tokio::test]
 async fn invalid_content_hash_returns_explicit_error() {
     let (fixture, root, _ws) = setup_workspace("http-badhash");
@@ -1336,7 +1336,7 @@ async fn invalid_content_hash_returns_explicit_error() {
     assert_eq!(status, StatusCode::OK, "异常请求后常规查询仍正常");
 }
 
-/// issue #36：查询 panic 被捕获，连接重建后继续服务（不被脏事务钉住）
+/// 查询 panic 被捕获，连接重建后继续服务（不被脏事务钉住）
 #[tokio::test]
 async fn panicking_query_is_contained_and_pool_recovers() {
     let (fixture, root, _ws) = setup_workspace("http-panic");
@@ -1364,7 +1364,7 @@ async fn panicking_query_is_contained_and_pool_recovers() {
     assert_eq!(exec.pool_size(), 1, "池容量保持");
 }
 
-/// issue #32：响应字节预算——超单响应上限返回 413 UNSUPPORTED_CONTENT 并指向 raw=1；
+/// 响应字节预算——超单响应上限返回 413 UNSUPPORTED_CONTENT 并指向 raw=1；
 /// raw=1 走流式（原字节一致）；上限内正常内联且响应体带预算守护。
 #[tokio::test]
 async fn content_response_byte_budget_and_streaming_raw() {
@@ -1468,7 +1468,7 @@ async fn content_response_byte_budget_and_streaming_raw() {
     assert_eq!(bytes, b"# body text".to_vec(), "大正文可用流式 raw 读取");
 }
 
-/// issue #32：实际文件大小校验——DB size_bytes 与磁盘不符时以磁盘为准
+/// 实际文件大小校验——DB size_bytes 与磁盘不符时以磁盘为准
 #[tokio::test]
 async fn content_uses_actual_file_size_not_db_size() {
     let (fixture, root, _ws) = setup_workspace("http-budget-actual");
@@ -1509,7 +1509,7 @@ async fn content_uses_actual_file_size_not_db_size() {
     assert_envelope(&json, "UNSUPPORTED_CONTENT");
 }
 
-/// issue #26：文件事件关联的四路 UNION 各分支都走各自索引（EXPLAIN QUERY PLAN），
+/// 文件事件关联的四路 UNION 各分支都走各自索引（EXPLAIN QUERY PLAN），
 /// 不再对整个工作区逐条求值四路 OR；UNION 按 rowid 去重，外层按 seq ASC。
 #[tokio::test]
 async fn event_file_association_branches_use_indexes() {
@@ -1553,7 +1553,7 @@ async fn event_file_association_branches_use_indexes() {
     );
 }
 
-/// issue #19 结构性用例：seq 空洞、last_revision_id 缺失回退最高 seq、
+/// 文件摘要结构性用例：seq 空洞、last_revision_id 缺失回退最高 seq、
 /// 快照不可用、版本计数精确（COUNT 而非 MAX(seq)）、首版时间取 MIN(seq) 行
 /// 而非 MIN(occurred_at)
 #[tokio::test]
@@ -1798,7 +1798,7 @@ async fn events_pagination_and_cursor_stale() {
     .await;
     assert_eq!(status, StatusCode::CONFLICT);
     assert_envelope(&bad, "CURSOR_STALE");
-    // 错误包络补当前代际（批次一落点）
+    // 错误包络补当前代际
     assert_eq!(
         bad.pointer("/index_generation").and_then(|v| v.as_u64()),
         Some(7),
@@ -1975,7 +1975,7 @@ async fn file_revisions_with_include() {
     assert_envelope(&nf, "NOT_FOUND");
 }
 
-/// issue #24：版本链分页——首页 COUNT 一次后 total 随游标携带，续页不再 COUNT；
+/// 版本链分页——首页 COUNT 一次后 total 随游标携带，续页不再 COUNT；
 /// include 文件级附集合只在首页携带（续页不重复传输/查询）
 #[tokio::test]
 async fn file_revisions_total_travels_with_cursor_and_include_first_page_only() {
@@ -2043,7 +2043,7 @@ async fn file_revisions_total_travels_with_cursor_and_include_first_page_only() 
     );
     assert!(
         p2.get("events").is_none(),
-        "续页不携带 include 附集合（issue #24）：{p2}"
+        "续页不携带 include 附集合：{p2}"
     );
     assert_eq!(
         p2.pointer("/revisions/0/seq").and_then(|v| v.as_i64()),
@@ -2055,7 +2055,7 @@ async fn file_revisions_total_travels_with_cursor_and_include_first_page_only() 
     );
 }
 
-/// files/{file_id}/detail（契约 §1.7 末段，issue #20 迁移后）：
+/// files/{file_id}/detail（契约 §1.7 末段）：
 /// 只返回头 + 当前版（camelCase 派生字段），不内联任何正文，附集合限额保留
 #[tokio::test]
 async fn file_detail_reader_compat() {
@@ -2084,7 +2084,7 @@ async fn file_detail_reader_compat() {
         Some(true),
         "v1 受基线保护"
     );
-    // issue #20：不再内联任何正文（单次响应不随版本数线性增长），正文经 §1.8 单独取
+    // 不再内联任何正文（单次响应不随版本数线性增长），正文经 §1.8 单独取
     assert!(
         revs[0].get("svgSource").is_none(),
         "SVG 也不内联正文：{json}"
@@ -2235,13 +2235,13 @@ async fn decisions_and_relations() {
     );
 }
 
-/// 批次二/三 501 桩与未知路由（契约 §2 / fallback 包络）
+/// 预留 501 桩与未知路由（契约 §2.3 / fallback 包络）
 #[tokio::test]
 async fn stubs_and_unknown_routes() {
     let (fixture, root, _ws) = setup_workspace("http-stubs");
     let app = app_for(&fixture, &root, "inst_test000000012");
 
-    // C02 已交付 /api/v1/search：缺 q → 400 包络（不再是 501 桩）
+    // /api/v1/search 已实现：缺 q → 400 包络（不再是 501 桩）
     let (status, json) = get(&app, "/api/v1/search").await;
     assert_eq!(
         status,
@@ -2250,12 +2250,12 @@ async fn stubs_and_unknown_routes() {
     );
     assert_envelope(&json, "BAD_REQUEST");
 
-    // /graph 仍为批次三 501 桩
+    // /graph 维持 501 预留桩
     let (status, json) = get(&app, "/api/v1/graph").await;
     assert_eq!(status, StatusCode::NOT_IMPLEMENTED, "graph 端点维持 501");
     assert_envelope(&json, "NOT_IMPLEMENTED");
 
-    // PRD v2.0 长任务批次：diff/stream 已实现——diff 空 body → 400 包络；
+    // diff/stream 已实现——diff 空 body → 400 包络；
     // stream 返回 SSE（此处只验证不是 501/404，事件内容在专用用例）
     let (status, _json) = send(
         &app,
@@ -2394,7 +2394,7 @@ trait Pipe: Sized {
 }
 impl<T> Pipe for T {}
 
-// ===== issue #4：有界查询执行通道（准入 / 隔离 / 取消 / generation 缓存） =====
+// ===== 有界查询执行通道（准入 / 隔离 / 取消 / generation 缓存） =====
 
 fn exec_config(wait_ms: u64, exec_ms: u64, max_waiters: usize) -> QueryConfig {
     QueryConfig {
@@ -2566,7 +2566,7 @@ async fn generation_cached_for_error_envelope_on_first_request() {
     );
 }
 
-// ===== 批次二：索引任务端点 =====
+// ===== 索引任务端点 =====
 
 /// POST JSON 请求：返回 (状态码, 解析后的 JSON)
 async fn post_json(app: &axum::Router, uri: &str, body: &str) -> (StatusCode, serde_json::Value) {
@@ -2700,7 +2700,7 @@ async fn job_status_unknown_id_is_not_found() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// B01：全格式采集/筛选、/api/v1/storage/stats、/api/v1/storage/policy 与二进制流/降级语义
+/// 全格式采集/筛选、/api/v1/storage/stats、/api/v1/storage/policy 与二进制流/降级语义
 #[tokio::test]
 async fn b01_open_formats_storage_stats_and_policy_roundtrip() {
     let base = std::env::temp_dir().join(format!("guanlan-svc-b01-{}", std::process::id()));
@@ -2827,7 +2827,7 @@ async fn b01_open_formats_storage_stats_and_policy_roundtrip() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// B02：QuickLook 轻预览端点（代码分片+UTF-8 边界、PNG 尺寸元数据、L0 大二进制体检卡+历史体积 delta、
+/// QuickLook 轻预览端点（代码分片+UTF-8 边界、PNG 尺寸元数据、L0 大二进制体检卡+历史体积 delta、
 /// /thumbnail 流式与 Range/304、desktop CORS Range 头放行）
 #[tokio::test]
 async fn b02_quick_preview_and_thumbnail_endpoints() {
@@ -3081,7 +3081,7 @@ fn build_stored_zip_for_http_test(files: &[(&str, &[u8])]) -> Vec<u8> {
     buf
 }
 
-/// B03：Office（`.docx`/`.xlsx` L2 端点、ETag/304、非 Office 拒绝、损坏/加密降级、
+/// Office（`.docx`/`.xlsx` L2 端点、ETag/304、非 Office 拒绝、损坏/加密降级、
 /// Markdown → `.xlsx#Sheet!Range` 决定证据锚定与 `.docx` 内嵌段落锚定）
 #[tokio::test]
 async fn b03_office_endpoints_and_decision_evidence_anchoring() {
@@ -3273,7 +3273,7 @@ async fn b03_office_endpoints_and_decision_evidence_anchoring() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// B04：构造最小多页未压缩文本 PDF（第 idx 页内容为 `page_bodies[idx]`，页码 1-based）
+/// 构造最小多页未压缩文本 PDF（第 idx 页内容为 `page_bodies[idx]`，页码 1-based）
 fn build_simple_pdf_for_http_test(page_bodies: &[&[u8]]) -> Vec<u8> {
     let mut objects: Vec<Vec<u8>> = Vec::new();
     objects.push(b"<< /Type /Catalog /Pages 2 0 R >>".to_vec());
@@ -3324,7 +3324,7 @@ fn build_simple_pdf_for_http_test(page_bodies: &[&[u8]]) -> Vec<u8> {
     out
 }
 
-/// B04：PDF 页级文本端点、ETag/304、非 PDF 拒绝、扫描页诚实降级与
+/// PDF 页级文本端点、ETag/304、非 PDF 拒绝、扫描页诚实降级与
 /// Markdown → `.pdf#page=N` 决定证据锚定
 #[tokio::test]
 async fn b04_pdf_page_extracts_and_decision_evidence_anchoring() {
@@ -3466,7 +3466,7 @@ async fn b04_pdf_page_extracts_and_decision_evidence_anchoring() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// C01：候选事项多信号编织（理由胶囊）、采纳固化与"误聚项剔除后重扫不反弹"
+/// 候选事项多信号编织（理由胶囊）、采纳固化与"误聚项剔除后重扫不反弹"
 #[tokio::test]
 async fn c01_initiative_candidates_weave_adopt_and_exclude() {
     let base = std::env::temp_dir().join(format!("guanlan-svc-c01-{}", std::process::id()));
@@ -3691,7 +3691,7 @@ async fn wait_job_terminal(app: &axum::Router, job_id: &str) {
     panic!("任务 20s 未到终态");
 }
 
-/// C02：混合倒排检索端到端（契约 §2.4）——真实文件 + 真实对账（reconcile 尾部
+/// 混合倒排检索端到端（契约 §2.4）——真实文件 + 真实对账（reconcile 尾部
 /// 自动建检索索引）→ GET /search 四态策略/行号/片段 → 一键重建自愈。
 #[tokio::test]
 async fn c02_search_hybrid_index_and_rebuild_end_to_end() {
@@ -3706,7 +3706,7 @@ async fn c02_search_hybrid_index_and_rebuild_end_to_end() {
 
     std::fs::write(
         ws_root.join("docs/方案总体/登录方案.md"),
-        "# 登录方案\n核心结论：登录方案采用统一网关。\n验收标准引用 AC-03 编号。\n",
+        "# 登录方案\n核心结论：登录方案采用统一网关。\n验收标准引用 REQ-03 编号。\n",
     )
     .unwrap();
     std::fs::write(
@@ -3785,7 +3785,7 @@ async fn c02_search_hybrid_index_and_rebuild_end_to_end() {
         .contains("登录方案"));
 
     // ② 专有编号：exact_code + 行号；文件名命中诚实不冒充正文
-    let (st, j) = get(&app, "/api/v1/search?q=AC-03").await;
+    let (st, j) = get(&app, "/api/v1/search?q=REQ-03").await;
     assert_eq!(st, StatusCode::OK);
     assert_eq!(j["mode"], "code");
     let code_hit = j["items"]
@@ -3844,7 +3844,7 @@ async fn c02_search_hybrid_index_and_rebuild_end_to_end() {
         let conn = rusqlite::Connection::open(data_dir.join("index.db")).unwrap();
         conn.execute("DELETE FROM search_postings", []).unwrap();
     }
-    let (st, j) = get(&app, "/api/v1/search?q=AC-03").await;
+    let (st, j) = get(&app, "/api/v1/search?q=REQ-03").await;
     assert_eq!(st, StatusCode::OK);
     assert!(j["items"].as_array().unwrap().is_empty(), "损坏后诚实为空");
 
@@ -3857,7 +3857,7 @@ async fn c02_search_hybrid_index_and_rebuild_end_to_end() {
     assert_eq!(st_rebuild, StatusCode::ACCEPTED);
     wait_job_terminal(&app, j_rebuild["job_id"].as_str().unwrap()).await;
 
-    let (st, j) = get(&app, "/api/v1/search?q=AC-03").await;
+    let (st, j) = get(&app, "/api/v1/search?q=REQ-03").await;
     assert_eq!(st, StatusCode::OK);
     assert!(
         !j["items"].as_array().unwrap().is_empty(),
@@ -3866,7 +3866,7 @@ async fn c02_search_hybrid_index_and_rebuild_end_to_end() {
     assert_eq!(j["search_state"], "ready");
 }
 
-/// 建一个真实索引过的混合工作区（Writer + reconcile 全链路，c02 同口径）
+/// 建一个真实索引过的混合工作区（Writer + reconcile 全链路，与混合检索端到端测试同口径）
 fn c05_build_workspace(
     base: &std::path::Path,
     tag: &str,
@@ -3895,7 +3895,7 @@ fn c05_build_workspace(
     (root_str, data_dir)
 }
 
-/// C05：跨项目只读挂载与联合检索端到端（契约 §2.5）——挂载/来源标注/互斥拒绝/
+/// 跨项目只读挂载与联合检索端到端（契约 §2.5）——挂载/来源标注/互斥拒绝/
 /// 跨挂载边界写拦截（确定性错误码）/版本级只读路由/离线降级/联合检索预算。
 #[tokio::test]
 async fn c05_mounts_cross_search_and_guardrails_end_to_end() {

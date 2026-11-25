@@ -21,7 +21,6 @@
 | [`scripts/parity-reconcile.ts`](../../scripts/parity-reconcile.ts) | Node ↔ Rust 写入对拍 |
 | [`scripts/seed-fixture.ts`](../../scripts/seed-fixture.ts) | 生成夹具工作区、期望结果与身份向量 |
 | `test/v04-events-query.test.ts`、`test/v04-round2-server.test.ts`、`test/v04-round1-scenario.test.ts` | 对旧管线自身的回归测试，随 `npm test` 一起跑 |
-| `scripts/seed-volume.ts`、`scripts/v04-reconcile-once.ts` | 历史脚本，含写死的个人路径，会写真实数据目录 |
 
 `vite.config.ts` 不再挂载 `guanlanWorkspacePlugin`，只把 `/api` 代理到 Rust 服务。旧中间件服务的是 `/api/workspace/*`，前端只调用 `/api/v1/*`，所以把插件重新挂回去也对接不上。
 

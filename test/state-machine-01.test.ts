@@ -1,5 +1,5 @@
 /**
- * state-machine-01：统一状态机 SSOT 场景测试（方案 F2/F8；AC-01）。
+ * state-machine-01：统一状态机 SSOT 场景测试。
  *
  * 验收口径：专项卡片、专项详情下拉（橱窗筛选词表）、星图节点、文档顶栏四处视图
  * 的状态徽标词与计数全部来自 stateProjection 单一出口——跨视图同词、状态一致性 100%。
@@ -32,9 +32,9 @@ import type { TaskPackage } from '../src/utils/taskPackages';
 // ── 契约镜像（wire DTO 编译锁 + 状态行词表一致性） ──
 import type { ArtifactStateView, InitiativeStateView, StatementDetailDTO, TaskNodeView } from '../src/services/apiTypes';
 
-// ================= AC-01：四视图同词 =================
+// ================= 四视图同词 =================
 
-describe('AC-01 四视图状态徽标同词（stateProjection 单一出口）', () => {
+describe('四视图状态徽标同词（stateProjection 单一出口）', () => {
   it('① 专项卡片：packageBadgeLine 由 SSOT 短语组合（v8 · 待用户验收）', () => {
     const pkg: TaskPackage = {
       id: '01-x/p1',
@@ -219,14 +219,14 @@ describe('wire DTO 形状（apiTypes v1.2 新增节编译锁）', () => {
   });
 });
 
-// ================= F1/F2 接线回归锁（AC-01 最后一公里） =================
+// ================= /state-overview 接线回归锁 =================
 
-describe('AC-01 接线回归：/state-overview 有调用方，四视图消费六态词', () => {
+describe('接线回归：/state-overview 有调用方，四视图消费六态词', () => {
   const readSrc = (rel: string): string =>
     readFileSync(new URL(rel, import.meta.url), 'utf8');
 
-  it('F1：App 调用 fetchStateOverview，并把同一份响应下传四处视图', () => {
-    // D01-a 拆层后 App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
+  it('App 调用 fetchStateOverview，并把同一份响应下传四处视图', () => {
+    // 拆层后 App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
     const app = [
       '../src/App.tsx',
       '../src/stores/useWorkspaceStore.tsx',
@@ -262,8 +262,8 @@ describe('AC-01 接线回归：/state-overview 有调用方，四视图消费六
     }
   });
 
-  it('F2：文档顶栏 / 专项详情条消费六态词（ReaderView）', () => {
-    // D01-a 拆层后阅读器实现 = 装配层 + 行为控制器——联合文本断言（语义不变）
+  it('文档顶栏 / 专项详情条消费六态词（ReaderView）', () => {
+    // 拆层后阅读器实现 = 装配层 + 行为控制器——联合文本断言（语义不变）
     const src = [
       '../src/components/ReaderView.tsx',
       '../src/components/reader/useReaderController.tsx',
@@ -283,8 +283,8 @@ describe('AC-01 接线回归：/state-overview 有调用方，四视图消费六
     }
   });
 
-  it('F2：星图节点消费六态词（artifact 行优先，无行回退阶段词）', () => {
-    // D01-a 巨石拆层后画布实现 = 装配层 + 行为控制器 + Scene 层——联合文本断言（语义不变）
+  it('星图节点消费六态词（artifact 行优先，无行回退阶段词）', () => {
+    // 拆层后画布实现 = 装配层 + 行为控制器 + Scene 层——联合文本断言（语义不变）
     const src = [
       '../src/components/GraphCanvasView.tsx',
       '../src/components/graph/useGraphCanvasController.tsx',

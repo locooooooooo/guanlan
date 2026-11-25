@@ -6,7 +6,7 @@ import {
 } from '../src/components/ReaderView';
 
 /**
- * GU-CC-01：证据行定位「就近回退」确定性单测。
+ * 证据行定位「就近回退」确定性单测。
  *
  * 背景：证据指针 lineStart 可能落在无锚点行上（两类来源）——
  * ① 代码围栏内部行：围栏整块只在 codeStart 挂一个 data-event-source-line（ReaderView
@@ -66,7 +66,7 @@ function deriveAnchorLines(lines: string[]): number[] {
 
 // ---------- 验收 1：50 行代码围栏，指针指向围栏内部具体行（写死 codeStart+10） ----------
 
-test('GU-CC-01 围栏内部行：落点回退到 codeStart 锚点，文案逐字中性、不含「无正文」', () => {
+test('围栏内部行：落点回退到 codeStart 锚点，文案逐字中性、不含「无正文」', () => {
   const codeStart = 3; // L1 标题、L2 空行、L3 围栏开头
   const fenceBody = Array.from({ length: 50 }, (_, k) => `const step_${k + 1} = ${k + 1};`);
   const lines = [
@@ -101,7 +101,7 @@ test('GU-CC-01 围栏内部行：落点回退到 codeStart 锚点，文案逐字
 
 // ---------- 验收 2：目标行自身有锚点 → 直接命中该行，不渲染回退提示 ----------
 
-test('GU-CC-01 目标行自身有锚点：纯函数幂等返回该行（命中路径先行，无需回退）', () => {
+test('目标行自身有锚点：纯函数幂等返回该行（命中路径先行，无需回退）', () => {
   const lines = ['# 观澜证据定位走查', '', '## 收尾章节'];
   const anchors = deriveAnchorLines(lines);
   const anchoredTarget = 3; // '## 收尾章节' 自身有锚点
@@ -115,7 +115,7 @@ test('GU-CC-01 目标行自身有锚点：纯函数幂等返回该行（命中�
 
 // ---------- 验收 3：目标行之前无任何锚点 → 落点为之后最近锚点，提示行号为实际落点 ----------
 
-test('GU-CC-01 之前无任何锚点：取之后最近锚点，提示行号为实际落点行号', () => {
+test('之前无任何锚点：取之后最近锚点，提示行号为实际落点行号', () => {
   // 文件以两行空行开头（空行不渲染无锚点），首个锚点出现在 L3 围栏开头；
   // 指针落在 L1/L2 这类「之前没有任何锚点」的行上
   const lines = ['', '', '```text', 'alpha', 'beta', '```', '第一段正文'];
@@ -132,7 +132,7 @@ test('GU-CC-01 之前无任何锚点：取之后最近锚点，提示行号为�
 
 // ---------- 验收 4：「就近」量化为确定性规则（不再用未量化的「附近」） ----------
 
-test('GU-CC-01 就近规则：之前取 ≤ 目标的最大锚点，之前为空取 > 目标的最小锚点', () => {
+test('就近规则：之前取 ≤ 目标的最大锚点，之前为空取 > 目标的最小锚点', () => {
   const anchors = [1, 3, 7, 20, 42];
   // 之前有多个候选：取之前最近（最大 ≤ 目标），不取更早的、也不越过后面的
   assert.equal(pickNearestSourceLineAnchor(anchors, 30), 20);
@@ -151,7 +151,7 @@ test('GU-CC-01 就近规则：之前取 ≤ 目标的最大锚点，之前为空
   assert.equal(pickNearestSourceLineAnchor([9, 4], 2), 4);
 });
 
-test('GU-CC-01 全文件无锚点：返回 null（调用方不滚动、不出提示，绝不假装定位成功）', () => {
+test('全文件无锚点：返回 null（调用方不滚动、不出提示，绝不假装定位成功）', () => {
   assert.equal(pickNearestSourceLineAnchor([], 5), null, '空锚点集合必须返回 null');
   // 纯空行/纯空白文档渲染不出任何锚点
   assert.deepEqual(deriveAnchorLines(['', '', '']), []);
@@ -160,7 +160,7 @@ test('GU-CC-01 全文件无锚点：返回 null（调用方不滚动、不出提
 
 // ---------- 验收 4 补充：表格分隔行（无锚点第二类来源） ----------
 
-test('GU-CC-01 表格分隔行：回退到表头行的整块锚点，正文行锚点不受影响', () => {
+test('表格分隔行：回退到表头行的整块锚点，正文行锚点不受影响', () => {
   const lines = ['# 表格走查', '', '| A | B |', '|---|---|', '| 1 | 2 |', '| 3 | 4 |'];
   const anchors = deriveAnchorLines(lines);
   // L3 表头（wrapLine 整块锚点）、L5/L6 正文行（<tr> 锚点）；L4 分隔行无锚

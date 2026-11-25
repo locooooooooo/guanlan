@@ -1,33 +1,33 @@
 /**
- * V12 · 明暗双态 × 5,500 份极限高密压测视觉总验收基线（长任务卡 v1.2 §4 V12；前身：U12 / D01-a）。
+ * 明暗双态 × 5,500 份极限高密压测视觉总验收基线。
  *
  * 目标：在 5,507 份真实超大工程混合夹具（2,107 业务文档 + 3,400 工程代码 + 15 天连续百文日
  * + 288 未决待拍板 + L4A 自动排空至 100%）上，以无头 Chrome + CDP 固定脚本走完全站
- * 12 大场景 × 27 镜头（覆盖明暗双态、列表时光流、资产库概览、设置弹窗/v1.2.2 关于、司辰手记），
+ * 12 大场景 × 27 镜头（覆盖明暗双态、列表时光流、资产库概览、设置弹窗/关于页、司辰手记），
  * 并同步执行「Console 0 Error / 0 Warning」「288 SSOT 守恒」「日历同槽 0px 碰撞」「L4A 100% 自动排空」门禁；
  * compare 模式把当前截图与基线逐像素比对（drawImage + getImageData，零 npm 依赖），
  * 超差退出码 1。
  *
- * 12 场景 × 27 镜头（长任务卡 v1.2 V12 全覆盖）：
+ * 12 场景 × 27 镜头：
  *  ① 首页        home-today（司辰今日徽记 + 288 SSOT + 事件走势柱图）、home-trend-jump（柱图直跳）
  *  ② 星图        graph-panorama（夜航全景）、graph-folded-groups（折叠组近景）、
  *                graph-node-cards（节点卡近景）、graph-paper（纸面态）
  *  ③ 日历        calendar-window（5,500+ 15 天连续百文日零碰撞）、calendar-compact（紧凑活跃断层槽）、
  *                calendar-popover（Base UI Popover 左避让 + 右侧聚焦卡零遮挡）
- *  ④ 列表时光流   timeline-stream（V09 TimelineView 司辰时光流）
+ *  ④ 列表时光流   timeline-stream（TimelineView 司辰时光流）
  *  ⑤ 阅读器      reader-decision、reader-scrolled、reader-dark-paper、reader-zen、
  *                reader-version-axis、reader-inspector
- *  ⑥ 资产库概览   atlas-overview（V09 AtlasView 概览折叠护栏与格式分布带）
+ *  ⑥ 资产库概览   atlas-overview（AtlasView 概览折叠护栏与格式分布带）
  *  ⑦ 版本时光机   time-machine-night（夜航）、time-machine-paper（纸面）
- *  ⑧ 命令面板    palette（V08 Ctrl+K 双栏 L4A 富预览）
+ *  ⑧ 命令面板    palette（Ctrl+K 双栏 L4A 富预览）
  *  ⑨ 批阅+轻预览  review-board（批阅看板六态泳道）、quick-preview（Space 轻预览）
- *  ⑩ 司辰手记    chronos-digest（V10 Sheet inset 今日/本周可溯源 Markdown 手记）
- *  ⑪ 设置与关于   settings-about（V08 分栏设置 + V12 v1.2.2 / git-sha / 构建时间透出）
- *  ⑫ 暗夜全局    dark-home、dark-calendar、dark-settings（V07 全站 .dark 语义双态总验）
+ *  ⑩ 司辰手记    chronos-digest（Sheet inset 今日/本周可溯源 Markdown 手记）
+ *  ⑪ 设置与关于   settings-about（分栏设置 + 版本号 / git-sha / 构建时间透出）
+ *  ⑫ 暗夜全局    dark-home、dark-calendar、dark-settings（全站 .dark 语义双态总验）
  *
  * 分阶段纪律（像素回归）：
- *  - U12 起全站镜头重 capture（U01–U11 美学收口后的新基线），VISUAL_DECLARED_SHIFTS
- *    清零；后续轮次如有行为升级再按镜头登记偏移，未登记镜头出现差异仍判失败。
+ *  - 全站镜头重 capture 后 VISUAL_DECLARED_SHIFTS 清零；
+ *    后续轮次如有行为升级再按镜头登记偏移，未登记镜头出现差异仍判失败。
  *
  * 确定性策略（同机可复现的全部已知抖动源逐一钉死）：
  *  - 夹具文件内容固定 + fs.utimesSync 固定 mtime（occurred_at / 排序全稳定）；
@@ -35,14 +35,14 @@
  *    司辰时钟、今日高亮全部冻结）；服务端扫描墙钟字段归一到固定时钟；
  *    occurred_at 单独按「日期 ≤ 固定时钟日」放行——夹具 mtime 派生的发生时间
  *    （确定性）如实透传，扫描墙钟派生的系统事件（真实日期 > 固定时钟日）归一。
- *    这使 U12 高密夹具的 86 天时间跨度在截图中可复现，属截图 harness 的时间归一，
+ *    这使高密夹具的 86 天时间跨度在截图中可复现，属截图 harness 的时间归一，
  *    产品代码与「发生/采集双口径」语义零改动；
  *  - Emulation.setEmulatedMedia prefers-reduced-motion=reduce（画布/动效按该信号关停
  *    循环层）；Animation.setPlaybackRate(0) + 截图前把活动动画跳到 endTime 并暂停；
  *  - 缩放/平移只用 CDP Input.dispatchMouseEvent 定坐标定步数（d3.zoom 对同输入幂等）；
  *  - 每镜头截图前 settle 等待 + 双重 rAF 同步 + 鼠标停靠视口右上中性位。
  *
- * Console 门禁（U12 新增）：
+ * Console 门禁：
  *  - Runtime.consoleAPICalled（error/warning/assert）、Runtime.exceptionThrown、
  *    Log.entryAdded（error/warning）三类事件全量采集、按 (kind,source,text) 去重；
  *  - 任一非零即判失败（退出码 1）——「0 Error / 0 Warning」由此有凭据。
@@ -72,7 +72,7 @@ const FAIL_DIR = path.join(HERE, '.visual-fail');
 
 /**
  * 已声明的布局偏移（行为升级白名单）：镜头名 → 理由。未登记镜头差异即停。
- * U12 重 capture 后基线即「全站美学收口终态」，本表清零；后续轮次按需登记。
+ * 重 capture 后基线即当前视觉终态，本表清零；后续轮次按需登记。
  */
 const VISUAL_DECLARED_SHIFTS = {};
 
@@ -84,7 +84,7 @@ const VISUAL_DECLARED_SHIFTS = {};
 const DIFF_RATIO_GATE = 0.001;
 
 /**
- * 镜头级噪声底（U12 标定，2026-11-23 五轮 compare 实测）：高密场景下 glow/渐变
+ * 镜头级噪声底（2026-11-23 五轮 compare 实测标定）：高密场景下 glow/渐变
  * 边缘与 Overlay 文字 AA 的固有栅格化残差（无限循环动画相位已钉 0 仍存在）：
  *  - graph-folded-groups 0.121–0.123%（折叠组头行文字微点，maxΔ≤20）；
  *  - time-machine-paper  0.100–0.110%（司辰 mascot 光环渐变边缘，maxΔ≤147）；
@@ -225,7 +225,7 @@ class CdpClient {
   }
 }
 
-/* ════════════════════════ Console 门禁（U12） ════════════════════════ */
+/* ════════════════════════ Console 门禁 ════════════════════════ */
 
 class ConsoleGate {
   constructor() {
@@ -392,15 +392,15 @@ const FIXTURE_FILES = [
 ];
 
 /**
- * V12 · 5,507 份极限高密压测确定性夹具（对齐真实「拥抱AI」5,519 份大工程体量）：
+ * 5,507 份极限高密压测确定性夹具（对齐 5,519 份真实大型工程体量）：
  *  - 业务文档：12 个业务目录 × 175 份 = 2,100 份 Markdown（加手写核心 7 份共 2,107 份）；
  *    其中前 287 份各含 1 处唯一 `[P1 - 待确认]` 卡点块（+ 核心蓝图 1 处 = 精确 288 项待拍板，
- *    验证 V03 全站 288 vs 100 分页 SSOT 零分裂）；
+ *    验证全站 288 vs 100 分页 SSOT 零分裂）；
  *  - 工程代码：`04-智能体代码/mod-00..mod-16`（17 子目录 × 200 份 = 精确 3,400 份 `.ts/.rs/.py/.json`），
- *    单子目录 200 份 > 150 阈值直接触发 V11 左栏虚拟切片护栏，顶层合并成 3,400 份高密日历行；
+ *    单子目录 200 份 > 150 阈值直接触发左栏虚拟切片护栏，顶层合并成 3,400 份高密日历行；
  *  - 时间分布（相对固定时钟日 2026-11-21 逐日回退）：
  *    · offset 0..14（连续 15 天）：每天 60 业务 + 90 代码 = 150 份/日（连续 15 天百文日，
- *      核心 7 份落 offset=11 同在该连续带内），正面压测 V05 日历零碰撞；
+ *      核心 7 份落 offset=11 同在该连续带内），正面压测日历零碰撞；
  *    · offset 15..25（连续 11 天全空）：近 30 天空日占比 11/30 = 36.7% ≥ 30% 且最长空段 11 ≥ 5，
  *      精确命中「紧凑活跃」智能识别门槛（等距/紧凑双态皆可截）；
  *    · offset 26..29（4 天）：每天 40 业务 + 60 代码 = 100 份/日（窗口尾段高柱）；
@@ -526,7 +526,7 @@ function buildBulkFixture(wsDir) {
   }
 }
 
-/** 写入核心 7 份夹具（用于 serve 启动后提交 changed_paths 任务，实机驱动 V03 L4A 后台队列自动排空至 100%）。 */
+/** 写入核心 7 份夹具（用于 serve 启动后提交 changed_paths 任务，实机驱动 L4A 后台队列自动排空至 100%）。 */
 function writeCoreFixtureFiles(wsDir) {
   let i = 0;
   for (const f of FIXTURE_FILES) {
@@ -750,8 +750,8 @@ async function anyEscLayerOpen(cdp) {
 /* ════════════════════════ 镜头脚本（capture / compare 共用） ════════════════════════ */
 
 /**
- * V12 · 12 场景 × 27 镜头计划：场景 → 镜头名（与文件名一致）。captureAllShots 按导航顺序执行，
- * 报告按本表场景聚合（长任务卡 v1.2 V12 全量压测 + 明暗双态覆盖）。
+ * 12 场景 × 27 镜头计划：场景 → 镜头名（与文件名一致）。captureAllShots 按导航顺序执行，
+ * 报告按本表场景聚合（高密压测 + 明暗双态全量覆盖）。
  */
 const SHOT_SCENES = [
   { scene: '① 首页（5,507 份 + 288 SSOT + 柱图直跳）', shots: ['home-today', 'home-trend-jump'] },
@@ -928,7 +928,7 @@ async function captureAllShots(endpoint, gate) {
     `);
     await settleFrames(cdp, 1500);
 
-    // V03 SSOT 门禁：顶栏决策雷达与首页焦点卡待拍板总数必须严格等于 288（消除 288 vs 100 分页分裂）
+    // SSOT 门禁：顶栏决策雷达与首页焦点卡待拍板总数必须严格等于 288（消除 288 vs 100 分页分裂）
     const ssotCheck = await cdp.eval(`
       const radarBtn = document.querySelector('button[aria-label^="未决决策 "]');
       const cardCount = document.querySelector('[data-feature-count="decision"]');
@@ -948,7 +948,7 @@ async function captureAllShots(endpoint, gate) {
       `首页待拍板焦点计数应为 ${EXPECTED_PENDING_DECISIONS}，实得 ${JSON.stringify(ssotCheck)}`
     );
     console.log(
-      `  [V03 SSOT 证据] 顶栏「${ssotCheck.radarAria}」=== 首页待拍板「${ssotCheck.cardText}」✓`
+      `  [SSOT 证据] 顶栏「${ssotCheck.radarAria}」=== 首页待拍板「${ssotCheck.cardText}」✓`
     );
 
     // ══ 场景① 镜头 1：home-today ══
@@ -1040,7 +1040,7 @@ async function captureAllShots(endpoint, gate) {
       await settleFrames(cdp, 900);
     }
 
-    // V05 门禁：15 天连续百文日同行相邻槽位 0px 碰撞 + 底部事件刻度行零裁切
+    // 日历门禁：15 天连续百文日同行相邻槽位 0px 碰撞 + 底部事件刻度行零裁切
     const calGeo = await cdp.eval(`
       const rows = Array.from(document.querySelectorAll('[data-cal-row]'));
       let totalChips = 0;
@@ -1081,7 +1081,7 @@ async function captureAllShots(endpoint, gate) {
     assert.equal(calGeo.collisions.length, 0, `日历同行槽位存在像素碰撞：${JSON.stringify(calGeo.collisions.slice(0, 5))}`);
     assert.ok(calGeo.eventsRowVisible, `底部事件刻度行应完整可见无裁切，实得 ${JSON.stringify(calGeo.eventsRowRect)}`);
     console.log(
-      `  [V05 零碰撞证据] ${calGeo.checkedRows} 行 ${calGeo.totalChips} 枚高密热力槽 0px 碰撞 · 事件刻度行 h=${calGeo.eventsRowRect.height}px 完整可见 ✓`
+      `  [日历零碰撞证据] ${calGeo.checkedRows} 行 ${calGeo.totalChips} 枚高密热力槽 0px 碰撞 · 事件刻度行 h=${calGeo.eventsRowRect.height}px 完整可见 ✓`
     );
 
     shots.set('calendar-window', await captureShot(cdp));
@@ -1100,7 +1100,7 @@ async function captureAllShots(endpoint, gate) {
     shots.set('calendar-compact', await captureShot(cdp));
 
     // 右缘最密一格弹层：DOM 序最后一枚 data-slot-chip = 最新日 = 最右列。
-    // U01 + V05 口径：Base UI Popover 右半区锚点弹层必须左展开，绝不压右侧聚焦卡。
+    // 弹层避让口径：Base UI Popover 右半区锚点弹层必须左展开，绝不压右侧聚焦卡。
     const chipInfo = await cdp.eval(`
       const chips = Array.from(document.querySelectorAll('[data-slot-chip]'));
       if (!chips.length) return null;
@@ -1154,7 +1154,7 @@ async function captureAllShots(endpoint, gate) {
       { label: 'popover closed' }
     );
 
-    // ══ 场景④ 列表时光流（V09 TimelineView） ══
+    // ══ 场景④ 列表时光流（TimelineView） ══
     await clickButtonIn(cdp, '[aria-label="全景溯源视图切换"]', '列表');
     await waitFor(
       () => cdp.eval(`return Boolean(document.querySelector('[data-timeline-chronos-stream]'));`),
@@ -1316,7 +1316,7 @@ async function captureAllShots(endpoint, gate) {
       { label: 'time machine closed' }
     );
 
-    // ══ 场景⑥ 资产库概览（V09 AtlasView 折叠护栏与格式分布带） ══
+    // ══ 场景⑥ 资产库概览（AtlasView 折叠护栏与格式分布带） ══
     // 退出版本时光机后落点在全景工作区，显式切回「知识资产库」以显示 阅读/概览 切换栏
     await clickPrimaryTab(cdp, '知识资产库');
     await waitFor(
@@ -1348,7 +1348,7 @@ async function captureAllShots(endpoint, gate) {
     );
     await settleFrames(cdp, 400);
 
-    // ══ 场景⑧ Ctrl+K 双栏命令面板（V08 L4A 富预览） ══
+    // ══ 场景⑧ Ctrl+K 双栏命令面板（L4A 富预览） ══
     // Ctrl 按住不放 → k（带 ctrl 修饰位）→ 释放 Control（useCommandPalette 判 ctrl+K）
     await cdp.send('Input.dispatchKeyEvent', {
       type: 'keyDown', key: 'Control', code: 'ControlLeft',
@@ -1402,7 +1402,7 @@ async function captureAllShots(endpoint, gate) {
       { label: 'quick preview closed' }
     );
 
-    // ══ 场景⑩ 司辰手记抽屉（V10 Sheet inset 今日/本周可溯源 Markdown 简报） ══
+    // ══ 场景⑩ 司辰手记抽屉（Sheet inset 今日/本周可溯源 Markdown 简报） ══
     await clickPrimaryTab(cdp, '首页');
     await waitFor(
       () => cdp.eval(`return Boolean(document.querySelector('[data-gallery-card]'));`),
@@ -1428,7 +1428,7 @@ async function captureAllShots(endpoint, gate) {
       { label: 'chronos digest closed' }
     );
 
-    // ══ 场景⑪ 设置弹窗与关于观澜（V08 分栏设置 + V12 v1.2.2 / git-sha / 构建时间透出） ══
+    // ══ 场景⑪ 设置弹窗与关于观澜（分栏设置 + 版本号 / git-sha / 构建时间透出） ══
     await clickButtonByAria(cdp, '项目设置');
     await waitFor(
       () => cdp.eval(`return Boolean(document.querySelector('[data-settings-modal="open"]'));`),
@@ -1453,7 +1453,7 @@ async function captureAllShots(endpoint, gate) {
     assert.ok(aboutInfo.gitSha.length >= 6, `关于页应透出编译期 git-sha，实得 ${JSON.stringify(aboutInfo)}`);
     assert.ok(aboutInfo.buildTime.length >= 10, `关于页应透出编译期构建时间，实得 ${JSON.stringify(aboutInfo)}`);
     console.log(
-      `  [V12 版本透出证据] v${aboutInfo.version} · git-sha=${aboutInfo.gitSha} · built=${aboutInfo.buildTime} ✓`
+      `  [版本透出证据] v${aboutInfo.version} · git-sha=${aboutInfo.gitSha} · built=${aboutInfo.buildTime} ✓`
     );
     await settleFrames(cdp, 400);
     shots.set('settings-about', await captureShot(cdp));
@@ -1484,7 +1484,7 @@ async function captureAllShots(endpoint, gate) {
       () =>
         cdp.eval(`
           const t = document.querySelector('[data-cv-chronos-stepper]')?.getAttribute('title') || '';
-          // 未锁定：司辰 · 全域（…）/ 司辰聚焦时间 · 全域；锁定后必含具体日期（U10 直跳语义）
+          // 未锁定：司辰 · 全域（…）/ 司辰聚焦时间 · 全域；锁定后必含具体日期（直跳语义）
           return t.length > 0 && !t.includes('全域');
         `),
       { label: 'activeDate locked (chronos stepper)' }
@@ -1495,11 +1495,11 @@ async function captureAllShots(endpoint, gate) {
       return document.querySelector('[data-cv-chronos-stepper]')?.getAttribute('title') || '';
     `);
     console.log(
-      `  [U10 证据] 柱图 ${jumpTarget.date} 直跳 → 星图锁定：${lockTitle.split('（')[0]}`
+      `  [柱图直跳证据] 柱图 ${jumpTarget.date} 直跳 → 星图锁定：${lockTitle.split('（')[0]}`
     );
     shots.set('home-trend-jump', await captureShot(cdp));
 
-    // ══ 场景⑫ 全站暗夜沉浸双态（V07 .dark：暗夜首页 / 暗夜日历 / 暗夜设置关于） ══
+    // ══ 场景⑫ 全站暗夜沉浸双态（.dark：暗夜首页 / 暗夜日历 / 暗夜设置关于） ══
     await clickPrimaryTab(cdp, '首页');
     await waitFor(
       () => cdp.eval(`return Boolean(document.querySelector('[data-gallery-card]'));`),
@@ -1661,8 +1661,8 @@ async function withTmp() {
 }
 
 /**
- * V12 后端极限门禁：在 5,500 份预扫描基础上写入 7 份核心夹具，提交 changed_paths 任务，
- * 实机驱动 V03 L4A 后台自动排空引擎至 100%（queue_depth === 0），并断言全库 5,507 文件与 288 待拍板 SSOT。
+ * 后端极限门禁：在 5,500 份预扫描基础上写入 7 份核心夹具，提交 changed_paths 任务，
+ * 实机驱动 L4A 后台自动排空引擎至 100%（queue_depth === 0），并断言全库 5,507 文件与 288 待拍板 SSOT。
  */
 async function triggerCoreAndWaitL4aDrain(endpoint, wsDir) {
   // 1. 等启动自检任务（若有）空闲
@@ -1703,7 +1703,7 @@ async function triggerCoreAndWaitL4aDrain(endpoint, wsDir) {
       return s;
     }
     return null;
-  }, { timeoutMs: 45000, intervalMs: 150, label: 'V03 L4A auto-drain to 100%' });
+  }, { timeoutMs: 45000, intervalMs: 150, label: 'L4A auto-drain to 100%' });
 
   // 4. 校验 /api/v1/bootstrap：精确 5,507 文件 + 288 未决待拍板 SSOT
   const boot = await fetch(`${endpoint}/api/v1/bootstrap`).then((res) => res.json());
@@ -1719,7 +1719,7 @@ async function triggerCoreAndWaitL4aDrain(endpoint, wsDir) {
   );
   const l4a = settledStatus.l4a_progress;
   console.log(
-    `  [V12 后端门禁] ${boot.counts.files} 份资产（${EXPECTED_BIZ_FILES} 业务 + ${GEN_CODE_TOTAL} 代码）· 待拍板 SSOT ${boot.decisions_unresolved_total} · L4A 自动排空 ${l4a.done}/${l4a.total} (${l4a.percent}%, queue=${l4a.queue_depth}) ✓`
+    `  [后端门禁] ${boot.counts.files} 份资产（${EXPECTED_BIZ_FILES} 业务 + ${GEN_CODE_TOTAL} 代码）· 待拍板 SSOT ${boot.decisions_unresolved_total} · L4A 自动排空 ${l4a.done}/${l4a.total} (${l4a.percent}%, queue=${l4a.queue_depth}) ✓`
   );
 }
 
@@ -1754,7 +1754,7 @@ async function main() {
     console.log('  endpoint =', endpoint);
     await triggerCoreAndWaitL4aDrain(endpoint, TMP.wsDir);
 
-    console.log(`[2/4] 无头浏览器执行 V12 · ${SHOT_SCENES.length} 场景 × ${SHOT_PLAN.length} 镜头（明暗双态 × 5,507 份）...`);
+    console.log(`[2/4] 无头浏览器执行视觉回归 · ${SHOT_SCENES.length} 场景 × ${SHOT_PLAN.length} 镜头（明暗双态 × 5,507 份）...`);
     const shots = await captureAllShots(endpoint, gate);
     assert.equal(
       shots.size,

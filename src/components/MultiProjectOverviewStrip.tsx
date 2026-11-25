@@ -1,5 +1,5 @@
 /**
- * 今日首页「多项目工作台」总览条（V07 · coss Frame / CardFrame / Group 重构）：
+ * 今日首页「多项目工作台」总览条（coss Frame / CardFrame / Group 布局）：
  * - 展示所有已纳入观澜管理的本地项目卡片（在线/扫描/只读/离线状态、文件数、目录数、待拍板数）；
  * - 所有指标项强制 whitespace-nowrap + 响应式换行，根治「720 文\n件」折行穿帮；
  * - 支持一键添加新项目、零重启聚焦到任意项目（首页 / 全景星图 / 知识资产库）；
@@ -161,7 +161,7 @@ export const MultiProjectOverviewStrip: React.FC<MultiProjectOverviewStripProps>
                     </div>
                   </div>
 
-                  {/* V07：指标与入口均强制 whitespace-nowrap + 响应式换行，根治「720 文\n件」折行 */}
+                  {/* 指标与入口均强制 whitespace-nowrap + 响应式换行，避免「720 文\n件」折行 */}
                   <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 pt-2.5 border-t border-border/70">
                     <div
                       data-project-metrics=""

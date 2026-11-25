@@ -1,14 +1,14 @@
-//! 决策拍板回写（PRD v2.0 §3.3；冻结契约 C 的写线程执行体）。
+//! 决策拍板回写（写线程执行体）。
 //!
-//! 三步原子操作（PRD 3.3 提交语义）：
+//! 三步原子操作：
 //! 1. 结构化结果回写至本地 .md（替换下划线占位符，状态词变更 `[P1 - 已确认]`，
-//!    front matter `revision+1` 仅当命中）——CAS 乐观锁（PRD 5.1）：磁盘内容哈希
+//!    front matter `revision+1` 仅当命中）——CAS 乐观锁：磁盘内容哈希
 //!    必须等于最新版本哈希，冲突绝不静默覆盖，改存草案分支；
-//! 2. 单路径 changed_paths 对账（`reconcile_paths`，<200ms 通道）→ 新版本 →
-//!    陈述重派生 → decision_changed 事件 → 状态机重算（阻塞3 裁定：唤醒=
-//!    同步函数调用，无 job 载体）；
-//! 3. `decision_writeback` 事件（subject_id=业务原 decision_id，阻塞4 非迁移类
-//!    身份口径）。
+//! 2. 单路径 `changed_paths` 对账（`reconcile_paths`，<200ms 通道）→ 新版本 →
+//!    陈述重派生 → `decision_changed` 事件 → 状态机同步重算（唤醒直接走
+//!    同步函数调用，无独立后台 job 载体）；
+//! 3. `decision_writeback` 事件（`subject_id` 为业务原 `decision_id`，遵循非迁移类
+//!    事件身份口径）。
 //!
 //! CAS 失败路径：`revision_drafts(status='proposed', conflict=1)` + `proposal_raised`
 //! 事件，**不写工作区文件**；job 仍 completed（『处理拍板请求』本身成功）。
@@ -31,7 +31,7 @@ use crate::index::writer::{NewEvent, Writer};
 use crate::index::{reconcile_paths, ReconcileOptions};
 use crate::storage::{RevisionDraftRow, StatementRow};
 
-/// 回写载荷（HTTP 层解析后传入；语义=PRD 3.3 表单字段）
+/// 回写载荷（HTTP 层解析后传入，对应决策确认表单字段）
 #[derive(Debug, Clone)]
 pub struct WritebackInput {
     pub statement_id: String,
@@ -61,15 +61,15 @@ pub struct WritebackOutcome {
     pub cas_conflict: Option<CasConflict>,
     /// CAS 失败时落草案分支的 draft_id
     pub draft_id: Option<String>,
-    /// E04：端到端拍板写回 + SQLite 版本提交 + 状态机重算耗时（毫秒；目标 <200ms）
+    /// 端到端拍板写回 + SQLite 版本提交 + 状态机重算耗时（毫秒；目标 <200ms）
     pub elapsed_ms: u64,
-    /// E04：受影响专项 id（无归属专项为 None）
+    /// 受影响专项 id（无归属专项为 None）
     pub initiative_id: Option<String>,
-    /// E04：回写后该专项剩余阻塞未决数（P0+P1）
+    /// 回写后该专项剩余阻塞未决数（P0+P1）
     pub remaining_pending_p0_p1: Option<i64>,
-    /// E04：本次拍板是否解锁了下游被阻塞事项（P0+P1 清零且状态机离开 pending_review）
+    /// 本次拍板是否解锁了下游被阻塞事项（P0+P1 清零且状态机离开 pending_review）
     pub unlocked_downstream: bool,
-    /// E04：回写重算后专项状态（如 approved_revision / executing）
+    /// 回写重算后专项状态（如 approved_revision / executing）
     pub initiative_state_after: Option<String>,
 }
 
@@ -91,11 +91,11 @@ pub fn apply_decision_writeback(
         .ok_or_else(|| GuanlanError::NotFound(format!("未找到文件 {}", statement.file_id)))?;
     let rel_path = file.current_path.clone();
 
-    // archived 主体守卫（冻结契约 F）：同步拒绝，回写不执行
+    // archived 主体守卫：已归档专项同步拒绝，不执行回写
     ensure_not_archived(writer, &statement.file_id)?;
 
     let workspace = writer.workspace()?;
-    // E05 沙箱守卫：严格限制在授权工作区目录内，禁止路径逃逸或符号链接越界写入
+    // 沙箱守卫：严格限制在授权工作区目录内，禁止路径逃逸或符号链接越界写入
     let disk_path =
         crate::storage::sandbox::resolve_workspace_file_in_jail(&workspace.root_path, &rel_path)?;
     let disk_bytes = std::fs::read(&disk_path).map_err(|e| {
@@ -109,7 +109,7 @@ pub fn apply_decision_writeback(
     })?;
     let expected_hash = latest.content_hash.clone();
 
-    // ---------- CAS：磁盘内容必须与最新版本一致（PRD 5.1 乐观锁） ----------
+    // ---------- CAS 乐观锁：磁盘内容必须与最新版本一致 ----------
     if disk_hash != expected_hash {
         // 待写入内容 = 拍板后的形态（草案存「我们想写的内容」，供人机比对合并）
         let resolved = render_resolved_content(&disk_content, &statement, input);
@@ -192,7 +192,7 @@ pub fn apply_decision_writeback(
         });
     }
 
-    // ---------- 原位替换（PRD 3.3 第 1 步） ----------
+    // ---------- 第 1 步：原位替换 ----------
     if statement.status == "已确认" {
         // 已拍板复述：内容不会变化，不重写文件、不造新版本（幂等重试口径）
         return Ok(WritebackOutcome {
@@ -223,7 +223,7 @@ pub fn apply_decision_writeback(
     }
     write_workspace_file_atomic(&disk_path, resolved.as_bytes(), &resolved_hash)?;
 
-    // ---------- 单路径对账（冻结契约 C：新版本→陈述→决策事件→状态机重算） ----------
+    // ---------- 单路径对账：新版本→陈述→决策事件→状态机重算 ----------
     let options = ReconcileOptions {
         observed_at: Some(clock::now_iso()),
         ..ReconcileOptions::default()
@@ -302,7 +302,7 @@ pub fn apply_decision_writeback(
         Ok(())
     })?;
 
-    // E04：回写重算后读取该文件所属专项最新状态，确认未决扣减与下游解锁
+    // 回写重算后读取该文件所属专项最新状态，确认未决扣减与下游解锁
     let initiative_id = writer
         .get_artifact_state(&statement.file_id)?
         .and_then(|row| row.initiative_id);
@@ -334,7 +334,7 @@ pub fn apply_decision_writeback(
     })
 }
 
-/// archived 主体守卫：文件所属专项 state='archived' → CONFLICT（冻结契约 F）
+/// archived 主体守卫：文件所属专项 `state == "archived"` 时返回 CONFLICT
 pub fn ensure_not_archived(writer: &Writer, file_id: &str) -> Result<(), GuanlanError> {
     let Some(state_row) = writer.get_artifact_state(file_id)? else {
         return Ok(());
@@ -469,7 +469,7 @@ fn render_resolved_content(
     }
     let mut resolved = out.join("\n");
 
-    // front matter revision+1：仅当命中且含 revision 行（冻结契约 C）
+    // front matter revision+1：仅当存在 front matter 且含 revision 行时递增
     if pat.front_matter.is_match(&resolved) {
         if let Some(captures) = pat.revision_line.captures(&resolved) {
             let current: u64 = captures

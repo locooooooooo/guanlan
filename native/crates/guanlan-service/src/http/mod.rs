@@ -1,13 +1,13 @@
-//! REST 路由与统一错误包络（方案 §2 http 模块：REST、SSE、静态资源）。
+//! REST 路由与统一错误包络（REST、SSE 与静态资源）。
 //!
-//! 路由清单 = contract-query-api.md §1（批次一端点）+ §2（批次二/三端点清单）。
-//! 批次一实现：处理器解析请求参数（query string / path）→ 调 `core::query` /
+//! 路由清单见 `contract-query-api.md` §1（核心只读端点）与 §2（写入、长任务与检索端点）。
+//! 处理器解析请求参数（query string / path）→ 调 `core::query` /
 //! `core::application` → `Json(响应 DTO)`；错误经 [`ApiError`] 统一转包络
-//! （契约 §0.2 六个错误码加本地扩展码，index_generation 按当前代际补齐）。core 不依赖
-//! HTTP 框架（方案 §2），故 IntoResponse 在本模块用本地新类型 [`ApiError`]
-//! 实现，而非直接为 `GuanlanError` 实现孤儿规则。
+//! （契约 §0.2 六个错误码加本地扩展码，index_generation 按当前代际补齐）。`guanlan-core`
+//! 不依赖 HTTP 框架，故 IntoResponse 在本模块用本地新类型 [`ApiError`]
+//! 实现，而非直接为 `GuanlanError` 实现（避免违反孤儿规则）。
 //!
-//! 查询执行形态（issue #4 有界查询通道）：rusqlite 连接是 `Send + !Sync`，
+//! 查询执行形态（有界查询通道）：rusqlite 连接是 `Send + !Sync`，
 //! 不再全局共享一把互斥锁——[`query_exec::QueryExecutor`] 维护独立只读连接池，
 //! 许可数 = 连接数，排队长度/排队 deadline 双上限，饱和确定性返回 INDEX_BUSY；
 //! 查询在 `tokio::task::spawn_blocking` 的阻塞线程池执行；请求断开/执行超时
@@ -16,9 +16,8 @@
 //!
 //! 静态资源：`dist` 目录存在才挂载（`GUANLAN_DIST_DIR` → 可执行文件同级 `dist/`，
 //! 见 runtime::resolve_dist_dir）；未挂载或未知 `/api/*` 路径一律走统一错误包络
-//! 的 404。SSE（/api/v1/stream）已交付；批次三端点里只有 /api/v1/graph 仍是 501 桩
-//! （契约 §2）；批次二的索引任务端点（/api/v1/index-jobs、/api/v1/jobs/{job_id}）已交付
-//! （契约 §2.1）。
+//! 的 404。SSE（/api/v1/stream）与索引任务端点（/api/v1/index-jobs、/api/v1/jobs/{job_id}）
+//! 均已就位（契约 §2.1、§2.2）；仅 /api/v1/graph 预留为 501 桩（契约 §2.3）。
 
 mod projects_api;
 pub mod query_exec;
@@ -73,22 +72,22 @@ pub use response_budget::ResponseBudget;
 /// 应用状态：有界查询执行器（连接池）+ 实例身份 + dist 目录（None=不挂静态资源）
 #[derive(Clone)]
 pub struct AppState {
-    /// 有界查询执行通道（独立只读连接池 + 准入/取消/generation 缓存，issue #4）
+    /// 有界查询执行通道（独立只读连接池 + 准入/取消/generation 缓存）
     pub exec: Arc<QueryExecutor>,
-    /// 响应字节预算（issue #32：内联正文的读取/转换/序列化/发送全生命周期）
+    /// 响应字节预算（内联正文的读取/转换/序列化/发送全生命周期）
     pub budget: Arc<ResponseBudget>,
     /// 服务实例身份（main 里经 runtime::generate_instance_id 生成，
     /// 与启动打印/GUANLAN_ENDPOINT 行一致；契约 §1.2）
     pub(crate) instance_id: String,
     /// dist 目录；存在才由 build_router 挂载静态资源
     pub(crate) dist: Option<PathBuf>,
-    /// 索引任务管理器（唯一写入线程；批次二）
+    /// 索引任务管理器（唯一写入线程）
     pub(crate) jobs: crate::index_jobs::IndexJobManager,
-    /// 文件监听句柄（冻结契约 B4/I；测试/只读装配可为 None）
+    /// 文件监听句柄（测试/只读装配可为 None）
     pub(crate) watcher: Option<crate::watcher::WatcherHandle>,
-    /// SSE 通知中枢（冻结契约 J；测试/只读装配可为 None）
+    /// SSE 通知中枢（测试/只读装配可为 None）
     pub(crate) notices: Option<crate::runtime::NoticeHub>,
-    /// C05 只读参考工作区挂载注册表（idle 装配 = 无挂载；测试/只读场景）
+    /// 只读参考工作区挂载注册表（idle 装配 = 无挂载；测试/只读场景）
     pub(crate) mounts: Arc<crate::mounts::MountRegistry>,
     /// 多项目并存中枢（Some = 启用多项目零重启动态切换；None = 传统单项目测试装配）
     pub(crate) projects: Option<Arc<crate::projects::ProjectHub>>,
@@ -164,7 +163,7 @@ impl From<GuanlanError> for ApiError {
 
 impl ApiError {
     /// 错误发生时按执行器缓存的当前代际补齐包络 index_generation
-    /// （issue #4：缓存由阻塞任务内轻量刷新，异步线程不再同步抢数据库锁）
+    /// （缓存由阻塞任务内轻量刷新，异步线程不再同步抢数据库锁）
     fn with_generation(err: GuanlanError, state: &AppState) -> Self {
         Self {
             err,
@@ -189,7 +188,7 @@ impl IntoResponse for ApiError {
     }
 }
 
-/// 有界查询统一执行（issue #4）：经执行器准入（许可 + 排队上限 + deadline），
+/// 有界查询统一执行：经执行器准入（许可 + 排队上限 + deadline），
 /// 在阻塞线程池的独立只读连接上跑 core 查询；错误统一补缓存代际后转 [`ApiError`]。
 async fn run_query<T, F>(state: &AppState, f: F) -> Result<T, ApiError>
 where
@@ -203,11 +202,11 @@ where
     })
 }
 
-/// 组装 /api/v1 路由（PRD v2.0 长任务批次端点齐备；仅 graph 维持 501 桩，
-/// search 已由 C02 交付；dist 存在才挂静态资源）。
+/// 组装 /api/v1 路由（业务、长任务与检索端点齐备，仅 graph 维持 501 桩；
+/// dist 存在才挂静态资源）。
 pub fn build_router(state: AppState) -> Router {
     let api: Router<AppState> = Router::new()
-        // ===== 批次一端点（契约 §1）=====
+        // ===== 核心只读与文件/目录操作端点（契约 §1、§2.2.1）=====
         .route("/api/v1/bootstrap", get(bootstrap))
         .route("/api/v1/status", get(status))
         .route("/api/v1/files", get(files))
@@ -230,7 +229,7 @@ pub fn build_router(state: AppState) -> Router {
             "/api/v1/revisions/{revision_id}/content",
             get(revision_content),
         )
-        // ===== B02：QuickLook 轻预览与流式图片缩略端点 =====
+        // ===== QuickLook 轻预览与流式图片缩略端点 =====
         .route(
             "/api/v1/revisions/{revision_id}/preview",
             get(revision_preview),
@@ -246,10 +245,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/v1/revisions/{revision_id}/pdf", get(revision_pdf))
         .route("/api/v1/decisions", get(decisions))
         .route("/api/v1/relations", get(relations))
-        // ===== V04：服务端已读基线查询 + 批量确立/撤销 =====
+        // ===== 服务端已读基线查询 + 批量确立/撤销 =====
         .route("/api/v1/reading-state", get(reading_state_list))
         .route("/api/v1/reading-state/batch", post(reading_state_batch))
-        // ===== B01 + F02：本地快照存储统计、策略、全量 SHA-256 完整性、铁律 GC、全量开放导出与脱敏诊断 ZIP =====
+        // ===== 本地快照存储统计、策略、全量 SHA-256 完整性、铁律 GC、全量开放导出与脱敏诊断 ZIP =====
         .route("/api/v1/storage/stats", get(storage_stats))
         .route("/api/v1/storage/policy", post(storage_policy_update))
         .route("/api/v1/storage/integrity", get(storage_integrity))
@@ -260,22 +259,22 @@ pub fn build_router(state: AppState) -> Router {
             get(storage_diagnostic_zip_download).post(storage_diagnostic_zip_export),
         )
         .route("/api/v1/export/workspace", post(export_workspace_open))
-        // ===== PRD v2.0 长任务批次端点（冻结契约 A-K）=====
+        // ===== 长任务引擎与上下文基座端点（契约 §2.2）=====
         .route("/api/v1/stream", get(stream)) // SSE：hello + workspace-change + 心跳
-        .route("/api/v1/state-overview", get(state_overview)) // 契约 A：统一状态机投影
-        .route("/api/v1/statements", get(statements_list)) // 契约 C：拍板表单数据源
+        .route("/api/v1/state-overview", get(state_overview)) // 统一状态机投影
+        .route("/api/v1/statements", get(statements_list)) // 拍板表单数据源
         .route(
             "/api/v1/decisions/{statement_id}/resolve",
             post(decision_resolve),
-        ) // 契约 C：拍板回写（恒 202）
+        ) // 拍板回写（恒 202）
         .route(
             "/api/v1/revision-proposals",
             get(revision_proposals_list).post(revision_proposals_create),
-        ) // 契约 D：Agent 草案
+        ) // Agent 草案
         .route(
             "/api/v1/revision-proposals/{draft_id}/content",
             get(revision_proposals_content),
-        ) // E02：草案多模态 Diff 审阅载荷（只读）
+        ) // 草案多模态 Diff 审阅载荷（只读）
         .route(
             "/api/v1/revision-proposals/{draft_id}/adopt",
             post(revision_proposals_adopt),
@@ -287,24 +286,24 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/api/v1/checkpoints",
             get(checkpoints_list).post(checkpoint_commit),
-        ) // 契约 E：同步 201
+        ) // 检查点同步受理（201）
         .route(
             "/api/v1/initiatives/{initiative_id}/tasks",
             get(initiative_tasks),
-        ) // 契约 E：五槽位 DAG
+        ) // 五槽位 DAG
         .route(
             "/api/v1/initiatives/{initiative_id}/resume-context",
             get(resume_context),
-        ) // PRD 3.2：恢复上下文（增量 + 最新决策）
+        ) // 恢复上下文（增量 + 最新决策）
         .route(
             "/api/v1/initiatives/{initiative_id}/archive",
             post(initiative_archive),
-        ) // 契约 F
+        ) // 专项归档
         .route(
             "/api/v1/initiatives/{initiative_id}/reopen",
             post(initiative_reopen),
-        ) // 契约 F
-        // ===== C01 · 候选事项（多信号编织；采纳前绝不写正式归属） =====
+        ) // 专项重开
+        // ===== 候选事项（多信号编织；采纳前绝不写正式归属） =====
         .route(
             "/api/v1/initiative-candidates",
             get(initiative_candidates_list),
@@ -321,29 +320,29 @@ pub fn build_router(state: AppState) -> Router {
             "/api/v1/initiative-candidates/{candidate_id}/members/{file_id}/exclude",
             post(initiative_candidate_exclude),
         )
-        .route("/api/v1/diff", post(diff)) // 契约 H：异步入任务队列
-        .route("/api/v1/context", post(context)) // 契约 B + E03：证道阁 Token 预算感知上下文包
-        .route("/api/v1/mcp/host-config", post(mcp_host_config)) // E03：主流宿主 .mcp.json 安全生成/写入
-        .route("/api/v1/review-board", get(review_board)) // E04：五态批阅看板 + 失联 unknown 诊断
+        .route("/api/v1/diff", post(diff)) // 异步入任务队列
+        .route("/api/v1/context", post(context)) // Token 预算感知上下文包
+        .route("/api/v1/mcp/host-config", post(mcp_host_config)) // 主流宿主 .mcp.json 安全生成/写入
+        .route("/api/v1/review-board", get(review_board)) // 五态批阅看板 + 失联 unknown 诊断
         .route(
             "/api/v1/review-board/{initiative_id}/repair-orphan",
             post(review_board_repair_orphan),
-        ) // E04：孤儿/失联节点人工修复入口（严禁跳过审阅直接完结）
-        .route("/api/v1/audit/ledger", get(audit_ledger)) // E05：关键决定账本哈希链与权限沙箱完整性只读审计
-        // ===== F01：事项资料胶囊（Context Capsule）两阶段预览/脱敏导出/秒开核验 =====
+        ) // 孤儿/失联节点人工修复入口（严禁跳过审阅直接完结）
+        .route("/api/v1/audit/ledger", get(audit_ledger)) // 关键决定账本哈希链与权限沙箱完整性只读审计
+        // ===== 事项资料胶囊（Context Capsule）两阶段预览/脱敏导出/秒开核验 =====
         .route("/api/v1/capsules/preview", post(capsule_preview))
         .route("/api/v1/capsules/export", post(capsule_export))
         .route("/api/v1/capsules/inspect", post(capsule_inspect))
         .route("/api/v1/capsules/file", post(capsule_file))
-        .route("/api/v1/summary/{file_id}", get(file_summary)) // 契约 I：L4A 摘要
-        .route("/api/v1/index-jobs", post(index_jobs)) // 契约 G：202 + job_id
+        .route("/api/v1/summary/{file_id}", get(file_summary)) // L4A 摘要
+        .route("/api/v1/index-jobs", post(index_jobs)) // 202 + job_id
         .route("/api/v1/jobs/{job_id}", get(job_status)) // 任务状态
         .route("/api/v1/jobs/{job_id}/cancel", post(job_cancel)) // 协作式取消
         .route("/api/v1/jobs/{job_id}/result", get(job_result)) // 有界结果
-        // ===== 批次三端点（契约 §2：C02 已交付 search；graph 仍为 501 桩）=====
-        .route("/api/v1/search", get(search)) // C02：有界检索（混合倒排索引）
-        .route("/api/v1/search/rebuild", post(search_rebuild)) // C02：一键重建派生检索索引
-        // ===== C05：跨项目只读挂载与联合检索（契约 §2.5）=====
+        // ===== 检索、跨项目只读挂载与预留关系端点（契约 §2.3–§2.5）=====
+        .route("/api/v1/search", get(search)) // 有界检索（混合倒排索引）
+        .route("/api/v1/search/rebuild", post(search_rebuild)) // 一键重建派生检索索引
+        // ===== 跨项目只读挂载与联合检索（契约 §2.5）=====
         .route("/api/v1/mounts", get(mounts_list).post(mounts_mount))
         .route(
             "/api/v1/mounts/{mount_id}",
@@ -351,7 +350,7 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/api/v1/mounts/{mount_id}/files", get(mounts_files))
         .route("/api/v1/search/cross", get(search_cross))
-        .route("/api/v1/graph", get(graph)) // 批次三：局部关系 center_id + depth
+        .route("/api/v1/graph", get(graph)) // 预留 501 桩：局部关系 center_id + depth
         .merge(projects_api::projects_routes());
 
     // dist 判定先独立克隆，避免 match 借用阻塞后面对 state 的 move
@@ -398,7 +397,7 @@ async fn fallback_not_found(State(state): State<AppState>) -> ApiError {
 /// 桌面壳模式路由：在 [`build_router`] 之上放行跨源读取——WebView 页面源是
 /// `http(s)://tauri.localhost`（Tauri v2 Windows 缺省），API 在 `127.0.0.1` 环回端口，
 /// 属跨源；开发期 Vite (localhost:*) 代理也一并放行便于调试。
-/// 只读语义对应的方法集；不带凭据（方案 §7：凭据不放进命令行或 URL）。
+/// 只读语义对应的方法集；不带凭据（凭据不放进命令行或 URL）。
 pub fn build_router_with_desktop_cors(state: AppState) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::predicate(|origin, _| {
@@ -521,7 +520,7 @@ fn parse_include(raw: Option<&str>) -> Vec<query::RevisionIncludeSection> {
         .collect()
 }
 
-// ===== 批次一端点处理器（契约 §1）=====
+// ===== 核心只读与存储管理端点处理器（契约 §1、§2.2.2）=====
 
 async fn bootstrap(
     State(state): State<AppState>,
@@ -545,7 +544,7 @@ async fn bootstrap(
     }
     // 一个短读事务内合成（契约 §1.1，core application::bootstrap）
     let mut resp = run_query(&state, move |store| application::bootstrap(store, &q)).await?;
-    // 批次二：后台对账进行中时如实标出（前端据此显示「对账中」而不是假装数据已最新）
+    // 后台对账进行中时如实标出（前端据此显示「对账中」而不是假装数据已最新）
     if state.active_jobs().has_active() {
         resp.config.runtime_status.service_state = "reconciling".to_owned();
     }
@@ -558,13 +557,13 @@ async fn status(State(state): State<AppState>) -> Result<Json<StatusResponse>, A
     // runtime::generate_instance_id 各自独立，wire 输出必须与启动打印的
     // instance_id 一致（契约 §1.2：SSE 三元组载体，单实例稳定）
     resp.instance_id = state.instance_id.clone();
-    // 批次二：进行中的索引任务随状态一起给出（前端据此知道后台对账是否还在跑）
+    // 进行中的索引任务随状态一起给出（前端据此知道后台对账是否还在跑）
     let active = state.active_jobs().active_jobs();
     resp.active_jobs = active
         .iter()
         .filter_map(|job| serde_json::to_value(job.to_response()).ok())
         .collect();
-    // 冻结契约 I：watcher 段 + L4A 进度 + schema_version=2（core 侧已填 2）
+    // 补齐 watcher 状态段 + L4A 进度 + schema_version=2（core 侧已填 2）
     let l4a = run_query(&state, query::l4a_progress).await?;
     resp.l4a_progress = guanlan_core::dto::L4aProgress {
         done: l4a.done,
@@ -593,7 +592,7 @@ async fn status(State(state): State<AppState>) -> Result<Json<StatusResponse>, A
     Ok(Json(resp))
 }
 
-/// B01：GET /api/v1/storage/stats —— 本地快照占用体积、三档配额与全格式分布明细
+/// GET /api/v1/storage/stats —— 本地快照占用体积、三档配额与全格式分布明细
 async fn storage_stats(
     State(state): State<AppState>,
 ) -> Result<Json<StorageStatsResponse>, ApiError> {
@@ -607,7 +606,7 @@ struct UpdateStoragePolicyBody {
     binary_max_mib: u64,
 }
 
-/// B01：POST /api/v1/storage/policy —— 更新当前工作区三档快照上限（写 `meta` 表）
+/// POST /api/v1/storage/policy —— 更新当前工作区三档快照上限（写 `meta` 表）
 async fn storage_policy_update(
     State(state): State<AppState>,
     body: Result<Json<UpdateStoragePolicyBody>, JsonRejection>,
@@ -639,7 +638,7 @@ async fn storage_policy_update(
     }
 }
 
-/// F02：GET /api/v1/storage/integrity —— 校验全部活跃快照 SHA-256 完整性并 100% 诚实报告受损影响范围
+/// GET /api/v1/storage/integrity —— 校验全部活跃快照 SHA-256 完整性并 100% 诚实报告受损影响范围
 async fn storage_integrity(
     State(state): State<AppState>,
 ) -> Result<Json<guanlan_core::storage::maintenance::BlobIntegrityReport>, ApiError> {
@@ -651,7 +650,7 @@ async fn storage_integrity(
     Ok(Json(report))
 }
 
-/// F03：GET /api/v1/storage/backups —— 列出 SQLite Schema 升级前自动一致性备份（滚动保留最近 5 份）
+/// GET /api/v1/storage/backups —— 列出 SQLite Schema 升级前自动一致性备份（滚动保留最近 5 份）
 async fn storage_backups(
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
@@ -669,7 +668,7 @@ async fn storage_backups(
     Ok(Json(payload))
 }
 
-/// F02：POST /api/v1/storage/gc —— 存储瘦身（dry_run 走只读预演；execute 经唯一写线程并铁律保护决定证据快照）
+/// POST /api/v1/storage/gc —— 存储瘦身（dry_run 走只读预演；execute 经唯一写线程并铁律保护决定证据快照）
 async fn storage_gc(
     State(state): State<AppState>,
     body: Result<Json<guanlan_core::storage::maintenance::StorageGcRequest>, JsonRejection>,
@@ -708,7 +707,7 @@ async fn storage_gc(
     }
 }
 
-/// F02：POST /api/v1/export/workspace —— 工作区级全量开放导出（零锁定：历史快照 + JSONL/MD 账本）
+/// POST /api/v1/export/workspace —— 工作区级全量开放导出（零锁定：历史快照 + JSONL/MD 账本）
 async fn export_workspace_open(
     State(state): State<AppState>,
     body: Result<
@@ -729,7 +728,7 @@ async fn export_workspace_open(
     Ok(Json(resp))
 }
 
-/// V04：GET /api/v1/reading-state —— 读工作区服务端已读基线
+/// GET /api/v1/reading-state —— 读工作区服务端已读基线
 async fn reading_state_list(
     State(state): State<AppState>,
 ) -> Result<Json<guanlan_core::dto::ReadingStateListResponse>, ApiError> {
@@ -737,7 +736,7 @@ async fn reading_state_list(
     Ok(Json(resp))
 }
 
-/// V04：POST /api/v1/reading-state/batch —— 存量工作区/目录一键确立已读基线或撤销还原
+/// POST /api/v1/reading-state/batch —— 存量工作区/目录一键确立已读基线或撤销还原
 async fn reading_state_batch(
     State(state): State<AppState>,
     body: Result<Json<guanlan_core::dto::ReadingStateBatchRequest>, JsonRejection>,
@@ -775,7 +774,7 @@ struct DiagnosticZipBody {
     output_path: Option<String>,
 }
 
-/// F02：POST /api/v1/storage/diagnostic-zip —— 落盘生成脱敏运行诊断包 ZIP 并返回路径回执
+/// POST /api/v1/storage/diagnostic-zip —— 落盘生成脱敏运行诊断包 ZIP 并返回路径回执
 async fn storage_diagnostic_zip_export(
     State(state): State<AppState>,
     body: Option<Json<DiagnosticZipBody>>,
@@ -788,7 +787,7 @@ async fn storage_diagnostic_zip_export(
     Ok(Json(resp))
 }
 
-/// F02：GET /api/v1/storage/diagnostic-zip —— 直接流式下载脱敏运行诊断包 ZIP
+/// GET /api/v1/storage/diagnostic-zip —— 直接流式下载脱敏运行诊断包 ZIP
 async fn storage_diagnostic_zip_download(
     State(state): State<AppState>,
 ) -> Result<Response, ApiError> {
@@ -889,7 +888,7 @@ async fn file_revisions(
     Ok(Json(resp))
 }
 
-/// 阅读器兼容视图（契约 §1.7 末段「批次一保留」；文件级非分页，SVG 内联正文）
+/// 阅读器兼容视图（契约 §1.7 末段；文件级非分页）
 async fn file_detail(
     State(state): State<AppState>,
     Path(file_id): Path<String>,
@@ -942,7 +941,7 @@ async fn run_file_op_sync(
     }
 }
 
-/// A05：POST /api/v1/files/{file_id}/rename —— 同目录原子重命名（保持 file_id 与全部历史连续）
+/// POST /api/v1/files/{file_id}/rename —— 同目录原子重命名（保持 file_id 与全部历史连续）
 async fn file_rename(
     State(state): State<AppState>,
     Path(file_id): Path<String>,
@@ -954,7 +953,7 @@ async fn file_rename(
             &state,
         )
     })?;
-    // C05 写拦截：参考工作区只读，跨挂载边界写操作确定性拒绝（契约 §2.5）
+    // 跨挂载写拦截：参考工作区只读，跨挂载边界写操作确定性拒绝（契约 §2.5）
     cross_write_preflight(&state, &file_id).await?;
     run_file_op_sync(
         &state,
@@ -966,7 +965,7 @@ async fn file_rename(
     .await
 }
 
-/// A05：POST /api/v1/files/{file_id}/move —— 工作区内安全跨目录移动（保持 file_id 与全部历史连续）
+/// POST /api/v1/files/{file_id}/move —— 工作区内安全跨目录移动（保持 file_id 与全部历史连续）
 async fn file_move(
     State(state): State<AppState>,
     Path(file_id): Path<String>,
@@ -978,7 +977,7 @@ async fn file_move(
             &state,
         )
     })?;
-    // C05 写拦截：参考工作区只读，跨挂载边界移动确定性拒绝（契约 §2.5）
+    // 跨挂载写拦截：参考工作区只读，跨挂载边界移动确定性拒绝（契约 §2.5）
     cross_write_preflight(&state, &file_id).await?;
     run_file_op_sync(
         &state,
@@ -991,7 +990,7 @@ async fn file_move(
     .await
 }
 
-/// A05：POST /api/v1/files/{file_id}/trash —— 移入系统回收站（强制 confirm=true，绝不永久物理删除）
+/// POST /api/v1/files/{file_id}/trash —— 移入系统回收站（强制 confirm=true，绝不永久物理删除）
 async fn file_trash(
     State(state): State<AppState>,
     Path(file_id): Path<String>,
@@ -1003,7 +1002,7 @@ async fn file_trash(
             &state,
         )
     })?;
-    // C05 写拦截：参考工作区只读，跨挂载边界删除确定性拒绝（契约 §2.5）
+    // 跨挂载写拦截：参考工作区只读，跨挂载边界删除确定性拒绝（契约 §2.5）
     cross_write_preflight(&state, &file_id).await?;
     run_file_op_sync(
         &state,
@@ -1311,7 +1310,7 @@ async fn files_batch_trash(
     }
 }
 
-/// 按版本读正文（契约 §1.8；issue #32 响应字节预算）：
+/// 按版本读正文（契约 §1.8；带响应字节预算）：
 /// - `raw=1`（MD/SVG/PDF）：快照原字节流式回包（64KiB 分块，恒定内存）；
 /// - PDF 无 raw：JSON + raw_url（v1 指自身路径）；
 /// - MD/SVG 无 raw：受限内联——打开后取**实际**文件大小（不信 DB size_bytes），
@@ -1326,12 +1325,12 @@ async fn revision_content(
 ) -> Result<Response, ApiError> {
     let raw = param(&params, "raw") == Some("1");
     let q = query::RevisionContentQuery { raw };
-    // C05 版本级只读路由：挂载区命中即在参考区只读库上执行（引用的外部资料可读）
+    // 版本级只读路由：挂载区命中即在参考区只读库上执行（引用的外部资料可读）
     let located = run_revision_query(&state, &revision_id, move |store, rid| {
         query::revision_content(store, rid, &q)
     })
     .await?;
-    // issue #37：稳定 ETag（内容寻址）+ 条件请求/Range 的请求头
+    // 稳定 ETag（内容寻址）+ 条件请求/Range 的请求头
     let etag = range::etag_for_content_hash(&located.content_hash);
     let if_none_match = headers
         .get(header::IF_NONE_MATCH)
@@ -1381,7 +1380,7 @@ async fn revision_content(
                         path.display()
                     )))
                 })?;
-            // 单响应上限门禁（issue #32 验收 1/3）：不信 DB 的 size_bytes
+            // 单响应上限门禁：以磁盘实际大小为准，不信 DB 的 size_bytes
             if actual_len > state.budget.max_single() {
                 // 错误包络按当前代际补齐（与 run_query 错误路径同口径）
                 return Err(ApiError::with_generation(
@@ -1405,7 +1404,7 @@ async fn revision_content(
             let mut resp = located;
             let path_for_read = path.clone();
             let bytes = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, GuanlanError> {
-                // 限长读取：文件在 metadata 后增长时也不会超读（issue #32 验收 1）
+                // 限长读取：文件在 metadata 后增长时也不会超读
                 let mut raw = Vec::with_capacity(actual_len);
                 let mut f = std::fs::File::open(&path_for_read).map_err(|e| {
                     GuanlanError::SnapshotUnavailable(format!(
@@ -1443,7 +1442,7 @@ async fn revision_content(
     }
 }
 
-/// B02：GET /api/v1/revisions/{revision_id}/preview —— QuickLook L1 轻预览端点。
+/// GET /api/v1/revisions/{revision_id}/preview —— QuickLook L1 轻预览端点。
 ///
 /// - 文本/源码/CSV/SVG 仅读取 `offset..offset+max_bytes`（默认 64 KiB），恒定内存且支持分片续读；
 /// - 图片仅读取文件头 ≤64 KiB 抽取像素尺寸，配合 `/thumbnail` 或 `?raw=1` 流式渲染；
@@ -1463,7 +1462,7 @@ async fn revision_preview(
     let q = query::RevisionPreviewQuery { offset, max_bytes };
     let clamped_max = q.clamped_max_bytes();
 
-    // C05 版本级只读路由：挂载区命中即在参考区只读库上执行
+    // 版本级只读路由：挂载区命中即在参考区只读库上执行
     let mut resp = run_revision_query(&state, &revision_id, move |store, rid| {
         query::revision_preview(store, rid, &q)
     })
@@ -1612,13 +1611,13 @@ async fn revision_preview(
     ))
 }
 
-/// B03：GET /api/v1/revisions/{revision_id}/office —— `.docx`/`.xlsx` 结构化 L2 阅读端点
+/// GET /api/v1/revisions/{revision_id}/office —— `.docx`/`.xlsx` 结构化 L2 阅读端点
 async fn revision_office(
     State(state): State<AppState>,
     Path(revision_id): Path<String>,
     headers: axum::http::HeaderMap,
 ) -> Result<Response, ApiError> {
-    // C05 版本级只读路由：挂载区命中即在参考区只读库上执行
+    // 版本级只读路由：挂载区命中即在参考区只读库上执行
     let resp = run_revision_query(&state, &revision_id, |store, rid| {
         query::revision_office(store, rid)
     })
@@ -1659,13 +1658,13 @@ async fn revision_office(
     ))
 }
 
-/// B04：GET /api/v1/revisions/{revision_id}/pdf —— PDF 页级文本阅读端点（页码证据直达）
+/// GET /api/v1/revisions/{revision_id}/pdf —— PDF 页级文本阅读端点（页码证据直达）
 async fn revision_pdf(
     State(state): State<AppState>,
     Path(revision_id): Path<String>,
     headers: axum::http::HeaderMap,
 ) -> Result<Response, ApiError> {
-    // C05 版本级只读路由：挂载区命中即在参考区只读库上执行
+    // 版本级只读路由：挂载区命中即在参考区只读库上执行
     let resp = run_revision_query(&state, &revision_id, |store, rid| {
         query::revision_pdf(store, rid)
     })
@@ -1703,14 +1702,14 @@ async fn revision_pdf(
     ))
 }
 
-/// B02：GET /api/v1/revisions/{revision_id}/thumbnail —— 图像/矢量缩略流式端点（支持 Range/ETag）。
+/// GET /api/v1/revisions/{revision_id}/thumbnail —— 图像/矢量缩略流式端点（支持 Range/ETag）。
 async fn revision_thumbnail(
     State(state): State<AppState>,
     Path(revision_id): Path<String>,
     headers: axum::http::HeaderMap,
 ) -> Result<Response, ApiError> {
     let rev_id_for_err = revision_id.clone();
-    // C05 版本级只读路由：挂载区命中即在参考区只读库上执行
+    // 版本级只读路由：挂载区命中即在参考区只读库上执行
     let located = run_revision_query(&state, &revision_id, |store, rid| {
         query::revision_content(store, rid, &query::RevisionContentQuery { raw: true })
     })
@@ -1748,7 +1747,7 @@ async fn revision_thumbnail(
     Ok(serve_snapshot_stream(path, mime, &etag, if_none_match, range_header, if_range).await)
 }
 
-/// 快照流式响应（raw=1 / PDF 二进制；issue #37）：
+/// 快照流式响应（raw=1 / PDF 二进制）：
 /// - 稳定 ETag（内容哈希）+ `If-None-Match` → 304（无 body）
 /// - 单区间 `Range`（含开放结尾/后缀）→ 206 + `Content-Range`/`Content-Length`
 /// - 不可满足 → 416 + `Content-Range: bytes */len`
@@ -1880,15 +1879,15 @@ async fn decisions(
     Ok(Json(resp))
 }
 
-/// 批次一过渡全量关系（契约 §1.10）
+/// 全量关系查询（契约 §1.10）
 async fn relations(State(state): State<AppState>) -> Result<Json<RelationsResponse>, ApiError> {
     let resp = run_query(&state, query::relations).await?;
     Ok(Json(resp))
 }
 
-// ===== PRD v2.0 长任务批次端点处理器（冻结契约 A-K）=====
+// ===== 长任务引擎与上下文基座端点处理器（契约 §2.2）=====
 
-/// 契约 A：GET /api/v1/state-overview?initiative_id=（四视图唯一数据源）
+/// GET /api/v1/state-overview?initiative_id=（统一状态机投影，四视图唯一数据源）
 async fn state_overview(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
@@ -1909,7 +1908,7 @@ async fn state_overview(
     Ok(Json(resp))
 }
 
-/// 契约 C：GET /api/v1/statements?file_id=&status=&limit=（拍板表单数据源）
+/// GET /api/v1/statements?file_id=&status=&limit=（拍板表单数据源）
 async fn statements_list(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
@@ -1930,7 +1929,7 @@ async fn statements_list(
     Ok(Json(resp))
 }
 
-/// resolve 请求体（冻结契约 C）
+/// 拍板回写请求体
 #[derive(Debug, serde::Deserialize)]
 struct ResolveRequest {
     decision: String,
@@ -1946,8 +1945,8 @@ struct ResolveRequest {
     note: Option<String>,
 }
 
-/// 契约 C：POST /api/v1/decisions/{statement_id}/resolve —— 恒 202（端点永不 409；
-/// archived 主体是同步 409 CONFLICT 的唯一例外口径，冻结契约 F）
+/// POST /api/v1/decisions/{statement_id}/resolve —— 恒 202（端点永不 409；
+/// archived 主体是同步 409 CONFLICT 的唯一例外口径）
 async fn decision_resolve(
     State(state): State<AppState>,
     Path(statement_id): Path<String>,
@@ -2002,7 +2001,7 @@ async fn decision_resolve(
     ))
 }
 
-/// propose 请求体（冻结契约 D + E02 输入上下文哈希清单/回执摘要）
+/// 修订草案提交请求体（含输入上下文哈希清单与回执摘要）
 #[derive(Debug, serde::Deserialize)]
 struct ProposeRequest {
     file_id: String,
@@ -2016,14 +2015,14 @@ struct ProposeRequest {
     receipt_summary: Option<String>,
 }
 
-/// dismiss 请求体（E02 可选退回理由；空 body 或 `{}` 同样合法）
+/// 草案退回请求体（可选退回理由；空 body 或 `{}` 同样合法）
 #[derive(Debug, Default, serde::Deserialize)]
 struct DismissRequest {
     #[serde(default)]
     reason: Option<String>,
 }
 
-/// 契约 D / E02：POST /api/v1/revision-proposals —— 恒 202；默认落入独立草案分支
+/// POST /api/v1/revision-proposals —— 恒 202；默认落入独立草案分支
 /// `v(N+1)-agent-draft`，绝不直接修改工作区正式文件；conflict 为受理初判预览，
 /// 权威结果在 job report.proposal
 async fn revision_proposals_create(
@@ -2123,7 +2122,7 @@ fn disk_path_of(
         .ok_or_else(|| GuanlanError::NotFound(format!("未找到文件 {file_id}")))
 }
 
-/// 契约 D：GET /api/v1/revision-proposals?status=&cursor=（只读分页）
+/// GET /api/v1/revision-proposals?status=&cursor=（只读分页）
 async fn revision_proposals_list(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
@@ -2138,7 +2137,7 @@ async fn revision_proposals_list(
     Ok(Json(resp))
 }
 
-/// E02：GET /api/v1/revision-proposals/{draft_id}/content（草案多模态 Diff 审阅载荷）
+/// GET /api/v1/revision-proposals/{draft_id}/content（草案多模态 Diff 审阅载荷）
 async fn revision_proposals_content(
     State(state): State<AppState>,
     Path(draft_id): Path<String>,
@@ -2150,7 +2149,7 @@ async fn revision_proposals_content(
     Ok(Json(resp))
 }
 
-/// 契约 D：POST /api/v1/revision-proposals/{draft_id}/adopt —— 202
+/// POST /api/v1/revision-proposals/{draft_id}/adopt —— 202
 async fn revision_proposals_adopt(
     State(state): State<AppState>,
     Path(draft_id): Path<String>,
@@ -2161,7 +2160,7 @@ async fn revision_proposals_adopt(
     Ok((StatusCode::ACCEPTED, Json(JobAccepted { ok: true, job_id })))
 }
 
-/// 契约 D / E02：POST /api/v1/revision-proposals/{draft_id}/dismiss —— 202（支持可选 `{ reason }`）
+/// POST /api/v1/revision-proposals/{draft_id}/dismiss —— 202（支持可选 `{ reason }`）
 async fn revision_proposals_dismiss(
     State(state): State<AppState>,
     Path(draft_id): Path<String>,
@@ -2182,7 +2181,7 @@ async fn revision_proposals_dismiss(
     Ok((StatusCode::ACCEPTED, Json(JobAccepted { ok: true, job_id })))
 }
 
-/// checkpoint 请求体（冻结契约 E；node_id 可缺省——按 (initiative_id, stage) 反查）
+/// checkpoint 请求体（node_id 可缺省——按 (initiative_id, stage) 反查）
 #[derive(Debug, serde::Deserialize)]
 struct CheckpointRequest {
     #[serde(default)]
@@ -2202,7 +2201,7 @@ struct CheckpointRequest {
     note: Option<String>,
 }
 
-/// 契约 E：POST /api/v1/checkpoints —— 同步受理 201（阻塞2）。
+/// POST /api/v1/checkpoints —— 同事务同步受理 201。
 /// handler 在 spawn_blocking 内等写线程回执（5s 超时 → 503 INDEX_BUSY）；
 /// 校验失败 404 NOT_FOUND 回传（checkpoint 不落库、无 job_id）。
 async fn checkpoint_commit(
@@ -2278,7 +2277,7 @@ async fn checkpoint_commit(
     }
 }
 
-/// 契约 E：GET /api/v1/checkpoints?initiative_id=&node_id=&status=&limit=
+/// GET /api/v1/checkpoints?initiative_id=&node_id=&status=&limit=
 async fn checkpoints_list(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
@@ -2306,7 +2305,7 @@ async fn checkpoints_list(
     Ok(Json(resp))
 }
 
-/// 契约 E：GET /api/v1/initiatives/{initiative_id}/tasks（五槽位 DAG）
+/// GET /api/v1/initiatives/{initiative_id}/tasks（五槽位 DAG）
 async fn initiative_tasks(
     State(state): State<AppState>,
     Path(initiative_id): Path<String>,
@@ -2318,7 +2317,7 @@ async fn initiative_tasks(
     Ok(Json(resp))
 }
 
-/// PRD 3.2：GET /api/v1/initiatives/{id}/resume-context?stage=
+/// GET /api/v1/initiatives/{id}/resume-context?stage=
 /// 最近 SUCCESS checkpoint + 增量变更 + 最新决策结果（外部 Agent 注入下一步 Prompt 用；
 /// 引擎不做 Prompt 注入/编排）。
 async fn resume_context(
@@ -2335,14 +2334,14 @@ async fn resume_context(
     Ok(Json(resp))
 }
 
-/// archive 请求体（冻结契约 F）
+/// 专项归档请求体
 #[derive(Debug, serde::Deserialize)]
 struct ArchiveRequest {
     #[serde(default)]
     note: Option<String>,
 }
 
-/// 契约 F：POST /api/v1/initiatives/{id}/archive —— 202
+/// POST /api/v1/initiatives/{id}/archive —— 202
 async fn initiative_archive(
     State(state): State<AppState>,
     Path(initiative_id): Path<String>,
@@ -2369,7 +2368,7 @@ async fn initiative_archive(
     Ok((StatusCode::ACCEPTED, Json(JobAccepted { ok: true, job_id })))
 }
 
-/// 契约 F：POST /api/v1/initiatives/{id}/reopen —— 202
+/// POST /api/v1/initiatives/{id}/reopen —— 202
 async fn initiative_reopen(
     State(state): State<AppState>,
     Path(initiative_id): Path<String>,
@@ -2389,7 +2388,7 @@ async fn initiative_reopen(
     Ok((StatusCode::ACCEPTED, Json(JobAccepted { ok: true, job_id })))
 }
 
-/// C01：GET /api/v1/initiative-candidates —— 多信号候选事项列表（含理由胶囊）
+/// GET /api/v1/initiative-candidates —— 多信号候选事项列表（含理由胶囊）
 async fn initiative_candidates_list(
     State(state): State<AppState>,
 ) -> Result<Json<guanlan_core::dto::InitiativeCandidatesResponse>, ApiError> {
@@ -2397,7 +2396,7 @@ async fn initiative_candidates_list(
     Ok(Json(resp))
 }
 
-/// C01 候选受理前置：候选存在性校验（不存在 404 而非入队后失败）
+/// 候选受理前置：候选存在性校验（不存在 404 而非入队后失败）
 async fn candidate_exists_preflight(state: &AppState, candidate_id: &str) -> Result<(), ApiError> {
     run_query(state, {
         let candidate_id = candidate_id.to_owned();
@@ -2413,7 +2412,7 @@ async fn candidate_exists_preflight(state: &AppState, candidate_id: &str) -> Res
     .await
 }
 
-/// C01：POST /api/v1/initiative-candidates/{id}/adopt —— 202（采纳为正式事项）
+/// POST /api/v1/initiative-candidates/{id}/adopt —— 202（采纳为正式事项）
 async fn initiative_candidate_adopt(
     State(state): State<AppState>,
     Path(candidate_id): Path<String>,
@@ -2425,7 +2424,7 @@ async fn initiative_candidate_adopt(
     Ok((StatusCode::ACCEPTED, Json(JobAccepted { ok: true, job_id })))
 }
 
-/// C01：POST /api/v1/initiative-candidates/{id}/dismiss —— 202（整簇否决 + 信号对排除）
+/// POST /api/v1/initiative-candidates/{id}/dismiss —— 202（整簇否决 + 信号对排除）
 async fn initiative_candidate_dismiss(
     State(state): State<AppState>,
     Path(candidate_id): Path<String>,
@@ -2437,7 +2436,7 @@ async fn initiative_candidate_dismiss(
     Ok((StatusCode::ACCEPTED, Json(JobAccepted { ok: true, job_id })))
 }
 
-/// C01：POST /api/v1/initiative-candidates/{id}/members/{file_id}/exclude —— 202（单成员剔除）
+/// POST /api/v1/initiative-candidates/{id}/members/{file_id}/exclude —— 202（单成员剔除）
 async fn initiative_candidate_exclude(
     State(state): State<AppState>,
     Path((candidate_id, file_id)): Path<(String, String)>,
@@ -2452,7 +2451,7 @@ async fn initiative_candidate_exclude(
     Ok((StatusCode::ACCEPTED, Json(JobAccepted { ok: true, job_id })))
 }
 
-/// diff 请求体（冻结契约 H）
+/// diff 请求体
 #[derive(Debug, serde::Deserialize)]
 struct DiffRequest {
     file_id: String,
@@ -2460,7 +2459,7 @@ struct DiffRequest {
     target_revision_id: String,
 }
 
-/// 契约 H：POST /api/v1/diff —— 202（大计算异步入任务队列，契约 §2.2）
+/// POST /api/v1/diff —— 202（大计算异步入任务队列，契约 §2.2）
 async fn diff(
     State(state): State<AppState>,
     body: Result<Json<DiffRequest>, JsonRejection>,
@@ -2478,7 +2477,7 @@ async fn diff(
     Ok((StatusCode::ACCEPTED, Json(JobAccepted { ok: true, job_id })))
 }
 
-/// context 请求体（冻结契约 B）
+/// context 请求体
 #[derive(Debug, serde::Deserialize)]
 struct ContextRequest {
     intent: String,
@@ -2505,7 +2504,7 @@ struct ContextItemRequest {
     granularity: Option<String>,
 }
 
-/// 契约 B：POST /api/v1/context（证道阁上下文包；单短读事务组装）
+/// POST /api/v1/context（智能体上下文包；单短读事务组装）
 async fn context(
     State(state): State<AppState>,
     body: Result<Json<ContextRequest>, JsonRejection>,
@@ -2565,7 +2564,7 @@ async fn context(
     Ok(Json(resp))
 }
 
-/// E03：主流宿主 .mcp.json 自动配置请求体（仅白名单三宿主，绝不写入任何本机密钥或环境变量）
+/// 主流宿主 .mcp.json 自动配置请求体（仅白名单三宿主，绝不写入任何本机密钥或环境变量）
 #[derive(Debug, serde::Deserialize)]
 struct McpHostConfigRequest {
     /// zcode | claude_code | cursor
@@ -2683,7 +2682,7 @@ fn merge_host_mcp_config_json(
     Ok((format!("{formatted}\n"), root_obj.1))
 }
 
-/// E03：POST /api/v1/mcp/host-config（一键为 ZCode / Claude Code / Cursor 生成或原子合并写入 .mcp.json）
+/// POST /api/v1/mcp/host-config（一键为 ZCode / Claude Code / Cursor 生成或原子合并写入 .mcp.json）
 async fn mcp_host_config(
     State(state): State<AppState>,
     body: Result<Json<McpHostConfigRequest>, JsonRejection>,
@@ -2749,7 +2748,7 @@ struct ReviewBoardQuery {
     stall_threshold_secs: Option<i64>,
 }
 
-/// E04：GET /api/v1/review-board（五态批阅看板 + 失联/无回执 unknown 诚实诊断）
+/// GET /api/v1/review-board（五态批阅看板 + 失联/无回执 unknown 诚实诊断）
 async fn review_board(
     State(state): State<AppState>,
     Query(query): Query<ReviewBoardQuery>,
@@ -2776,7 +2775,7 @@ struct RepairOrphanRequest {
     note: Option<String>,
 }
 
-/// E04：POST /api/v1/review-board/{initiative_id}/repair-orphan（人工孤儿修复入口，禁止隐式完结）
+/// POST /api/v1/review-board/{initiative_id}/repair-orphan（人工孤儿修复入口，禁止隐式完结）
 async fn review_board_repair_orphan(
     State(state): State<AppState>,
     Path(initiative_id): Path<String>,
@@ -2810,7 +2809,7 @@ async fn review_board_repair_orphan(
     Ok((StatusCode::ACCEPTED, Json(JobAccepted { ok: true, job_id })))
 }
 
-/// 契约 I：GET /api/v1/summary/{file_id}（L4A 确定性摘要）
+/// GET /api/v1/summary/{file_id}（L4A 确定性摘要）
 async fn file_summary(
     State(state): State<AppState>,
     Path(file_id): Path<String>,
@@ -2819,7 +2818,7 @@ async fn file_summary(
     Ok(Json(resp))
 }
 
-/// SSE 流（冻结契约 J）：hello → workspace-change 通知 → 15s  心跳
+/// SSE 流（contract-query-api.md §2.2）：hello → workspace-change 通知 → 15s 心跳
 ///（KeepAlive 由 axum 层承担；通知经 tokio mpsc 桥接入——其 poll_recv 公开可手写 Stream）
 async fn stream(State(state): State<AppState>) -> Response {
     let hello = serde_json::json!({
@@ -2874,7 +2873,7 @@ impl futures_core::Stream for SseNoticeStream {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
         use std::task::Poll;
-        // hello 先行（契约 J：连接即发 hello 三元组）
+        // hello 先行（连接建立即发 hello 三元组）
         if let Some(hello) = self.hello.take() {
             return Poll::Ready(Some(Ok(SseEvent::default().event("hello").data(hello))));
         }
@@ -2898,7 +2897,7 @@ impl futures_core::Stream for SseNoticeStream {
     }
 }
 
-/// C02：GET /api/v1/search —— 有界检索（契约 §2.4）。
+/// GET /api/v1/search —— 有界检索（契约 §2.4）。
 /// matchStrategy 四态 + 每文件命中上限 3；派生索引非 ready 时诚实返回空 items。
 async fn search(
     State(state): State<AppState>,
@@ -2932,7 +2931,7 @@ async fn search(
     Ok(Json(resp))
 }
 
-/// E05：GET /api/v1/audit/ledger —— 关键决定账本防篡改哈希链 + 工作区路径沙箱 + 响应字节预算只读审计
+/// GET /api/v1/audit/ledger —— 关键决定账本防篡改哈希链 + 工作区路径沙箱 + 响应字节预算只读审计
 async fn audit_ledger(State(state): State<AppState>) -> Result<Json<serde_json::Value>, ApiError> {
     let max_single_bytes = state.budget.max_single();
     let in_use_bytes = state.budget.in_use_bytes();
@@ -2957,7 +2956,7 @@ async fn audit_ledger(State(state): State<AppState>) -> Result<Json<serde_json::
     Ok(Json(payload))
 }
 
-/// F01：POST /api/v1/capsules/preview —— 事项资料胶囊预览（体积估算 + 敏感路径自动排除 + preview_token）
+/// POST /api/v1/capsules/preview —— 事项资料胶囊预览（体积估算 + 敏感路径自动排除 + preview_token）
 async fn capsule_preview(
     State(state): State<AppState>,
     body: Result<Json<guanlan_core::application::capsule::CapsulePreviewRequest>, JsonRejection>,
@@ -2975,7 +2974,7 @@ async fn capsule_preview(
     Ok(Json(resp))
 }
 
-/// F01：POST /api/v1/capsules/export —— 事项资料胶囊导出（强制 preview_token + confirmed_preview=true）
+/// POST /api/v1/capsules/export —— 事项资料胶囊导出（强制 preview_token + confirmed_preview=true）
 async fn capsule_export(
     State(state): State<AppState>,
     body: Result<Json<guanlan_core::application::capsule::CapsuleExportRequest>, JsonRejection>,
@@ -2998,7 +2997,7 @@ struct CapsuleInspectRequest {
     capsule_dir: String,
 }
 
-/// F01：POST /api/v1/capsules/inspect —— 校验并秒开任意开放事项资料胶囊目录
+/// POST /api/v1/capsules/inspect —— 校验并秒开任意开放事项资料胶囊目录
 async fn capsule_inspect(
     State(state): State<AppState>,
     body: Result<Json<CapsuleInspectRequest>, JsonRejection>,
@@ -3029,7 +3028,7 @@ struct CapsuleFileRequest {
     bundled_rel_path: String,
 }
 
-/// F01：POST /api/v1/capsules/file —— 沙箱读取胶囊内附带快照原文（支持另一台观澜跳转定位行号证据）
+/// POST /api/v1/capsules/file —— 沙箱读取胶囊内附带快照原文（支持另一台观澜跳转定位行号证据）
 async fn capsule_file(
     State(state): State<AppState>,
     body: Result<Json<CapsuleFileRequest>, JsonRejection>,
@@ -3055,7 +3054,7 @@ async fn capsule_file(
     Ok(Json(resp))
 }
 
-/// C02：POST /api/v1/search/rebuild —— 202（一键重建派生检索索引；损坏自愈）
+/// POST /api/v1/search/rebuild —— 202（一键重建派生检索索引；损坏自愈）
 async fn search_rebuild(
     State(state): State<AppState>,
 ) -> Result<(StatusCode, Json<JobAccepted>), ApiError> {
@@ -3063,9 +3062,9 @@ async fn search_rebuild(
     Ok((StatusCode::ACCEPTED, Json(JobAccepted { ok: true, job_id })))
 }
 
-// ===== C05：跨项目只读挂载与联合检索（契约 §2.5）=====
+// ===== 跨项目只读挂载与联合检索（契约 §2.5）=====
 
-/// C05：GET /api/v1/mounts —— 挂载列表（在线现读摘要；离线给最后已知摘要 + error）
+/// GET /api/v1/mounts —— 挂载列表（在线现读摘要；离线给最后已知摘要 + error）
 async fn mounts_list(State(state): State<AppState>) -> Json<MountListResponse> {
     let registry = state.active_mounts();
     let items = tokio::task::spawn_blocking(move || registry.list())
@@ -3083,7 +3082,7 @@ struct MountRequest {
     root_path: String,
 }
 
-/// C05：POST /api/v1/mounts —— 只读挂载参考工作区（同步受理）。
+/// POST /api/v1/mounts —— 只读挂载参考工作区（同步受理）。
 /// 父子目录互斥/重复挂载在注册表内确定性拒绝（MOUNT_REJECTED 409 / CONFLICT 409）；
 /// 参考区无观澜索引库 → 404（提示先用观澜索引）。
 async fn mounts_mount(
@@ -3111,7 +3110,7 @@ async fn mounts_mount(
     }))
 }
 
-/// C05：DELETE /api/v1/mounts/{mount_id} —— 卸载（只断开只读连接，绝不动参考区磁盘）
+/// DELETE /api/v1/mounts/{mount_id} —— 卸载（只断开只读连接，绝不动参考区磁盘）
 async fn mounts_unmount(
     State(state): State<AppState>,
     Path(mount_id): Path<String>,
@@ -3142,7 +3141,7 @@ async fn mounts_files(
     Ok(Json(resp))
 }
 
-/// C05：GET /api/v1/search/cross?q=&format=&dir=&limit= —— 主区 + 全部在线挂载区
+/// GET /api/v1/search/cross?q=&format=&dir=&limit= —— 主区 + 全部在线挂载区
 /// 联合检索（预算 <80ms：主区走有界执行器，挂载区在阻塞线程串行点查级执行；
 /// 挂载区命中逐条携带 source_workspace 来源标注，离线挂载在 mounts[] 中诚实降级）。
 async fn search_cross(
@@ -3163,7 +3162,7 @@ async fn search_cross(
         dir: param(&params, "dir").map(str::to_owned),
         limit: parse_limit(&params, "limit"),
     };
-    // 主区检索（既有 C02 管线原样，有界执行器）
+    // 主区检索（复用既有混合倒排检索管线与有界执行器）
     let primary_query = query.clone();
     let primary = run_query(&state, move |store| {
         guanlan_core::query::search(store, &primary_query)
@@ -3180,7 +3179,7 @@ async fn search_cross(
     )))
 }
 
-/// C05 版本级只读路由：先溯源挂载区（点查 revisions 主键），命中即在对应挂载区
+/// 版本级只读路由：先溯源挂载区（点查 revisions 主键），命中即在对应挂载区
 /// 只读连接上执行；否则回落主区有界执行器。闭包须为 Fn + Clone（多库重放）。
 async fn run_revision_query<T, F>(state: &AppState, revision_id: &str, f: F) -> Result<T, ApiError>
 where
@@ -3214,7 +3213,7 @@ where
     run_query(state, move |store| f(store, &rid)).await
 }
 
-/// C05 写拦截溯源：file_id 属于任一在线挂载区 → 确定性 403
+/// 跨挂载写拦截溯源：file_id 属于任一在线挂载区 → 确定性 403
 /// CROSS_WORKSPACE_FORBIDDEN（主/挂载区之间硬性禁止 rename/move/trash 与一切跨库写入）。
 async fn cross_write_preflight(state: &AppState, file_id: &str) -> Result<(), ApiError> {
     let registry = state.active_mounts();
@@ -3233,12 +3232,12 @@ async fn cross_write_preflight(state: &AppState, file_id: &str) -> Result<(), Ap
     Ok(())
 }
 
-/// 批次三：局部关系（center_id + depth(1|2)，maxNodes=80）
+/// 预留 501 桩：局部关系（center_id + depth(1|2)，maxNodes=80；契约 §2.3）
 async fn graph(Query(_params): Query<HashMap<String, String>>) -> ApiError {
     GuanlanError::NotImplemented("graph").into()
 }
 
-/// 契约 G：POST /api/v1/index-jobs —— 202 + job_id（外部四类；内部 kind 400）
+/// POST /api/v1/index-jobs —— 202 + job_id（外部四类；内部 kind 400）
 async fn index_jobs(
     State(state): State<AppState>,
     body: Result<Json<IndexJobRequest>, JsonRejection>,
@@ -3311,7 +3310,7 @@ async fn job_status(
     Ok(Json(job.to_response()))
 }
 
-/// 契约 G：POST /api/v1/jobs/{job_id}/cancel —— 202（queued 立即；running 协作式；
+/// POST /api/v1/jobs/{job_id}/cancel —— 202（queued 立即；running 协作式；
 /// 已结束 → 409 CONFLICT）
 async fn job_cancel(
     State(state): State<AppState>,
@@ -3331,7 +3330,7 @@ async fn job_cancel(
     ))
 }
 
-/// 契约 G：GET /api/v1/jobs/{job_id}/result —— 200 {ok, job_id, state, kind,
+/// GET /api/v1/jobs/{job_id}/result —— 200 {ok, job_id, state, kind,
 /// result, next_cursor}
 async fn job_result(
     State(state): State<AppState>,

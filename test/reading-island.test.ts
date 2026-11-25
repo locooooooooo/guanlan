@@ -14,10 +14,10 @@ import type { FileRecord, ReadingState, WorkspaceConfig } from '../src/types/gua
  * 右缘「阅读与存档」悬浮岛（参考贴屏黑岛 + 三进度环）。
  *
  * 三个问题一张岛答完：哪些已读 / 哪些未读 / 哪些已落盘存档。
- * 口径全部复用既有判定：已读/未读走 GL-01 hasUnreadChanges 三态（up_to_date 记已读），
+ * 口径全部复用既有判定：已读/未读走 hasUnreadChanges 三态（up_to_date 记已读），
  * 落盘取当前版本 snapshotAvailable（被配额淘汰 = 未落盘），配额水位取 config.quota 真实值。
  *
- * 测试分两层（同 tl-cal-01 惯例）：纯函数（computeReadingIslandStats/islandPercent/
+ * 测试分两层：纯函数（computeReadingIslandStats/islandPercent/
  * formatIslandQuotaLine）+ renderToString 结构断言（node 无 DOM 事件，点击接线由
  * onClick 代码保证，见文末对账注释）。
  */
@@ -84,7 +84,7 @@ function stripComments(html: string): string {
 
 // ---------- 纯函数层：三态聚合 + 落盘判定 ----------
 
-test('悬浮岛聚合：已读/未读按 GL-01 三态分桶，落盘按当前版本 snapshotAvailable', () => {
+test('悬浮岛聚合：已读/未读按三态分桶，落盘按当前版本 snapshotAvailable', () => {
   // ① 已读最新：基线 = 当前版本 → up_to_date → 已读
   const readDoc = file({ title: '已读完' });
   // ② 从未读过：无阅读记录 → never_read → 未读
@@ -227,7 +227,7 @@ test('悬浮岛收起态：顶栏走极简静默单图标；inline 形态渲染�
   assert.ok(inlineHtml.includes('aria-label="已读 1/3 · 33%"'), 'aria 带真实计数（虚报不可发生）');
 });
 
-test('悬浮岛展开面板：分组清单 + 配额水位 + 落盘徽标，未读文案与 GL-01 同源', () => {
+test('悬浮岛展开面板：分组清单 + 配额水位 + 落盘徽标，未读文案与已读状态口径同源', () => {
   const { files, states } = islandFixture();
   const stats = computeReadingIslandStats(files, states);
   const html = renderToString(
@@ -249,7 +249,7 @@ test('悬浮岛展开面板：分组清单 + 配额水位 + 落盘徽标，未�
   assert.ok(html.includes('data-island-section="未读"'));
   assert.ok(
     html.includes('未读新件（尚未建立阅读基线）'),
-    'never_read 文案逐字来自 unreadStatusLabel（GL-01 唯一出口；D02 两态术语）'
+    'never_read 文案逐字来自 unreadStatusLabel（两态术语唯一出口）'
   );
   assert.ok(html.includes('收起阅读与存档面板'), '面板关闭按钮可达');
 });

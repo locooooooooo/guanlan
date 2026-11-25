@@ -1,5 +1,5 @@
 /**
- * 观澜批次一端到端冒烟 —— /api/v1 逐端点比对 expected/ 期望结果
+ * 观澜端到端冒烟 —— /api/v1 逐端点比对 expected/ 期望结果
  *
  * 用法（在仓库根目录执行，不新增依赖）：
  *   node node_modules/tsx/dist/cli.mjs scripts/smoke-v1.ts --exe <guanlan.exe 路径>
@@ -203,7 +203,7 @@ class Smoke {
     return { status: res.status, contentType, json: null, bytes: Buffer.from(await res.arrayBuffer()) };
   }
 
-  /** POST JSON（C02：index-jobs 提交与 search/rebuild 用） */
+  /** POST JSON（用于 index-jobs 提交与 search/rebuild） */
   async post(pathAndQuery: string, body: unknown): Promise<ApiResponse> {
     const res = await fetch(this.endpoint + pathAndQuery, {
       method: 'POST',
@@ -218,7 +218,7 @@ class Smoke {
     return { status: res.status, contentType, json: null, bytes: Buffer.from(await res.arrayBuffer()) };
   }
 
-  /** 轮询任务到终态（C02：verify_all 建检索索引 / rebuild 自愈用；20s 封顶） */
+  /** 轮询任务到终态（用于 verify_all 建检索索引 / rebuild 自愈；20s 封顶） */
   async waitJob(jobId: string): Promise<string> {
     for (let i = 0; i < 200; i++) {
       const res = await this.get('/api/v1/jobs/' + jobId);
@@ -469,7 +469,7 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
     const body = res.json as Record<string, unknown> | null;
     if (body && res.status === 200) {
       smoke.expect(id, body.ok === true, '$.ok', 'true', show(body.ok));
-      // V03 SSOT 增量字段：服务端全库未决待拍板总数须与 expected/decisions.json 未决计数完全一致
+      // SSOT 增量字段：服务端全库未决待拍板总数须与 expected/decisions.json 未决计数完全一致
       const expectedUnresolved = ctx.decisionsExp.items.filter(
         (d) => d.status !== '已确认' && d.status !== '已归档' && d.status !== '已废弃'
       ).length;
@@ -531,7 +531,7 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
     smoke.expect(id, first?.undated_count === set.undated_count, '$.undated_count', String(set.undated_count), show(first?.undated_count));
     smoke.compare(id, set.window, first?.window, '$.window');
     smoke.expect(id, first?.index_generation === ctx.meta.index_generation, '$.index_generation', String(ctx.meta.index_generation), show(first?.index_generation));
-    // 夹具静态：任何一页出现 newer_count > 0 都说明服务动了夹具（批次一明令打开不重扫）
+    // 夹具静态：任何一页出现 newer_count > 0 都说明服务动了夹具（只读打开不重扫）
     const last = walk.pages[walk.pages.length - 1];
     smoke.expect(id, last?.newer_count === 0, '$.newer_count', '0（夹具静态）', show(last?.newer_count));
   }
@@ -717,7 +717,7 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
     smoke.expect(id, (resRev.json as { ok?: boolean } | null)?.ok === false, '$.ok(版本)', 'false', show((resRev.json as { ok?: boolean } | null)?.ok));
   }
 
-  // ---------- C02 混合倒排检索（契约 §2.4）----------
+  // ---------- 混合倒排检索（契约 §2.4）----------
   // 用 POST /api/v1/search/rebuild 建检索索引（**零污染**：只写派生表与 search_* meta，
   // 不跑 reconcile——不 touch last_scan_at/last_observed_at，不推进 index_generation，
   // 因此可重复执行且不影响前面的 golden 比对）。置于全部 golden 比对之后。
@@ -853,7 +853,7 @@ async function main(): Promise<void> {
   }
 
   // 启动服务：guanlan serve --root <夹具>；数据目录经 GUANLAN_DATA_DIR 传入（WorkspaceStore.ts:272 兼容）。
-  // 自测辅助：--exe 允许指向 .mjs/.js 脚本（用当前 node 运行），便于在批次一落地前用 mock
+  // 自测辅助：--exe 允许指向 .mjs/.js 脚本（用当前 node 运行），便于用 mock
   // 服务自测本脚本全链路；正常用法仍是 Rust 二进制。
   const isScript = /\.(mjs|cjs|js)$/i.test(args.exe);
   const launcher = isScript ? process.execPath : args.exe;

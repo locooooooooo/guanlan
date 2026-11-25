@@ -1,7 +1,7 @@
-//! 长任务批次只读查询（冻结契约 C/D/E/F/I）：statements、checkpoints、
-//! task_nodes、revision_drafts、summary 与 archived 主体检查。
+//! 长任务引擎只读查询：`statements`、`checkpoints`、`task_nodes`、`revision_drafts`、
+//! `summary` 与 `archived` 主体检查。
 //!
-//! 全部只读 SQL（contract-storage.md §4 边界不变）；分页游标沿用
+//! 全部只读 SQL（`contract-storage.md` §4 边界不变）；分页游标沿用
 //! [`crate::query::cursor`] 的 base64url 偏移键游标（created_at+id 排序键）。
 
 use rusqlite::params;
@@ -20,9 +20,9 @@ use crate::index::derive::parse_markdown_outline;
 use crate::query::cursor;
 use crate::storage::{checkpoint_row, internal_sql, task_node_row, ReadonlyStore};
 
-/// statements 的 status wire 词映射（冻结契约 C，建议2：契约写死的词表）。
-/// pending→'待确认'、confirmed→'已确认'、rejected→'已否决'、shelved→'已搁置'、
-/// superseded→'已取代'；其余/未传=全部。
+/// `statements` 的 `status` wire 词映射（固定词表）：
+/// `pending→'待确认'`、`confirmed→'已确认'`、`rejected→'已否决'`、`shelved→'已搁置'`、
+/// `superseded→'已取代'`；其余或未传表示全部。
 pub fn map_status_wire(raw: Option<&str>) -> Option<String> {
     match raw {
         Some("pending") => Some("待确认".to_owned()),
@@ -48,8 +48,8 @@ pub(crate) fn statement_priority(detail_json: &str) -> String {
         .unwrap_or_else(|| "P2".to_owned())
 }
 
-/// GET /api/v1/statements（契约 C）：file_id 必选、status 走 wire 词映射、
-/// limit 默认 50 上限 200（与文件分页同口径）。
+/// `GET /api/v1/statements`：`file_id` 必选、`status` 走 wire 词映射、
+/// `limit` 默认 50 上限 200（与文件分页同口径）。
 pub fn statements(
     store: &ReadonlyStore,
     file_id: &str,
@@ -156,8 +156,8 @@ fn is_placeholder(text: &str) -> bool {
             .all(|c| c == '_' || c == '…' || c == '—' || c == '－' || c == '·')
 }
 
-/// GET /api/v1/checkpoints（契约 E）：initiative_id 必选，node_id/status 可选过滤，
-/// created_at DESC 排序（最近 SUCCESS 在前——恢复口径）。
+/// `GET /api/v1/checkpoints`：`initiative_id` 必选，`node_id`/`status` 可选过滤，
+/// `created_at DESC` 排序（最近 SUCCESS 在前，便于恢复查询）。
 pub fn checkpoints(
     store: &ReadonlyStore,
     initiative_id: &str,
@@ -194,8 +194,8 @@ pub fn checkpoints(
             .map_err(internal_sql)?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(internal_sql)?;
-        // PRD 3.2 output_artifact_version（版本号如 v2）：产出修订的 per-file seq
-        // 派生（versionNumber = revision.seq 同源口径）；缺产出修订 → null
+        // output_artifact_version（版本号如 v2）：由产出修订的 per-file seq
+        // 派生（与 versionNumber = revision.seq 同源口径）；缺产出修订 → null
         let mut version_stmt = conn
             .prepare("SELECT seq FROM revisions WHERE revision_id = ?")
             .map_err(internal_sql)?;
@@ -232,13 +232,13 @@ pub fn checkpoints(
             ok: true,
             index_generation: ws.index_generation,
             items,
-            // created_at DESC 定长页：本批不做续页游标（limit 上限 200 覆盖恢复场景）
+            // created_at DESC 定长页，不提供续页游标（limit 上限 200 足以覆盖恢复场景）
             next_cursor: None,
         })
     })
 }
 
-/// GET /api/v1/initiatives/{initiative_id}/tasks（契约 E：五槽位 DAG）
+/// `GET /api/v1/initiatives/{initiative_id}/tasks`（五槽位 DAG）
 pub fn task_nodes(
     store: &ReadonlyStore,
     initiative_id: &str,
@@ -280,7 +280,7 @@ pub fn task_nodes(
     })
 }
 
-/// GET /api/v1/revision-proposals（契约 D / E02：只读分页，status 过滤 + created_at 倒序）
+/// `GET /api/v1/revision-proposals`（只读分页，`status` 过滤 + `created_at` 倒序）
 pub fn revision_drafts(
     store: &ReadonlyStore,
     status: Option<&str>,
@@ -367,7 +367,7 @@ pub fn revision_drafts(
     })
 }
 
-/// GET /api/v1/revision-proposals/{draft_id}/content（E02：草案多模态 Diff 审阅只读载荷）
+/// `GET /api/v1/revision-proposals/{draft_id}/content`（草案多模态 Diff 审阅只读载荷）
 ///
 /// 在有界字节预算（2 MiB）内返回基准版、磁盘现态与 Agent 草案快照文本及实时 CAS 状态，
 /// 供前端 ProposalToast / 审阅面板直接渲染多模态 Diff，绝不触碰磁盘原稿。
@@ -478,9 +478,8 @@ pub fn revision_draft_content(
     })
 }
 
-/// GET /api/v1/summary/{file_id}（契约 I）：该文件当前版本的 L4A 确定性摘要。
-/// 无摘要行时按是否有待处理任务回 queued；快照可读时也可即时组装（v1 只读
-/// 已沉淀的 summary_json，未沉淀 → queued=true 由后台 L4A 队列补齐）。
+/// `GET /api/v1/summary/{file_id}`：该文件当前版本的 L4A 确定性摘要。
+/// 只读已沉淀的 `summary_json`，未沉淀且后台任务排队/运行中时返回 `queued = true`。
 pub fn file_summary(
     store: &ReadonlyStore,
     file_id: &str,
@@ -531,8 +530,8 @@ pub fn file_summary(
     })
 }
 
-/// 主体 archived 检查（冻结契约 F：resolve/propose/checkpoint 命中 archived
-/// 主体 → 同步 409）。按 file 查；无状态行/无专项 = 未归档。
+/// 主体 archived 检查（resolve/propose/checkpoint 命中已归档主体时同步返回 409）。
+/// 按 file 查；无状态行或无专项归属视为未归档。
 pub fn file_initiative_archived(
     store: &ReadonlyStore,
     file_id: &str,
@@ -556,8 +555,8 @@ pub fn file_initiative_archived(
     })
 }
 
-/// L4A 确定性摘要组装（PRD 3.4 离线降级口径：generated_by='local_deterministic'）。
-/// core 大纲 = parse_markdown_outline（derive.rs:652 同源）；决策摘要按该版本陈述聚合。
+/// L4A 确定性摘要组装（本地离线确定性口径：`generated_by = "local_deterministic"`）。
+/// core 大纲 = `parse_markdown_outline`（与 `derive.rs` 同源）；决策摘要按该版本陈述聚合。
 pub fn build_summary_detail(
     content: &str,
     statements: &[crate::storage::StatementRow],
@@ -609,7 +608,7 @@ pub fn build_summary_detail(
             _ => {}
         }
     }
-    // 核心摘要：确定性口径 = 大纲标题串联 + 决策计数（无外部模型调用，登记偏差）
+    // 核心摘要：确定性口径 = 大纲标题串联 + 决策计数（不依赖外部模型调用）
     let core = if outline.is_empty() {
         format!(
             "本文档共 {} 项已确认决定、{} 项未决事项（P0 {} / P1 {}）。",
@@ -691,9 +690,9 @@ pub fn initiative_state(
     })
 }
 
-/// L4A 队列进度（契约 I：done/total/percent，total=0 时 percent=100）
+/// L4A 队列进度（`done`/`total`/`percent`，`total = 0` 时 `percent = 100`）
 pub fn l4a_progress(store: &ReadonlyStore) -> Result<crate::dto::L4aProgress, GuanlanError> {
-    // v0/v1 库（summary_jobs 未由写入侧建出）：中性值——与 state_overview 同口径
+    // schema 版本低于 2 的旧库尚无 summary_jobs 表：返回中性值，与 state_overview 同口径
     if store.schema_version()? < 2 {
         return Ok(crate::dto::L4aProgress {
             done: 0,
@@ -770,7 +769,7 @@ mod tests {
     use super::*;
     use crate::test_support::{cleanup_dir, FixtureDb};
 
-    /// wire 词映射表逐字断言（冻结契约 C，建议2）
+    /// wire 词映射表逐字断言
     #[test]
     fn status_wire_mapping() {
         assert_eq!(map_status_wire(Some("pending")).as_deref(), Some("待确认"));

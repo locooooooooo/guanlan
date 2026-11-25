@@ -1,12 +1,10 @@
 /**
- * D01-a 四层拆解 · 屏幕空间 Overlay 覆盖层（任务卡 D01-a ②）。
+ * 屏幕空间 Overlay 覆盖层：
  *
- * 从 GraphCanvasView.tsx（原 4563-5023）原样迁入的 stage 内屏幕空间覆盖件：
- * 泳道图例气泡、叙事抽屉直流连线、司辰摘要气泡、节点悬停预览卡、右上小地图、
- * 快捷键轻弹层、叙事抽屉本体。所有坐标折算都发生在屏幕空间（zoomTransform 反算）。
- * D01-a ③ 增设：任务包标题 Overlay 层（恒定像素字号、缩放不模糊、按缩放后容器宽
- * 自动省略、双击原位改名固化显示名——packageTitleStore）。
- * 迁移纪律：JSX 与类名逐字一致（像素回归护栏）；数据一律来自 controller ctx。
+ * 承载画布 stage 内的屏幕空间覆盖件：任务包标题层（恒定像素字号、缩放不模糊、
+ * 按缩放后容器宽自动省略、双击原位改名固化至 packageTitleStore）、泳道图例气泡、
+ * 司辰摘要气泡、节点悬停预览卡、右上小地图、快捷键轻弹层与叙事抽屉本体。
+ * 所有坐标折算均在屏幕空间完成（zoomTransform 反算），数据一律来自 controller ctx。
  */
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -24,7 +22,7 @@ import CanvasNarrativeDrawer from '../canvas/CanvasNarrativeDrawer';
 import { LANE_COLORS } from './geometry';
 import type { GraphCanvasCtx } from './useGraphCanvasController';
 
-/* ═══ D01-a ③：任务包标题 Overlay（屏幕空间恒定像素字号层）═══
+/* ═══ 任务包标题 Overlay（屏幕空间恒定像素字号层）═══
  * 几何同源：foreignObject 头行 = 容器 padding 14 + dot 8 + gap 8 起（world），
  * 纵向中心 = y + 12(top pad) + 10(head half) = y + 22；
  * 本层订阅 controller 帧级缩放流（subscribeZoomFrame），每帧直接写入 DOM style，
@@ -153,9 +151,8 @@ export function GraphPackageTitleOverlay({ ctx }: { ctx: GraphCanvasCtx }) {
   );
 }
 
-/** C4 泳道图例（starfix T3 三栏并一）：右下角常驻图例栏退役，收敛为药丸「图例?」
- *  点击展开的气泡（data-testid="trunk-lane-legend" 锚点原样保留，只挪挂载形态）；
- *  四枚色点+中文名与四根泳道一一对应（色值即 LANE_COLORS 令牌引用，随主题自动换档） */
+/** 泳道图例：点击底部药丸「图例?」展开的气泡（保留 data-testid="trunk-lane-legend" 锚点）；
+ *  四枚色点+中文名与四根泳道一一对应（色值取 LANE_COLORS 令牌引用，随主题自动换档） */
 export function GraphLaneLegend({ ctx }: { ctx: GraphCanvasCtx }) {
   const { legendOpen, narrativeDrawerOpen } = ctx;
   if (!legendOpen) return null;
@@ -393,7 +390,7 @@ export function GraphHoverPreviewCard({ ctx }: { ctx: GraphCanvasCtx }) {
 
           <div className="mt-3 pt-2 border-t border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_6%,transparent)] flex items-center justify-between text-[10.5px] font-mono text-[color:var(--cv-ink-dim)]">
             <span>D3 自由拖拽节点</span>
-            {/* v0.8 R3③：双击语义变更同步提示文案（双击=滑出叙事抽屉查看详情） */}
+            {/* 双击语义提示文案（双击滑出叙事抽屉查看详情） */}
             <span className="text-[color:var(--cv-brand)]">单击进入事件链 · 双击查看详情</span>
           </div>
         </>
@@ -402,9 +399,9 @@ export function GraphHoverPreviewCard({ ctx }: { ctx: GraphCanvasCtx }) {
   );
 }
 
-/** v0.8 R5 右上小地图：世界框（zoom 层内容包围盒）+ 视口框（当前 transform 折算），
+/** 右上小地图：世界框（zoom 层内容包围盒）+ 视口框（当前 transform 折算），
  *  点击/拖框跳转走既有运镜（PAN_TRANSITION_MS=500=--dur-pan）；锚点 data-cv-minimap。
- *  挂 right-4 top-3（约 160×100px）——常驻检视器退役后右上首次让位给画布 chrome */
+ *  定位在 right-4 top-3（约 160×100px）。 */
 export function GraphMiniMapSection({ ctx }: { ctx: GraphCanvasCtx }) {
   const {
     stageWidth,
@@ -432,7 +429,7 @@ export function GraphMiniMapSection({ ctx }: { ctx: GraphCanvasCtx }) {
   );
 }
 
-/** R4⑤ ?快捷键就地轻弹层（药丸上方浮出；纯 chrome，不进 zoom 层） */
+/** ?快捷键就地轻弹层（药丸上方浮出；纯 chrome，不进 zoom 层） */
 export function GraphShortcutsPop({ ctx }: { ctx: GraphCanvasCtx }) {
   const { showShortcuts, narrativeDrawerOpen } = ctx;
   if (!showShortcuts) return null;
@@ -450,7 +447,7 @@ export function GraphShortcutsPop({ ctx }: { ctx: GraphCanvasCtx }) {
           { key: 'Space', desc: '原位轻预览（↑/↓ 切换）' },
           { key: 'Enter', desc: '深度阅读当前焦点文件' },
           { key: 'D', desc: '版本对比 / 多模态时光机' },
-          { key: 'C', desc: '加入证道阁上下文篮' },
+          { key: 'C', desc: '加入上下文篮' },
           { key: 'Ctrl + Z / Shift+Z', desc: '撤销 / 重做改名与移动' },
           { key: '单击 / 双击卡片', desc: '下钻事件链 / 叙事详情抽屉' },
           { key: '抓手拖拽 / 滚轮', desc: '平移 / 缩放画布' },
@@ -466,10 +463,9 @@ export function GraphShortcutsPop({ ctx }: { ctx: GraphCanvasCtx }) {
   );
 }
 
-/** v0.8 R3 叙事抽屉：双击节点 / 顶栏「详情」滑出（translateX+opacity --dur-3 --ease-spring），
- *  取代 334px 常驻检视器。footer 首位=「打开原文」（双击语义变更后原文入口的唯一去处，
- *  复用 openFileReader 链路）；追溯决策与复制证据随迁不丢失；「已选中 · 层级」（R9 逐字）
- *  与返回主轴钮（偏差登记①：动作迁移不丢失）由叙事 memo / backButton 承载 */
+/** 叙事抽屉：双击节点 / 顶栏「详情」滑出（translateX+opacity --dur-3 --ease-spring），
+ *  取代常驻检视器。footer 首位为「打开原文」（复用 openFileReader 链路）；
+ *  追溯决策、复制证据、「已选中 · 层级」信息与返回主轴钮由叙事 memo / backButton 承载 */
 export function GraphNarrativeDrawerSection({ ctx }: { ctx: GraphCanvasCtx }) {
   const {
     narrativeDrawerOpen,

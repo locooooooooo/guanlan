@@ -40,7 +40,7 @@ import {
 } from '../src/components/CalendarBoardView';
 import { CalendarSidePanels } from '../src/components/CalendarSidePanels';
 import CanvasPillToolbar from '../src/components/canvas/CanvasPillToolbar';
-// U03：左侧目录树减噪（零值智能视图收纳 / 目录活跃摘要 / 未读点降噪）
+// 左侧目录树减噪（零值智能视图收纳 / 目录活跃摘要 / 未读点降噪）
 import {
   collectFolderActivitySummaries,
   collectUnreadFileIds,
@@ -479,7 +479,7 @@ test('日历全面升级与动效契约：累积微折线、纵贯光束、脉�
   assert.ok(popHtml.includes('data-slot-jump-starmap="2026-11-21"'), '弹层头支持一键跳转星图');
 });
 
-// ---------- U01：日历弹层智能避让 + 头部防截断 ----------
+// ---------- 日历弹层智能避让 + 头部防截断 ----------
 
 /** 从 SSR 渲染结果里取弹层的定位样式（left/top）。 */
 function popoverStyleOf(html: string): { left: number; top: number; raw: string } {
@@ -492,7 +492,7 @@ function popoverStyleOf(html: string): { left: number; top: number; raw: string 
   return { left, top, raw };
 }
 
-test('U01 弹层智能避让：右半区锚点 100% 向左展开且 popLeft+popWidth ≤ anchorLeft−8，四向定位零压盖右侧栏', () => {
+test('日历弹层智能避让：右半区锚点 100% 向左展开且 popLeft+popWidth ≤ anchorLeft−8，四向定位零压盖右侧栏', () => {
   const viewport = { width: 1440, height: 900 };
   const size = { width: 280, height: 320 };
   const safeRight = calendarSidePanelSafeRight(viewport.width);
@@ -578,7 +578,7 @@ test('U01 弹层智能避让：右半区锚点 100% 向左展开且 popLeft+popW
   );
 });
 
-test('U01 弹层头部防截断：SlotDayList 两段式头（左日期·份数主行 + 目录次行，右星图胶囊 + 关闭钮）零省略号', () => {
+test('日历弹层头部防截断：SlotDayList 两段式头（左日期·份数主行 + 目录次行，右星图胶囊 + 关闭钮）零省略号', () => {
   const items = Array.from({ length: 10 }, () => makeFile('2026-11-21', '01-方案文档'));
   const html = renderToString(
     createElement(SlotDayList, {
@@ -618,7 +618,7 @@ test('U01 弹层头部防截断：SlotDayList 两段式头（左日期·份数�
   assert.ok(html.includes('glx-popover-in'), '弹层沿用既有入场动效类');
 });
 
-test('U01 更早清单头部重排：计数主行不截断 + 星图直跳（跳清单内最近一日）+ 既有计数口径逐字不变', () => {
+test('日历更早清单头部重排：计数主行不截断 + 星图直跳（跳清单内最近一日）+ 既有计数口径逐字不变', () => {
   const groups: [string, FileRecord[]][] = [
     ['2026-10-14', [makeFile('2026-10-14')]],
     ['2013-10-16', [makeFile('2013-10-16')]],
@@ -650,7 +650,7 @@ test('U01 更早清单头部重排：计数主行不截断 + 星图直跳（跳�
   assert.ok(style.left >= 12 && style.left + 256 <= calendarSidePanelSafeRight(1280));
 });
 
-test('U01 三入口统一避让：芯片 / 更早槽头 / 更早清单→当日清单二级跳转共用同一 anchorRect 管线', () => {
+test('日历三入口统一避让：芯片 / 更早槽头 / 更早清单→当日清单二级跳转共用同一 anchorRect 管线', () => {
   const src = readFileSync(
     fileURLToPath(new URL('../src/components/CalendarBoardView.tsx', import.meta.url)),
     'utf8'
@@ -676,7 +676,7 @@ test('U01 三入口统一避让：芯片 / 更早槽头 / 更早清单→当日�
   }
 });
 
-// ---------- U02：日历「紧凑活跃」空白周压缩与双态光束对齐 ----------
+// ---------- 日历「紧凑活跃」空白周压缩与双态光束对齐 ----------
 
 /** 逐日枚举（本地日历日；与 calendarWindow 的窗口口径同源）。 */
 function dayRangeOf(start: string, end: string): string[] {
@@ -724,8 +724,8 @@ function near(a: number, b: number, eps = 1e-6): boolean {
   return Math.abs(a - b) <= eps;
 }
 
-test('U02 纯函数：连续 ≥5 天空段折为「空 N 天」断层槽，活跃日顺序与日期零丢失', () => {
-  // 30 天窗口：前 23 天全空，末 7 天连续活跃（任务卡量化验收场景）
+test('紧凑活跃·纯函数：连续 ≥5 天空段折为「空 N 天」断层槽，活跃日顺序与日期零丢失', () => {
+  // 30 天窗口：前 23 天全空，末 7 天连续活跃（紧凑活跃量化验收场景）
   const days = dayRangeOf('2026-10-24', '2026-11-22');
   assert.equal(days.length, 30, '夹具窗口 = 30 个连续日历日');
   const activeDays = dayRangeOf('2026-11-16', '2026-11-22');
@@ -774,7 +774,7 @@ test('U02 纯函数：连续 ≥5 天空段折为「空 N 天」断层槽，活�
   assert.ok(CALENDAR_COMPACT_GAP_WEIGHT < 1, '断层槽权重 < 1（压缩而非等宽）');
 });
 
-test('U02 量化验收：30 天内仅末 7 天有数据 → 紧凑活跃把活跃日单列可用宽度提升 ≥2 倍', () => {
+test('紧凑活跃·量化验收：30 天内仅末 7 天有数据 → 紧凑活跃把活跃日单列可用宽度提升 ≥2 倍', () => {
   const days = dayRangeOf('2026-10-24', '2026-11-22');
   const activeDays = dayRangeOf('2026-11-16', '2026-11-22');
   const active = new Set(activeDays);
@@ -810,7 +810,7 @@ test('U02 量化验收：30 天内仅末 7 天有数据 → 紧凑活跃把活�
   assert.equal(calendarBeamWidth('compact', 30), 28);
 });
 
-test('U02 渲染：顶栏「紧凑活跃」开关 + 断层槽（空 23 天）+ 活跃日与文件数 100% 守恒', () => {
+test('紧凑活跃·渲染：顶栏「紧凑活跃」开关 + 断层槽（空 23 天）+ 活跃日与文件数 100% 守恒', () => {
   const activeDays = dayRangeOf('2026-11-16', '2026-11-22');
   const files: FileRecord[] = activeDays.map((d) => makeFile(d, '01-方案文档'));
 
@@ -861,7 +861,7 @@ test('U02 渲染：顶栏「紧凑活跃」开关 + 断层槽（空 23 天）+ �
   );
 });
 
-test('U02 双态光束对齐：纵贯光束 / 表头浮标 / 今日灯标 / 事件脉冲柱严格同列（同一 x）', () => {
+test('紧凑活跃·双态光束对齐：纵贯光束 / 表头浮标 / 今日灯标 / 事件脉冲柱严格同列（同一 x）', () => {
   const today = localTodayStr();
   const days = dayRangeOf(shiftCalendarDay(today, -29)!, today);
   assert.equal(days.length, 30, '窗口 = 最近 30 个日历日');
@@ -940,7 +940,7 @@ test('U02 双态光束对齐：纵贯光束 / 表头浮标 / 今日灯标 / 事�
   );
 });
 
-test('U02 动效契约：光束只过渡 transform（禁 left）、断层槽走令牌时长且 reduced-motion 逐类登记', () => {
+test('紧凑活跃·动效契约：光束只过渡 transform（禁 left）、断层槽走令牌时长且 reduced-motion 逐类登记', () => {
   const motionCss = readFileSync(
     fileURLToPath(new URL('../src/styles/motion.css', import.meta.url)),
     'utf8'
@@ -980,7 +980,7 @@ test('U02 动效契约：光束只过渡 transform（禁 left）、断层槽走�
   );
 });
 
-// ---------- U02 实机复核回修：断层标签穿字 / 光束浮标叠字 / 摘要条截断 / 紧凑门槛语义 ----------
+// ---------- 紧凑活跃实机复核回修：断层标签穿字 / 光束浮标叠字 / 摘要条截断 / 紧凑门槛语义 ----------
 
 /** 取渲染串中所有文本恰为 text 的 <span> 的属性片段。 */
 function spanAttrsWithText(html: string, text: string): string[] {
@@ -989,7 +989,7 @@ function spanAttrsWithText(html: string, text: string): string[] {
     .map((m) => m[1]);
 }
 
-test('U02 回修①：断层槽虚线导轨与「空 N 天」标签分行，窄断层下虚线永不穿字', () => {
+test('紧凑活跃·回修①：断层槽虚线导轨与「空 N 天」标签分行，窄断层下虚线永不穿字', () => {
   const motionCss = readFileSync(
     fileURLToPath(new URL('../src/styles/motion.css', import.meta.url)),
     'utf8'
@@ -1033,7 +1033,7 @@ test('U02 回修①：断层槽虚线导轨与「空 N 天」标签分行，窄�
   assert.ok(!labelTag.includes('glx-cal-gap-rail'), '导轨不得嵌进标签节点内');
 });
 
-test('U02 回修②：悬停纵贯光束浮标与同位表头刻度标签不再叠字（浮标同位刻度让位）', () => {
+test('紧凑活跃·回修②：悬停纵贯光束浮标与同位表头刻度标签不再叠字（浮标同位刻度让位）', () => {
   const files: FileRecord[] = dayRangeOf('2026-11-16', '2026-11-22').map((d) => makeFile(d, '01-方案文档'));
 
   // ① 对照组：不悬停 → 该周一刻度标签（浅灰 --ink-faint）正常渲染
@@ -1077,7 +1077,7 @@ test('U02 回修②：悬停纵贯光束浮标与同位表头刻度标签不再�
   assert.ok(src.includes('if (nearBeam(wt.pct)) return null;'), '同位周一刻度标签须 return null');
 });
 
-test('U02 回修③：窗口资产构成/节奏摘要条改 sticky 贴底，不再被卡片底栏从中间切断', () => {
+test('紧凑活跃·回修③：窗口资产构成/节奏摘要条改 sticky 贴底，不再被卡片底栏从中间切断', () => {
   const files: FileRecord[] = dayRangeOf('2026-11-16', '2026-11-22').map((d) => makeFile(d, '01-方案文档'));
   const html = renderToString(
     createElement(CalendarBoardView, { files, events: [], onOpenDocument: () => {} })
@@ -1096,7 +1096,7 @@ test('U02 回修③：窗口资产构成/节奏摘要条改 sticky 贴底，不�
   assert.ok(text.includes('密集'), '图例条目不变');
 });
 
-test('U02 回修④：紧凑活跃门槛语义锁定——「每天都有事件」的 30 天窗口不压缩，同夹具 90 天窗口压缩出断层槽', () => {
+test('紧凑活跃·回修④：紧凑活跃门槛语义锁定——「每天都有事件」的 30 天窗口不压缩，同夹具 90 天窗口压缩出断层槽', () => {
   // 夹具与门禁镜头同款：最近 30 天每天都有事件（activeSet 覆盖全部 30 天）
   const days = dayRangeOf('2026-10-24', '2026-11-22');
   const events = days.map((d, i) => ({
@@ -1135,7 +1135,7 @@ test('U02 回修④：紧凑活跃门槛语义锁定——「每天都有事件�
   assert.equal((wide.match(/data-event-day=/g) ?? []).length, 30, '事件刻度零丢失');
 });
 
-test('U02 回修⑤：紧凑活跃选择可持久化（跨刷新不丢），且非法值一律回落 auto', () => {
+test('紧凑活跃·回修⑤：紧凑活跃选择可持久化（跨刷新不丢），且非法值一律回落 auto', () => {
   assert.equal(CALENDAR_COMPACT_STORAGE_KEY, 'guanlan.calendarCompact.v1');
   assert.equal(normalizeCalendarCompactChoice('on'), true);
   assert.equal(normalizeCalendarCompactChoice('off'), false);
@@ -1145,10 +1145,10 @@ test('U02 回修⑤：紧凑活跃选择可持久化（跨刷新不丢），且�
 });
 
 // ══════════════════════════════════════════════════════════════════════════
-// U03 · 左侧目录树视觉减噪 / 零值智能视图收纳 / 活跃微标
+// 左侧目录树视觉减噪 / 零值智能视图收纳 / 活跃微标
 // ══════════════════════════════════════════════════════════════════════════
 
-/** U03 夹具：构造带目录与阅读基线的最小 FileRecord。 */
+/** 侧栏夹具：构造带目录与阅读基线的最小 FileRecord。 */
 function makeSidebarFile(
   id: string,
   folder: string,
@@ -1169,7 +1169,7 @@ function makeSidebarFile(
   } as unknown as FileRecord;
 }
 
-/** U03 夹具：服务端状态机 artifact 行（last_activity_at 走服务端活动口径）。 */
+/** 侧栏夹具：服务端状态机 artifact 行（last_activity_at 走服务端活动口径）。 */
 function makeArtifact(
   fileId: string,
   overrides: Partial<{
@@ -1199,7 +1199,7 @@ function makeArtifact(
   } as unknown as import('../src/services/apiTypes').ArtifactStateView;
 }
 
-/** U03 夹具：阅读基线（last_read_revision_id ≠ 当前版 → GL-01「读后有更新」）。 */
+/** 侧栏夹具：阅读基线（last_read_revision_id ≠ 当前版 →「读后有更新」）。 */
 function makeReadingState(fileId: string, lastReadRevisionId: string) {
   return {
     file_id: fileId,
@@ -1211,7 +1211,7 @@ function makeReadingState(fileId: string, lastReadRevisionId: string) {
   } as unknown as import('../src/types/guanlan').ReadingState;
 }
 
-test('U03 纯函数：智能视图零值收纳（0 项折叠 / 非 0 项必显 / 选中零值项不失踪）+ 腾出高度 ≥40px', () => {
+test('侧栏目录树·纯函数：智能视图零值收纳（0 项折叠 / 非 0 项必显 / 选中零值项不失踪）+ 腾出高度 ≥40px', () => {
   // ① 全零：五项皆收折为末尾轻胶囊
   const allZero = partitionSmartViewsByCount(
     {
@@ -1279,10 +1279,10 @@ test('U03 纯函数：智能视图零值收纳（0 项折叠 / 非 0 项必显 /
     25,
     '默认宽度下收折 3 项零值 → 净收益 1 行（25px）'
   );
-  // 零值 ≥4 项 → 省 2 行 ≈ 50px（满足任务卡「≥ 40px 有效可视高度」口径）
+  // 零值 ≥4 项 → 省 2 行 ≈ 50px（满足 ≥ 40px 有效可视高度口径）
   assert.ok(
     estimateSmartViewCollapseGain(1, 4) >= 40,
-    '零值 ≥4 项时腾出高度 ≥40px（任务卡量化口径）'
+    '零值 ≥4 项时腾出高度 ≥40px'
   );
   // 最小宽度侧栏（220px）→ 每行 1 枚 → 收折 3 项即省 2 行 ≈ 50px
   assert.ok(
@@ -1293,7 +1293,7 @@ test('U03 纯函数：智能视图零值收纳（0 项折叠 / 非 0 项必显 /
   assert.equal(estimateSmartViewCollapseGain(2, -3), 0, '非法入参不虚报收益');
 });
 
-test('U03 纯函数：目录活跃摘要——未读走 GL-01 单一出口，近 7 日活跃走 last_activity_at 窗口', () => {
+test('侧栏目录树·纯函数：目录活跃摘要——未读走单一出口，近 7 日活跃走 last_activity_at 窗口', () => {
   const nowMs = Date.parse('2026-11-22T12:00:00Z');
   const files = [
     makeSidebarFile('f_read', 'docs'), // 有基线且版本不同 → 读后有更新（未读）
@@ -1328,7 +1328,7 @@ test('U03 纯函数：目录活跃摘要——未读走 GL-01 单一出口，近
   assert.equal(summary.active7dCount, 1, '仅窗口内 last_activity_at 计入活跃');
   assert.equal(summary.isDense, false, '3 份远低于高密阈值');
 
-  // 高密判定（V04 调优为直接子文件 >= 15 份）
+  // 高密判定（直接子文件 >= 15 份）
   const dense = summarizeFolderActivity({
     directFiles: Array.from({ length: SIDEBAR_DENSE_FOLDER_THRESHOLD }, (_, i) =>
       makeSidebarFile(`d_${i}`, 'dense')
@@ -1364,7 +1364,7 @@ test('U03 纯函数：目录活跃摘要——未读走 GL-01 单一出口，近
   assert.equal(ids.size, summary.unreadCount, '文件级未读集合与目录级未读计数同源');
 });
 
-test('U03 渲染：智能视图默认折叠让位目录树，激活态仅显非零与选中项且无「其余 N 项 (0)」噪点', () => {
+test('侧栏目录树·渲染：智能视图默认折叠让位目录树，激活态仅显非零与选中项且无「其余 N 项 (0)」噪点', () => {
   const files = [makeSidebarFile('f_a', '01-方案文档'), makeSidebarFile('f_b', '01-方案文档')];
   const readingStates: Record<string, import('../src/types/guanlan').ReadingState> = {
     f_a: makeReadingState('f_a', 'rev_old_f_a'),
@@ -1406,7 +1406,7 @@ test('U03 渲染：智能视图默认折叠让位目录树，激活态仅显非�
   assert.ok(!activeText.includes('其余 2 项 (0)'), '彻底去除零值收折占位文案');
 });
 
-test('U03 渲染：目录树视觉极简化——去重复格式色点、仅读后有更新亮微点、行尾单数字静默且按需强调未读', () => {
+test('侧栏目录树·渲染：目录树视觉极简化——去重复格式色点、仅读后有更新亮微点、行尾单数字静默且按需强调未读', () => {
   const denseFiles = Array.from({ length: SIDEBAR_DENSE_FOLDER_THRESHOLD + 4 }, (_, i) =>
     makeSidebarFile(`d_${i}`, '01-方案文档')
   );
@@ -1508,7 +1508,7 @@ test('U03 渲染：目录树视觉极简化——去重复格式色点、仅读�
   assert.ok(html.includes('--glx-tree-idx'), '交错行序写入 --glx-tree-idx');
 });
 
-test('U03 多项目分支：同款减噪（高密隐格式点 / 待拍板数字微标 / 折叠箭头微过渡），无阅读基线不造未读数', () => {
+test('侧栏目录树·多项目分支：同款减噪（高密隐格式点 / 待拍板数字微标 / 折叠箭头微过渡），无阅读基线不造未读数', () => {
   const denseFiles = Array.from({ length: SIDEBAR_DENSE_FOLDER_THRESHOLD + 3 }, (_, i) => ({
     file_id: `p_${i}`,
     relative_path: `specs/p_${i}.md`,
@@ -1535,7 +1535,7 @@ test('U03 多项目分支：同款减噪（高密隐格式点 / 待拍板数字�
   ];
   const project = {
     project_id: 'proj_u03',
-    name: '项目 U03',
+    name: '示例项目',
     root_path: 'H:\\u03',
     readonly: false,
     is_active: false,
@@ -1557,7 +1557,7 @@ test('U03 多项目分支：同款减噪（高密隐格式点 / 待拍板数字�
         data: {
           ok: true,
           project_id: 'proj_u03',
-          name: '项目 U03',
+          name: '示例项目',
           root_path: 'H:\\u03',
           readonly: false,
           is_active: false,
@@ -1623,7 +1623,7 @@ test('U03 多项目分支：同款减噪（高密隐格式点 / 待拍板数字�
   assert.ok(!branchHtml.includes('data-folder-unread'), '多项目分支不得伪造未读数');
 });
 
-test('U03 动效契约：新增树动效只动 transform/opacity、只消费令牌时长、reduced-motion 逐类登记', () => {
+test('侧栏目录树·动效契约：新增树动效只动 transform/opacity、只消费令牌时长、reduced-motion 逐类登记', () => {
   const motionCss = readFileSync(
     fileURLToPath(new URL('../src/styles/motion.css', import.meta.url)),
     'utf8'

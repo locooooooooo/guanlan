@@ -171,7 +171,7 @@ impl FixtureDb {
         let conn = Connection::open(&db_path).expect("打开夹具库失败");
         conn.execute_batch(CONTRACT_DDL)
             .expect("按契约 DDL 建表失败");
-        // C02 派生检索索引两表（与生产 Writer::ensure_schema 同一 DDL 单一来源）
+        // 派生检索索引两表（与生产 Writer::ensure_schema 同一 DDL 单一来源）
         conn.execute_batch(crate::index::search_index::SEARCH_DDL)
             .expect("按契约 DDL 建检索索引表失败");
         Self { dir, db_path, conn }

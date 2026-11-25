@@ -1,11 +1,11 @@
 //! 文件摘要分页与筛选（契约 §1.3）。
 //!
-//! 对应现状：projectWorkspace.files（server/project.ts:174-207）去掉
-//! revisions 数组的分页版。排序固化为 relative_path ASC + file_id ASC
-//! （契约 §1.3：现状 listFiles 无排序保证，v1 固化为可稳定分页的序）。
+//! 对应 `projectWorkspace.files`（`server/project.ts:174-207`）去掉
+//! `revisions` 数组的分页版。排序固化为 `relative_path ASC + file_id ASC`，
+//! 保证跨页分页顺序稳定。
 //!
-//! 口径决定（批次一，见返回说明）：列表与 facets 的基础集合为 active 文件
-//! （与 projectWorkspace.files 的现状投影一致）；bootstrap.files_total 同口径。
+//! 列表与 facets 的基础集合为 active 文件（与 `projectWorkspace.files` 口径一致）；
+//! `bootstrap.files_total` 同口径。
 
 use std::collections::HashMap;
 
@@ -91,17 +91,17 @@ pub(crate) fn inline_revision_text(store: &ReadonlyStore, rev: &RevisionRow) -> 
     if rev.size_bytes > INLINE_LIMIT_BYTES {
         return None;
     }
-    // issue #36：非法 hash 走「不可读」分支（不 panic、不猜路径）
+    // 非法 hash 走「不可读」分支（不 panic、不猜路径）
     let bytes = std::fs::read(store.blob_path_for(&rev.content_hash).ok()?).ok()?;
     Some(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 /// coverage 判定（project.ts:180-187）：md=当前版快照可读→full_text；
-/// svg=含<text>→svg_text；B04 起 pdf=L2 页级抽取 page_indexed→pdf_page_text，否则 filename_only。
+/// svg=含`<text>`→svg_text；pdf=L2 页级抽取 page_indexed→pdf_page_text，否则 filename_only。
 ///
-/// issue #19：不再逐页整读正文——
+/// 避免逐页整读正文：
 /// - stat 门禁先行：snapshot_available=0 / 超内联上限 / blob 缺失（外部删除）
-///   直接判不可读，不发起了读取；
+///   直接判不可读，不发起读取；
 /// - 判定缓存按「format + content_hash」记忆（判定与格式相关；同格式同 hash
 ///   即同字节同判定），每个唯一内容只读一次；外部删除后 stat 失败即降级并
 ///   清除缓存项，不谎报可读。
@@ -112,7 +112,7 @@ fn coverage_of(store: &ReadonlyStore, format: &str, current: Option<&RevisionRow
     if rev.snapshot_available == 0 {
         return "filename_only".to_owned();
     }
-    // B03：受支持的结构化 Office 文档（.docx / .xlsx）在 snapshot_available != 0 时不受
+    // 受支持的结构化 Office 文档（.docx / .xlsx）在 snapshot_available != 0 时不受
     // INLINE_LIMIT_BYTES (256KiB) 限制，只要 L2 抽取状态为 indexed 即判 office_structured。
     if matches!(format, "docx" | "docm" | "dotx" | "xlsx" | "xlsm" | "xltx") {
         if let Some(status) = crate::query::office::cached_office_status(store, &rev.content_hash) {
@@ -129,7 +129,7 @@ fn coverage_of(store: &ReadonlyStore, format: &str, current: Option<&RevisionRow
             "filename_only".to_owned()
         };
     }
-    // B04：文本型 PDF 在 snapshot_available != 0 时不受 INLINE_LIMIT_BYTES 限制，
+    // 文本型 PDF 在 snapshot_available != 0 时不受 INLINE_LIMIT_BYTES 限制，
     // 只要 L2 页级抽取状态为 page_indexed 即判 pdf_page_text；扫描件/解析失败如实降级。
     if format == "pdf" {
         if let Some(status) = crate::query::pdf::cached_pdf_status(store, &rev.content_hash) {
@@ -155,7 +155,7 @@ fn coverage_of(store: &ReadonlyStore, format: &str, current: Option<&RevisionRow
     }
     let cache_key = format!("{format}\u{0}{}", rev.content_hash);
     let Ok(blob_path) = store.blob_path_for(&rev.content_hash) else {
-        // issue #36：异常库里的非法 hash —— 如实判不可读，不让路径拼接崩进程
+        // 异常库里的非法 hash：如实判不可读，不让路径拼接崩进程
         return "filename_only".to_owned();
     };
     if std::fs::metadata(&blob_path).is_err() {
@@ -193,7 +193,7 @@ fn coverage_of(store: &ReadonlyStore, format: &str, current: Option<&RevisionRow
     verdict
 }
 
-/// coverage 判定缓存（issue #19）：content_hash → 判定（内容寻址，同 hash 同字节）
+/// coverage 判定缓存：content_hash → 判定（内容寻址，同 hash 同字节）
 fn coverage_cache() -> &'static std::sync::Mutex<std::collections::HashMap<String, String>> {
     static CACHE: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, String>>> =
         std::sync::OnceLock::new();
@@ -203,7 +203,7 @@ fn coverage_cache() -> &'static std::sync::Mutex<std::collections::HashMap<Strin
 /// coverage 缓存容量（唯一内容数上限；超出按插入序逐最旧）
 const COVERAGE_CACHE_CAPACITY: usize = 8192;
 
-/// facets 缓存（issue #21，issue #33 加固）：workspace_id → (generation, active 计数, facets)。
+/// facets 缓存：`workspace_id → (generation, active 计数, facets)`。
 /// facets 只依赖完整 active 集合；命中时要求代际与 active 计数都一致——同代际内的
 /// 数据漂移（外部提交未 bump generation）也能被廉价计数识别并重算。
 type FacetsCache = std::sync::Mutex<std::collections::HashMap<String, (i64, i64, FileFacets)>>;
@@ -241,8 +241,8 @@ fn dir_clause(dir: &str) -> Option<(String, Vec<Value>)> {
     ))
 }
 
-/// 文件摘要分页（契约 §1.3；排序 relative_path ASC，游标键 (relative_path, file_id)）
-/// issue #33：短读事务包装——generation 与 count/items/facets 在同一快照内读取。
+/// 文件摘要分页（契约 §1.3；排序 relative_path ASC，游标键 `(relative_path, file_id)`）。
+/// 使用短读事务包装，保证 generation 与 count/items/facets 在同一快照内读取。
 pub fn list_files(
     store: &ReadonlyStore,
     query: &FileListQuery,
@@ -277,7 +277,7 @@ pub fn list_files_tx(
     }
     let snapshot_generation = cursor.as_ref().map_or(current_gen, |c| c.snap) as u64;
 
-    // 过滤构建（契约 §1.3 参数表：dir/format/matter/q；A05 扩展可选 status）
+    // 过滤构建（契约 §1.3 参数表：dir/format/matter/q，并支持可选 status 过滤）
     let mut clauses: Vec<String> = vec!["f.workspace_id = ?".to_owned()];
     let mut params: Vec<Value> = vec![sql_text(ws_id)];
     match crate::query::cursor::non_empty(&query.status) {
@@ -379,8 +379,8 @@ pub fn list_files_tx(
         files.truncate(limit as usize);
     }
 
-    // 页内文件的版本必需信息（issue #19：不构造页内文件全部 RevisionRow，
-    // 三组有界集合查询按需取数，历史增长不使摘要对象随完整版本链增长）
+    // 页内文件的版本必需信息：不构造页内文件全部 RevisionRow，
+    // 用三组有界集合查询按需取数，历史增长不使摘要对象随完整版本链增长
     let placeholders = vec!["?"; files.len()].join(",");
     let file_ids: Vec<Value> = files.iter().map(|f| sql_text(f.file_id.as_str())).collect();
 
@@ -514,7 +514,7 @@ pub fn list_files_tx(
                     .get(f.file_id.as_str())
                     .and_then(|(_, occ)| occ.clone()),
                 coverage: coverage_of(store, &f.format, current),
-                // B04：PDF 徽标改为真实缓存状态（page_indexed/image_only/ocr_pending/
+                // PDF 徽标取真实缓存状态（page_indexed/image_only/ocr_pending/
                 // extract_failed/encrypted/corrupted/metadata_only），未入库时仍报 unindexed
                 pdf_status: if f.format == "pdf" {
                     Some(match current {
@@ -541,16 +541,14 @@ pub fn list_files_tx(
         .map_err(internal_sql)?;
 
     // 侧栏筛选项计数（契约 §1.3 facets）：active 基础集合上的目录/格式/事项分布。
-    // issue #21：facets 只依赖完整 active 集合与代际（writer 每次提交 bump
-    // generation），按 workspace+generation 缓存复用——不再每页全量重读全部
-    // 活跃文件（此前 Θ(F²/p) 的分页累计主因）；口径不变：仍是全集分布，
-    // 不是当前页/当前筛选子集。
+    // facets 只依赖完整 active 集合与代际（writer 每次提交 bump generation），
+    // 按 workspace+generation 缓存复用，避免每页全量重读全部活跃文件；
+    // 口径保持全集分布，而不是当前页或当前筛选子集。
     let facets = {
         let current_gen = ws.index_generation as i64;
-        // issue #33：同代际内也可能存在「数据变、generation 未变」的外部提交
-        // （旧 Node writer 未按契约同事务 bump，或同代内补写）。缓存命中时用一次
-        // 索引计数（idx_files_ws 上的 COUNT，O(log n)）核对 active 集合规模，
-        // 规模不符即视为漂移并重算——不依赖「写者必然 bump generation」的假设。
+        // 同代际内也可能存在「数据变、generation 未变」的外部提交（旧 Node writer
+        // 未同事务 bump 或同代内补写）。缓存命中时用一次索引计数（idx_files_ws 上的
+        // COUNT，O(log n)）核对 active 集合规模，规模不符即视为漂移并重算。
         let active_count: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM files WHERE workspace_id = ? AND status = 'active'",
@@ -619,7 +617,7 @@ pub fn list_files_tx(
             k: last.relative_path.replace('\\', "/"),
             s: last.file_id.clone(),
             fp: fp.clone(),
-            // files/decisions 不使用 total（issue #24 仅版本链游标携带），序列化时省略
+            // files/decisions 不使用 total（仅版本链游标携带），序列化时省略
             total: None,
         })
     });

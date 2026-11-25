@@ -119,7 +119,7 @@ function makeFile(id: string, rel: string, format: string): FileRecord {
   };
 }
 
-describe('B02 · 轻预览纯函数（语法高亮、CSV/TSV 表格、JSON 与体积差）', () => {
+describe('轻预览纯函数（语法高亮、CSV/TSV 表格、JSON 与体积差）', () => {
   it('parseDelimitedTable 正确解析带引号逗号与转义引号的 CSV 及 TSV', () => {
     const csv = 'id,name,amount\n1,"观澜, 工作台",128.50\n2,"引号 ""测试""",-14%\n';
     const parsed = parseDelimitedTable(csv, ',');
@@ -164,7 +164,7 @@ describe('B02 · 轻预览纯函数（语法高亮、CSV/TSV 表格、JSON 与�
   });
 });
 
-describe('B02 · HTTP 轻预览客户端与 20 次连按方向键零竞态防抖调度', () => {
+describe('HTTP 轻预览客户端与 20 次连按方向键零竞态防抖调度', () => {
   let server: http.Server | null = null;
   let prevBase = '';
   let lastPreviewUri = '';
@@ -335,10 +335,10 @@ describe('B02 · HTTP 轻预览客户端与 20 次连按方向键零竞态防抖
   });
 });
 
-describe('B02 · 独立组件边界与全视图接线护栏', () => {
+describe('独立组件边界与全视图接线护栏', () => {
   it('QuickPreviewModal 保持独立，绝未塞入 ReaderView.tsx 巨石组件', () => {
     const reader = fs.readFileSync(path.join(SRC_ROOT, 'components/ReaderView.tsx'), 'utf8');
-    // D01-a 拆层后 App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
+    // 拆层后 App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
     const app = ['App.tsx', 'stores/useWorkspaceStore.tsx', 'components/app/AppModalsStack.tsx']
       .map((p) => fs.readFileSync(path.join(SRC_ROOT, p), 'utf8'))
       .join(String.fromCharCode(10))

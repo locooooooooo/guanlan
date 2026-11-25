@@ -1,16 +1,14 @@
 /**
- * D01-a 拆解 · 阅读器决策回执纯函数层（T1 命中解析 / T2 本机持久化 / T3 指令组装
- * 与桌面壳写回桥）。自 readerMarkdownModel.ts 按层边界原样迁入（行数护栏 <600）；
- * 消费方：useReaderController；测试兼容再导出仍保留在 ReaderView.tsx。
- * 迁移纪律：函数体与拆解前逐字一致。
+ * 阅读器决策回执纯函数层：
+ * 包含命中解析、本机持久化、指令组装与桌面壳写回桥。
+ * 消费方为 useReaderController，测试兼容再导出保留在 ReaderView.tsx。
  */
 
 /* ══════════════════════════════════════════════════════════════════════════
-   决策回执层（工票「激活决策回执可交互能力」T1/T2/T3 纯函数层）
+   决策回执纯函数层
 
    背景：决策/回执类文档以 markdown 语法承载表单——「□ A) 选项」复选项、
-   「- [ ] …」复选清单、「___」内联填空。此前全部按普通文本渲染，读者无法
-   在阅读器里完成勾选与回传。本层把「命中判定」收敛为纯函数并刻意保守：
+   「- [ ] …」复选清单、「___」内联填空。本层把「命中判定」收敛为纯函数并刻意保守：
 
    · 逐行识别三类表单项：□ 复选项（☐/☑/☒ 同族；■ 常作装饰字符不识别）、
      markdown 任务行、3+ 下划线填空行；
@@ -88,7 +86,7 @@ function classifyDecisionLine(trimmed: string): DecisionLineClass {
 }
 
 /**
- * 决策回执命中解析（T1 核心，纯函数可单测）：
+ * 决策回执命中解析（纯函数，可直接单测）：
  * markdownContent → Map<行号, DecisionFormItem>。只产「哪些行是表单项」，
  * 不改 buildMarkdownBlocks 主行模型——未命中行零影响，逐字回退原渲染。
  */
@@ -148,8 +146,8 @@ export function parseDecisionFormItems(
       }
     }
     const leadText = leadTexts.join('\n');
-    // 放行判定：① ≥2 项成簇即清单形态；②③④ 单项放行——自身文本 /
-    // 带前 ≤3 非空行 / 最近上方标题命中决策关键词（合并 OR 语义与旧版等价）
+    // 放行判定：① ≥2 项成簇即清单形态；② 单项放行需自身文本、
+    // 带前 ≤3 非空行或最近上方标题命中决策关键词
     const hydrate =
       zoneItemLines.length >= 2 || DECISION_KEYWORD_RE.test(leadText);
     if (hydrate) {
@@ -200,11 +198,11 @@ export function parseDecisionFormItems(
   return items;
 }
 
-/* ── T2：勾选状态本机持久化（file_id + current_revision_id 隔离） ──────────
+/* ── 勾选状态本机持久化（按 file_id + current_revision_id 隔离） ───────────
    键 guanlan.decisionReceipt.v1 → Record<"fileId::revisionId", 快照>。
-   读写全部 try/catch（readingStateStore / safeStorage 同口径：隐私模式、
+   读写全部 try/catch（与 readingStateStore / safeStorage 同口径：隐私模式、
    配额满、损坏 JSON 一律静默降级，绝不让阅读器起不来）；node 无 window 环境按
-   未设置处理（gu-cc-01 单测链直接 import 本模块不炸）。 */
+   未设置处理，确保纯函数单测直接 import 本模块不报错。 */
 
 export const DECISION_RECEIPT_STORAGE_KEY = 'guanlan.decisionReceipt.v1';
 
@@ -278,7 +276,7 @@ export function saveDecisionReceiptSnapshot(
   }
 }
 
-/* ── T3：决策指令组装（写剪贴板 / 证据篮共用同一份 payload 形状） ─────────── */
+/* ── 决策指令组装（写剪贴板 / 证据篮共用同一份 payload 形状） ──────────────── */
 
 /** 证据篮 payload（onAddDecisionToBasket 可选 prop 的入参形状）。 */
 export interface DecisionReceiptBasketPayload {
@@ -334,7 +332,7 @@ export function buildDecisionReceiptInstruction(input: {
   return [...head, '', ...blocks].join('\n');
 }
 
-/* ── 补完：保存回写原文件（Tauri 桌面壳命令桥）───────────────────────────
+/* ── 保存回写原文件（Tauri 桌面壳命令桥）───────────────────────────────────
    读服务保持只读契约（/api/v1 全 GET）不变；回写走桌面壳原生命令
    save_workspace_file（native/crates/guanlan-desktop/src/main.rs：CRLF 归一的
    乐观并发冲突检测 + 临时文件原子替换）。浏览器/CLI dev 环境无注入桥 →

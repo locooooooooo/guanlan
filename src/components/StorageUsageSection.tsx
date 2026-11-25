@@ -91,7 +91,7 @@ function displayClassLabel(cls: string, fallbackLabel?: string): string {
 }
 
 /**
- * B01 · 设置面板中的真实存储占用、全格式分类分布、`.gitignore` 状态与三档快照阈值配置。
+ * 设置面板中的真实存储占用、全格式分类分布、`.gitignore` 状态与三档快照阈值配置。
  * 数据源自 `GET /api/v1/storage/stats` 与 `POST /api/v1/storage/policy`。
  */
 export const StorageUsageSection: React.FC<StorageUsageSectionProps> = ({
@@ -106,7 +106,7 @@ export const StorageUsageSection: React.FC<StorageUsageSectionProps> = ({
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
-  // F02：SHA-256 完整性校验、铁律保护存储瘦身、全量开放导出、一键脱敏诊断 ZIP
+  // SHA-256 完整性校验、受保护存储瘦身、全量开放导出、一键脱敏诊断 ZIP
   const [integrityLoading, setIntegrityLoading] = useState(false);
   const [integrityReport, setIntegrityReport] = useState<BlobIntegrityReport | null>(null);
   const [integrityError, setIntegrityError] = useState<string | null>(null);

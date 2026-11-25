@@ -2,7 +2,7 @@
 //! 原生文件夹选择、多工作区秒切与平滑服务重绑、最近工作区持久化（`desktop.json`）
 //! 及 `ROOT_IN_USE` 锁冲突友好恢复。
 //!
-//! 方案 §7「桌面壳不复制数据库与索引代码」：壳只启动/重绑/连接同一服务实现，
+//! 桌面壳不复制数据库与索引代码：壳只启动/重绑/连接同一服务实现，
 //! 工作区变更与停机时经 `RunningService::shutdown()` 释放端口、写线程、watcher 与排他锁。
 
 // release 构建不弹控制台窗口；debug 构建保留终端便于看 stderr 诊断
@@ -104,7 +104,7 @@ impl DesktopRuntime {
         recent_statuses(&read_config_at(self.config_path.as_deref()))
     }
 
-    /// C03：全局呼出热键配置（desktop.json `hotkey`；未配置返回 None → main 用默认值）
+    /// 全局呼出热键配置（desktop.json `hotkey`；未配置返回 None → main 用默认值）
     fn hotkey_config(&self) -> Option<String> {
         read_config_at(self.config_path.as_deref())
             .hotkey
@@ -369,7 +369,7 @@ fn dispatch_native_drag_drop(window: &tauri::WebviewWindow, drop_event: &DragDro
     let _ = window.eval(&script);
 }
 
-// ===== C03：全局呼出热键（Ctrl+K 面板唤起；desktop.json `hotkey` 可配置）=====
+// ===== 全局呼出热键（Ctrl+K 面板唤起；desktop.json `hotkey` 可配置）=====
 
 /// 热键配置解析（纯函数，单测锁定）：
 /// - 形如 `"mod+mod+key"`，修饰符白名单 ctrl/control/alt/shift/super（大小写无关）；
@@ -435,7 +435,7 @@ fn summon_and_notify(window: &tauri::WebviewWindow, hotkey: &str) {
     let _ = window.eval(&script);
 }
 
-/// F03：构造 Windows 当前用户（HKCU，免 UAC 提权）资源管理器右键菜单「用观澜打开此文件夹」注册命令清单。
+/// 构造 Windows 当前用户（HKCU，免 UAC 提权）资源管理器右键菜单「用观澜打开此文件夹」注册命令清单。
 fn build_windows_context_menu_reg_args(exe_path: &str) -> Vec<Vec<String>> {
     let icon_val = format!("{exe_path},0");
     let dir_cmd = format!("\"{exe_path}\" --open \"%1\"");
@@ -679,7 +679,7 @@ fn main() {
     }
 
     let runtime = DesktopRuntime::new(default_config_path());
-    // C03：全局呼出热键（desktop.json `hotkey` 可配置；非法值回退默认并告警——
+    // 全局呼出热键（desktop.json `hotkey` 可配置；非法值回退默认并告警——
     // 可配置性是停机条件：抢占系统常规快捷键且不可配置即停）
     let hotkey_raw = runtime
         .hotkey_config()
@@ -1354,7 +1354,7 @@ mod save_workspace_file_tests {
         assert_eq!(s_a2.recent_workspaces[2].name, "beta");
 
         eprintln!(
-            "[A02 实测] A={ms_a}ms (冷建库), A(带SSE)→B={ms_b}ms, B→C={ms_c}ms, C→A={ms_a2}ms"
+            "[多工作区切换实测] A={ms_a}ms (冷建库), A(带SSE)→B={ms_b}ms, B→C={ms_c}ms, C→A={ms_a2}ms"
         );
         assert!(
             ms_a2 < 300,
@@ -1492,7 +1492,7 @@ mod save_workspace_file_tests {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
         let elapsed_ms = started.elapsed().as_millis();
-        eprintln!("[A04 实测] 外部 PDF/SVG 拖入落盘 → 出现在今日时间主干耗时 = {elapsed_ms}ms");
+        eprintln!("[拖入落盘实测] 外部 PDF/SVG 拖入落盘 → 出现在今日时间主干耗时 = {elapsed_ms}ms");
         assert!(
             appeared_in_trunk && elapsed_ms < 500,
             "拖入外部文件应在 < 500ms 内出现在今日时间主干，实测 {elapsed_ms}ms"
@@ -1570,7 +1570,7 @@ mod save_workspace_file_tests {
     }
 }
 
-/// C03：全局呼出热键解析与 desktop.json 持久化（纯函数 + 配置 roundtrip）
+/// 全局呼出热键解析与 desktop.json 持久化（纯函数 + 配置 roundtrip）
 #[cfg(test)]
 mod hotkey_tests {
     use super::{config, parse_hotkey};

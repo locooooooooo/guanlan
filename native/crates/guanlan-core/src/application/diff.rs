@@ -1,10 +1,10 @@
-//! 语义级版本 Diff（PRD v2.0 §3.5；冻结契约 H）。
+//! 语义级版本 Diff。
 //!
-//! 数据源勘误（冻结契约 H 明文）：事件 kind 实为 appeared/modified，payload 仅含
-//! changed_sections/added_lines/removed_lines——语义摘要卡**直接比对两版正文与
+//! 事件 `kind` 为 `appeared`/`modified`，`payload` 仅含 `changed_sections` /
+//! `added_lines` / `removed_lines`，因此语义摘要卡**直接比对两版正文与
 //! statements**，不依赖事件 payload。
 //!
-//! 三项指标（确定性 v1 口径，契约登记）：
+//! 三项确定性指标：
 //! - 新增交付项 = checklist_done(目标) − checklist_done(基线)；
 //! - 关闭未决事项 = 基线 pending(P0+P1) − 目标 pending（statements 按 revision_id
 //!   过滤聚合，decision 最新状态口径同 record_decision_events）；
@@ -16,7 +16,7 @@
 use crate::index::state_machine::derive_checklist;
 use crate::storage::StatementRow;
 
-/// 单版行数预算（冻结契约 H：≤2000 行，超限 truncated）
+/// 单版行数预算（≤2000 行，超限标记 truncated）
 pub const DIFF_LINE_BUDGET: usize = 2000;
 /// 分块预算：单页 sections 的行数上限（超出 → next_cursor 续页）
 pub const SECTION_PAGE_LINES: usize = 400;
@@ -39,7 +39,7 @@ pub enum DiffLine {
 }
 
 impl DiffLine {
-    /// wire 词（契约 H：same|add|del）
+    /// wire 词（same|add|del）
     pub fn type_str(&self) -> &'static str {
         match self {
             DiffLine::Same(_) => "same",
@@ -112,7 +112,7 @@ pub fn lcs_lines(baseline: &[&str], target: &[&str]) -> Vec<DiffLine> {
     out
 }
 
-/// 语义摘要卡三项指标（冻结契约 H 口径）
+/// 语义摘要卡三项指标
 pub fn summary_metrics(
     baseline_content: &str,
     target_content: &str,

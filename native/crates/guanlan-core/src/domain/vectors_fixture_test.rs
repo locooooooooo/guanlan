@@ -1,8 +1,8 @@
 use super::*;
 /// 夹具身份数字向量（native/testdata/identity-vectors.json，由
 /// scripts/seed-fixture.ts 生成）。文件被 gitignore 且不在 git 内：
-/// 干净 checkout（无 seed 的 CI cargo 作业）缺文件时**显式降级跳过**（冻结约束3），
-/// 不 panic——门禁「cargo test 含无 seed 干净 checkout 能过」由此成立。
+/// 干净 checkout（无 seed 的 CI cargo 作业）缺文件时**显式降级跳过**，
+/// 不 panic，确保无 seed 的干净 checkout 也能通过 `cargo test`。
 ///
 /// 夹具 JSON 结构（以 scripts/seed-fixture.ts 实际产出为准）：
 /// ```jsonc
@@ -26,11 +26,10 @@ use super::*;
 /// ```
 #[test]
 fn identity_vectors_from_fixture() {
-    // 冻结约束3：identity-vectors.json 被仓库根 .gitignore 忽略且由
+    // identity-vectors.json 被仓库根 .gitignore 忽略且由
     // seed-fixture.ts 生成——干净 checkout（无 seed 的 CI cargo 作业）没有该文件。
-    // 缺文件时显式降级跳过而非 panic：门禁「cargo test 含无 seed 干净 checkout
-    // 能过」是验收命题；身份公式本身由本文件的 SESSION_VECTORS 内嵌向量与
-    // contract_stated_identity_values 覆盖，不因夹具缺失而失守。
+    // 缺文件时显式降级跳过而非 panic；身份公式本身由本文件的 SESSION_VECTORS
+    // 内嵌向量与 contract_stated_identity_values 覆盖，不因夹具缺失而失守。
     let text = match std::fs::read_to_string(IDENTITY_VECTORS_PATH) {
         Ok(t) => t,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {

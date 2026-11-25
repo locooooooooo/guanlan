@@ -81,4 +81,4 @@ cargo test --locked -p guanlan-core --lib -- storage::maintenance
 cargo test --locked -p guanlan-service --test e05_concurrent_mcp_audit
 ```
 
-`f03_`、`f02_`、`e05_` 开头的测试名对应任务卡编号，每个都锁定一条上面的红线。在真实库上手跑只读审计：`cargo run --locked -p guanlan-service -- audit --root "<工作区目录>"`，检出篡改或越界时退出码为 3。
+`f03_`、`f02_`、`e05_` 开头的测试分别锁定上述安全、清理与防篡改红线。在真实库上手跑只读审计：`cargo run --locked -p guanlan-service -- audit --root "<工作区目录>"`，检出篡改或越界时退出码为 3。

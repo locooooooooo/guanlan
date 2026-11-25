@@ -1,7 +1,7 @@
 /**
- * 观澜 v0.4 第二轮 —— 工程画布的事件场景映射
+ * 观澜 —— 工程画布的事件场景映射
  *
- * 方案 §2：把真实时间绑定到现有 X-Ray 主干。
+ * 把真实时间绑定到 X-Ray 主干：
  * - 标尺刻度 = 真实日期（不是固定的 0:00 / 1:00 / 2:00）
  * - 中央卡片 = 发生了什么（日期、事项、依据版本）
  * - 虚线折叠组 = 一天内同一明确事项的事件；无事项标识时只按日期分组
@@ -17,12 +17,12 @@ import type {
   EventDaysResult,
 } from '../services/workspaceClient';
 import type { FileFormat, FileRecord, TimelineEvent } from '../types/guanlan';
-// TA-03：画布角标与日期标签统一按本地时区取值
+// 画布角标与日期标签统一按本地时区取值
 import { formatLocalClock, localDay } from './timeFormat';
-// wf_2：同日同文件合并（语义聚合层既有导出）——mergeDayRevisions 按 file_id+本地日历日成桶，
-// dayMergeLabel 产出 DoD2 逐字口径标签；版本号由调用方经 resolveVersion 注入，本层不伪造
+// 同日同文件合并（语义聚合层既有导出）——mergeDayRevisions 按 file_id+本地日历日成桶，
+// dayMergeLabel 产出合并口径标签；版本号由调用方经 resolveVersion 注入，本层不伪造
 import { mergeDayRevisions, type DayRevisionMerge } from './taskPackages';
-// v0.8 任务空间桌面：任务包分组容器与富预览卡数据——分组判定/核心结论/缩略图清洗全部
+// 任务空间桌面：任务包分组容器与富预览卡数据——分组判定/核心结论/缩略图清洗全部
 // 复用既有单源导出（taskPackages.groupFilesIntoPackages / extractCoreSummary /
 // filePreviewCache 的 SVG 清洗编码与正文预览），本层只做画布形态的装配，禁止复写任何判定逻辑
 import {
@@ -53,24 +53,24 @@ export interface CanvasEventCard {
    *  GE 层恒为空串：EventDayItem 没有真实版本号，禁止伪造；
    *  由画布（GraphCanvasView）按 revisionId → FileRecord.revisions[].versionNumber 解析回填 */
   changeLabel: string;
-  /** 底部角标：HH:MM（当天时刻，不重复完整日期；tf_4/D3 起[分类]前缀删除，语义由徽章行独家承载） */
+  /** 底部角标：HH:MM（当天时刻，不重复完整日期；不带[分类]前缀，语义由徽章行独家承载） */
   cornerLabel: string;
-  /** R1-identity-dedup：>1 时为「同基名拷贝并组卡」——N = 本桶已取回样本内并掉的同基名拷贝数
+  /** 身份去重：>1 时为「同基名拷贝并组卡」——N = 本桶已取回样本内并掉的同基名拷贝数
    *  （诚实口径：样本内计数，绝不冒充全桶计数；全桶余量由组头「N 条待展开」承载） */
   mergedCount?: number;
-  /** R1-identity-dedup：并组卡所属桶的事件总数（供调用方与 mergedCount 对照，不全可样本不足时如实透出） */
+  /** 身份去重：并组卡所属桶的事件总数（供调用方与 mergedCount 对照，样本不足时如实透出） */
   mergedBucketTotal?: number;
-  /** wf_2：同 file_id 同日合并记录（mergeDayRevisions 产出，含 vFirst/vLast/evolutionCount）。
+  /** 同 file_id 同日合并记录（mergeDayRevisions 产出，含 vFirst/vLast/evolutionCount）。
    *  仅当日 ≥2 条事件且 buildCanvasEventScene 注入 resolveVersion 时存在——此时该卡代表
    *  同一文件当日全部小版本演进，changeLabel 由画布按 dayMergeLabel 渲染（v1 → v3 · 今日演进 2 次）；
-   *  缺省（未注入 resolveVersion）恒缺省，逐字保留旧逐卡行为。 */
+   *  缺省（未注入 resolveVersion）恒缺省，保留逐卡行为。 */
   mergedDay?: DayRevisionMerge;
   /** 当天时刻 HH:MM（observed_at 时刻分量，右栏行尾复用） */
   observedClock: string;
   /** 行 2 右侧/右栏 timeRange 展示的事件日期（occurred 日 YYYY-MM-DD / 日期待考） */
   dateLabel: string;
   /** 所属组桶键（day=YYYY-MM-DD；week=周一；month=YYYY-MM；''=待考）——
-   *  tf_6/F2：画布选中调光按桶键比对（isNodeInActiveTimeSlice），与 dateLabel 分离，
+   *  画布选中调光按桶键比对（isNodeInActiveTimeSlice），与 dateLabel 分离，
    *  observed 口径/周月聚合下不再因卡片日期与桶键格式不同而整组误降透明度 */
   bucketDate: string;
   /** 事件真实格式；null = 无法判定（工作区级事件/旧数据）→ UI 落中性，不再猜成 md */
@@ -96,7 +96,7 @@ export interface CanvasDayGroup {
   formats: Record<string, number>;
   matters: Array<{ id: string; code: string; status: string; count: number }>;
   cards: CanvasEventCard[];
-  /** 未在首屏展开的事件数（方案 §5：超出的事项进入既有折叠组） */
+  /** 未在首屏展开的事件数（超出的事项进入既有折叠组） */
   more: number;
 }
 
@@ -151,8 +151,8 @@ export interface CanvasEventScene {
 
 const SLOT_IDS = ['sub_01', 'sub_02', 'sub_03', 'sub_04', 'sub_05', 'sub_06', 'sub_07', 'sub_08'];
 
-/** 界面用词（方案 §3 表格的「界面用词与证据」一列）。
- *  pm_3：参数放宽为「kind 必有、time_basis/action 可缺」——列表态事件只保证 kind，
+/** 事件类型到界面用词的映射。
+ *  参数放宽为「kind 必有、time_basis/action 可缺」——列表态事件只保证 kind，
  *  时间依据与动作由服务端 payload 透出。补齐 discovered / moved_or_copied，
  *  避免默认分支把英文 kind 直接当界面词（列表卡与画布同一套词）。 */
 export interface EventKindLabelInput {
@@ -233,7 +233,7 @@ export const CANVAS_SEMANTIC_LABELS: Record<CanvasCapability, string> = {
 };
 
 /**
- * 事件真实格式（T06 / B01）：以服务端随事件返回的 format 为准（决策事件已从 payload 回填）；
+ * 事件真实格式：以服务端随事件返回的 format 为准（决策事件已从 payload 回填）；
  * 无法判定时返回 null，UI 落中性——不再拿文件扩展名猜测、更不会把未知事件当 md。
  */
 function formatOf(item: EventDayItem): string | null {
@@ -255,7 +255,7 @@ export function toCanvasCard(
   item: EventDayItem,
   slotIndex: number,
   ambiguous: Set<string> = new Set(),
-  /** tf_6/F2：所属组桶键（toGroup 透传 group.date）；缺省 ''（日期待考） */
+  /** 所属组桶键（toGroup 透传 group.date）；缺省 ''（日期待考） */
   bucketDate: string = ''
 ): CanvasEventCard {
   const format = formatOf(item);
@@ -286,7 +286,7 @@ export function toCanvasCard(
     if (cap) highlighted.push(cap);
   } else if (item.time_basis === 'document_self') highlighted.push('TIM');
 
-  // 底部角标：HH:MM（observed_at 时刻分量，tf_4/D3 去重定稿「仅时刻」）——
+  // 底部角标：HH:MM（observed_at 时刻分量，去重后仅保留时刻）——
   // 分类语义由卡底徽章行独家承载（pickSemanticCapabilityCodes 第 1 枚与原 corner 分类代码恒同源，
   // [分类] 前缀在同卡重复显示，删除）；CANVAS_SEMANTIC_LABELS 仍被徽章体系使用，保留不删
   const observedClock = formatLocalClock(item.observed_at);
@@ -339,7 +339,7 @@ function toGroup(
   group: EventDayGroup,
   slotOffset: number,
   maxCards: number,
-  /** wf_2：revision_id → versionNumber 解析器；缺省 = 同日同文件合并关闭（逐字旧行为） */
+  /** revision_id → versionNumber 解析器；缺省 = 同日同文件合并关闭（逐卡展示） */
   resolveVersion?: (revisionId: string | null) => number | null
 ): CanvasDayGroup {
   // 同组内重名的文件（如多个 run 目录各自的 README/PLAN/HANDOFF）加目录前缀区分
@@ -355,16 +355,16 @@ function toGroup(
   );
 
   // 卡片网格左上→右下由新到旧（全画布统一「上新下旧」）：
-  // tf_4/D2：先按语义层级排序——决策/内容修改类恒在前（首屏可见），其余（含全部 appeared：文档自述日期/
+  // 先按语义层级排序——决策/内容修改类恒在前（首屏可见），其余（含全部 appeared：文档自述日期/
   // 新出现（文件时间）/新出现）沉后；同层内仍按 (occurred_at || observed_at) 降序（次级键不变），排序保持稳定。
   // 镜像服务端取样优先级（queries.ts 同一 CASE WHEN 规则）：服务端已被优先选入样本的决策/修改事件，
   // 客户端重排后仍居首屏前部，首扫新出现聚簇不再挤占决策卡位
   const tierOf = (s: EventDayItem): number =>
     s.kind === 'decision_raised' || s.kind === 'decision_changed' || s.kind === 'modified' ? 0 : 1;
 
-  // wf_2：样本池构建——resolveVersion 注入时先做同 file_id 同日合并（mergeDayRevisions），
+  // 样本池构建——resolveVersion 注入时先做同 file_id 同日合并（mergeDayRevisions），
   // 每个 file_id 至多保留一条代表样本（桶内 observed_at 最大者，与 merge.headline 同源）；
-  // 无 file_id 的决策/工作区级事件原样入池。缺省时池 = 原始样本，后续装配逐字同旧。
+  // 无 file_id 的决策/工作区级事件原样入池。缺省时池 = 原始样本，后续装配逐卡展示。
   const mergedByFile = new Map<
     string,
     { merge: DayRevisionMerge; representative: EventDayItem; consumedCount: number }
@@ -393,7 +393,7 @@ function toGroup(
     return ka < kb ? 1 : ka > kb ? -1 : 0;
   });
 
-  // R1-identity-dedup：基名 → 异文件样本数（决策事件是独立事项、无 file_id 的事件不参与并组）。
+  // 身份去重：基名 → 异文件样本数（决策事件是独立事项、无 file_id 的事件不参与并组）。
   // 池内每个 file_id 至多一条代表样本，计数即「异文件数」，同 file_id 多版本不再重复计数。
   const isDecisionSample = (s: EventDayItem) =>
     s.kind === 'decision_raised' || s.kind === 'decision_changed';
@@ -409,7 +409,7 @@ function toGroup(
   // 卡片装配：遍历全部有序代表样本，同基名拷贝群先并成一张 ×N 卡再计入卡数——
   // 首屏卡位不再被同 basename 拷贝占满（首屏 6 卡=6 份不同事项）。×N 取「样本内」成员数：
   // 服务端取样器不改，样本不足以代表全桶时绝不把 ×N 写成全桶口径（诚实呈现在卡面行2前缀）。
-  // wf_2 起「先同 file_id 同日合并、再跨 file_id 同基名并组」两规则互不覆盖；
+  // 「先同 file_id 同日合并、再跨 file_id 同基名并组」两规则互不覆盖；
   // representedSamples 恒按「卡面承载的原始样本数」累计（合并卡 = 桶内事件条数），more 口径不变。
   const cards: CanvasEventCard[] = [];
   const consumed = new Set<string>();
@@ -458,7 +458,7 @@ function toGroup(
     consumed.add(s.event_id);
     const card = toCanvasCard(s, slotOffset + cards.length, ambiguous, group.date);
     if (mergedInfo && mergedInfo.merge.merged) {
-      // 同 file_id 同日合并卡：携带合并记录（画布以 dayMergeLabel 渲染 changeLabel，DoD2 口径）
+      // 同 file_id 同日合并卡：携带合并记录（画布以 dayMergeLabel 渲染 changeLabel）
       cards.push({ ...card, mergedDay: mergedInfo.merge });
       representedSamples += mergedInfo.consumedCount;
     } else {
@@ -608,9 +608,9 @@ function truncationTick(hidden: number, granularity: EventDayGranularity): Canva
 }
 
 /** 画布场景构建选项。
- *  wf_2：resolveVersion 为可选注入——revision_id → versionNumber 解析器（由调用方从
+ *  resolveVersion 为可选注入——revision_id → versionNumber 解析器（由调用方从
  *  FileRecord.revisions 查表注入；EventDayItem 无版本号，禁止伪造）。缺省 = 同日同文件
- *  合并关闭，toGroup 逐字走旧逐卡行为（v04-canvas-events 既有断言不动）。 */
+ *  合并关闭，toGroup 保持逐卡展示。 */
 export interface CanvasSceneBuildOptions {
   activeDate?: string;
   maxCardsPerGroup?: number;
@@ -618,12 +618,12 @@ export interface CanvasSceneBuildOptions {
 }
 
 /**
- * 同日期桶去重（starfix T5）：日期轴数据源头铁律——同一桶键（YYYY-MM-DD / 周一 /
+ * 同日期桶去重：日期轴数据源头铁律——同一桶键（YYYY-MM-DD / 周一 /
  * YYYY-MM / '' 待考）在下游（scene.days 折叠组、navigator 日期卡、主干标尺刻度）
  * 只允许出现 1 次。上游若给出重复桶（同日多份分组），主干轴会重复渲染同一日期刻度
  * （如 11-13/11-14 各出现多次的穿帮），故在场景构建入口并组：
  * count / by_kind / formats 求和，decisions / samples 按原相对序拼接，桶位置取首现处。
- * 纯函数、无副作用；不改动互异日期桶的任何字段（既有行为逐字不变）。
+ * 纯函数、无副作用；不改动互异日期桶的任何字段。
  */
 export function dedupeEventGroupsByDate(groups: EventDayGroup[]): EventDayGroup[] {
   const merged = new Map<string, EventDayGroup>();
@@ -657,12 +657,11 @@ export function dedupeEventGroupsByDate(groups: EventDayGroup[]): EventDayGroup[
 }
 
 /**
- * 主干刻度渲染侧硬护栏（starfix2 T4）：把喂给主干轴渲染的刻度序列按桶键做严格去重
+ * 主干刻度渲染侧硬护栏：把喂给主干轴渲染的刻度序列按桶键做严格去重
  * ——按日期字符串 Set 保序（保留首现刻度）。
  *
- * 为什么渲染前还要再过一道：scene 入口已有 dedupeEventGroupsByDate 源头并组
- * （starfix T5），但用户实测主干竖轴仍连续出现同一批日期（11-13/11-14/11-15）——
- * 渲染侧不得再信任上游数组：主干里程碑标签、标签步长、司辰锚 y、日期卡锚 y、
+ * 为什么渲染前还要再过一道：scene 入口虽已有 dedupeEventGroupsByDate 源头并组，
+ * 但渲染侧仍不信任上游数组：主干里程碑标签、标签步长、司辰锚 y、日期卡锚 y、
  * panToDate 命中 y 全部改为消费本函数产物（GraphCanvasView.trunkTicks 单一序列），
  * 无论上游给出什么，同一日期在主干轴上恒恰好 1 个刻度/标签。
  * 纯函数；无重复桶时零改写（逐字等价返回）。
@@ -765,9 +764,9 @@ export function formatTrunkTickLabel(
 
 /**
  * 构建画布场景。
- * activeDate 指定当前日期（§2「点日期组看当天事项」）；未指定时取最新一天。
+ * activeDate 指定当前日期（点日期组看当天事项）；未指定时取最新一天。
  * 传 '' 表示查看「日期待考」。
- * starfix T5：入口先过 dedupeEventGroupsByDate——days/groups 与标尺同源，重复桶
+ * 入口先过 dedupeEventGroupsByDate——days/groups 与标尺同源，重复桶
  * 在此一次性收敛，下游 scene.days/navigator/ruler 天然满足「同日期 ≤1 次」。
  */
 export function buildCanvasEventScene(
@@ -808,19 +807,19 @@ export function buildCanvasEventScene(
   const dated = groups.filter((g) => g.date !== '');
 
   const navigator: CanvasNavigatorEntry[] = groups.slice(0, 4).map((g) => {
-    // T06：读真实格式分布（formats）取计数最高者，并透出「MD×n · SVG×n」计数；
+    // 读真实格式分布（formats）取计数最高者，并透出「MD×n · SVG×n」计数；
     // 之前这里把事件种类（EventKind）当格式推导——种类永不等于 svg/pdf，导航器恒显回退值 md。
     const format =
       (Object.entries(g.formats).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null) as CanvasNavigatorEntry['format'];
     return { date: g.date, label: g.label, count: g.count, format, formats: g.formats };
   });
 
-  // 时间轴忠实于时间（T02 day 粒度：覆盖首末事件日之间的每个日历日，新 → 旧（index 0 = 最新，画在主干最顶端），
+  // 时间轴忠实于时间（day 粒度：覆盖首末事件日之间的每个日历日，新 → 旧（index 0 = 最新，画在主干最顶端），
   // 空档日以占位刻度表达时间流逝；日期待考不进轴）。
-  // T03：week/month 粒度改为一个聚合桶一个刻度（label 带粒度后缀，点按下钻到日）；
+  // week/month 粒度为一个聚合桶一个刻度（label 带粒度后缀，点按下钻到日）；
   // 超出 limitDays 被折叠的更早历史，以「更早 N 天/周/月」提示刻度置于轴尾（主干最底端），明示截断不再静默消失。
   const hiddenDays = Math.max(0, Number(days.hidden_days) || 0);
-  // starfix T5：标尺与折叠组同源——喂去重后的桶（buildCalendarRuler 内部本就有 Map 去重，
+  // 标尺与折叠组同源——喂去重后的桶（buildCalendarRuler 内部本就有 Map 去重，
   // 但 buildBucketRuler 是一桶一刻度的直映，喂原始重复桶会渲染重复周/月刻度）
   const ruler: CanvasRulerTick[] =
     granularity === 'day'
@@ -950,7 +949,7 @@ export function versionFoldCardTitle(
   return `${subject} 检测到连续更新 (${versionFoldRangeLabel(group)})`;
 }
 
-// ==================== starfix T6：事件卡核心变更摘要直出 ====================
+// ==================== 事件卡核心变更摘要直出 ====================
 
 /** 「检测到更新」类事件卡的核心变更摘要（CanvasEventCard.changeSummary 承载） */
 export interface CanvasChangeSummary {
@@ -969,7 +968,7 @@ export interface CanvasChangeSummary {
  * · detail —— 服务端事件 detail 文本：章节变更为「变更章节：A、B」；纯哈希变化时
  *   为「内容哈希变化（+N/-M 行）」，其中的 +N/-M 就是服务端真实行数统计（reconcile.ts
  *   summarizeChange），此处按定式解析回收——解析不到就返回 counts=null，绝不编数。
- * · addedLines/removedLines —— T5 起事件表的结构化行数（payload added_lines/
+ * · addedLines/removedLines —— 事件表的结构化行数（payload added_lines/
  *   removed_lines 直映 TimelineEvent.addedLines/removedLines）：章节变更事件的 detail
  *   无行数定式，此前 counts 恒落 null，靠它才能诚实透出 +/-；优先于 detail 定式。
  *
@@ -980,7 +979,7 @@ export function deriveCanvasChangeSummary(input: {
   changedSections?: string[] | null;
   /** 服务端事件 detail（TimelineEvent.detail）；缺省/空串安全 */
   detail?: string | null;
-  /** T5：事件 payload 结构化行数；两个都到位才采信，缺任一个都不拿半个真值凑数 */
+  /** 事件 payload 结构化行数；两个都到位才采信，缺任一个都不拿半个真值凑数 */
   addedLines?: number;
   removedLines?: number;
 }): CanvasChangeSummary {
@@ -1018,19 +1017,19 @@ export function deriveCanvasChangeSummary(input: {
   return { counts, description };
 }
 
-// ==================== starfix2 T1：事件卡行1/行3 措辞单一出口 ====================
-// 工票纪律：事件卡新四行布局的措辞禁组件内散写——版本跨度胶囊、变更章节摘要行
-// 都在本文件出口；dayMergeLabel（taskPackages）保持 DoD2 旧口径不动（日历/看板
-// 消费方口径不变），画布卡用新出口 versionSpanCapsule 产新措辞。
+// ==================== 事件卡行1/行3 措辞单一出口 ====================
+// 事件卡四行布局的措辞统一由本文件出口，避免组件内散写——版本跨度胶囊、变更章节摘要行
+// 都在本文件出口；dayMergeLabel（taskPackages）保持原有口径不动（日历/看板
+// 消费方口径不变），画布卡用 versionSpanCapsule 产出紧凑措辞。
 
 /**
- * 事件卡行1 右「版本跨度胶囊」措辞（starfix2 T1 单一出口）：
+ * 事件卡行1 右「版本跨度胶囊」措辞（单一出口）：
  *   同日合并卡：v6 → v8 (2次)（vFirst≠vLast 且 evolutionCount>0）；
  *              v6 → v8（evolutionCount=0 的理论档）；v8（仅末版可解析 / 同版）。
  *   非合并 modified：v7 → v8（>1）；v1（n≤1）。
  *   appeared：新出现 v3（保留既有「新出现」语义词——版本真值来自 revisions 查表）。
  *   无可解析版本 → 空串（调用方不渲染胶囊），绝不伪造版本号。
- * 与 dayMergeLabel 的差异（登记）：旧「· 今日演进 N 次」后缀改为紧凑「(N次)」括注，
+ * 与 dayMergeLabel 的差异：将「· 今日演进 N 次」后缀改为紧凑「(N次)」括注，
  *   适配 280px 卡行1 右侧轻量灰胶囊的宽度预算。
  */
 export function versionSpanCapsule(input: {
@@ -1063,7 +1062,7 @@ export function versionSpanCapsule(input: {
 const CHANGE_DIGEST_SECTION_CAP = 3;
 
 /**
- * 事件卡行3「真实修改内容摘要」措辞（starfix2 T1 单一出口）：
+ * 事件卡行3「真实修改内容摘要」措辞（单一出口）：
  *   「变更章节：文档头部 / 构建说明 — 修改文档头部」——章节名拼接（≤3 个，多则
  *   「/ …」收口）+ 「 — 」+ 一句描述（deriveCanvasChangeSummary 产物）。
  *   无章节名时透出描述本身；两者皆空 → 空串（调用方回退 headline，绝不只写
@@ -1151,17 +1150,16 @@ export function polishEventCardDigestLine(input: {
   });
 }
 
-// ==================== starfix2 T2：展开框组头全量措辞 ====================
+// ==================== 展开框组头全量措辞 ====================
 
 /** 组头尾段（彩色 tspan 锚点，与 fanOutDayHeaderLine 同源同串尾——组件按此切分双色） */
 export const FANOUT_DAY_HEADER_TAIL = '点击查看全天 →）';
 
 /**
- * 展开框组头措辞（starfix2 T2 单一出口）：
+ * 展开框组头措辞（单一出口）：
  *   「2026-11-13 · 共 12 条事件（已合并为 4 份活跃文档 · 点击查看全天 →）」
  * n=当日事件总数（group.count，真实总数非卡数）、m=合并后活跃文档数
  * （group.cards.length——同日同文件合并/同基名并组后每卡一份活跃文档）。
- * 旧「· N 条待展开 · 点击看全天 →」措辞按工票废弃（wf2 旧断言 starfix2 授权留痕）；
  * 「⑃」前缀由组件拼接（收起态图标保留）。
  */
 export function fanOutDayHeaderLine(
@@ -1172,8 +1170,8 @@ export function fanOutDayHeaderLine(
   return `${dateLabel} · 共 ${eventCount} 条事件（已合并为 ${activeDocCount} 份活跃文档 · ${FANOUT_DAY_HEADER_TAIL}`;
 }
 
-// ==================== v0.8 任务空间桌面：任务包分组与富预览卡数据 ====================
-// 画布从「竖干+空壳卡」改造为「任务包分组容器横排 + 280px 富预览卡」的数据面：
+// ==================== 任务空间桌面：任务包分组与富预览卡数据 ====================
+// 画布从「竖干+空壳卡」演进为「任务包分组容器横排 + 280px 富预览卡」的数据面：
 // 每个任务包一个分组（PackageGroupFrame 渲染），包内每份文档一张富预览卡
 // （RichDocPreviewCard 渲染）。判定逻辑零复写——归属/阶段/结论全部来自
 // taskPackages 既有导出；本层只补画布形态需要的字段（版本胶囊串/正文前 3 行/
@@ -1184,7 +1182,7 @@ export interface CanvasPackageGroupDoc {
   fileId: string;
   title: string;
   format: FileFormat;
-  /** 版本胶囊原串（R2 口径「BUILD · v{N}」；N=当前修订 versionNumber，无修订回 1）——
+  /** 版本胶囊原串（「BUILD · v{N}」；N=当前修订 versionNumber，无修订回 1）——
    *  data-cv-rich-card-version 锚点值即本串原样透出，组件层不得再拼装 */
   versionLabel: string;
   /** 核心结论（taskPackages.extractCoreSummary 产物；无正文为空串，由卡片显式占位） */

@@ -1,5 +1,5 @@
 /**
- * B03 · Office（`.docx` / `.xlsx`）证据锚点解析、单元格区间命中与跳转辅助纯函数。
+ * Office（`.docx` / `.xlsx`）证据锚点解析、单元格区间命中与跳转辅助纯函数。
  */
 
 import type { DecisionAssertion, DecisionSourceEvidence, OfficeEvidenceAnchor } from '../types/guanlan';

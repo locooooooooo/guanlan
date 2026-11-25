@@ -1,8 +1,6 @@
 /**
- * D01-a 拆解 · 阅读器局部关系图面板（任务卡 D01-a ②）。
- *
- * 从 ReaderView.tsx（原 3538-3794）原样迁入：一跳/二跳切换 + 列布局 SVG +
- * 关系证据明细。迁移纪律：JSX 与类名逐字一致（像素回归护栏）。
+ * 阅读器局部关系图面板：
+ * 提供一跳/二跳切换、非重叠列布局 SVG 与关系证据明细。
  */
 
 import React from 'react';
@@ -240,7 +238,7 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
                       ? 'bg-white/60 border-[color:var(--glass-hairline)]'
                       : 'bg-white/60 border-[color:var(--glass-hairline)]'
                   }`}
-                  /* P1-9 提示文本治理：端点 ID 调试保真——恒入卡片 title，不占界面行 */
+                  /* 端点 ID 放入卡片 title 供调试核对，不占正文版面 */
                   title={`${edge.source_id} → ${edge.target_id}`}
                 >
                   <div className="flex items-center justify-between">
@@ -251,8 +249,8 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
                     >
                       {edge.label} ({edge.isInferred ? '虚线推断/同组' : '实线显式证据'})
                     </span>
-                    {/* P1-9：mono 位改「原文 L{n}」（对齐下钻层「· L{n}」先例）；
-                        locator 缺省时整行不渲染——下方已渲染 {edge.reason}，兜底会重复 */}
+                    {/* 等宽位显示「原文 L{n}」；locator 缺省时整行不渲染，
+                        避免与下方已渲染的 {edge.reason} 重复 */}
                     {edge.locator && (
                       <span
                         className="font-mono text-[length:var(--text-micro)] leading-[var(--lh-micro)] tabular-nums text-[color:var(--ink-soft)]"

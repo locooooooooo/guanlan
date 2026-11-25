@@ -1,19 +1,19 @@
 /**
- * D01-a 拆解 · 静态 Scene 节点层（任务卡 D01-a ②）——薄装配。
+ * 静态 SVG 场景节点层（薄装配）：
  *
- * 从 GraphCanvasView.tsx（原 3074-4561）原样迁入的整棵 SVG 场景按场景分节拆入：
+ * 整棵 SVG 场景按功能分节组合：
  *  - GraphSceneBackdrop.tsx  defs 渐变/滤镜 + 流星雨星闪 + 星轨 + 固定文字组 + 传导线
  *  - GraphSceneTrunk.tsx     四泳道主干 + 里程碑刻度 + 来源连线 + 计数胶囊
  *  - GraphSceneNodes.tsx     扇出盒 + 司辰 + 主节点 + 左侧日期卡
  *  - GraphSceneCards.tsx     事件卡 + 任务包分组横排
- * DOM 嵌套结构与拆解前逐字一致（svg > g[zoom 层] > 分节子树），像素回归护栏覆盖。
+ * 保持 svg > g[zoom 层] > 分节子树的稳定 DOM 嵌套结构。
  */
 
 import React from 'react';
 import type { GraphCanvasCtx } from './useGraphCanvasController';
 import { GraphSceneBackdrop } from './GraphSceneBackdrop';
 import { GraphSceneTrunk } from './GraphSceneTrunk';
-// D01-b：证据链连线层（悬停/选中的关系边 + 镂空微标签；静置态渲染 null 零像素）
+// 证据链连线层（悬停/选中的关系边 + 镂空微标签；静置态渲染 null 零像素）
 import { GraphRelationEdges } from './GraphRelationEdges';
 import { GraphSceneNodes } from './GraphSceneNodes';
 import { GraphSceneCards } from './GraphSceneCards';
@@ -26,7 +26,7 @@ export function GraphSceneLayer({ ctx }: { ctx: GraphCanvasCtx }) {
       ref={svgRef}
       data-testid="d3-graph-svg"
       className={`w-full h-full block select-none ${
-        // R4②：抓手态保留 grab 光标语；指针态光标落 default（点选优先，拖拽平移关闭）
+        // 抓手态保留 grab 光标；指针态光标落 default（点选优先，拖拽平移关闭）
         canvasTool === 'pan' ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
       }`}
       style={{

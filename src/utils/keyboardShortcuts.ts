@@ -1,25 +1,25 @@
 /**
- * D05 · 全键盘无鼠工作流——键→动作解析单一语义源 + 速查清单 + 无障碍动效节律（纯函数，零 UI 依赖）。
+ * 全键盘无鼠工作流——键→动作解析单一语义源 + 速查清单 + 无障碍动效节律（纯函数，零 UI 依赖）。
  *
- * 任务卡 D05 改动与产物①「补齐完整快捷键体系」的分发层语义核心：
- *  - J / K        上一 / 下一事件（时间轴线性遍历；画布增量批阅开启时由 D02 聚光灯同键承担）
+ * 快捷键分发层语义核心：
+ *  - J / K        上一 / 下一事件（时间轴线性遍历；画布增量批阅开启时由聚光灯同键承担）
  *  - H / L        收起 / 展开当前选中事件所属事项组（批次 / 身份簇 / 同文件同日版本组）
  *  - Space        原位轻预览（useQuickPreview 既有监听独占，本文件不解析）
  *  - Enter        深度阅读当前焦点文件（阅读器 + 来源栈返回）
  *  - D            打开当前焦点文件的版本对比（MD→阅读器差异 / SVG·表格→时光机 / 其余→版本链抽屉）
- *  - C            当前焦点文件加入上下文篮（证道阁）
+ *  - C            当前焦点文件加入上下文篮
  *  - Ctrl/Cmd+Z、Ctrl/Cmd+Shift+Z   文件操作 Undo / Redo（独立 FileOpHistory 账本）
  *  - Alt+方向键   星图画布沿引用/因果连线空间漫游（canvasSpatialNav 消费，本文件不解析）
  *  - Esc          按来源栈逐级精确返回（useWorkspaceStore Esc 阶梯独占）
  *  - ?            开关快捷键速查浮层（useWorkspaceStore 独占）
  *
- * 停机条件护栏（任务卡 D05 §5）：编辑态文本编辑（input/textarea/select/contenteditable）与
+ * 停机红线护栏：编辑态文本编辑（input/textarea/select/contenteditable）与
  * 输入法组字（isComposing）里【一切】键都不解析——Ctrl+Z 恒留给原生文本撤销；任何浮层
  * （[data-esc-layer="open"] 或 [role="dialog"]）打开时不解析；原生可激活元素
  * （button/a/summary/role="button"）聚焦时不抢 Enter（单字母导航键无原生行为，照常生效）。
  */
 
-/** 本轮新增的快捷键动作（与既有 Space 轻预览 / Ctrl+K 面板 / Esc 阶梯正交，绝不重复解析）。 */
+/** 全局/视图快捷键动作（与 Space 轻预览 / Ctrl+K 面板 / Esc 阶梯正交，绝不重复解析）。 */
 export type ShortcutAction =
   | 'event-next'
   | 'event-prev'
@@ -30,7 +30,7 @@ export type ShortcutAction =
   | 'add-focus-to-basket'
   | 'undo-op'
   | 'redo-op'
-  // V11 · 全站工作区导航与左右侧栏折展
+  // 全站工作区导航与左右侧栏折展
   | 'nav-tab-home'
   | 'nav-tab-panorama'
   | 'nav-tab-library'
@@ -57,7 +57,7 @@ export const STORE_SHORTCUT_ACTIONS: ReadonlySet<ShortcutAction> = new Set<Short
   'toggle-right-inspector',
 ]);
 
-/** V11 · 两键和弦（G S / G C / G L）有效时间窗口（ms）。 */
+/** 两键和弦（G S / G C / G L）有效时间窗口（ms）。 */
 export const SHORTCUT_CHORD_WINDOW_MS = 900;
 
 /** 解析输入（KeyboardEvent 的最小鸭子类型——node 测试链无 DOM 全局，SSR 同构安全）。 */
@@ -87,7 +87,7 @@ const LETTER_ACTIONS: Record<string, ShortcutAction> = {
   enter: 'deep-read-focus',
   d: 'open-version-diff',
   c: 'add-focus-to-basket',
-  // V11 · 全站导航与侧栏折展
+  // 全站导航与侧栏折展
   '1': 'nav-tab-home',
   '2': 'nav-tab-panorama',
   '3': 'nav-tab-library',
@@ -95,7 +95,7 @@ const LETTER_ACTIONS: Record<string, ShortcutAction> = {
   ']': 'toggle-right-inspector',
 };
 
-/** V11 · G 和弦第二键映射（G S 司辰星图 / G C 日历看板 / G L 时光列表）。 */
+/** G 和弦第二键映射（G S 司辰星图 / G C 日历看板 / G L 时光列表）。 */
 const G_CHORD_ACTIONS: Record<string, ShortcutAction> = {
   s: 'nav-panorama-star',
   c: 'nav-panorama-calendar',
@@ -286,7 +286,7 @@ export const SHORTCUT_CHEATSHEET_GROUPS: readonly ShortcutCheatsheetGroup[] = [
       { keys: 'Space', desc: '原位轻预览（↑ / ↓ 切上下文件）' },
       { keys: 'Enter', desc: '深度阅读当前焦点文件' },
       { keys: 'D', desc: '打开版本对比（MD 差异 / 图表时光机 / 版本链）' },
-      { keys: 'C', desc: '当前焦点文件加入证道阁上下文篮' },
+      { keys: 'C', desc: '当前焦点文件加入上下文篮' },
     ],
   },
   {

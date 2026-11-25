@@ -1,9 +1,9 @@
 /**
- * 观澜 v0.4 第一轮 —— 对账与历史写入
+ * 观澜 Node 对拍基线 —— 对账与历史写入
  *
- * 写入顺序（方案 §4）：稳定读取 → 保存并校验内容快照 → 事务提交版本与事件及证据 → 发出更新通知。
+ * 写入顺序：稳定读取 → 保存并校验内容快照 → 事务提交版本与事件及证据 → 发出更新通知。
  *
- * 第一轮通过条件对应实现：
+ * 核心不变量：
  * - 内容哈希相同 ⇒ 不新增版本、不新增事件（连续重扫不增加事件）
  * - 只有 mtime 变化 ⇒ 仅更新采集状态，不增加内容版本
  * - A → B → A ⇒ 三次版本出现、两份内容快照（相同哈希共享 blob），可逐版回看
@@ -118,7 +118,7 @@ function detectRole(relativePath: string, title: string, format: string): string
   return '其他';
 }
 
-/** 变更摘要：章节增减与行数（方案 §3「内容修改：MD 显示变更章节」） */
+/** 变更摘要：章节增减与行数（内容修改时 MD 显示变更章节） */
 function summarizeChange(
   prevText: string | null,
   newText: string | null,
@@ -242,7 +242,7 @@ export function reconcileWorkspace(
 
     if (!fileRow && file.stable) {
       // 改名/移动证据不足：仅当工作区里恰好有一个缺失文件与本文件同哈希时才考虑关联，
-      // 否则保留「新增」与「缺失」两个独立事实（方案 §4 数据对象表）
+      // 否则保留「新增」与「缺失」两个独立事实
       const sameHashMissing = missingHashCandidates.filter((candidate) => {
         const rev = store.latestRevision(candidate.file_id);
         return rev && rev.content_hash === file.sha256;
@@ -345,7 +345,7 @@ export function reconcileWorkspace(
     const wroteFile = store.writeSnapshotToDisk(content, plan.revision.content_hash);
     if (wroteFile) report.snapshotsWritten++;
 
-    // 版本发生时间（方案 §3「时间要回答具体问题」）：
+    // 版本发生时间：
     // - 首次捕获（v1）：优先材料自述日期（回答「材料声称何时产生」）
     // - 后续修改（v2+）：用文件修改时间（回答「这次改动何时发生」），
     //   文档自述日期通常停留在初稿，不能拿来当修改时间
@@ -409,7 +409,7 @@ export function reconcileWorkspace(
 
       const kind: EventRow['kind'] = plan.isNewFile ? 'appeared' : 'modified';
 
-      // 基线扫描的分工（方案 §2、§3）：
+      // 基线扫描的分工：
       // - 正文有可核验自述日期的材料：按「文档自述日期」各自入轴，落到那一天
       // - 没有日期依据的材料：不逐条刷屏，统一由「首次纳入 N 份资料」基线卡覆盖
       const datedBySelf = plan.revision.occurred_source === 'document_self';
@@ -473,7 +473,7 @@ export function reconcileWorkspace(
       if (!plan.isNewFile) report.contentChanged++;
     }
 
-    // 缺失检测：只在范围完整遍历时判定（方案 §4 监听与对账）
+    // 缺失检测：只在范围完整遍历时判定
     if (collected.complete) {
       const seenPaths = new Set(collected.files.map((f) => normalizeRelPath(f.relativePath)));
       const seenIds = new Set(pending.map((p) => p.fileId));
@@ -621,7 +621,7 @@ export function reconcileWorkspace(
       });
     }
 
-    // 决策入轴：只有明确的状态转换才新增事件，同状态复述只补来源证据（方案 §4）
+    // 决策入轴：只有明确的状态转换才新增事件，同状态复述只补来源证据
     report.decisionEventsInserted += recordDecisionEvents(
       store,
       workspace.workspace_id,
@@ -630,7 +630,7 @@ export function reconcileWorkspace(
     );
   });
 
-  // 规则升级：重建派生索引并记录规则版本（方案 §4 末）
+  // 规则升级：重建派生索引并记录规则版本
   const derived = rebuildDerivedIfNeeded(store, workspace.workspace_id, rootPath, observedAt);
   if (derived.rebuilt) {
     report.statementsUpserted += derived.statements;
@@ -638,7 +638,7 @@ export function reconcileWorkspace(
     report.derivedRebuilt = true;
   }
 
-  // 旧资料回填（方案 §4「旧资料回填分两步」）：已入库版本若正文明确记载日期，
+  // 旧资料回填：已入库版本若正文明确记载日期，
   // 补一条「文档自述日期」事件；没有日期依据的一律保持只由基线卡覆盖。
   report.backfilledDocDateEvents = backfillDocumentSelfEvents(
     store,
@@ -810,7 +810,7 @@ function insertEventSafe(
   else report.eventsSkipped++;
 }
 
-/** 状态 → 界面用词与事件种类（方案 §3「决策提出、确认、否决或取代」） */
+/** 状态 → 界面用词与事件种类（决策提出、确认、否决或取代） */
 function decisionActionFor(status: string): { kind: EventKind; word: string; action: string } {
   switch (status) {
     case '已确认':
@@ -831,7 +831,7 @@ function decisionActionFor(status: string): { kind: EventKind; word: string; act
 /**
  * 决策事件写入：
  * - 每条来源陈述已在 statements 中留证
- * - 工程轴只在状态发生转换时新增事件；新版本复述同一状态不重复记（方案 §4）
+ * - 工程轴只在状态发生转换时新增事件；新版本复述同一状态不重复记
  * 返回实际新增的事件数。
  */
 function recordDecisionEvents(

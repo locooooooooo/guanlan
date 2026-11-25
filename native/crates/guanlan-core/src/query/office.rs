@@ -1,8 +1,8 @@
-//! B03 · Office（`.docx` / `.xlsx`）结构化只读查询与轻预览摘要。
+//! Office（`.docx` / `.xlsx`）结构化只读查询与轻预览摘要。
 //!
 //! 优先级：
 //! 1. 优先从 `office_extracts` 按 `content_hash` 直接读取索引时产出的 L2 结构；
-//! 2. 若打开 B03 之前采集的旧库尚未有 `office_extracts` 行且 `snapshot_available != 0`
+//! 2. 若打开尚未包含 `office_extracts` 行的旧库且 `snapshot_available != 0`
 //!    （且快照体积在安全上限内），在只读路径按需解析内存快照返回，绝不写库。
 
 use crate::dto::{OfficeContentResponse, OfficePreviewSummary};

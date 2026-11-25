@@ -1,5 +1,5 @@
 /**
- * B04 · PDF（`.pdf#page=N`）页码证据锚点解析、标签格式化与跳转辅助纯函数。
+ * PDF（`.pdf#page=N`）页码证据锚点解析、标签格式化与跳转辅助纯函数。
  * 与 `officeAnchor.ts` 同构：fragment 语义与 Rust `derive.rs::parse_pdf_fragment` 同源。
  */
 

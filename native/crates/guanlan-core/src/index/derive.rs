@@ -2,7 +2,7 @@
 //!
 //! 移植自 `server/derive.ts` 与 `src/services/WorkspaceTransformer.ts`。
 //!
-//! 身份口径（决定「不产生第二套历史」的关键，方案 §5）：
+//! 身份口径（保证「不产生第二套历史」的关键，参见 `contract-storage.md` §2）：
 //! - 每条来源陈述都有独立 `statement_id`（同编号不同问题绝不共用身份）
 //! - 业务决定 ID 由「命名空间 + 归一化问题」推导，只有同问题才归入同一决定
 //! - 引用绑定到来源版本，并记录目标版本是否已知
@@ -77,8 +77,8 @@ struct Patterns {
     status_conflict: Regex,
     /// 状态：待确认
     status_pending: Regex,
-    /// 状态：[P1 - 已确认] 卡点块回写后的括号形态（PRD 3.3；v0.4.3 无此规则，
-    /// 仅影响新增版本的派生——不 bump EXTRACT_RULE_VERSION，登记 §4.3）
+    /// 状态：[P1 - 已确认] 卡点块回写后的括号形态（仅影响新增版本的派生，
+    /// 维持 EXTRACT_RULE_VERSION 不变，详见 `contract-storage.md` §4.3.5）
     status_bracket_confirmed: Regex,
     /// 问题归一化时剔除的标点
     question_punctuation: Regex,
@@ -240,7 +240,7 @@ pub fn derive_statements(input: &DeriveInput<'_>) -> Vec<StatementRow> {
         );
     }
 
-    // 格式 C（PRD v2.0 §3.3）：[P0/P1/P2 - 待确认/已确认] 卡点块。
+    // 格式 C：[P0/P1/P2 - 待确认/已确认] 卡点块。
     // 每块一条陈述，code = 优先级词（P0/P1/P2），detail_json 追加 priority 键；
     // 身份公式与 A/B 两条路径同源（decision_id_for + stable_key）。
     for block in crate::index::decision_block::parse_decision_blocks(input.content) {
@@ -378,7 +378,7 @@ fn detect_status(text: &str) -> String {
     if pat.status_confirmed.is_match(&plain) || pat.status_receipt_confirmed.is_match(&plain) {
         return "已确认".to_owned();
     }
-    // [P1 - 已确认] 卡点块回写后的括号形态（PRD 3.3）
+    // [P1 - 已确认] 卡点块回写后的括号形态
     if pat.status_bracket_confirmed.is_match(&plain) {
         return "已确认".to_owned();
     }
@@ -1263,7 +1263,7 @@ mod decision_block_statement_tests {
         (HashMap::new(), HashMap::new())
     }
 
-    /// 格式 C（PRD v2.0 §3.3 卡点块）→ StatementRow：code=优先级词、detail_json 追加
+    /// 格式 C（卡点块）→ StatementRow：code=优先级词、detail_json 追加
     /// priority 键、status 由括号形态判定；A/B 路径的 detail_json 不受影响
     #[test]
     fn derives_decision_block_statements_with_priority() {

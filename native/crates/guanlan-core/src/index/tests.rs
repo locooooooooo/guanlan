@@ -1,4 +1,4 @@
-//! 对账主流程的端到端测试（批次二写入侧）。
+//! 对账主流程的端到端测试（写入侧）。
 //!
 //! 覆盖契约 §5 的历史语义：内容未变不增版本、纯日期不补午夜、A→B→A 三次版本
 //! 两份内容、首次扫描只发一条基线卡、范围不完整不判缺失、重复扫描不增事件。
@@ -267,7 +267,7 @@ fn root_of(workspace: &TempWorkspace) -> &Path {
     &workspace.root
 }
 
-// ===== 状态机重算（冻结契约 B2 + 约束1/2/4）=====
+// ===== 状态机重算 =====
 
 use crate::index::state_engine::{commit_checkpoint, state_machine_recompute};
 use crate::index::state_machine::{initiative_id_of, node_id_of, SlotKind, Stage};
@@ -301,7 +301,7 @@ fn state_machine_first_scan_creates_rows_silently() {
     let mut writer = ws.writer();
     let first = run(&mut writer, "2026-11-17T00:00:00.000Z");
 
-    // 首建静默（约束4 a）：有落库行、无迁移事件
+    // 首建静默：有落库行、无迁移事件
     assert!(
         first.state_rows_upserted > 0,
         "首轮应落 initiatives/artifact_states/task_nodes 行"
@@ -416,7 +416,7 @@ fn state_machine_transition_events_carry_direction_identity() {
     ws.write("01-演示专项/03-待确认事项.md", DECISION_RESOLVED_MD);
     let second = run(&mut writer, "2026-11-17T02:00:00.000Z");
 
-    // 阻塞4 回归锁：多级迁移每单步一条、身份互异（subject_id 编码 from→to）
+    // 回归锁：多级迁移每单步一条、身份互异（subject_id 编码 from→to）
     assert!(
         second.state_transitions >= 3,
         "文档 + 节点 + 专项三条迁移：{}",
@@ -470,8 +470,8 @@ fn state_machine_transition_events_carry_direction_identity() {
 
 #[test]
 fn checkpoint_commit_advances_generate_slot_without_node_id() {
-    // 约束1：POST /checkpoints 不带 node_id 也能推进执行槽；
-    // 约束2：seq 由库内派生；AC-03 机械化：suspended → 拍板 → 唤醒 → checkpoint → completed
+    // POST /checkpoints 不带 node_id 时按 (initiative_id, stage) 反查推进执行槽；
+    // seq 由库内派生；验证完整流转：suspended → 拍板 → 唤醒 → checkpoint → completed
     let ws = TempWorkspace::new("sm-ckpt");
     ws.write("01-演示专项/需求单.md", "# 需求单\n\n范围\n");
     ws.write("01-演示专项/方案.md", "# 方案\n\n设计\n");
@@ -496,7 +496,7 @@ fn checkpoint_commit_advances_generate_slot_without_node_id() {
         "决策清零后执行槽 running（task_running=true）"
     );
 
-    // AC-03：文档级 approved_revision→executing（task_running 唤醒）
+    // 文档级 approved_revision→executing（task_running 唤醒）
     let states = writer.list_artifact_states(&workspace_id).expect("查状态");
     let decision_state = states.iter().find(|s| s.stage == "决策").expect("决策文档");
     assert_eq!(
@@ -504,7 +504,7 @@ fn checkpoint_commit_advances_generate_slot_without_node_id() {
         "多级迁移：pending_review→approved→executing"
     );
 
-    // checkpoint 提交（node_id 缺省——约束1 反查；404 路径先验）
+    // checkpoint 提交（node_id 缺省时按阶段反查；先验未知专项 404）
     let bad = CheckpointInput {
         node_id: None,
         workspace_id: workspace_id.clone(),
@@ -571,7 +571,7 @@ fn checkpoint_commit_advances_generate_slot_without_node_id() {
     assert_eq!(recovered.checkpoint_id, outcome.checkpoint_id);
     assert!(
         recovered.node_id.is_none(),
-        "载荷不含 node_id（约束1 反查通道）"
+        "载荷不含 node_id（按阶段反查槽位通道）"
     );
 }
 
@@ -641,7 +641,7 @@ fn b01_mixed_formats_gitignore_and_tiered_snapshot_policy() {
             ..Default::default()
         },
     )
-    .expect("B01 对账");
+    .expect("全文件类型分级对账");
 
     assert!(report.ignored_paths >= 3, "应排除 .gitignore 命中的路径");
     let files = writer

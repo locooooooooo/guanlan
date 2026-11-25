@@ -1,15 +1,11 @@
 /**
- * D01-a 四层拆解 · 浮动 Chrome 工具栏层（任务卡 D01-a ②）。
- *
- * 从 GraphCanvasView.tsx 原样迁入的画布外壳件：顶栏（全景三态页签 + 主题分段钮 +
- * 司辰日期 chip + 详情钮）、视图设置弹层、底部药丸工具栏接线。
- * Sources 面板独立成 GraphSourcesPanel.tsx（体量大、自成一块 chrome）。
- * 迁移纪律：JSX 与类名逐字一致（像素回归护栏）；数据一律来自 useGraphCanvasController ctx。
+ * 浮动 Chrome 工具栏层：
+ * 承载画布顶栏（全景三态页签 + 主题分段钮 + 司辰日期 chip + 详情钮）、
+ * 视图设置弹层与底部药丸工具栏接线；Sources 面板位于 GraphSourcesPanel.tsx。
+ * 数据一律来自 useGraphCanvasController ctx。
  */
 
 import React, { useSyncExternalStore } from 'react';
-// starfix T3：RotateCcw/ZoomIn/ZoomOut 图标随左下胶囊栏退役移除——缩放簇/重置改由
-// CanvasPillToolbar 内部自带 lucide 图标承担，本文件不再引用
 import { Activity, BookMarked, ChevronLeft, ChevronRight, MoonStar, Orbit, Pause, Play, Sparkles, Sun } from 'lucide-react';
 import { Tabs, type TabsProps } from '../ui/primitives';
 import { getCanvasTheme, subscribeCanvasTheme } from '../../utils/canvasThemeStore';
@@ -19,10 +15,10 @@ import { sceneDateLabel, type PanoramaMode } from './geometry';
 import { GraphSpotlightBar } from './GraphSpotlightBar';
 import type { GraphCanvasCtx } from './useGraphCanvasController';
 
-/* ── v0.7 评审第 2 轮（延迟项）：主题订阅叶子 ─────────────────────────────────────
- * 画布主题换出 React props 链后，仅剩两处需要感知主题值：全景页签的 theme 形制、
+/* ── 主题订阅叶子 ─────────────────────────────────────────────────────────────────
+ * 画布主题不经 React props 透传，仅两处叶子组件需要感知主题值：全景页签的 theme 形制、
  * 顶栏主题分段钮的激活段。两处各自 useSyncExternalStore 订阅 canvasThemeStore——
- * 一次翻转只重渲这两个叶子（合计 <30 节点），不再触发数千 SVG 节点的整树
+ * 一次翻转只重渲这两个叶子（合计 <30 节点），避免触发数千 SVG 节点的整树
  * reconciliation；data-canvas-theme/theme-morphing 由宿主 App 命令式直写舷窗。 */
 
 /** 全景三态页签（星图/列表/日历）：主题形制自订阅，其余 props 原样透传 Tabs */
@@ -31,7 +27,7 @@ export function CanvasThemeAwareTabs(props: Omit<TabsProps, 'theme'>) {
   return <Tabs {...props} theme={canvasTheme === 'xray-light' ? 'light' : 'dark'} />;
 }
 
-/** 画布主题分段钮（§2.1 双 aria-pressed 形制不变）：激活段自订阅 */
+/** 画布主题分段钮（双 aria-pressed 形制）：激活段自订阅 */
 export function CanvasThemeSegmented({ onChange }: { onChange?: (theme: CanvasTheme) => void }) {
   const canvasTheme = useSyncExternalStore(subscribeCanvasTheme, getCanvasTheme);
   return (
@@ -71,7 +67,7 @@ export function CanvasThemeSegmented({ onChange }: { onChange?: (theme: CanvasTh
   );
 }
 
-/** 全景溯源工作区顶栏：星图/列表/日历 三态切换（契约⑤）+ 画布主题分段钮 + 当前司辰日期。 */
+/** 全景溯源工作区顶栏：星图/列表/日历三态切换 + 画布主题分段钮 + 当前司辰日期。 */
 export function GraphTopBar({ ctx }: { ctx: GraphCanvasCtx }) {
   const {
     panoramaMode,
@@ -93,8 +89,8 @@ export function GraphTopBar({ ctx }: { ctx: GraphCanvasCtx }) {
   } = ctx;
   return (
     <div className="mx-3.5 mt-2.5 px-4 py-1.5 rounded-[14px] bg-[color:var(--cv-panel)] border border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_8%,transparent)] flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-[12px] shrink-0 z-20">
-      {/* 评审第 2 轮：主题形制由 CanvasThemeAwareTabs 自订阅（页签 ≤10 节点），
-          不再以 canvasTheme prop 拉动本组件整树重渲；资产域过滤以原生 flex 并列，零遮挡 */}
+      {/* 主题形制由 CanvasThemeAwareTabs 自订阅（页签 ≤10 节点），
+          避免以 canvasTheme prop 拉动本组件整树重渲；资产域过滤以原生 flex 并列，零遮挡 */}
       <div className="flex items-center gap-3 min-w-0 flex-wrap">
         <CanvasThemeAwareTabs
           items={[
@@ -108,7 +104,7 @@ export function GraphTopBar({ ctx }: { ctx: GraphCanvasCtx }) {
         />
         {topBarSlot}
       </div>
-      {/* v0.7（§2.1）+ V09：画布主题分段钮 + 标尺粒度分段钮 + 详情/聚光灯/司辰日期统一 coss Toolbar 语义 */}
+      {/* 画布主题分段钮 + 标尺粒度分段钮 + 详情/聚光灯/司辰日期统一 coss Toolbar 语义 */}
       <div
         role="toolbar"
         data-slot="toolbar"
@@ -150,8 +146,7 @@ export function GraphTopBar({ ctx }: { ctx: GraphCanvasCtx }) {
           </div>
         )}
         <CanvasThemeSegmented onChange={onCanvasThemeChange} />
-        {/* v0.8 R3③ 顶栏「详情」文字钮（本契约新增元素）：对当前选中节点滑出叙事抽屉
-            ——334px 常驻检视器退役后的详情入口之一（双击节点为另一入口） */}
+        {/* 顶栏「详情」文字钮：对当前选中节点滑出叙事抽屉（与双击节点互补） */}
         <button
           type="button"
           data-cv-topbar-detail
@@ -172,7 +167,7 @@ export function GraphTopBar({ ctx }: { ctx: GraphCanvasCtx }) {
             <span>司辰手记</span>
           </button>
         )}
-        {/* D02：增量聚光灯开关（展开后的逐条批阅微条浮于画布顶部中央，不再撑爆顶栏） */}
+        {/* 增量聚光灯开关（展开后的逐条批阅微条浮于画布顶部中央，不撑宽顶栏） */}
         <GraphSpotlightBar ctx={ctx} mode="toggle" />
         {(() => {
           const fullDateText =
@@ -252,8 +247,7 @@ export function GraphTopBar({ ctx }: { ctx: GraphCanvasCtx }) {
   );
 }
 
-/** ② 视图设置弹层：布局三钮 + 特效三开关（类名原样自原底部工具条搬入）；
-    starfix T3 触发源改挂药丸「视图设置」钮，弹层位置随迁 bottom-16 正中（原 bottom-12 left-4） */
+/** 视图设置弹层：布局三钮 + 特效三开关；由底部药丸「视图设置」触发，定位于 bottom-16 正中 */
 export function GraphViewSettings({ ctx }: { ctx: GraphCanvasCtx }) {
   const {
     isViewSettingsOpen,
@@ -354,11 +348,10 @@ export function GraphViewSettings({ ctx }: { ctx: GraphCanvasCtx }) {
   );
 }
 
-/** v0.8 R4 底部药丸工具栏接线（starfix T3 三栏并一后画布唯一悬浮药丸）：
-    控件 = +上下文 / 指针抓手 / 只看最新·演进 / 司辰滑块 / ⚙视图设置 / 缩放±%·重置 /
-    图例? / ?快捷键——原左下角胶囊与右下角图例栏已整栏退役并全部收敛于此。
-    left-1/2 bottom-4 正中悬浮，磨砂底 --cv-panel 92% + backdrop-blur；z-20 低于叙事抽屉 z-30。
-    药丸选中态吃 --cv-pill-active-*（starfix T1 冻结值），与顶栏 --cv-seg-* 分段语法分离 */
+/** 底部药丸工具栏接线（画布底部唯一悬浮控制栏）：
+    控件包含 +上下文 / 指针抓手 / 只看最新·演进 / 司辰滑块 / ⚙视图设置 / 缩放±%·重置 /
+    图例? / ?快捷键；left-1/2 bottom-4 正中悬浮，磨砂底 --cv-panel 92% + backdrop-blur，
+    z-20 低于叙事抽屉 z-30；选中态使用 --cv-pill-active-*，与顶栏 --cv-seg-* 分段语法分离 */
 export function GraphPillToolbarSection({ ctx }: { ctx: GraphCanvasCtx }) {
   const {
     canvasTool,
@@ -400,7 +393,7 @@ export function GraphPillToolbarSection({ ctx }: { ctx: GraphCanvasCtx }) {
       style={{ left: 16, right: narrativeDrawerOpen ? 356 : 16 }}
     >
       <div className="d3-no-pan pointer-events-auto flex flex-col items-center gap-2 max-w-full">
-      {/* V10 · 司辰时光步进回放微轨（播放态浮现于药丸上方：日/周步进 · 1x/2x 倍速 · 实时当日增量数字） */}
+      {/* 司辰时光步进回放微轨（播放态浮现于药丸上方：日/周步进 · 1x/2x 倍速 · 实时当日增量数字） */}
       {showReplayRail && (
         <div
           role="toolbar"

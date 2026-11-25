@@ -1,21 +1,21 @@
 /**
- * B05 · 多格式混合大目录稳定性与增量核验自动化基准
+ * 多格式混合大目录稳定性与增量核验自动化基准
  *
  * 用法：
  *   npx tsx scripts/bench-v1.ts --exe <guanlan.exe 路径> \
  *     [--fixture native/testdata/bench/workspace] [--data native/testdata/bench/data] \
  *     [--port 18410] [--samples 20]
  *
- * 阶段与验收口径（任务卡 B05）：
+ * 阶段与验收口径：
  *   B 冷启动   —— 清库首启 + verify_all 全量索引耗时（仅记录，不设阈值）
  *   C 热启动   —— bootstrap p95 < 150ms（硬判，n=--samples 顺序采样）
- *   D 单文件修改 —— watcher 事件驱动：写 1 文件 → SSE 通知延迟（A03 口径 <300ms，记录+提示）
+ *   D 单文件修改 —— watcher 事件驱动：写 1 文件 → SSE 通知延迟（目标 <300ms，记录+提示）
  *   E 批量对账 —— 写 100 文件 → 后台增量对账完成 < 1.5s（硬判，含 100ms 防抖与 SSE 通知）；
  *                  对账期间并发混合查询 p95 < 50ms（硬判；files/events/bootstrap 四路并发）
  *
  * 机制锚点：`guanlan serve --watch`（后台索引开关，lib.rs ServeConfig::background_index）、
  * watcher 100ms 滑动防抖（watcher.rs DEBOUNCE_MS）、SSE `workspace-change` 携带
- * `index_generation`（冻结契约 J）、`POST /api/v1/index-jobs {kind:"verify_all"}`（契约 G）。
+ * `index_generation`、`POST /api/v1/index-jobs {kind:"verify_all"}`。
  */
 
 import fs from 'node:fs';
@@ -212,7 +212,7 @@ async function stopServe(): Promise<void> {
 
 // ---------- 主流程 ----------
 async function main(): Promise<void> {
-  console.log(`B05 基准：exe=${args.exe}`);
+  console.log(`体量基准：exe=${args.exe}`);
   console.log(`  fixture=${args.fixture}\n  data=${args.data}\n  samples=${args.samples}\n`);
 
   // ===== B. 冷启动：清库首启 + verify_all 全量索引（不带 --watch，任务精确计时）=====
@@ -277,10 +277,10 @@ async function main(): Promise<void> {
   let singleMs = -1;
   try {
     singleMs = await waitForGeneration(g0 + 1, 5000);
-    // B05 卡面口径「后台增量对账 <1.5s」的常态单元 = 一次保存（单文件端到端：
+    // 验收口径「后台增量对账 <1.5s」的常态单元 = 一次保存（单文件端到端：
     // watcher 检测 + 100ms 防抖合并 + 增量对账 + SSE 通知）
     judge('E 验收：单文件保存 → 后台增量对账端到端', singleMs, 1500);
-    if (singleMs >= 300) report.lines.push('    ↳ A03 口径提示：<300ms 未达（Windows Defender 对新写文件的实时扫描开销，如实记录）');
+    if (singleMs >= 300) report.lines.push('    ↳ watcher 延迟提示：<300ms 未达（Windows Defender 对新写文件的实时扫描开销，如实记录）');
   } catch (e) {
     row('D 单文件修改 → SSE 通知', `失败：${(e as Error).message}`, 'FAIL');
     report.failures.push(`D 单文件通知失败: ${(e as Error).message}`);
@@ -301,7 +301,7 @@ async function main(): Promise<void> {
   for (const t of touched) {
     const p = path.join(args.fixture, t.rel);
     if (t.append === '') {
-      fs.writeFileSync(p, JSON.stringify({ touchedAt: Date.now(), note: 'B05 batch' }));
+      fs.writeFileSync(p, JSON.stringify({ touchedAt: Date.now(), note: 'bench batch' }));
     } else {
       fs.appendFileSync(p, `\n${t.append}\n`);
     }
@@ -360,14 +360,14 @@ async function main(): Promise<void> {
   await stopServe();
 
   // ===== 汇总 =====
-  console.log('\n========== B05 基准结果 ==========');
+  console.log('\n========== 体量基准结果 ==========');
   for (const line of report.lines) console.log(line);
   if (report.failures.length > 0) {
     console.log(`\n基准失败：${report.failures.length} 项超预算/异常`);
     for (const f of report.failures) console.log(`  ✗ ${f}`);
     process.exit(1);
   }
-  console.log('\n基准通过：三项 B05 验收口径全部达标。');
+  console.log('\n基准通过：三项体量验收口径全部达标。');
   process.exit(0);
 }
 

@@ -1,5 +1,5 @@
 /**
- * 非激活受管项目的完整可展开目录树分支（Quiet.md 多项目并列树）：
+ * 非激活受管项目的完整可展开目录树分支（多项目并列树）：
  * - 与当前激活项目同构展示真实空目录、嵌套子目录与受管文件；
  * - 支持原地内联新建子文件夹 / Markdown 文档（写盘自动刷新该分支）；
  * - 点击任意文件夹 → 零重启切换聚焦项目并进入文件夹面包屑工作区；
@@ -52,22 +52,22 @@ const ROW_CLS =
   'w-full flex items-center gap-1 px-2 py-1 rounded-[9px] border border-transparent text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-soft)] hover:bg-card/75 hover:text-[color:var(--ink-strong)] cursor-pointer motion-safe:transition-colors';
 
 /**
- * U03 + V04 · 侧栏共享「高密目录」阈值：直接子文件 >= 15 份即启用视觉降噪
- * （格式点隐去 + 行尾聚合数字微标），根治百行亮橙点刷屏。
+ * 侧栏共享「高密目录」阈值：直接子文件 >= 15 份即启用视觉降噪
+ * （格式点隐去 + 行尾聚合数字微标），避免大量同类格式圆点刷屏。
  *
  * 定义在本低层分支模块：LeftSidebar 单向 import 本模块（无循环依赖），
- * 两侧共用同一阈值，杜绝「主树降噪、副树不降噪」的两套口径。
+ * 两侧共用同一阈值，保证主树与多项目副树口径一致。
  */
 export const SIDEBAR_DENSE_FOLDER_THRESHOLD = 15;
 
-/** U03 · 目录行展开/收起交错微过渡的行序（--glx-tree-idx 由调用方写入）。 */
+/** 目录行展开/收起交错微过渡的行序（--glx-tree-idx 由调用方写入）。 */
 const TREE_ROW_ENTER = 'glx-tree-row-in';
 
 /**
- * V11 · 左栏高密目录直接子文件轻量视窗切片容器（> 150 条自动切片，稳守 60fps）：
- * - 直接子文件 <= 150 份时零包裹直接渲染（既有 DOM 与像素零变动）；
+ * 左栏高密目录直接子文件轻量视窗切片容器（> 150 条自动切片，维持 60fps 滚动）：
+ * - 直接子文件 <= 150 份时零包裹直接渲染；
  * - 直接子文件 > 150 份时启用固定行高视窗虚拟切片，单帧仅渲染视窗内 + 缓冲项（~35 项），
- *   即使 5,500 份文件全展开亦保持 60fps 流畅滚动。
+ *   即使 5,500 份文件全展开亦保持流畅滚动。
  */
 export function VirtualFileSlice<T>({
   items,
@@ -225,17 +225,17 @@ const BranchInlineCreateRow: React.FC<{
   );
 };
 
-/** U03 导出：多项目分支文件行（供单测直接渲染断言格式点降噪与待拍板微点）。 */
+/** 多项目分支文件行（独立导出，便于单测校验格式点降噪与待拍板微点）。 */
 export const BranchFileRow: React.FC<{
   project: ProjectEntryDto;
   file: ProjectTreeFileEntryDto;
   depth: number;
   pinned: boolean;
-  /** U03 + V04：高密目录（直接子文件 >= 15）→ 隐去格式色点，格式改由行尾标签承载。 */
+  /** 高密目录（直接子文件 >= 15）时隐去格式色点，格式改由行尾标签承载。 */
   dense?: boolean;
-  /** U03：展开交错微过渡的行序（稀疏目录逐行错峰；高密目录整目录瞬时落位）。 */
+  /** 展开交错微过渡的行序（稀疏目录逐行错峰；高密目录整目录瞬时落位）。 */
   rowIdx?: number;
-  /** V04：同级兄弟公共前缀长度（用于智能中段省略，保留后缀差异词）。 */
+  /** 同级兄弟公共前缀长度（用于智能中段省略，保留后缀差异词）。 */
   sharedPrefixLen?: number;
   onOpenFile: (projectId: string, fileId: string) => void;
   onToggleGlobalPin?: (item: GlobalPinnedFile) => void;
@@ -326,7 +326,7 @@ export const BranchFileRow: React.FC<{
   );
 };
 
-/** U03 导出：多项目分支目录行（供单测直接渲染断言行尾待拍板数字微标）。 */
+/** 多项目分支目录行（独立导出，便于单测校验行尾待拍板数字微标）。 */
 export const BranchFolderRows: React.FC<{
   project: ProjectEntryDto;
   nodes: ProjectFolderNode[];
@@ -363,13 +363,13 @@ export const BranchFolderRows: React.FC<{
       const open = expanded.has(node.path);
       const hasExpandable = node.children.length > 0 || node.directFiles.length > 0;
       const isCreatingInside = inlineCreate?.parentDir === node.path;
-      // U03 + V04：高密目录判定（直接子文件 >= 15）→ 该目录下文件行隐去格式色点
+      // 高密目录判定（直接子文件 >= 15）：该目录下文件行隐去格式色点
       const dense = node.directFiles.length >= SIDEBAR_DENSE_FOLDER_THRESHOLD;
       const siblingPrefixMap =
         (open || isCreatingInside) && node.directFiles.length > 1
           ? computeSiblingSharedPrefixMap(node.directFiles.map((f) => f.title))
           : null;
-      // U03：目录行尾待拍板聚合徽标（数据源＝DTO 真有的 pending_decisions，不造数）
+      // 目录行尾待拍板聚合徽标（直接汇总 DTO 中的 pending_decisions，不编造计数）
       const pendingTotal = node.directFiles.reduce(
         (sum, f) => sum + (f.pending_decisions ?? 0),
         0
@@ -458,8 +458,8 @@ export const BranchFolderRows: React.FC<{
                 <span className="font-mono text-[10px] tabular-nums text-[color:var(--ink-soft)] opacity-75">
                   {node.total}
                 </span>
-                {/* U03：待拍板聚合数字微标（琥珀文字 + L1 托盘底 + 前导琥珀点，
-                    与文件数在形状/位置/色相上三重区分；AA 达标 4.94:1） */}
+                {/* 待拍板聚合数字微标（琥珀文字 + 浅底 + 前导琥珀点，
+                    与文件数在形状/位置/色相上三重区分；对比度满足 AA 4.94:1） */}
                 {pendingTotal > 0 && (
                   <span
                     data-project-folder-pending={pendingTotal}

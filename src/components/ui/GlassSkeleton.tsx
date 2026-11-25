@@ -1,17 +1,14 @@
 import React from 'react';
 
 /**
- * U11 · 琉璃流光骨架屏（通用轻组件，独立成件不并入 primitives 基建）。
+ * 琉璃流光骨架屏（通用轻组件，独立成件不并入 primitives 基建）。
  *
- * 依据：docs/guanlan/观澜-全站UIUX琉璃美学与司辰叙事收口-长任务卡-v1.1.md §4 U11、
- * 设计规范 v0.6 §6（空态线稿语法）与 motion.css §3.29（glx-skeleton 流光）。
- *
- * - 视觉：白玻璃条（L2 相位：发丝阴影环替代硬描边 + inset 顶沿白线高光，border:none）
+ * - 视觉：白玻璃条（发丝阴影环替代硬描边 + inset 顶沿白线高光，border:none）
  *   + transform 扫光流光（.glx-skeleton::after，只动 transform，禁 background-position）；
- *   prefers-reduced-motion 下流光层 display:none，终态＝静态琉璃骨架恒可见（motion.css §4）。
+ *   prefers-reduced-motion 下流光层隐藏，终态保持静态琉璃骨架恒可见。
  * - 语义：本组件是纯视觉占位（aria-hidden），「正在加载」的诚实播报由调用方的
  *   role="status" 容器与原文案承担——骨架不得吞掉真实错误态 / 重试入口。
- * - 纪律：行宽由纯函数 skeletonLineWidths 决定（可单测）；零字面色（阴影环取既有
+ * - 纪律：行宽由纯函数 skeletonLineWidths 决定；零字面色（阴影环取既有
  *   rgba(38,36,61,.045) 阴影环语法与 --glass-shadow 同族的薰衣草相位）。
  */
 
@@ -25,13 +22,13 @@ export function skeletonLineWidths(lines: number): string[] {
   return Array.from({ length: count }, (_, i) => `${Math.max(MIN_PCT, 100 - i * STEP_PCT)}%`);
 }
 
-/* 琉璃条底座：glx-skeleton（motion.css §3.29 流光载体）+ 随语境 tint 的玻璃面。
-   实机核验修订：条底由固定 bg-white/75 改为 color-mix(currentColor 14%)——
-   骨架条继承容器文字色（壳层 --ink-soft / 阅读纸面 #6E6A61 / 夜航纸面 #A1A09A），
-   三语境下轨道均可见（固定白条在浅纸面 #F5F0E8 上近乎隐形）；描边走阴影环
-   rgba(38,36,61,0.055)（v0.8 铁律：新表面 border:none），顶沿高光只用 inset 白线
-   （0.55：暗底上不刺眼、浅底上仍是玻璃高光），弥散微影取 --glass-shadow 同族
-   薰衣草相位。高度由调用处追加（行条 h-2.5 / 头像位 h-9），基类不写死尺寸。 */
+/* 琉璃条底座：glx-skeleton（motion.css 流光载体）+ 随语境 tint 的玻璃面。
+   条底采用 color-mix(currentColor 14%) 而非固定白色——骨架条继承容器文字色
+   （壳层 --ink-soft / 阅读纸面 #6E6A61 / 夜航纸面 #A1A09A），三语境下轨道均可见
+   （固定白条在浅纸面 #F5F0E8 上近乎隐形）；描边改用阴影环 rgba(38,36,61,0.055)
+   取代 1px 硬边框，顶沿高光只用 inset 白线（0.55：暗底上不刺眼、浅底上仍是玻璃高光），
+   弥散微影取 --glass-shadow 同族薰衣草相位。高度由调用处追加（行条 h-2.5 / 头像位 h-9），
+   基类不写死尺寸。 */
 const GLASS_BAR_CLASS =
   'glx-skeleton block rounded-full bg-[color:color-mix(in_srgb,currentColor_14%,transparent)] shadow-[0_0_0_1px_rgba(38,36,61,0.055),inset_0_1px_0_rgba(255,255,255,0.55),0_2px_8px_rgba(84,70,160,0.08)]';
 
@@ -60,8 +57,8 @@ export function GlassSkeleton({ lines = 3, avatar = false, className = '' }: Gla
   );
 }
 
-/** 克制的司辰线稿（v0.6 §6 空态语法：单点双圈涟漪线稿、澜青桥色 --canvas-bridge、
- *  衰减 α 1.0/.59/.31 施加于线稿层；纯静态零动画——呼吸语法只属未读/新变化提示）。 */
+/** 克制的司辰空态线稿：单点双圈涟漪线稿、澜青桥色 --canvas-bridge、
+ *  衰减 α 1.0/.59/.31 施加于线稿层；纯静态零动画——呼吸语法只属未读/新变化提示。 */
 export function ChronosLineArt({ className = '' }: { className?: string }) {
   return (
     <svg

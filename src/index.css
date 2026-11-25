@@ -1,10 +1,10 @@
 @import "tailwindcss";
-/* 动效层（占位，动效工程师 B4/B6 填充；契约见文件内注释） */
+/* 共享动效层（动效约定见文件内注释） */
 @import "./styles/motion.css";
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ══════════════════════════════════════════════════════════════════════════
-   V01 · coss.com/ui 语义令牌映射层（Tailwind v4 @theme inline）
+   coss.com/ui 语义令牌映射层（Tailwind v4 @theme inline）
    与既有观澜令牌（--ink-* / --accent-iris / --depth-* / --cv-*）并行共存：
    新原语（src/components/ui/*）消费标准语义色阶；既有组件零破坏渐进迁移。
    ══════════════════════════════════════════════════════════════════════════ */
@@ -99,22 +99,20 @@
   :root {
     --font-sans: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Source Han Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-serif: 'Source Serif 4', 'Noto Serif SC', 'Lora', Georgia, Cambria, serif;
-    /* R3：等宽栈补入系统中文字族——Latin/数字仍由 JetBrains Mono/Menlo/Consolas 等宽渲染（tabular-nums 不变），
+    /* 等宽栈补入系统中文字族——Latin/数字仍由 JetBrains Mono/Menlo/Consolas 等宽渲染（tabular-nums 不变），
        中文回退到黑体（微软雅黑/苹方/思源黑体，均为系统字或已加载的 Noto Sans SC webfont），
        不再落到 generic monospace 的宋体锯齿混排。 */
     --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Microsoft YaHei', 'PingFang SC', 'Source Han Sans SC', 'Noto Sans SC', monospace;
 
     /* Claude Code X-Ray + Anthropic Editorial Dark Palette (Exact Reference Match)
-       —— 暗色令牌保留:星图 / 事件链 / 时光机等 D3 画布内部仍走这套,
-          以 .dark-porthole 深色舷窗形式嵌入下方浅色玻璃界面。
-       ⚠ deprecated（v0.7 设计增补 §1.2/V7-D15，保留一版，下一版删除）：
+       —— 暗色令牌保留：星图 / 事件链 / 时光机等 D3 画布内部以 .dark-porthole 深色舷窗嵌入浅色界面。
+       ⚠ deprecated（仅作兼容保留，勿新增引用）：
          画布消费面已改走下方 .dark-porthole 的 --cv-* 双主题令牌，映射表：
          --claude-bg-void→--cv-void、--claude-bg-panel→--cv-panel、--claude-bg-card→--cv-card、
          --claude-ink-primary→--cv-ink、--claude-ink-secondary→--cv-ink-muted、
          --claude-terracotta→--cv-brand、--claude-lavender→--cv-lav、--claude-amber→--cv-amber、
          --claude-sage→--cv-read-line（暗档同值）。
-         幽灵令牌（画布 0 消费，勘察 §5.4 对账）：--claude-bg-canvas、--claude-bg-card-hover、
-         --claude-slate——一并标记 deprecated，勿新增引用。 */
+         零消费旧令牌：--claude-bg-canvas、--claude-bg-card-hover、--claude-slate 一并标记 deprecated。 */
     --claude-bg-void: #0D0D0F;
     --claude-bg-canvas: #0F0F12;      /* deprecated · 幽灵令牌（0 消费） */
     --claude-bg-panel: #141417;
@@ -136,9 +134,9 @@
        界面 chrome(顶栏/侧栏/卡片/弹窗/首页)统一从这里取值;组件内不再新造色值。
        --stage-ink-* 是五阶段文字色在浅底上的可读版本(STAGE_ACCENT 的浅色映射)。 */
     --glass-page-base: #F1EFF8;
-    /* 纸面画布底（v0.7 V7-D15 白名单扩档登记）：--cv-void 浅档取值。
+    /* 纸面画布底：--cv-void 浅档取值。
        不用 --glass-page-base——薰衣草紫调会干扰泳道色相判断；阅读纸暖色系
-       （#F5F0E8 族，v0.6 §7.5 不动清单）是视图局部 palette，二者都不如独立纸底。 */
+       （#F5F0E8 族）是视图局部 palette，二者都不如独立纸底。 */
     --paper-light: #FAF9F5;
     --glass-page-grad: linear-gradient(160deg, #EDEAF7 0%, #F6F4FB 42%, #EFEDEA 100%);
     --glass-bg: rgba(255, 255, 255, 0.58);
@@ -146,8 +144,7 @@
     --glass-bg-panel: rgba(255, 255, 255, 0.75);
     --glass-border: rgba(255, 255, 255, 0.75);
     --glass-hairline: rgba(35, 33, 80, 0.08);
-    /* hover 强化档（合规修复登记）：原 RightInspector/ReaderView hover 用 #26243D/25，
-       归并到同族墨 25%（复合 Δ≤1.5/通道），与 --glass-hairline 同源不新造色系。 */
+    /* hover 强化档：与 --glass-hairline 同源墨色 25%（不新造色系）。 */
     --glass-hairline-strong: rgba(35, 33, 80, 0.25);
     --glass-blur: 18px;
     --glass-blur-pop: 24px;
@@ -159,38 +156,35 @@
     --ink-faint: #64627B;
     --ink-onmuteglass: #6F6C8C;
 
-    /* ── 品牌墨轴（§3.1）────────────────────────────────────────────────
-       澜墨 #112030 一线贯穿：CTA 底 / 一级标线 / 暗 chrome 锚 / 品牌徽底
-       （=gen-icon BG，品牌口径 §4.1；桌面图标本轮不翻新，D14）。 */
+    /* ── 品牌墨轴 ────────────────────────────────────────────────────────
+       澜墨 #112030 一线贯穿：CTA 底 / 一级标线 / 暗 chrome 锚 / 品牌徽底。 */
     --ink-anchor: #112030;
-    --paper-on-ink: #F4F8FF;  /* 墨底上的字（主钮字 15.49 ✅） */
+    --paper-on-ink: #F4F8FF;  /* 墨底上的字（主钮字 15.49:1） */
     --paper-dark: #F4F3EE;    /* 暗域纸面（暗画布字/暗域标线，chrome 侧语义名） */
 
-    /* ── 强调＝薰衣草，唯一交互色（§3.1）────────────────────────────────
-       iris 仅描边/焦点外的装饰环/胶囊底（作文字 4.17 不合格，禁）；
-       iris-deep 才可作链接文字与 focus 环（玻璃 4.82 ✅）；
-       iris-ink 用于薰衣草 10% 胶囊底上的激活字（5.41 ✅）。 */
+    /* ── 强调＝薰衣草，唯一交互色 ────────────────────────────────────────
+       iris 仅描边/焦点外的装饰环/胶囊底（作文字 4.17:1 不满足 AA，禁作文字）；
+       iris-deep 才可作链接文字与 focus 环（玻璃底 4.82:1）；
+       iris-ink 用于薰衣草 10% 胶囊底上的激活字（5.41:1）。 */
     --accent-iris: #7C6FD0;
     --accent-iris-deep: #6D5BD0;
     --accent-iris-ink: #5E4BC0;
-    /* deprecated 别名一版（现役 tsx 引用 8/4 处，值不变；下一版删除） */
+    /* deprecated 兼容别名（值不变，勿新增引用） */
     --accent-lavender: var(--accent-iris);
     --accent-violet-ink: var(--accent-iris-deep);
     --accent-slate-ink: #4A7DAF;
     --accent-lime: #B9D96B;
     --accent-lime-chip: #E4F2B8;
-    /* 澜·未读（§3.1/D4）：文字与点核共用单令牌（白 5.74/玻璃 5.34/胶囊底 4.79 全 ✅）；
-       chrome 侧 #D97757/#F76808 未读点引用换入本令牌；画布泳道白名单豁免不换（§7.2） */
+    /* 澜·未读：文字与点核共用单令牌（白底 5.74:1 / 玻璃底 5.34:1 / 胶囊底 4.79:1 均满足 AA）；
+       画布泳道独立使用 --cv-lane-*，不共用本令牌 */
     --accent-wave: #A84A1A;
-    /* 澜·未读·暗底亮档（评审第 1 轮 #7②，§8 AA 冻结门流程新增值）：暗岛底 #17161F 7.13、
-       /90 复合底 #2C2B35 5.55、#121214 7.44——全部 ≥4.5（附录 B 同款脚本实跑，
-       2026-11-13）；供暗域 chrome 的未读文字/进度条/点核使用，浅底仍走 --accent-wave */
+    /* 澜·未读·暗底亮档：暗底 #17161F 7.13:1、复合底 #2C2B35 5.55:1、#121214 7.44:1（均 ≥4.5:1）；
+       供暗域 chrome 的未读文字/进度条/点核使用，浅底仍走 --accent-wave */
     --accent-wave-bright: #ED8A50;
-    /* 澜青桥（porthole 沿口/空态线稿/画布↔壳层过渡）＋画布 chrome idle 字——
-       均为现役值登记语义名，画布不动清单，本轮不改值（D15） */
+    /* 澜青桥（porthole 沿口/空态线稿/画布↔壳层过渡）与画布 chrome idle 字语义名 */
     --canvas-bridge: #DEE6F3;
     --canvas-ink-idle: #8E8D87;
-    /* deprecated 别名（§3.6 换锚：#17161F→#112030，近黑暗色肉眼无差；下一版删除） */
+    /* deprecated 别名（指向 --ink-anchor #112030，勿新增引用） */
     --pill-dark: var(--ink-anchor);
     --status-green: #3E9B6B;
     --status-amber: #C99347;
@@ -201,61 +195,60 @@
     --stage-ink-exec: #C25E4C;
     --stage-ink-deliver: #647A45;
     --stage-ink-anomaly: #B14A78;
-    /* 六色双层（§3.1/D5）：graphic 原值只作色块/图形（玻璃上 ≥3:1）；
-       文字一律取 -text 深档（玻璃上 ≥4.5，AA 实测值见规范表） */
+    /* 六色双层：graphic 原值只作色块/图形（玻璃底 ≥3:1）；
+       文字一律取 -text 深档（玻璃底 ≥4.5:1，满足 WCAG AA） */
     --stage-ink-blueprint-text: #3D6C99;
-    --stage-ink-plan-text: var(--stage-ink-plan);  /* 同值即合格（4.82）；薰衣草胶囊底场景另用 --accent-iris-ink */
+    --stage-ink-plan-text: var(--stage-ink-plan);  /* 同值即合格（4.82:1）；薰衣草胶囊底场景另用 --accent-iris-ink */
     --stage-ink-decision-text: #8A621E;
     --stage-ink-exec-text: #A8432F;
     --stage-ink-deliver-text: #56643A;
     --stage-ink-anomaly-text: #9C3F68;
 
-    /* ── 动效基座 · 时长/缓动令牌（§3.5 契约）────────────────────────────
-       chrome 侧动效只许复用四档时长与两条缓动，不得各自写死；
-       画布侧例外登记：.anim-spring-pop 340ms（D13，画布闸后并入 --dur-3）、
-       连线电流 linear 1.1s（不动）；详见文件末尾 .anim-* 工具类。 */
+    /* ── 动效基座 · 时长/缓动令牌 ────────────────────────────────────────
+       chrome 侧动效只复用四档时长与两条缓动，不得各自写死；
+       画布侧例外：.anim-spring-pop 340ms、连线电流 linear 1.1s；详见文件末尾 .anim-* 工具类。 */
     --dur-1: 120ms;   /* hover / 淡入微动 */
     --dur-2: 180ms;   /* 标线 / 页签 / 状态位移 */
     --dur-3: 260ms;   /* 抽屉/面板补位、chrome spring-pop */
-    --dur-pan: 500ms; /* 运镜（现役保留） */
-    /* deprecated 别名一版（D10：160ms→180ms 归档；现役 glass-* 5 处引用不退役） */
+    --dur-pan: 500ms; /* 运镜 */
+    /* deprecated 别名（归档至 --dur-2 180ms，保留兼容） */
     --dur-fast: var(--dur-2);
-    --ease-spring: cubic-bezier(0.22, 1, 0.36, 1); /* 入场/位移（现役保留） */
-    --ease-fade: cubic-bezier(0.4, 0, 0.2, 1);     /* 交叉淡变（新增） */
+    --ease-spring: cubic-bezier(0.22, 1, 0.36, 1); /* 入场/位移 */
+    --ease-fade: cubic-bezier(0.4, 0, 0.2, 1);     /* 交叉淡变 */
 
-    /* ── 字阶七档（§3.2）────────────────────────────────────────────────
+    /* ── 字阶七档 ────────────────────────────────────────────────────────
        字重纪律：sans 400/500/600；mono 400/500；700 仅存 serif display 档。
-       数字等宽唯一出口＝.tabular-nums（D9，不新增 .num）。 */
+       数字等宽唯一出口＝.tabular-nums（不新增 .num）。 */
     --text-micro: 11px;      --lh-micro: 16px;      /* mono 500 大写：章节小标/口径标签 */
     --text-ui: 12px;         --lh-ui: 18px;         /* 页签、按钮、徽标 */
     --text-ui-body: 13px;    --lh-ui-body: 20px;    /* 卡片次行、表单、次钮字 */
-    --text-item-title: 14px; --lh-item-title: 20px; /* 列表/卡片题（sans 600，归一 44 处分裂） */
-    --text-read: 17px;       --lh-read: 32px;       /* 阅读正文 1.88 行高（serif 受闸，D3） */
+    --text-item-title: 14px; --lh-item-title: 20px; /* 列表/卡片题（sans 600） */
+    --text-read: 17px;       --lh-read: 32px;       /* 阅读正文 1.88 行高（serif 需显式挂 serif-body-live 类） */
     --text-title: 22px;      --lh-title: 30px;      /* 文章题/正文 h2（serif 600） */
-    --text-display: 34px;    --lh-display: 44px;    /* 正文 h1/首页问候（serif 700，全应用唯一 700，更具刊物视觉张力） */
+    --text-display: 34px;    --lh-display: 44px;    /* 正文 h1/首页问候（serif 700，全应用唯一 700） */
 
-    /* ── 间距与尺寸（§3.3）────────────────────────────────────────────── */
+    /* ── 间距与尺寸 ────────────────────────────────────────────────────── */
     --space-1: 4px;
     --space-2: 8px;
     --space-3: 12px;
     --space-4: 16px;
     --space-5: 24px;
     --space-6: 32px;
-    --chrome-h: 52px;      /* 顶栏高（舒展 52px 呼吸感，GraphCanvasView 自动消费 var(--chrome-h)） */
+    --chrome-h: 52px;      /* 顶栏高（GraphCanvasView 自动消费 var(--chrome-h)） */
     --ctl-h: 30px;         /* 控件高 */
-    --ctl-h-sm: 26px;      /* 控件高·sm（§4.1 sm 变式 / status-capsule） */
-    --ctl-icon: 32px;      /* 图标钮 32×32（§4.1 icon 形态） */
+    --ctl-h-sm: 26px;      /* 控件高·sm（紧凑按钮 / status-capsule） */
+    --ctl-icon: 32px;      /* 图标钮 32×32 */
     --gutter: 16px;        /* 面板内距 */
-    --measure-read: 714px; /* 阅读量宽＝42 汉字×17px（D7：px 定值，em 单位错不重蹈） */
+    --measure-read: 714px; /* 阅读量宽＝42 汉字×17px（采用 px 定值，避免 em 随字号漂移） */
 
-    /* ── 圆角四档（§3.4；rounded-[4px] 任意值废除并入 --r-ctl）────────── */
+    /* ── 圆角四档 ──────────────────────────────────────────────────────── */
     --r-ctl: 6px;
     --r-block: 10px;
     --r-card: 16px;
     --r-pill: 999px;
 
-    /* ── 组件级令牌（primitives.tsx 消费；值＝规范 §4.1-§4.4 冻结值）─────
-       组件不写字面色：暗色主题将来只换这里，不必触组件。 */
+    /* ── 组件级令牌（primitives.tsx 消费）─────────────────────────────────
+       组件不写字面色：明暗切换只需覆写这里，不必触组件。 */
     --btn-primary-bg: var(--ink-anchor);
     --btn-primary-bg-hover: #1C2B40;
     --btn-primary-bg-active: #0A1520;
@@ -281,22 +274,15 @@
     --tab-hover-line: rgba(38, 36, 61, 0.20);        /* 页签 hover 发丝下划线（浅色） */
     --tab-hover-line-dark: rgba(244, 243, 238, 0.20); /* 同上·暗域 */
 
-    /* ── v0.8 三层景深空间令牌（L0 底层画布 / L1 分组容器 / L2 内容实体卡）──────
-       层级由「背景色阶 + 弥散阴影」承担，新表面一律无边框——替代既有 1px 硬边框的
-       统一出口是下方 depth 工具类块（border:none 显式声明）。域纪律：只服务壳层
+    /* ── 三层景深空间令牌（L0 底层画布 / L1 分组容器 / L2 内容实体卡）──────
+       层级由「背景色阶 + 弥散阴影」承担。域纪律：只服务壳层
        （首页/侧栏/阅读/抽屉），画布组件只消费 --cv-*，depth 表面禁止引用 --cv-*
-       （v0.6 冻结「浅壳+暗舷窗」、v0.7 增补 §1.1，两套令牌域互不串写）。
-       零新增色相/字档/时长：文字走 --ink-strong/--ink-soft/--ink-onmuteglass
-       （--ink-faint 仍禁 <24px）、链接字 --accent-iris-deep；--depth-0-dot 与
-       .glass-page 点阵/--cv-dot 浅档同相位（rgba(35,33,80,0.05) 现役配方）；
-       --depth-1-radius 与 --r-card:16px 同档（分组容器专用名）；两个特征渐变只借
-       --accent-wave(168,74,26)/--accent-iris(124,111,208) 的相位，不成新色相。
-       AA 白名单登记（v0.6 §8 冻结门：新增底值当天同款脚本实跑，不手算；
-       2026-11-15 node 实跑，公式=docs/guanlan/观澜-界面迭代-v0.7/对比度复算.mjs）：
-       #F5F6F8（--depth-0-base）：ink-strong 13.85 / ink-soft 6.32 / onmuteglass 4.62 ✅
-       #ECEEF2（--depth-1-bg）：ink-strong 12.89 / ink-soft 5.88 ✅（onmuteglass 4.30
-       不达 4.5——L1 实底上的次文字一律升 --ink-soft，onmuteglass 限 L0/L2）
-       #FFFFFF（--depth-2-bg）：ink-strong 14.98 / ink-soft 6.83 / onmuteglass 5.00 ✅ */
+       （两套令牌域互不串写）。
+       文字走 --ink-strong/--ink-soft/--ink-onmuteglass（--ink-faint 禁用于 <24px 正文）、
+       链接字走 --accent-iris-deep；--depth-0-dot 与 .glass-page 点阵 / --cv-dot 浅档同相位；
+       --depth-1-radius 与 --r-card:16px 同档。
+       对比度说明：L1 实底（--depth-1-bg）上的次文字应使用 --ink-soft（onmuteglass 对比度
+       不足 4.5:1，仅限 L0/L2 底使用）。 */
     --depth-0-base: #F5F5F8;               /* L0 底层工作区底色（克制纯底，无装饰极光） */
     --depth-0-dot: rgba(38, 36, 61, 0.04); /* L0 极淡点阵（保留变量兼容） */
     --depth-1-bg: #EFEFF4;                 /* L1 分组托盘实底（克制高对比层级） */
@@ -310,7 +296,7 @@
     --feature-grad-amber: none;
     --feature-grad-blue: none;
 
-    /* ── V01 · coss.com/ui 中性精密色阶（浅色默认态）────────────────────────
+    /* ── coss.com/ui 中性精密色阶（浅色默认态）─────────────────────────────
        纯白实体表面 + 4% 凹槽 + 8% 极细线 + 澜墨主锚 / 薰衣草品牌交互色，
        全部文字/语义前景色满足 WCAG AA（≥4.5:1）。 */
     --radius: 0.625rem;
@@ -354,7 +340,7 @@
     --code-highlight: rgba(17, 24, 39, 0.045);
   }
 
-  /* ── V01 · 全局暗夜模式（html.dark）────────────────────────────────────────
+  /* ── 全局暗夜模式（html.dark）─────────────────────────────────────────────
      采用 coss.com/ui 中性阶梯暗面（背景 → 卡面 → 浮层逐级提亮 2%~4%），
      同步覆写既有观澜壳层令牌，使新旧组件一键协同进入高对比暗夜沉浸态。 */
   .dark {
@@ -454,8 +440,7 @@
     -moz-osx-font-smoothing: grayscale;
     margin: 0;
     padding: 0;
-    /* L0 全局落点（v0.8 评审 #4）：body 底换 --depth-0-base。.glass-page 类本体
-       保留不动——App 根容器与未被本轮触碰的表面仍挂它；已改版表面走 .depth-0-surface。 */
+    /* L0 全局默认底色走 --depth-0-base；App 根容器仍挂 .glass-page，页面主面走 .depth-0-surface。 */
     background-color: var(--depth-0-base);
     color: var(--ink-strong);
   }
@@ -469,17 +454,14 @@
     font-family: var(--font-serif);
   }
 
-  /* §6.8 全局键盘焦点环（B0）。既有 focus-visible:ring-* 工具类在 utilities 层，
-     优先级更高，不受影响。暗域(.dark-porthole)环色 #9B8AFB 按规范留待
-     画布闸批次（B6）实测后覆写，本批不加。 */
+  /* 全局键盘焦点环。既有 focus-visible:ring-* 工具类在 utilities 层，优先级更高，不受影响。 */
   :focus-visible {
     outline: 2px solid var(--accent-iris-deep);
     outline-offset: 2px;
   }
 
-  /* 阅读正文档（§3.2 read-body 档：17/32，行高 1.88——阅读优先底线①）。
-     族默认 sans；正文衬线为受闸切换（D3）：html 挂 serif-body-live 才启用，
-     闸门＝win32 1.25x ClearType 截图对比（规范 §8，未执行→保底态衬线只上标题）。 */
+  /* 阅读正文档（17/32，行高 1.88）。
+     默认使用 sans；仅当 html 显式挂 serif-body-live 类时正文切换为衬线字族。 */
   .read-body {
     font-size: var(--text-read);
     line-height: var(--lh-read);
@@ -495,8 +477,7 @@
 }
 
 .reader-measure {
-  /* §3.3/D7：量宽单一来源＝--measure-read 714px（替换现役 46rem=736px；
-     ReaderView 内联 760 由 B1 批次归一到本令牌） */
+  /* 阅读量宽单一来源：--measure-read (714px) */
   max-width: var(--measure-read);
 }
 
@@ -554,13 +535,12 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   浅色玻璃工具类——界面 chrome 的统一配方,组件从这些类取形,不再各写各的:
-   · .glass-page    应用根底:薰衣草渐变 + 双侧光晕 + 细点阵
-   · .glass-pop     浮层(下拉/弹窗/popover):更厚 blur + 更深阴影
-   · .glass-input   输入框玻璃底
-   · .dark-porthole 深色舷窗:包裹星图等暗色画布嵌入浅色界面
-   （v0.8 退役：glass-card/glass-card-hover/glass-panel/glass-chip/glass-btn-primary
-     已被三层景深 depth-0/1/2 体系替代，类与退役自证注释见 AtlasView/HomeView/App/TopHeader）
+   浅色玻璃工具类——界面 chrome 的统一配方，组件从这些类取形：
+   · .glass-page    应用根底
+   · .glass-pop     浮层（下拉/弹窗/popover）
+   · .glass-input   输入框底面
+   · .dark-porthole 深色舷窗：包裹星图等画布嵌入壳层界面
+   （旧卡片/面板工具类已由下方三层景深 depth-0/1/2 体系替代）
    ══════════════════════════════════════════════════════════════════════════ */
 
 .glass-page {
@@ -601,11 +581,11 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   v0.8 三层景深空间画布 · 壳层专用，严禁进 .dark-porthole 域
-   ——三级表面类：L0 .depth-0-surface（微光极光底+点阵）/ L1 .depth-1-group（磨砂分组托盘，
-   顶沿高光+环境轮廓，零生硬黑线）/ L2 .depth-2-card（瓷白实体卡，多维弥散阴影）。
-   hover 唯一合法形态（v0.6 硬约束④零布局位移）：--depth-2-lift + 阴影加深，
-   过渡 --dur-2 --ease-spring；禁止 hover 改 width/left/top。
+   三层景深空间画布 · 壳层专用，严禁进 .dark-porthole 域
+   ——三级表面类：L0 .depth-0-surface / L1 .depth-1-group（分组托盘） /
+   L2 .depth-2-card（内容实体卡）。
+   hover 只动 --depth-2-lift（transform）与阴影/边框色（零布局位移）；
+   禁止 hover 改 width/left/top。
    ══════════════════════════════════════════════════════════════════════════ */
 
 .depth-0-surface {
@@ -652,7 +632,7 @@
   box-shadow: var(--depth-2-shadow);
 }
 
-/* V07 · 全局暗夜模式三层景深适配（对齐 coss.com/ui 阶梯暗面，杜绝白卡刺眼） */
+/* 全局暗夜模式三层景深适配（对齐 coss.com/ui 阶梯暗面，杜绝白卡刺眼） */
 .dark .depth-0-surface {
   background-color: var(--background);
 }
@@ -685,9 +665,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* v0.8 浮起降级：撤除声明与上方声明同文件相邻，且 .depth-2-card-hover 双写
-     提高特异性——不依赖源码顺序，也不怕压缩器把与 motion.css §4 登记行同款的
-     transition:none 规则去重合并到文件前部（theme-morphing 块尾 @media 同款防御）。
+  /* 卡片浮起降级：撤除声明与上方声明同文件相邻，且 .depth-2-card-hover 双写
+     提高特异性——不依赖源码顺序，也不怕压缩器把与 motion.css 登记行同款的
+     transition:none 规则去重合并到文件前部（同下方 theme-morphing @media 防御）。
      reduce 用户 hover 浮起瞬时完成、无过渡（终态可见）。 */
   .depth-2-card-hover.depth-2-card-hover {
     transition: none;
@@ -695,35 +675,21 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   v0.7 全景双主题令牌（设计增补 §1.1-§1.3）：作用域 = .dark-porthole 舷窗
-   （App.tsx 挂 data-canvas-theme；不挂 html——scope 诚实，壳层两主题恒浅玻璃）。
-   · 暗档（默认块）= 现值原样：X-Ray 基线零迁移；两处登记翻值见行内注释
-     （--cv-ink-dim T4 清偿 V7-D1/D2/D3；主钮反白 --cv-on-brand V7-D13）。
-   · 浅档（[data-canvas-theme='xray-light'] 块）= 增补 §1.3 各表值，全量过增补 §5
-     （选择器逐字=canvasThemeStore 枚举值：App:1454 挂 data-canvas-theme={canvasTheme}，
-     attr 词汇与 store/GCV 同源；首轮评审曾裂为 'light' 致浅档永不匹配——契约测试
-     test/canvas-theme.test.ts §3 锁死 attr↔选择器同词汇）
-     附录同款对比度脚本（本会话实跑 63 PASS；证据行见脚本）。
-     定稿复算基准 = 同目录 对比度复算.mjs（二轮定稿 §0 R4：两账并存，以随稿脚本为准）。
-   · 白名单扩档登记（V7-D15，值共享、令牌独立）：泳道浅档 #C2410C/#5B4BC4/
-     #8A621E/#2F5AA8 + 纸底 #FAF9F5 + #B4530A/#7C6FD0/#A8762B/#9A4208/#1F7A45/
-     #C53030/#0E7490/#64646D（TRUNK 暗档 V7-D16 清偿新值）——泳道=文档分类数据编码、
-     iris=交互色、stage-ink=五阶段语义，
-     三轴独立演化，不别名化现役令牌（别名会静默串写编码）。
-   · 超出 §1.3 计数的派生令牌（均为本稿落地必需的登记增补，非新色相）：
-     --cv-on-brand（主钮/阅读钮反白字，暗=void #0D0D0F 即 V7-D13；浅=paper-on-ink）、
-     --cv-line-strong（eventGraph hub 边等价位，增补 §1.3 H 表点名令牌）、
-     --cv-seg-*（§2.1 分段钮两态跨主题取值，组件不感知主题）。
+   全景双主题令牌：作用域 = .dark-porthole 舷窗（挂 data-canvas-theme，不挂 html）。
+   · 暗档（默认块）：X-Ray 暗色画布基线，层级由底色阶表达（void < panel < card）。
+   · 浅档（[data-canvas-theme='xray-light'] 块）：纸面主题，选择器值与
+     canvasThemeStore 枚举值逐字一致（test/canvas-theme.test.ts 锁定二者同源）。
+   · 独立色轴说明：泳道（文档分类数据编码）、iris（交互色）、stage-ink（五阶段语义）
+     三轴独立演化，避免别名化导致不同语义互相串写。
+   · 派生令牌：--cv-on-brand（主钮反白字）、--cv-line-strong（hub 边描边）、
+     --cv-seg-*（顶栏分段钮两态跨主题取值，组件不感知主题）。
    ══════════════════════════════════════════════════════════════════════════ */
 .dark-porthole {
-  /* A · 底座与 chrome 面（11）
-     starfix T1 规格冻结：夜航档画布底/展开容器/内部卡片/亮字改字面值（不再走 --claude-*
-     别名）——值=工票冻结（--cv-void #0B0D12、展开容器 --cv-panel #161922、内部卡片
-     --cv-card #1E222D、亮字 --cv-ink #F3F4F6），层级只由底色阶表达：void < panel < card。 */
+  /* A · 底座与 chrome 面（夜航档：层级只由底色阶表达，void < panel < card） */
   --cv-void: #0B0D12;
   --cv-panel: #161922; /* 展开容器（深灰半透玻璃底；严禁白条/浅灰卡片） */
   --cv-card: #1E222D; /* 内部卡片 */
-  --cv-card-selected: #211F29; /* 现役事件卡选中底（≠--claude-bg-card-selected #211F26） */
+  --cv-card-selected: #211F29; /* 事件卡选中底 */
   --cv-slot: #222228;
   --cv-ctl: #1C1C21;
   --cv-ctl-hover: #25252C;
@@ -731,15 +697,15 @@
   --cv-hairline-ink: #FFFFFF;
   --cv-shadow-ink: #000000;
   --cv-dot: rgba(255, 255, 255, 0.075);
-  /* B · 文字阶（7） */
-  --cv-ink: #F3F4F6; /* 亮字（starfix T1 冻结；was --claude-ink-primary #F4F3EE，Δ≤2 同亮度带） */
+  /* B · 文字阶 */
+  --cv-ink: #F3F4F6;
   --cv-ink-2: #E4E4E7;
   --cv-ink-3: #D4D3CD;
   --cv-ink-muted: var(--claude-ink-secondary);
   --cv-ink-meta: #9AA0A6;
-  --cv-ink-dim: #8E8D87; /* T4 债务清偿（V7-D1/D2/D3）：#787771/#71717A/#6E6D68 并档，card 5.32/panel 5.52 ✅ */
-  --cv-ink-ghost: #52525B; /* 豁免档登记：仅图标/极弱装饰 */
-  /* C · 品牌/强调族（7） */
+  --cv-ink-dim: #8E8D87; /* 次级暗字：card 5.32:1 / panel 5.52:1，满足 AA */
+  --cv-ink-ghost: #52525B; /* 仅用于图标与极弱装饰 */
+  /* C · 品牌/强调族 */
   --cv-brand: var(--claude-terracotta);
   --cv-brand-hover: #C66647;
   --cv-brand-ink: #E5A985;
@@ -747,12 +713,12 @@
   --cv-lav-ink: #C4B5FD;
   --cv-amber: var(--claude-amber);
   --cv-amber-ink: #D99B52;
-  /* D · 泳道（4；14-hex 白名单暗档原样） */
+  /* D · 泳道 */
   --cv-lane-md: #F76808;
   --cv-lane-svg: #8E8AE6;
   --cv-lane-pdf: #F5D90A;
   --cv-lane-unknown: #4C8DFF;
-  /* E · 蓝/状态族（10） */
+  /* E · 蓝/状态族 */
   --cv-blue-bg: #17202B;
   --cv-blue-line: #52769E;
   --cv-blue-ink: #93C5FD;
@@ -763,24 +729,19 @@
   --cv-read-ink: #CDE0CD;
   --cv-read-ink-strong: #84A584;
   --cv-unread: #E5484D;
-  /* F · 时光机状态（4；V7-D15 白名单同源） */
+  /* F · 时光机状态 */
   --cv-add: #30A46C;
   --cv-del: #E5484D;
   --cv-ref-out: #26C0DB;
-  --cv-trunk: #64646D; /* V7-D16 清偿：原 #232326/void 1.24 FAIL → 3.32 PASS；浅档 3.15 不动
-                          （候选 #606069 3.12 贴地、#6A6A73+ 亮过浅档，均否决）；唯一消费点 DTM 主干脊柱 */
-  /* 派生登记（见块头注释） */
-  --cv-on-brand: var(--cv-void); /* 主钮/阅读钮反白字：暗 6.22/hover 4.99 ✅（V7-D13） */
-  --cv-line-strong: #7D6B54; /* V7-D19 清偿：原 #675245 暗 card 2.42/void 2.65/panel 2.51 FAIL →
-                                3.46/3.79/3.59 PASS；=浅档现值→双主题同值（不选 #8A7761，亮过安静边线档）；
-                                唯一消费点 eventGraph.css hub 身份描边 */
-  /* starfix T3/T1 新增：底部药丸选中态（工票二选一冻结 #3B82F6，备选 #F97316 未启用并在此登记）。
-     只供 .cvw-pill-btn[aria-pressed='true']（底部药丸域），不与 --cv-seg-*（顶栏分段钮语法）串写。
-     反白字取 --cv-void（5.29:1 ✅）而非白（3.68:1 小字 FAIL）——同 --cv-on-brand 先例 */
+  --cv-trunk: #64646D; /* 时光机主干脊柱（暗底 3.32:1 图形级达标） */
+  /* 派生令牌 */
+  --cv-on-brand: var(--cv-void); /* 主钮/阅读钮反白字：暗底 6.22:1 / hover 4.99:1 */
+  --cv-line-strong: #7D6B54; /* eventGraph hub 身份描边（双主题图形对比度 ≥3.4:1） */
+  /* 底部药丸选中态：专供 .cvw-pill-btn[aria-pressed='true']，不与 --cv-seg-* 混用；
+     反白字取 --cv-void（5.29:1）而非纯白（3.68:1 小字不足 AA） */
   --cv-pill-active-bg: #3B82F6;
   --cv-pill-active-ink: var(--cv-void);
-  /* starfix T1 新增：事件轴标题框（fan-out 组头胶囊）三件套——暗档值=现渲染式原样收编成令牌
-     （lav 10% panel 底 + lav 描边 + lav-ink 字，视觉零变化）；浅档覆写在 light 块（#FFFFFF+#1F2937） */
+  /* 事件轴标题框（fan-out 组头胶囊）三件套：浅档覆写在下方 xray-light 块 */
   --cv-axis-title-bg: color-mix(in srgb, var(--cv-lav) 10%, var(--cv-panel));
   --cv-axis-title-line: color-mix(in srgb, var(--cv-lav) 25%, transparent);
   --cv-axis-title-ink: var(--cv-lav-ink);
@@ -801,9 +762,8 @@
 }
 
 .dark-porthole[data-canvas-theme='xray-light'] {
-  /* A · starfix T1 规格冻结（纸面档）：画布底 #F7F8FA、展开容器 #F0F2F5（绝不能是黑底！）、
-     内部卡片 #FFFFFF + 柔阴影（--cv-shadow-ink 30% 弥散既有配方承走在用阴影）。
-     层级照旧 void < panel < card，白卡浮在浅灰容器上靠 hairline 描边 + 柔阴影分界。 */
+  /* A · 纸面档底座与 chrome 面：画布底 #F7F8FA、展开容器 #F0F2F5、内部卡片 #FFFFFF；
+     层级 void < panel < card，白卡浮在浅灰容器上靠 hairline 描边与柔阴影分界。 */
   --cv-void: #F7F8FA;
   --cv-panel: #F0F2F5;
   --cv-card: #FFFFFF;
@@ -824,23 +784,21 @@
   --cv-ink-dim: var(--ink-soft);
   --cv-ink-ghost: var(--ink-faint);
   /* C */
-  --cv-brand: #B4530A; /* paper 4.77 文字图形双达标（现值纸 2.96 图形 FAIL，必须换值） */
+  --cv-brand: #B4530A; /* 浅底 4.77:1，文字与图形均满足对比度 */
   --cv-brand-hover: #9A4208;
   --cv-brand-ink: var(--accent-wave);
-  --cv-lav: #7C6FD0; /* 值同 --accent-iris，独立令牌（V7-D15） */
+  --cv-lav: #7C6FD0; /* 值同 --accent-iris，保持独立令牌避免语义串写 */
   --cv-lav-ink: var(--accent-iris-ink);
   --cv-amber: #A8762B; /* 值同 --stage-ink-decision，独立令牌 */
   --cv-amber-ink: #8A621E; /* 值同 --stage-ink-decision-text，独立令牌 */
   /* D */
   --cv-lane-md: #C2410C;
   --cv-lane-svg: #5B4BC4;
-  --cv-lane-pdf: #8A621E; /* 原值浅底 1.35 一票否决，降到琥珀褐 */
+  --cv-lane-pdf: #8A621E; /* 浅底降为琥珀褐以保证对比度 */
   --cv-lane-unknown: #2F5AA8;
   /* E */
   --cv-blue-bg: rgba(61, 108, 153, 0.08);
-  --cv-blue-line: #52769E; /* V7-D17 清偿：原 rgba(61,108,153,.45) 复合 paper 1.90/blueBg 1.84 FAIL →
-                              paper 4.49/blueBg 4.05 PASS；暗值不动 → 双主题同值（--cv-unread 先例；
-                              不调 #6C93BD——3.05 贴地且新增 hex） */
+  --cv-blue-line: #52769E; /* 浅底 4.49:1 / blueBg 4.05:1，双主题同值 */
   --cv-blue-ink: #3D6C99; /* 值同 blueprint-text，独立令牌 */
   --cv-link: #3D6C99;
   --cv-link-hover: #2F5AA8;
@@ -853,26 +811,25 @@
   --cv-add: #1F7A45;
   --cv-del: #C53030;
   --cv-ref-out: #0E7490;
-  --cv-trunk: #8D8AA6; /* paper 图形 3.15（候选 #A5A1B8 2.38 否决） */
+  --cv-trunk: #8D8AA6; /* 纸面底图形对比度 3.15:1 */
   /* 派生 */
-  --cv-on-brand: var(--paper-on-ink); /* 浅档主钮字 4.71 ✅ */
-  --cv-line-strong: #7D6B54; /* 降饱和暖褐：card 上 5.07 图形级 ✅（实跑） */
-  /* starfix T3/T1 浅档药丸选中态：#1F2937 底白字（14.65:1 ✅）——工票逐字冻结 */
+  --cv-on-brand: var(--paper-on-ink); /* 浅档主钮字 4.71:1 */
+  --cv-line-strong: #7D6B54; /* 降饱和暖褐：白卡上 5.07:1 图形级 */
+  /* 浅档底部药丸选中态：#1F2937 底白字（14.65:1） */
   --cv-pill-active-bg: #1F2937;
   --cv-pill-active-ink: #FFFFFF;
-  /* starfix T1 浅档事件轴标题框：#FFFFFF 底 + #1F2937 深灰字（工票冻结值）；描边降为墨色发丝线，
-     与白底卡同族（lav 描边在白底上会发飘） */
+  /* 浅档事件轴标题框：#FFFFFF 底 + #1F2937 深灰字；描边降为墨色发丝线，与白底卡同族 */
   --cv-axis-title-bg: #FFFFFF;
   --cv-axis-title-line: color-mix(in srgb, #1F2937 18%, transparent);
   --cv-axis-title-ink: #1F2937;
   --cv-seg-active-bg: var(--ink-anchor); /* =壳层控件语法 */
-  --cv-seg-active-ink: var(--paper-on-ink); /* 15.49 ✅ */
-  --cv-seg-idle: var(--ink-soft); /* slot 复合底上 5.79 ✅ */
+  --cv-seg-active-ink: var(--paper-on-ink); /* 15.49:1 */
+  --cv-seg-idle: var(--ink-soft); /* slot 复合底上 5.79:1 */
   --cv-seg-idle-hover: var(--ink-soft);
-  /* 纸面档悬浮阴影：轻盈冷灰层次，消除旧 68%~75% --cv-shadow-ink 产生的发闷紫云 */
+  /* 纸面档悬浮阴影：轻盈冷灰层次，消除高饱和阴影产生的紫晕 */
   --cv-shadow-elevated: 0 10px 28px -4px rgba(38, 36, 61, 0.10), 0 2px 6px rgba(38, 36, 61, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.85);
 
-  /* 浅色舷窗外壳（增补 §1.2）：柔光宣纸微渐变 + 玻璃发丝沿口 + 柔影 */
+  /* 浅色舷窗外壳：柔光宣纸微渐变 + 玻璃发丝沿口 + 柔影 */
   background-color: var(--cv-void);
   background-image:
     radial-gradient(760px 440px at 14% 8%, rgba(124, 111, 208, 0.065), transparent 65%),
@@ -881,10 +838,9 @@
   box-shadow: var(--glass-shadow);
 }
 
-/* 泳道光束滤镜按主题切换（增补 §1.4）：暗档强发光（stdDeviation 2.6），
-   浅档换 d3-stream-glow-soft（stdDeviation 1.2，GraphCanvasView defs 内同批新增）——
-   白底白光晕是糊化不是增益。stdDeviation 本体永不量化（勘察 §5.1 红线）。
-   光束元素从 filter 属性改挂本类（SVG 属性不吃主题切换，CSS 引用才能覆写）。 */
+/* 泳道光束滤镜按主题切换：暗档强发光（stdDeviation 2.6），
+   浅档换 d3-stream-glow-soft（stdDeviation 1.2，定义在 GraphCanvasView defs 内）——
+   白底强光晕会显得发糊。光束元素通过本类引用滤镜，避免 SVG filter 属性无法随主题覆写。 */
 .cv-stream-glow {
   filter: url(#d3-stream-glow);
 }
@@ -896,11 +852,10 @@
   opacity: 0.22;
 }
 
-/* 主题切换 morph（增补 §2.2）：只在翻转瞬间生效（App 挂 theme-morphing 320ms 后移除）。
-   为什么不是常驻一条 transition——transition 不继承，覆盖全子树必须 `*` 常驻，
-   会给画布所有 hover/瞬时色态永久加渐变，超出本批授权。
-   reduced-motion 撤除见文件尾 @media 块（必须与声明同文件且在其后，
-   否则 motion.css @import 先序 + 同特异性会输掉级联；motion.css §4 块一另留登记行）。 */
+/* 主题切换 morph：只在翻转瞬间生效（App 挂 theme-morphing 320ms 后移除）。
+   不常驻 `*` transition 是为了避免给画布所有 hover/瞬时色态永久附加渐变。
+   reduced-motion 撤除必须与声明同文件且在其后，否则 motion.css @import 先序 + 同特异性
+   会输掉级联（motion.css 文末另留登记声明）。 */
 .dark-porthole.theme-morphing,
 .dark-porthole.theme-morphing * {
   transition:
@@ -915,11 +870,10 @@
   .dark-porthole.theme-morphing,
   .dark-porthole.theme-morphing.theme-morphing,
   .dark-porthole.theme-morphing.theme-morphing * {
-    /* 切换瞬时完成，无过渡（登记处同步在 motion.css §4 块一）。
+    /* 切换瞬时完成，无过渡（motion.css 文末同步登记）。
        `.theme-morphing.theme-morphing` 双写是有意提高特异性：(0,3,0) 压过上方 (0,2,0)
        的 morph 过渡声明（舷窗根与全部后代两路都压住）——不依赖源码顺序，也不怕
-       压缩器把与 motion.css 同款 `transition:none` 规则去重合并到文件前部
-       （本会话 vite build 实证会发生）。 */
+       构建压缩器把与 motion.css 同款 `transition:none` 规则去重合并到文件前部。 */
     transition: none;
   }
 }
@@ -1207,11 +1161,11 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   动效基座（契约）—— 3 条通用 keyframes + 3 个工具类
+   画布动效基座 —— 3 条通用 keyframes + 3 个工具类
    · 只动 transform / opacity / stroke-dashoffset / background-position：
      全部走合成器或廉价栏，不触发布局（无 width/height/top/left）。
-   · 复用约定：其余三路只组合这里的类名与 :root 令牌（--ease-spring /
-     --dur-fast / --dur-pan），禁止各自新写 keyframes。
+   · 复用约定：画布侧组合这里的类名与 :root 令牌（--ease-spring /
+     --dur-fast / --dur-pan），避免重复定义 keyframes。
    · 每个工具类都有 prefers-reduced-motion 降级（见文件末尾）。
    ══════════════════════════════════════════════════════════════════════════ */
 
@@ -1241,7 +1195,7 @@
 }
 
 /* 3.3 呼吸波纹：「执行中 / 已同步」状态点的柔和扩散。
-   0.85→1.9 是契约幅度；72%~100% 停在不可见态，形成呼吸间歇而非连续抖动。 */
+   0.85→1.9 扩散幅度；72%~100% 停在不可见态，形成呼吸间歇而非连续抖动。 */
 @keyframes ripple-ping {
   0% {
     transform: scale(0.85);
@@ -1356,7 +1310,7 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   D04 · 阅读器锚点反向定位闪烁（决定/批注跳转到达时的「在这里」信号）
+   阅读器锚点反向定位闪烁（决定/批注跳转到达时的「在这里」信号）
    · 只动 box-shadow / outline-color：合成器或廉价栏，不触发布局。
    · 两轮脉冲约 1.05s×2，控制器 2.2s 后摘类（state 清零），残影不落 DOM。
    · reduced-motion：降为单次静态琥珀描边（保留定位信号，不闪动）。
@@ -1389,19 +1343,14 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   B0 · reduced-motion 底册（§6.6/D11；全局兜底留画布闸 B6）
-   原则照旧：停帧＋终态可见，不藏内容；
-   纯装饰层 display:none。默认（未开偏好）渲染零变化——只影响 reduce 用户。
-   划界（规范建议＋逐类落位）：
+   画布与遗留动效 reduced-motion 降级底册
+   原则：停帧＋终态可见，不藏内容；纯装饰层 display:none。
    · 画布功能流停帧保终态：dash-flow×2 / river-pulse / orbit-spin（终态＝静态线与静态轨道）
-   · 偶神与时刻停初始帧：chronos-float / chronos-shadow / wing×2 / clock×2 /
+   · 司辰与时刻停初始帧：chronos-float / chronos-shadow / wing×2 / clock×2 /
      staff-gem（元素保持可见，只不再动）
    · 纯装饰层整层隐藏：sonar-ripple / laser-sweep / sand-mote×3 /
      meteor×6 / star-twinkle / chronos-cast（施法波为一次性装饰层，不播即无残影）
-   · Tailwind animate-pulse（常驻呼吸点）：停帧＝恒亮，B4 批次将废除该常驻循环
-   · animate-spin（Loader2 加载）属功能流保留，本批不动（§6.2）
-   （v0.8 退役：dash-flow-reverse / orbit-spin-reverse / chronos-shimmer×2 /
-     chronos-flicker 类与 keyframes 已随退役面清扫删除，登记行同步撤除）
+   · Tailwind animate-pulse：停帧＝恒亮；animate-spin（Loader2 加载）属功能流保留
    ══════════════════════════════════════════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {
   .animate-dash-flow,
@@ -1437,9 +1386,9 @@
   }
 }
 
-/* ===== C03 · Ctrl+K 命令面板（Omnibox）=====
+/* ===== Ctrl+K 命令面板（Omnibox）=====
    1) 滚动条落于右侧 padding 槽内：scrollbar-gutter 预留稳定槽位 + 细滚动条，
-      悬浮式窄槽不遮挡命中摘要正文（任务卡 C03 / quiet-md search.rs 口径）； */
+      悬浮式窄槽不遮挡命中摘要正文； */
 .glx-palette-scroll {
   scrollbar-gutter: stable;
 }
@@ -1466,7 +1415,7 @@
   overflow: hidden;
 }
 
-/* ===== D02 · quiet-md 克制空间层级减法（侧栏与列表） =====
+/* ===== 克制空间层级减法（侧栏与列表分隔线） =====
    常规态：结构性分隔线降为极低透明度（--glass-hairline 再混 45% 透明），
    把高对比度视觉重心留给行动信号（未读点/拍板/聚光灯琥珀描边）；
    悬停相邻行（.quiet-row:hover）时其上分隔线平滑隐去（:has 相邻选择，

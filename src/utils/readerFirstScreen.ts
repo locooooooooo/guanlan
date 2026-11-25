@@ -1,8 +1,8 @@
 /**
- * 阅读器首屏渲染预算（AC-02）——纯函数 + 轻量性能测量，供 ReaderView 与单测共用。
+ * 阅读器首屏渲染预算——纯函数 + 轻量性能测量，供 ReaderView 与单测共用。
  *
- * AC-02 口径（PRD v2.0 验收表）：点击打开任意本地 Markdown 文档（含首次打开与
- * 切换文档）时「无『正在向智能体请求正文』阻塞遮罩，首屏渲染耗时 < 300ms」。
+ * 首屏目标：点击打开任意本地 Markdown 文档（含首次打开与
+ * 切换文档）时无「正在向智能体请求正文」阻塞遮罩，首屏渲染耗时 < 300ms。
  *
  * 两层职责：
  *  - resolveReaderBodyPhase：首屏框架（标题/工具栏/纸面）与正文读取态解耦——
@@ -15,7 +15,7 @@
  * 纪律：纯函数模块——禁 import .css / React；性能 API 缺失时回退 Date.now()。
  */
 
-/** AC-02 首屏渲染预算（PRD v2.0 验收表逐字） */
+/** 首屏渲染预算（300ms） */
 export const READER_FIRST_SCREEN_BUDGET_MS = 300;
 
 /** 纸面正文三态：错误 / 读取中 / 可渲染文章（含空正文的诚实空纸面） */
@@ -46,7 +46,7 @@ export interface ReaderFirstScreenSample {
   revisionId: string;
   /** 从 ReaderView 本次 screenKey 首次渲染到提交后 effect 的耗时（ms） */
   elapsedMs: number;
-  /** 是否在 AC-02 300ms 预算内 */
+  /** 是否在 300ms 首屏预算内 */
   withinBudget: boolean;
   /** 首屏提交时正文是否仍需异步读取（true = shell 先到、正文后到） */
   contentPending: boolean;
@@ -63,7 +63,7 @@ export function readerFirstScreenNowMs(): number {
 
 /**
  * 记录一次首屏渲染样本并写入 performance 时间线。
- * 返回的 withinBudget 是唯一判定口径（严格 < 300ms，与 PRD 验收表逐字一致）；
+ * 返回的 withinBudget 是唯一判定口径（严格 < 300ms）；
  * 超预算不抛错，由调用方告警。
  */
 export function recordReaderFirstScreenSample(input: {

@@ -21,9 +21,9 @@ import {
 import { getCanvasTheme, type CanvasTheme } from '../src/utils/canvasThemeStore';
 
 /**
- * U04 · 单文档版本时光机「司辰琉璃化」与纸面/夜航双主题 —— 契约测试。
+ * 单文档版本时光机「司辰琉璃化」与纸面/夜航双主题 —— 契约测试。
  *
- * 锁死四条量化验收口径（任务卡 §4 U04）：
+ * 锁死四条量化验收口径：
  *  ① 双主题切换：分段钮渲染 + 活值订阅 + 舷窗 DOM 直写（命令式，不入 React state）；
  *  ② 版本增量条纯函数：+add/-del 比例几何 + 数据源（服务端真实行数，无数据不伪造）；
  *  ③ 动效 reduced-motion 降级：新增类「声明 + 停帧」双登记，且只动 transform/opacity；
@@ -43,12 +43,12 @@ function cssRules(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, '');
 }
 
-/** U04 夹具：最小 FileRecord（时光机只读渲染，不触发取数——useEffect 在 SSR 不跑）。 */
+/** 时光机夹具：最小 FileRecord（时光机只读渲染，不触发取数——useEffect 在 SSR 不跑）。 */
 function makeFile(id: string): FileRecord {
   return {
     file_id: id,
     folder: '01-方案文档',
-    title: 'U04 时光机夹具',
+    title: '时光机夹具',
     relative_path: '01-方案文档/u04-time-machine.md',
     format: 'md',
     current_revision_id: 'rev_u04_3',
@@ -62,8 +62,8 @@ function renderMachine() {
     createElement(DocumentTimeMachineView, {
       active: true,
       file: makeFile('f_u04'),
-      frame: { fileId: 'f_u04', revisionId: 'rev_u04_3', name: 'U04 时光机夹具' },
-      trail: [{ fileId: 'f_u04', revisionId: 'rev_u04_3', name: 'U04 时光机夹具' }],
+      frame: { fileId: 'f_u04', revisionId: 'rev_u04_3', name: '时光机夹具' },
+      trail: [{ fileId: 'f_u04', revisionId: 'rev_u04_3', name: '时光机夹具' }],
       root: 'H:\\u04',
       files: [makeFile('f_u04')],
       relations: [],
@@ -77,7 +77,7 @@ function renderMachine() {
 
 // ---------- ① 双主题（纸面 / 夜航） ----------
 
-test('U04 双主题：分段钮渲染双态 + 活值自订阅 + 舷窗 DOM 命令式直写（主题值不入 React state）', () => {
+test('时光机·双主题：分段钮渲染双态 + 活值自订阅 + 舷窗 DOM 命令式直写（主题值不入 React state）', () => {
   const html = renderMachine();
   const text = html.replace(/<!-- -->/g, '');
 
@@ -117,7 +117,7 @@ test('U04 双主题：分段钮渲染双态 + 活值自订阅 + 舷窗 DOM 命�
   );
 });
 
-test('U04 双主题：浅/夜两档背板各有专属覆写块（点阵星尘 + 柔和光晕），且 CSS 零裸 hex/rgba', () => {
+test('时光机·双主题：浅/夜两档背板各有专属覆写块（点阵星尘 + 柔和光晕），且 CSS 零裸 hex/rgba', () => {
   const graphCss = readSrc('components/eventGraph.css');
   const rules = cssRules(graphCss);
 
@@ -146,7 +146,7 @@ test('U04 双主题：浅/夜两档背板各有专属覆写块（点阵星尘 + 
 
 // ---------- ② 版本增量条纯函数 ----------
 
-test('U04 版本增量条纯函数：比例几何逐字 + 无真实行数时诚实留空（零造数）', () => {
+test('时光机·版本增量条纯函数：比例几何逐字 + 无真实行数时诚实留空（零造数）', () => {
   // ① 常规：新增 12 / 删除 3 → 80% / 20%，文案 '+12/-3'
   const bar = computeVersionDeltaBar(12, 3);
   assert.equal(bar.added, 12);
@@ -185,7 +185,7 @@ test('U04 版本增量条纯函数：比例几何逐字 + 无真实行数时诚�
   assert.equal(dirty.label, '+0/-5');
 });
 
-test('U04 版本增量口径单一：节点卡只认章节级 diff 统计，与右侧面板/检查器同源（禁两套行数同屏）', () => {
+test('时光机·版本增量口径单一：节点卡只认章节级 diff 统计，与右侧面板/检查器同源（禁两套行数同屏）', () => {
   // 病根：节点卡曾用 history 事件 payload 的 added_lines（服务端整文件行级口径），
   // 右侧面板/检查器用章节级 computeSectionDiff 统计 → 同屏两个互相矛盾的行数
   // （卡 +4/-0 vs 面板 +8/-0）且未标注各自来源 → 命中「诚实边界」停机条件。
@@ -206,7 +206,7 @@ test('U04 版本增量口径单一：节点卡只认章节级 diff 统计，与�
 
 // ---------- ③ 动效契约（reduced-motion 降级 + 只动 transform/opacity） ----------
 
-test('U04 动效契约：新增动效类「声明 + 停帧」双登记，且只动 transform/opacity、只吃令牌时长', () => {
+test('时光机·动效契约：新增动效类「声明 + 停帧」双登记，且只动 transform/opacity、只吃令牌时长', () => {
   const motionCss = readSrc('styles/motion.css');
   const reduceSection = motionCss.slice(motionCss.indexOf('@media (prefers-reduced-motion: reduce)'));
 
@@ -247,7 +247,7 @@ test('U04 动效契约：新增动效类「声明 + 停帧」双登记，且只�
   );
 });
 
-test('U04 动效接线：司辰跟随位移量来自纯函数、切版流光环随选中版本重播、Diff 面板走 --dur-1 淡变', () => {
+test('时光机·动效接线：司辰跟随位移量来自纯函数、切版流光环随选中版本重播、Diff 面板走 --dur-1 淡变', () => {
   const tsx = readSrc('components/DocumentTimeMachineView.tsx');
 
   // ① 司辰跟随：位移量由纯函数算好后写进 CSS 自定义属性（组件内不写坐标公式）
@@ -270,7 +270,7 @@ test('U04 动效接线：司辰跟随位移量来自纯函数、切版流光环�
 
 // ---------- ④ 几何保绿（主干 path 逐字不变 + 引线落点 + 跟随上限） ----------
 
-test('U04 几何保绿：主干 path 与 trunkEnd ≤ 640 上界零回归，引线自贝塞尔脊柱精确落笔', () => {
+test('时光机·几何保绿：主干 path 与 trunkEnd ≤ 640 上界零回归，引线自贝塞尔脊柱精确落笔', () => {
   const html = renderMachine();
 
   // ① 主干 path 逐字不变（tl02 保绿：M 260 100 Q 252 200 260 {trunkEnd}）
@@ -303,7 +303,7 @@ test('U04 几何保绿：主干 path 与 trunkEnd ≤ 640 上界零回归，引�
   }
 });
 
-test('U04 相对时间纯函数：与绝对戳同锚点（occurred_at ?? observed_at），只换叙述不改口径', () => {
+test('时光机·相对时间纯函数：与绝对戳同锚点（occurred_at ?? observed_at），只换叙述不改口径', () => {
   const now = Date.parse('2026-11-22T10:00:00');
 
   // ① 今天 / 昨天（仅日期锚点按本地日历日解析，不走 UTC 零点）
@@ -328,7 +328,7 @@ test('U04 相对时间纯函数：与绝对戳同锚点（occurred_at ?? observe
 
 // ---------- ⑤ 主题切换的活值层联动（不造第二套口径） ----------
 
-test('U04 主题活值层：分段钮激活态跟存活值翻转（同值短路，零重渲整树）', () => {
+test('时光机·主题活值层：分段钮激活态跟存活值翻转（同值短路，零重渲整树）', () => {
   const seen: CanvasTheme[] = [];
   const off = (() => {
     // 订阅口在 store 内；此处只断言活值翻转与分段钮激活态一致
@@ -348,7 +348,7 @@ test('U04 主题活值层：分段钮激活态跟存活值翻转（同值短路�
 
 // ---------- ⑥ 实机回归护栏：下钻时光机不得整树崩白屏 ----------
 
-test('U04 实机回归：同任务包分组 <details> 的 onToggle 不得在 setState updater 内读 e.currentTarget', () => {
+test('时光机·实机回归：同任务包分组 <details> 的 onToggle 不得在 setState updater 内读 e.currentTarget', () => {
   // 病根：React 在事件派发结束即把 currentTarget 置 null，而 setState 的 updater
   // 可能延后到渲染期才执行——updater 内读 e.currentTarget.open 会抛 TypeError，
   // 连带整棵树崩成白屏（实机复现：星图 → 来源面板 → 单文档时光机下钻）。
@@ -366,7 +366,7 @@ test('U04 实机回归：同任务包分组 <details> 的 onToggle 不得在 set
 
 // ---------- ⑦ 浮层遮挡避让（Diff 面板压住版本轴） ----------
 
-test('U04 浮层避让：面板展开时卡面右缘让出遮挡带（角标/比例条/文字不被浮层硬切）', () => {
+test('时光机·浮层避让：面板展开时卡面右缘让出遮挡带（角标/比例条/文字不被浮层硬切）', () => {
   // 病根：DiffSidePane 以 absolute inset-y-0 right-0 叠在 .event-plot 上，
   // 面板左缘落在 viewBox x≈302（画布右侧 62%），而版本卡右缘在 335 → 重叠 33 单位
   // （卡面 22% 被压：「当前」角标 100% 不可见、「初始基线」约 41% 被遮、
@@ -408,7 +408,7 @@ test('U04 浮层避让：面板展开时卡面右缘让出遮挡带（角标/比
 
 // ---------- ⑧ 纸面档层级倒挂 / 收起把手 / 纸面光晕 ----------
 
-test('U04 纸面档层级：chrome 大板走白卡浮于浅底（与星图纸面语言一致），夜航档不变', () => {
+test('时光机·纸面档层级：chrome 大板走白卡浮于浅底（与星图纸面语言一致），夜航档不变', () => {
   const graphCss = readSrc('components/eventGraph.css');
   // ① 浅档：工具条 / 检查器 / 缩放条 / 分页条 → --cv-card（纯白）而非更暗的 --cv-panel
   assert.ok(
@@ -433,7 +433,7 @@ test('U04 纸面档层级：chrome 大板走白卡浮于浅底（与星图纸面
   assert.ok(!darkPaneBlock.includes('--cv-panel: var(--cv-card)'), '夜航档保持 --cv-panel 原值');
 });
 
-test('U04 收起把手：竖排裸文字改横排（禁 Latin 侧倒字带），信息不删', () => {
+test('时光机·收起把手：竖排裸文字改横排（禁 Latin 侧倒字带），信息不删', () => {
   const graphCss = readSrc('components/eventGraph.css');
   assert.ok(
     graphCss.includes('[data-machine-diff-pane="collapsed"] span'),
@@ -450,7 +450,7 @@ test('U04 收起把手：竖排裸文字改横排（禁 Latin 侧倒字带），
   assert.ok(handleBlock.includes('white-space: nowrap'), '横排标签整行不折行');
 });
 
-test('U04 纸面档主干：光晕浓度提高（浅底上光轴须读得出「发光」）', () => {
+test('时光机·纸面档主干：光晕浓度提高（浅底上光轴须读得出「发光」）', () => {
   const graphCss = readSrc('components/eventGraph.css');
   assert.ok(
     graphCss.includes(".dark-porthole[data-canvas-theme='xray-light'] .machine-trunk-halo"),
@@ -462,7 +462,7 @@ test('U04 纸面档主干：光晕浓度提高（浅底上光轴须读得出「�
   assert.ok(opacity > 0.14, `浅档光晕浓度须高于夜航档的 .14（实测 ${opacity}）`);
 });
 
-test('U04 流光引线：新增动效类须「声明 + 停帧」双登记，描边动画只用于轻量微图元', () => {
+test('时光机·流光引线：新增动效类须「声明 + 停帧」双登记，描边动画只用于轻量微图元', () => {
   const motionCss = readSrc('styles/motion.css');
   const reduceSection = motionCss.slice(motionCss.indexOf('@media (prefers-reduced-motion: reduce)'));
   assert.ok(motionCss.includes('.glx-machine-lead-flow'), 'motion.css 应声明流光引线类');
@@ -493,8 +493,8 @@ test('U04 流光引线：新增动效类须「声明 + 停帧」双登记，描�
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
-   U05 · 阅读器极简顶栏 / 琉璃阅读进度光条 / 文档迷你版本轴 / 专注纸面（Zen）
-   —— 契约测试（任务卡 v1.1 §4 U05）。
+   阅读器极简顶栏 / 琉璃阅读进度光条 / 文档迷你版本轴 / 专注纸面（Zen）
+   —— 契约测试。
    锁死四条量化验收口径：
     ① 顶栏减密：长相对路径与文件 ID 移入「标题悬浮信息卡 / ··· 菜单」，主行只留锚点；
     ② 进度光条：scaleX 纯计算（钳位/非法值）+ 单一数据源（复用 handleMarkdownScroll 的 pct）
@@ -516,7 +516,7 @@ import {
 import { ReaderView } from '../src/components/ReaderView';
 import type { DecisionAssertion, FileRecord, RelationEdge } from '../src/types/guanlan';
 
-/** U05 夹具：三版文档（修订链 v1 → v3），末版含章节级变更。 */
+/** 阅读器夹具：三版文档（修订链 v1 → v3），末版含章节级变更。 */
 function u05Revisions(): MiniVersionAxisRevision[] {
   return [
     {
@@ -554,7 +554,7 @@ function u05File(): FileRecord {
   return {
     file_id: 'f_u05',
     relative_path: '01-方案文档/u05-reader.md',
-    title: 'U05 阅读器夹具',
+    title: '阅读器夹具',
     format: 'md',
     folder: '01-方案文档',
     role: '说明',
@@ -592,7 +592,7 @@ function u05ReaderProps(file: FileRecord) {
 
 // ---------- ① 进度光条：scaleX 纯计算 + 单一数据源 + 只动 transform ----------
 
-test('U05 进度光条纯函数：百分比 → scaleX 换算（钳位 / 非法值 / 端点逐字）', () => {
+test('阅读器·进度光条纯函数：百分比 → scaleX 换算（钳位 / 非法值 / 端点逐字）', () => {
   assert.equal(computeReadingProgressScaleX(0), 0, '起点恒 0');
   assert.equal(computeReadingProgressScaleX(1), 0.01);
   assert.equal(computeReadingProgressScaleX(50), 0.5);
@@ -608,7 +608,7 @@ test('U05 进度光条纯函数：百分比 → scaleX 换算（钳位 / 非法�
   }
 });
 
-test('U05 进度光条接线：数据源复用 handleMarkdownScroll 的同一 pct，只动 scaleX（禁动画 width）', () => {
+test('阅读器·进度光条接线：数据源复用 handleMarkdownScroll 的同一 pct，只动 scaleX（禁动画 width）', () => {
   const controller = readSrc('components/reader/useReaderController.tsx');
   const readerView = readSrc('components/ReaderView.tsx');
 
@@ -667,7 +667,7 @@ test('U05 进度光条接线：数据源复用 handleMarkdownScroll 的同一 pc
 
 // ---------- ② 迷你版本轴：修订链序 + 概览 + 入口 ----------
 
-test('U05 迷你版本轴纯函数：修订链序 vN → … → v1（禁按日期排）+ 当前/最新标记 + 变动概览', () => {
+test('阅读器·迷你版本轴纯函数：修订链序 vN → … → v1（禁按日期排）+ 当前/最新标记 + 变动概览', () => {
   const nodes = buildMiniVersionAxis(u05Revisions(), 'rev_u05_2', 'rev_u05_3');
   assert.equal(nodes.length, 3);
   assert.deepEqual(
@@ -712,7 +712,7 @@ test('U05 迷你版本轴纯函数：修订链序 vN → … → v1（禁按日�
   );
 });
 
-test('U05 迷你版本轴渲染：玻璃微型修订链 + 切版/比对入口 + 进入版本时光机', () => {
+test('阅读器·迷你版本轴渲染：玻璃微型修订链 + 切版/比对入口 + 进入版本时光机', () => {
   const nodes = buildMiniVersionAxis(u05Revisions(), 'rev_u05_3', 'rev_u05_3');
   const html = renderToString(
     createElement(ReaderMiniVersionAxis, {
@@ -750,7 +750,7 @@ test('U05 迷你版本轴渲染：玻璃微型修订链 + 切版/比对入口 + 
   assert.equal(canOpenTimeMachine('pdf'), false, 'PDF 不在时光机路由集合内');
 });
 
-test('U05 迷你版本轴接线：版本胶囊可点开 + 切版/比对/时光机三条动作各有落点', () => {
+test('阅读器·迷你版本轴接线：版本胶囊可点开 + 切版/比对/时光机三条动作各有落点', () => {
   const chrome = readSrc('components/reader/readerChromeSections.tsx');
   const controller = readSrc('components/reader/useReaderController.tsx');
   const stage = readSrc('components/app/AppLibraryStage.tsx');
@@ -776,7 +776,7 @@ test('U05 迷你版本轴接线：版本胶囊可点开 + 切版/比对/时光�
 
 // ---------- ③ 顶栏减密 ----------
 
-test('U05 顶栏减密：长相对路径与文件 ID 移出主行（进标题悬浮信息卡 / ··· 菜单）', () => {
+test('阅读器·顶栏减密：长相对路径与文件 ID 移出主行（进标题悬浮信息卡 / ··· 菜单）', () => {
   const chrome = readSrc('components/reader/readerChromeSections.tsx');
   const file = u05File();
   const html = renderToString(createElement(ReaderView, u05ReaderProps(file)));
@@ -810,7 +810,7 @@ test('U05 顶栏减密：长相对路径与文件 ID 移出主行（进标题悬
 
 // ---------- ④ Zen 专注纸面 ----------
 
-test('U05 Zen 状态机纯函数：按钮恒切；快捷键在编辑面/浮层/非阅读态一律让路', () => {
+test('阅读器·Zen 状态机纯函数：按钮恒切；快捷键在编辑面/浮层/非阅读态一律让路', () => {
   // ① 顶栏按钮：恒可切（退出专注的唯一路径不被任何护栏堵死）
   const on = resolveZenToggle({
     zenMode: false,
@@ -880,7 +880,7 @@ test('U05 Zen 状态机纯函数：按钮恒切；快捷键在编辑面/浮层/�
   assert.equal(diff.reason, 'shortcut-ignored-submode');
 });
 
-test('U05 Zen 接线：顶栏一键 + Z 快捷键 + 壳层收起左右侧栏（进入/退出成对）', () => {
+test('阅读器·Zen 接线：顶栏一键 + Z 快捷键 + 壳层收起左右侧栏（进入/退出成对）', () => {
   const chrome = readSrc('components/reader/readerChromeSections.tsx');
   const controller = readSrc('components/reader/useReaderController.tsx');
   const stage = readSrc('components/app/AppLibraryStage.tsx');
@@ -904,7 +904,7 @@ test('U05 Zen 接线：顶栏一键 + Z 快捷键 + 壳层收起左右侧栏（�
 
 // ---------- ⑤ 动效契约（reduced-motion 降级 + 只动 transform/opacity） ----------
 
-test('U05 动效契约：三个新增类「声明 + 停帧」双登记，且只动 transform/opacity、只吃令牌时长', () => {
+test('阅读器·动效契约：三个新增类「声明 + 停帧」双登记，且只动 transform/opacity、只吃令牌时长', () => {
   const motionCss = readSrc('styles/motion.css');
   const reduceSection = motionCss.slice(motionCss.indexOf('@media (prefers-reduced-motion: reduce)'));
 
@@ -950,7 +950,7 @@ test('U05 动效契约：三个新增类「声明 + 停帧」双登记，且只�
   );
 });
 
-test('U05 阅读器首屏与既有护栏零回归：冷启动 SSR 仍 < 300ms 且光条/微轴零阻塞', () => {
+test('阅读器·阅读器首屏与既有护栏零回归：冷启动 SSR 仍 < 300ms 且光条/微轴零阻塞', () => {
   const file = u05File();
   const html = renderToString(createElement(ReaderView, u05ReaderProps(file)));
   assert.ok(html.includes('data-reader-shell'), '首屏 shell 锚点仍在');
@@ -964,7 +964,7 @@ test('U05 阅读器首屏与既有护栏零回归：冷启动 SSR 仍 < 300ms �
 
 // ---------- ⑥ 实机走查修复（第二批） ----------
 
-test('U05 走查修复：迷你版本轴弹层锚 header 底沿展开（避让 Row2 查看模式条）+ outside-click 收口', () => {
+test('阅读器·走查修复：迷你版本轴弹层锚 header 底沿展开（避让 Row2 查看模式条）+ outside-click 收口', () => {
   const chrome = readSrc('components/reader/readerChromeSections.tsx');
   const controller = readSrc('components/reader/useReaderController.tsx');
 
@@ -975,7 +975,7 @@ test('U05 走查修复：迷你版本轴弹层锚 header 底沿展开（避让 R
   const axisBlock = axis.slice(axisStart, axis.indexOf('>', axisStart));
   assert.ok(axisBlock.includes('top-full') && axisBlock.includes('left-5'), '弹层须锚 header 底沿向下展开');
   // 结构锁：header 内的条件渲染块位于 Row2（Stepper）之后，即挂在 header 根节点末尾
-  const row2Idx = chrome.indexOf('wf_4：所属专项 + 五阶段 Stepper 并入 Row 2 右侧');
+  const row2Idx = chrome.indexOf('所属专项 + 五阶段 Stepper 收拢为紧凑下拉胶囊，按需展开五阶段跳转');
   const mountIdx = chrome.indexOf('{versionAxisOpen && (', row2Idx);
   assert.ok(mountIdx > row2Idx, '弹层挂载点必须位于 Row2 之后（header 根节点内）');
   assert.ok(!/relative">\s*{versionAxisOpen/.test(chrome), '弹层不得再嵌回版本胶囊的 relative 包裹层');
@@ -988,7 +988,7 @@ test('U05 走查修复：迷你版本轴弹层锚 header 底沿展开（避让 R
   );
 });
 
-test('U05 走查修复：三处玻璃浮层近不透明换底（封堵正文笔画透印）+ 双态可读', () => {
+test('阅读器·走查修复：三处玻璃浮层近不透明换底（封堵正文笔画透印）+ 双态可读', () => {
   const chrome = readSrc('components/reader/readerChromeSections.tsx');
   // 白玻璃 .glass-pop 原 0.95 透率实测透印（复合亮度 247/255 ≈1.05:1）；
   // 0.985 → 复合亮度 252.6/255（Δ2.4 级），1× 不可辨；夜航档同值
@@ -1007,7 +1007,7 @@ test('U05 走查修复：三处玻璃浮层近不透明换底（封堵正文笔�
   assert.ok(!chrome.includes('rgba(24, 27, 36, 0.97)'), '旧 0.97 透率残留须清零（口径统一）');
 });
 
-test('U05 走查修复：主行单行化（<2xl 大纲/昼夜收为图标钮，aria-label 提供可读名）+ 返回横幅文案去工程语感', () => {
+test('阅读器·走查修复：主行单行化（<2xl 大纲/昼夜收为图标钮，aria-label 提供可读名）+ 返回横幅文案去工程语感', () => {
   const chrome = readSrc('components/reader/readerChromeSections.tsx');
 
   // ① 1440 主配置（目录栏展开）：大纲 + 昼夜合计省 ~104px，四大锚点同回 Row1 一行
@@ -1032,7 +1032,7 @@ test('U05 走查修复：主行单行化（<2xl 大纲/昼夜收为图标钮，a
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
-   U06 · 右侧溯源检查器「时光轨迹卡」与文件历史抽屉重构 —— 契约测试（任务卡 v1.1 §4 U06）。
+   右侧溯源检查器「时光轨迹卡」与文件历史抽屉重构 —— 契约测试。
    锁死量化验收口径：
     ① 时光轨迹卡纯函数映射三边界：多版本（最近 4 节点 + 诚实收纳计数）/
        单版本（唯一基线，不渲染假差异入口）/ 已淘汰快照（仅元数据，diff 全禁）；
@@ -1055,7 +1055,7 @@ import {
 } from '../src/components/RightInspector';
 import { FileTimelineDrawer } from '../src/components/FileTimelineDrawer';
 
-/** U06 夹具：N 个版本的修订链（chain 自 v1 → vN），可指定第几版起快照淘汰。 */
+/** 检查器夹具：N 个版本的修订链（chain 自 v1 → vN），可指定第几版起快照淘汰。 */
 function u06Revisions(n: number, opts?: { evictFromVersion?: number }): TimeTrailRevision[] {
   const evictFrom = opts?.evictFromVersion ?? Number.POSITIVE_INFINITY;
   return Array.from({ length: n }, (_, i) => {
@@ -1081,12 +1081,12 @@ function u06InspectorFile(overrides?: Partial<FileRecord>): FileRecord {
     file_id: 'f_u06_main',
     content_sha256: `sha_${rev.revision_id}`,
     sizeBytes: 2048,
-    summaryNote: rev.versionNumber === 6 ? 'U06 检查器夹具的当前版摘要。' : '',
+    summaryNote: rev.versionNumber === 6 ? '检查器夹具的当前版摘要。' : '',
   }));
   return {
     file_id: 'f_u06_main',
     relative_path: '02-会议纪要/u06-z-main.md',
-    title: 'U06 检查器夹具',
+    title: '检查器夹具',
     format: 'md',
     folder: '02-会议纪要',
     role: '说明',
@@ -1099,12 +1099,12 @@ function u06InspectorFile(overrides?: Partial<FileRecord>): FileRecord {
   } as unknown as FileRecord;
 }
 
-/** U06 夹具：同包第三份文档（阅读序在选中文档之后，供「下游」按钮落位）。 */
+/** 检查器夹具：同包第三份文档（阅读序在选中文档之后，供「下游」按钮落位）。 */
 function u06NextFile(): FileRecord {
   return {
     file_id: 'f_u06_next',
     relative_path: '02-会议纪要/u06-z-next.md',
-    title: 'U06 下游文档',
+    title: '下游文档',
     format: 'md',
     folder: '02-会议纪要',
     role: '说明',
@@ -1131,7 +1131,7 @@ function u06PeerFile(): FileRecord {
   return {
     file_id: 'f_u06_peer',
     relative_path: '02-会议纪要/u06-peer.md',
-    title: 'U06 对端文档',
+    title: '对端文档',
     format: 'md',
     folder: '02-会议纪要',
     role: '说明',
@@ -1184,7 +1184,7 @@ const u06Decisions = [
     code: 'D-U06-1',
     status: '待确认',
     namespace: '方案',
-    question: 'U06 待拍板决策：是否采纳背景方案？',
+    question: '待拍板决策：是否采纳背景方案？',
     isCandidateOnly: false,
     evidences: [{ file_id: 'f_u06_main' }],
   },
@@ -1193,7 +1193,7 @@ const u06Decisions = [
     code: 'D-U06-2',
     status: '已确认',
     namespace: '方案',
-    question: 'U06 已生效决策：范围已锁定。',
+    question: '已生效决策：范围已锁定。',
     isCandidateOnly: false,
     evidences: [{ file_id: 'f_u06_main' }],
   },
@@ -1202,7 +1202,7 @@ const u06Decisions = [
     code: 'D-U06-3',
     status: '待确认',
     namespace: '编织',
-    question: 'U06 候选线索（未定案）。',
+    question: '候选线索（未定案）。',
     isCandidateOnly: true,
     evidences: [{ file_id: 'f_u06_main' }],
   },
@@ -1230,7 +1230,7 @@ function u06InspectorProps(file: FileRecord) {
 
 // ---------- ① 时光轨迹卡纯函数：三边界映射 ----------
 
-test('U06 时光轨迹纯函数·多版本边界：链序 vN→v1、最近 4 节点、诚实收纳计数（零丢版零造数）', () => {
+test('检查器·时光轨迹纯函数·多版本边界：链序 vN→v1、最近 4 节点、诚实收纳计数（零丢版零造数）', () => {
   const model: TimeTrailModel = buildTimeTrail(
     u06Revisions(6),
     'rev_u06_6',
@@ -1274,7 +1274,7 @@ test('U06 时光轨迹纯函数·多版本边界：链序 vN→v1、最近 4 节
   assert.ok(!model.nodes[0].observedLabel.includes('T'));
 });
 
-test('U06 时光轨迹纯函数·单版本与空链边界：唯一基线不渲染假差异入口，空输入诚实零节点', () => {
+test('检查器·时光轨迹纯函数·单版本与空链边界：唯一基线不渲染假差异入口，空输入诚实零节点', () => {
   const single = buildTimeTrail(u06Revisions(1), 'rev_u06_1', 'rev_u06_1');
   assert.equal(single.boundary, 'single');
   assert.equal(single.nodes.length, 1);
@@ -1301,7 +1301,7 @@ test('U06 时光轨迹纯函数·单版本与空链边界：唯一基线不渲�
   assert.equal(dirty.boundary, 'empty', '无身份的版本行不得计入轨迹');
 });
 
-test('U06 时光轨迹纯函数·已淘汰快照边界：仅保留元数据、diff 全禁、绝不冒充可读旧版', () => {
+test('检查器·时光轨迹纯函数·已淘汰快照边界：仅保留元数据、diff 全禁、绝不冒充可读旧版', () => {
   const evictedAll = buildTimeTrail(
     u06Revisions(6, { evictFromVersion: 1 }),
     'rev_u06_6',
@@ -1338,7 +1338,7 @@ test('U06 时光轨迹纯函数·已淘汰快照边界：仅保留元数据、di
 
 // ---------- ② 三卡结构 SSR ----------
 
-test('U06 SSR·时光轨迹卡：链序锚点 + 当前版差异默认展开 + 收纳行 + 时光机入口（md 可跳 / pdf 无假入口）', () => {
+test('检查器·SSR·时光轨迹卡：链序锚点 + 当前版差异默认展开 + 收纳行 + 时光机入口（md 可跳 / pdf 无假入口）', () => {
   const html = renderToString(
     createElement(RightInspector, u06InspectorProps(u06InspectorFile()))
   );
@@ -1357,7 +1357,7 @@ test('U06 SSR·时光轨迹卡：链序锚点 + 当前版差异默认展开 + �
   assert.ok(text.includes('其余 2 个更早版本'), '收纳行文案在位');
   assert.ok(html.includes('data-trail-open-time-machine'), 'md 文档提供「进入版本时光机」入口');
   assert.ok(text.includes('进入版本时光机 →'), '时光机入口文案在位');
-  assert.ok(html.includes('data-unread-status'), '未读三态标签在轨迹卡头（GL-01 消费不丢）');
+  assert.ok(html.includes('data-unread-status'), '未读三态标签在轨迹卡头（未读状态消费不丢）');
   assert.ok(text.includes('未读新件（尚未建立阅读基线）'), '无基线时未读文案如实呈现');
 
   // pdf：不渲染时光机入口（canOpenTimeMachine 单一口径——不做跳过去发现没有的假入口）
@@ -1370,7 +1370,7 @@ test('U06 SSR·时光轨迹卡：链序锚点 + 当前版差异默认展开 + �
   assert.ok(!pdfHtml.includes('data-trail-open-time-machine'), 'pdf 不渲染时光机入口');
 });
 
-test('U06 SSR·双向引用卡：正/反向分组折叠 + 关系胶囊行号微标 + 悬停气泡预览目标摘要', () => {
+test('检查器·SSR·双向引用卡：正/反向分组折叠 + 关系胶囊行号微标 + 悬停气泡预览目标摘要', () => {
   const html = renderToString(
     createElement(RightInspector, u06InspectorProps(u06InspectorFile()))
   );
@@ -1411,7 +1411,7 @@ test('U06 SSR·双向引用卡：正/反向分组折叠 + 关系胶囊行号微�
   assert.ok(decisionPreview.startsWith('决策问题：') && decisionPreview.endsWith('…'), '决策对端走问题口径并截断');
 });
 
-test('U06 SSR·决策与归属卡：待拍板/已定案/候选三桶（SSOT 同源）+ 专项上下游', () => {
+test('检查器·SSR·决策与归属卡：待拍板/已定案/候选三桶（SSOT 同源）+ 专项上下游', () => {
   const html = renderToString(
     createElement(RightInspector, u06InspectorProps(u06InspectorFile()))
   );
@@ -1435,7 +1435,7 @@ test('U06 SSR·决策与归属卡：待拍板/已定案/候选三桶（SSOT 同�
 
 // ---------- ③ 三口径时间语义与只读边界（源码契约） ----------
 
-test('U06 时间语义·三口径绝不合并一行 + 只读边界零基线写点', () => {
+test('检查器·时间语义·三口径绝不合并一行 + 只读边界零基线写点', () => {
   const inspectorSrc = readSrc('components/RightInspector.tsx');
 
   // ① 三口径各自独立行（检查器 ⓘ 明细），绝无合并的「时间」单行标签
@@ -1477,7 +1477,7 @@ test('U06 时间语义·三口径绝不合并一行 + 只读边界零基线写�
 
 // ---------- ④ 文件历史抽屉：glx-t-panel 弹簧抽屉与动效契约 ----------
 
-test('U06 抽屉动效·glx-t-panel 双轨 + 两段式入场（现役 glx-drawer-in 零叠加）', () => {
+test('检查器·抽屉动效·glx-t-panel 双轨 + 两段式入场（现役 glx-drawer-in 零叠加）', () => {
   const drawerSrc = readSrc('components/FileTimelineDrawer.tsx');
   const motionCss = readSrc('styles/motion.css');
   const reduceSection = motionCss.slice(motionCss.indexOf('@media (prefers-reduced-motion: reduce)'));
@@ -1517,7 +1517,7 @@ test('U06 抽屉动效·glx-t-panel 双轨 + 两段式入场（现役 glx-drawer
   );
 });
 
-test('U06 抽屉 SSR·关闭零 DOM + 开启首帧偏移态可见（弹簧入场的可测中间态）', () => {
+test('检查器·抽屉 SSR·关闭零 DOM + 开启首帧偏移态可见（弹簧入场的可测中间态）', () => {
   const noop = () => {};
   const closed = renderToString(
     createElement(FileTimelineDrawer, {
@@ -1544,7 +1544,7 @@ test('U06 抽屉 SSR·关闭零 DOM + 开启首帧偏移态可见（弹簧入场
   assert.ok(open.includes('aria-label="文件时间线"'), '对话框语义与可读名在位');
 });
 
-test('U06 抽屉精简·冗余技术字段收纳 + 竖轴节点锚点在位', () => {
+test('检查器·抽屉精简·冗余技术字段收纳 + 竖轴节点锚点在位', () => {
   const drawerSrc = readSrc('components/FileTimelineDrawer.tsx');
 
   // ① size KB 不再逐节点平铺卡面头行——只保留「版本徽标 title + 正文预览头」两处收纳出口
@@ -1559,7 +1559,7 @@ test('U06 抽屉精简·冗余技术字段收纳 + 竖轴节点锚点在位', ()
   assert.ok(drawerSrc.includes('data-timeline-node='), '节点行锚点');
   assert.ok(drawerSrc.includes('data-timeline-node-kind='), '节点类型锚点（版本/事件）');
 
-  // ③ 诚实语义保留：TA-03 时间依据与精度标注未被精简掉（绝不为减字丢口径）
+  // ③ 诚实语义保留：时间依据与精度标注未被精简掉（绝不为减字丢口径）
   assert.ok(drawerSrc.includes('timeBasisLabel(rev.occurred_source)'), 'occurred 依据标注在位');
   assert.ok(drawerSrc.includes("'仅日期' : '含时刻'"), 'occurred 精度标注在位');
   assert.ok(

@@ -1,8 +1,8 @@
 /**
- * 画布主题（舷窗局部）本机持久化（v0.7 设计增补 §1.1）。
+ * 画布主题（舷窗局部）本机持久化。
  *
  * 作用域是 .dark-porthole 画布舷窗，不是全局主题：壳层在两主题下恒浅玻璃
- * （v0.6 冻结「浅壳+暗舷窗」），键名刻意带 canvasTheme 而不是 theme——
+ * （保持「浅壳+暗舷窗」结构），键名刻意带 canvasTheme 而不是 theme——
  * 防止后来者把它当全局主题复用。值只有两档：'xray-dark'（夜航，默认）/
  * 'xray-light'（纸面）。形制照 readingStateStore.ts：裸字符串 + try/catch，
  * 读取失败/无值/非法值一律回默认，绝不让画布起不来。
@@ -46,10 +46,10 @@ export function saveCanvasTheme(theme: CanvasTheme): void {
   }
 }
 
-/* ── 活值层（评审第 2 轮延迟项新增） ────────────────────────────────────────────
+/* ── 活值层 ───────────────────────────────────────────────────────────────────
  * 背景：切换此前是 App useState——一次翻转=整棵 App 树两次重渲（canvasTheme 提交 +
  * themeMorphing 类提交），数千 SVG 节点的 reconciliation 与两次全子树样式失效相乘，
- * 评审实测点击→过渡 2.1s、类移除 4.2s。现在主题值住在本模块（内存单例），
+ * 实测点击→过渡 2.1s、类移除 4.2s。现在主题值住在本模块（内存单例），
  * 舷窗 data-canvas-theme / theme-morphing 由宿主 App 命令式直写 DOM；
  * 只有分段钮与页签 theme 两个叶子经 useSyncExternalStore 订阅——翻转零重子树重渲。
  * node 裸环境（测试）无 window：readCanvasTheme 守卫回默认，订阅层照常可用。 */

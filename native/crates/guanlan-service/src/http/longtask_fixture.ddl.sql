@@ -1,4 +1,4 @@
--- 长任务批次 http 集成测试夹具 DDL
+-- 长任务端点 http 集成测试夹具 DDL
 -- = contract-storage.md §1.1（v1 全表）+ §4.3（schema v2 全部新表）逐字一致
 CREATE TABLE IF NOT EXISTS workspaces (
   workspace_id       TEXT PRIMARY KEY,

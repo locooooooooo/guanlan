@@ -23,7 +23,7 @@ import {
 } from '../src/services/workspaceClient';
 
 /**
- * 批次一：/api/v1 workspaceClient 的 node:test（本地 http 桩，无外部依赖）。
+ * /api/v1 workspaceClient 的 node:test（本地 http 桩，无外部依赖）。
  *
  * 覆盖（契约 native/docs/contract-query-api.md）：
  * - bootstrap 解析（§1.1）；
@@ -395,7 +395,7 @@ describe('workspaceClient /api/v1（本地 http 桩）', () => {
         handler: (_req, res, url) => {
           pageCalls += 1;
           assert.equal(url.searchParams.get('order'), 'seq_asc');
-          // issue #24 + A05：include 只在首页发送（文件级集合含 aliases，不随版本页重复传输）
+          // include 只在首页发送（文件级集合含 aliases，不随版本页重复传输）
           assert.equal(
             url.searchParams.get('include'),
             pageCalls === 1 ? 'events,statements,edges,aliases' : null,
@@ -514,7 +514,7 @@ describe('workspaceClient /api/v1（本地 http 桩）', () => {
     }
   });
 
-  test('issue #20 迁移：阅读器链路走 /revisions 分页（fetchFileHistory → revisionsFromHistory），include 仅首页发送', async () => {
+  test('阅读器链路走 /revisions 分页（fetchFileHistory → revisionsFromHistory），include 仅首页发送', async () => {
     // /detail 兼容视图退场后，阅读器版本链统一走 §1.7 分页端点：
     // snake_case wire（seq/occurred_at/size_bytes）→ revisionsFromHistory，
     // changedSectionsFromPrev 由首页 modified 事件 payload 归档。
@@ -584,7 +584,7 @@ describe('workspaceClient /api/v1（本地 http 桩）', () => {
       setApiBaseUrl(stub.base);
       const history = await fetchFileHistory('file_svg');
       assert.ok(history, '版本链读取成功');
-      // include 参数只在首页出现（issue #24：续页不再请求文件级附集合）
+      // include 参数只在首页出现（续页不再请求文件级附集合）
       assert.match(requestedUrls[0], /include=events/, '首页携带 include');
       assert.equal(requestedUrls[1]?.includes('include'), false, '续页不再发送 include');
 

@@ -4,7 +4,7 @@
 
 观澜的代码有很大一部分由智能体编写，再由人或智能体评审后合并。合并进来的工作会出问题：同一个 bug 修了又修，验证做得太薄，文档写了没人跑。这里留下从这些问题里学到的东西。改代码之前先读。每条教训先写规则，再写为什么，最后是证据。一条教训在 3 个不同的日子被评审发现，就并入 [docs/code-standards.md](docs/code-standards.md)。
 
-**第一批内容从哪里来。** 仓库以单个压缩提交开源（`7e0b5fa`），更早的提交历史不在仓库里。所以下面多数教训不是从逐日复盘里来的，而是**回填**的：从源码注释和回归测试里留存的记录还原出来，包括注释里引用的 issue #4 到 #39，以及以修复命名的测试文件。每条都指向仓库里现在还读得到的证据，标注了「来源」。回填的教训只代表「出过这个问题」，不代表「评审见过几次」。从这之后，新的教训来自对合并提交的复盘，会写明是哪次。
+**初始内容从哪里来。** 仓库以单个压缩提交开源（`7e0b5fa`），更早的提交历史不在仓库里。所以下面多数教训不是从逐日复盘里来的，而是**回填**的：从源码注释和回归测试里留存的记录还原出来。每条都指向仓库里现在还读得到的证据，标注了「来源」。回填的教训只代表「出过这个问题」，不代表「评审见过几次」。从这之后，新的教训来自对合并提交的复盘，会写明是哪次。
 
 ## 读不全的时候
 
@@ -20,8 +20,8 @@
 ## 缓存与派生数据要跟着事实走
 
 - **事实变了，建立在它上面的缓存要失效。** 磁盘改动带来新版本时若不丢掉旧的详情缓存，阅读器停在旧版本，「标为已读」标错版本，未读永远清不掉。来源：`applyFileSummaries`。
-- **没定下来的状态不要缓存。** 占位版本行先到时缓存了空对象，正文补齐后仍命中旧对象，预览永远缺失。只缓存可判定的终态。来源：issue #31，`src/utils/filePreviewCache.ts`。
-- **多套缓存各管各的，就会互相覆盖。** 正文曾分散在三套缓存里：一个入口把「已请求」永久标记，失败后不再补取；晚到的详情整链替换版本列表，丢掉已经并入的正文。现在统一由一个带字节预算的协调层管。来源：issue #29，`src/utils/revisionContentStore.ts`。
+- **没定下来的状态不要缓存。** 占位版本行先到时缓存了空对象，正文补齐后仍命中旧对象，预览永远缺失。只缓存可判定的终态。来源：`src/utils/filePreviewCache.ts`。
+- **多套缓存各管各的，就会互相覆盖。** 正文曾分散在三套缓存里：一个入口把「已请求」永久标记，失败后不再补取；晚到的详情整链替换版本列表，丢掉已经并入的正文。现在统一由一个带字节预算的协调层管。来源：`src/utils/revisionContentStore.ts`。
 - **发起新查询时先作废旧窗口。** 「此前漏 bump」：切换「仅未定时事件」时没有推进代际，旧指纹签发的在途游标续页把旧窗口的事件追加进了新窗口。来源：`toggleUndatedEvents`。
 - **派生数据可以丢弃重建，但规则版本要登记。** 检索索引的规则版本与库内标记不符时自动全量重建。抽取规则版本一升就是全量重派生，必须是一次独立的变更。来源：`index/search_index.rs`、`index/writer.rs` 的 `EXTRACT_RULE_VERSION`。
 
@@ -36,7 +36,7 @@
 - **解析崩溃不能拖垮唯一写线程。** Office 与 PDF 解析都包在 `catch_unwind` 里。来源：`index/office.rs`、`index/pdf.rs`。
 - **按字节切字符串之前，先确认切在字符边界上。**
   - 非 ASCII 路径的第 8 个字节落在多字节字符中间，`path[..n]` 在启动时 panic。来源：`domain/mounts.rs` 的 `strip_extended_prefix`。
-  - 按字节取哈希前两位，遇到以多字节字符开头的损坏哈希就 panic。来源：issue #36，`storage/mod.rs`、`index/ident.rs`。
+  - 按字节取哈希前两位，遇到以多字节字符开头的损坏哈希就 panic。来源：`storage/mod.rs`、`index/ident.rs`。
 - **写下去的字节必须与登记的哈希一致。** 快照落盘前重读临时文件重算哈希，不符就按「本轮不稳定」丢弃，等下一轮。采纳草案时先校验、再原子改名。来源：`Writer::write_snapshot_to_disk`、`index_jobs.rs` 的 `write_workspace_file`。
 
 ## 跨实现一致性
@@ -52,7 +52,7 @@
 - **同哈希的恢复候选只能用一次。** 两个同哈希的新文件各自认领同一个缺失文件，会算出相同的版本 ID，在事务里撞唯一约束，回滚整轮对账。命中后立刻移出候选池。来源：`reconcile_collected`。
 - **状态机的幂等就是 `running` 的持久性；首次落库是静默的。** 没有既有行时的第一次写入不发迁移事件、不计变化、不推进代际。来源：`index/state_engine.rs`。
 - **连接归还之前，先清掉上一个请求的取消标志。** 否则「上一请求的取消误伤复用连接的新请求」。来源：`http/query_exec.rs`、`ReadonlyStore::reset_query_state`。
-- **panic 过的查询不能把连接带走。** 此前一次 panic 让读事务永不结束，后续查询被钉在旧快照上。来源：issue #36。
+- **panic 过的查询不能把连接带走。** 此前一次 panic 让读事务永不结束，后续查询被钉在旧快照上。来源：`storage/mod.rs`（RAII 读事务守卫与连接重建）。
 - **测试起的常连接要显式断开。** fetch 默认 keep-alive，`server.close()` 会一直等。来源：`test/workspace-client-v1.test.ts`。
 - **服务停机前先协作取消在途长任务，且绝不在异步工作线程上裸 `join` 阻塞线程。** 桌面端切换工作区时，`RunningService::shutdown` 先关了 HTTP 与 SSE，再在异步上下文里等 `IndexJobManager::shutdown` 的 `writer_thread.join()`；若旧工作区含大体积音视频文件、正跑整盘 `VerifyAll` 流式 SHA-256，写线程无法中断，导致切换卡死数十秒乃至数分钟，期间前端对已停机的旧端口持续报「连接已中断 / 扫描失败 / 无法连接观澜读服务」。现在取消标志贯通采集、64 KiB 流式哈希与事务前对账，`ProjectRuntime::shutdown` 先发取消信号再进 `spawn_blocking` 等写线程退出，前端在切换窗口内暂停旧后端 SSE 与轮询。来源：提交「desktop: 切换工作区或停机时协作中止在途扫描，消除假断连报错」。
 
@@ -67,16 +67,16 @@
 
 ## 性能是有代价的，要量
 
-- **只比较版本身份，不重算内容。** 未读统计曾对每个基线落后的文件跑全文二维 LCS，「2200 份文件就是 2200 次」。来源：issue #18，`hasUnreadChanges`。
-- **分页不能每页重读全量。** 文件摘要、事件、决定、版本链各有一次「不再每页全量重读」的修复。来源：issue #19 到 #25、#33、#38，`query/` 各模块的注释。
+- **只比较版本身份，不重算内容。** 未读统计曾对每个基线落后的文件跑全文二维 LCS，「2200 份文件就是 2200 次」。来源：`hasUnreadChanges`。
+- **分页不能每页重读全量。** 文件摘要、事件、决定、版本链各有一次「不再每页全量重读」的修复。来源：`query/` 各模块的查询计划与分页实现。
 - **频繁切换的状态不要放进 React 树。** 画布主题用 `useState` 时一次切换是整棵树重渲两次，实测 2.1 秒；移出 React 状态后 723 毫秒。来源：`src/stores/useWorkspaceStore.tsx` 的 `handleCanvasThemeChange`。
 - **大列表要开窗。** 日历一次渲染 4776 天、上万个元素，改成窗口化加聚合槽。来源：`test/tl-cal-02-window.test.ts`。
-- **大正文走流式，内联有字节预算。** 此前整读快照再复制再序列化，单请求峰值是正文的三倍。来源：issue #32，`http/response_budget.rs`。
+- **大正文走流式，内联有字节预算。** 此前整读快照再复制再序列化，单请求峰值是正文的三倍。来源：`http/response_budget.rs`。
 - **读取用流式哈希，恒定内存。** 代价是变更文件读两遍，换来的是 2 GB 的视频也只占 64 KiB 的缓冲。来源：`index/collector.rs`。
 
 ## 验证
 
-- **写了测试不等于跑了测试。** 有测试文件在头注释里写明「未运行 npm test/lint/build」，有的写明「本轮按角色约束未执行测试命令」。来源：`test/calfix-01-calendar-fixes.test.ts`、`test/tl-cal-02-window.test.ts`。
+- **写了测试不等于跑了测试。** 早期合入的测试曾只写了用例却跳过执行 `npm test`/lint/build，直到后续统一门禁才发现问题。来源：日历与时间线回归测试历史。
 - **测试名要和断言一致。** MCP 代理的 `tools/list` 测试原名里写着「四个」，断言的却是 6 个；另一个用例的标题曾写「耗时 < 40ms」，断言的却是小于 120。两处现已改成一致。
 - **验证命令要真的跑到测试。** 编写子系统参考时，三条 `cargo test` 命令的过滤条件写成了测试文件名，而模块路径其实是另一个名字，每条都匹配到 0 个测试、退出码却是 0。逐条真跑、看「running N tests」的 N 才发现。来源：提交「docs: 十二个子系统的设计参考」。
 - **改之前先跑一遍基线。** 建立这套规范时先在未改动的提交上跑全部门禁，才发现 `npm run build` 有一次偶发崩溃。没有基线就分不清是自己弄坏的还是本来就有。
@@ -119,18 +119,15 @@
   - README 说「外部网络仅在你显式开启 HTML 允许 HTTPS 外链时访问」，但 `index.html` 会从 Google Fonts 加载三款字体，构建产物里也还在。要么去掉外部字体，要么改说明。
   - 安装包里没有随附许可文件：`tauri.conf.json` 与 `tauri.release.conf.json` 没有配置 `bundle.resources`、`license` 或 `licenseFile`，仓库里的 `LICENSE` 与 `THIRD_PARTY_NOTICES` 都不会装到用户机器上。要不要随安装包带上、以什么形式带，由维护者定。安装包按 `embedBootstrapper` 内嵌了 WebView2 引导程序（微软的安装器，约 1.8 MB），它的再分发条款没有核实过。
   - GitHub 上的 `ci` 工作流已停用。它唯一一次运行（`main` 上）五个作业一个都没启动，失败注解是「recent account payments have failed or your spending limit needs to be increased」。恢复要处理账户的 Actions 额度或付款方式；恢复之前，验证以本地 `npm run gate -- --full` 为准（见[构建与发布](docs/subsystems/release-pipeline.md#ci)）。
-- **测试没有真正执行的：** 下面这三个在 `npm run gate` 的运行记录里会被点名。CI 的 Rust 作业直接跑 `cargo test`，而 libtest 会截获通过的测试打印的内容，日志里看不到它们。
+- **测试没有真正执行的：** 下面这个在 `npm run gate` 的运行记录里会被点名。CI 的 Rust 作业直接跑 `cargo test`，而 libtest 会截获通过的测试打印的内容，日志里看不到它。
   - `identity_vectors_from_fixture` 在干净 checkout 上跳过，因为 CI 的 Rust 作业不生成夹具。
-  - `domain/triage/tests.rs` 里两个 Node 对拍测试从不执行，因为它们依赖的 `workflow-triage.js` 等源文件不在仓库里。
 - **测试没有隔离真实环境的：** Rust 测试自身不设数据目录，直接跑 `cargo test --workspace` 会写进已安装的观澜正在用的数据目录。`npm run gate` 替 Rust 步骤设好了临时的 `GUANLAN_DATA_DIR`，所以经由门禁跑是安全的；测试代码本身还没有改。
 - **行为待核实的（只读了代码，没有运行验证）：** MCP 代理的 `resolve_endpoint` 不校验回环地址；索引写线程上除了解析器之外没有 panic 兜底，一处 panic 会让线程退出，之后的任务全部失败；查询的执行超时与取消可能以 500 而不是 503 返回；`guanlan scan` 先打开可写库、后取工作区锁。
 - **仓库卫生：**
   - `npm run build` 的偶发崩溃（`@tailwindcss/oxide` 4.3.4 的 `boundary.rs`）。`npm run gate` 只对它自动重试一次，根因没有查。
   - 测试在系统临时目录里留下目录，从不清理。Rust 测试的 `guanlan-core-*`、`guanlan-svc-*` 一类（六个文件、十五处），以及 Node 测试 `test/v04-events-query.test.ts`，它每次运行留下 5 个 `guanlan-evq-*`。建立这套规范时，本机 `%TEMP%` 里有 22565 个 `guanlan-*` 目录、58498 个文件、约 4.8 GB。
   - `npm run gate` 的每一步没有超时。某一步卡住时门禁会一直等着，既不失败也不提示；CI 的 cargo 步骤有超时。建立这套规范时，有一轮门禁在 `npm test` 停了十多分钟，同一个测试文件单独跑 20 次没有复现，原因没有查清。
-  - 两个历史脚本写死了个人路径：`scripts/v04-reconcile-once.ts`（缺省工作区）、`scripts/verify-v03-data-simple.cjs`（连参数都不收）。测试与身份数字向量里也拿同一路径当样本（`src/utils/guanlanEngine.test.ts`、`native/crates/guanlan-core/src/domain/mod.rs`）；后者改了会改变向量的值，要连向量一起重新生成。
-  - 两个历史脚本会直接写真实数据目录：`scripts/v04-reconcile-once.ts`、`scripts/seed-volume.ts`，都经 `defaultDataDir` 取默认目录。
+  - 身份数字向量测试里使用了历史本机样本路径（`native/crates/guanlan-core/src/domain/mod.rs`）；改路径会改变向量的值，要连向量一起重新生成。
   - 没有任何地方引用的资源：`scripts/visual-baseline/u12/` 下的截图、`public/assets/aistudio/` 下的一张图片。
   - `package.json` 没有 `description`、`license`、`repository`、`engines`；`clean` 脚本删的 `server.js` 并不存在。
   - 安装包没有代码签名，首次运行会有系统的未知发布者提示。
-  - Rust 工作区的拆分方案、PRD 等被注释大量引用的设计文档不在仓库里，注释里的「方案 §N」无处可查。

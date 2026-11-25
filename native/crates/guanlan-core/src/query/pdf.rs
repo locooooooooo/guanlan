@@ -1,8 +1,8 @@
-//! B04 · PDF 页级正文只读查询与轻预览摘要。
+//! PDF 页级正文只读查询与轻预览摘要。
 //!
 //! 优先级：
 //! 1. 优先从 `pdf_extracts` 按 `content_hash` 直接读取索引时产出的页级结构；
-//! 2. 若打开 B04 之前采集的旧库尚未有 `pdf_extracts` 行且 `snapshot_available != 0`
+//! 2. 若打开尚未包含 `pdf_extracts` 行的旧库且 `snapshot_available != 0`
 //!    （且快照体积在安全上限内），在只读路径按需解析内存快照返回，绝不写库。
 
 use crate::dto::{PdfContentResponse, PdfPreviewSummary};

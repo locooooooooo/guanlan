@@ -1,7 +1,7 @@
 /**
- * D01-a 拆解 · ReaderView 薄装配层（任务卡 D01-a ②）。
+ * ReaderView 分层薄装配层。
  *
- * 巨石（4689 行）已按层拆入 reader/ 目录：
+ * 具体实现按层拆分在 reader/ 目录下：
  *  - reader/readerMarkdownModel.ts      纯函数 Markdown 行模型层（零 UI 依赖、可单测）
  *  - reader/useReaderController.tsx     单一行为控制器（state/memo/effect/handler + 行渲染闭包 → ctx）
  *  - reader/readerChromeSections.tsx    浮动 Chrome（返回横幅/新版本告警/双层文件头）
@@ -11,8 +11,7 @@
  *  - reader/readerSvgPdfSections.tsx    SVG / PDF 格式插件层
  *  - reader/readerShared.tsx            共享类型 + CopyIdButton
  *
- * 本文件只保留：测试兼容再导出（decision-receipt-01、02 与 gu-cc-01 既有导入路径不变）
- * + 分节装配（DOM 嵌套结构与拆解前逐字一致，像素回归护栏覆盖）。
+ * 本文件保留测试兼容再导出（保持既有单测导入路径不变）与各分节装配结构。
  */
 
 import React from 'react';
@@ -65,7 +64,7 @@ import { ReaderDiffSection } from './reader/readerDiffSection';
 import { ReaderRelationsSection } from './reader/readerRelationsSection';
 import { ReaderMarkdownSection } from './reader/readerMarkdownSection';
 import { ReaderPdfSection, ReaderSvgSection } from './reader/readerSvgPdfSections';
-// D04 · 锚点批注层挂载点（最薄接线：组件本体在 reader/readerAnchorLayer.tsx）
+// 锚点批注层挂载点（最薄接线：组件本体在 reader/readerAnchorLayer.tsx）
 import {
   ReaderAnnotationComposer,
   ReaderAnnotationDrawer,
@@ -74,10 +73,9 @@ import { formatAnnotationLocatorLabel } from '../utils/readerAnnotations';
 import { StickyNote } from 'lucide-react';
 
 /**
- * 阅读器（四层装配）。§3.2：paper-light / dark 双态阅读纸；四种格式专用插件分节。
- * AC-02：shell 与首屏测量挂根节点（firstScreenRootRef），正文读取不阻塞首屏。
- * D04：根节点补 position:relative（无偏移零视觉变化），承载批注抽屉/撰写卡浮动层；
- * 两者关闭态零 DOM——D01-a 像素基线结构性零扰动。
+ * 阅读器（分层装配）：paper-light / dark 双态阅读纸，按格式分派专用阅读分节。
+ * shell 与首屏测量挂根节点（firstScreenRootRef），正文读取不阻塞首屏。
+ * 根节点使用 position:relative 承载批注抽屉与撰写卡浮动层；关闭态不渲染额外 DOM。
  */
 export const ReaderView: React.FC<ReaderViewProps> = (props) => {
   const ctx = useReaderController(props);
@@ -91,11 +89,11 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     systemActions,
     onAddEvidencePointer,
     indexGeneration,
-    // U05 · 专注纸面（Zen）与阅读进度光条
+    // 专注纸面（Zen）与阅读进度光条
     zenMode,
     readerProgressBarRef,
     readerProgressTrackRef,
-    // D04 · 锚点批注层
+    // 锚点批注层
     annotations,
     annotationsOpen,
     setAnnotationsOpen,
@@ -131,13 +129,12 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
       {/* 2. 紧凑单行文件头（浮动 Chrome） */}
       <ReaderFileHeaderSection ctx={ctx} />
 
-      {/* 2.5 U05 · 顶部 2px 琉璃阅读进度光条（紧贴顶栏下沿）：
+      {/* 2.5 顶部 2px 琉璃阅读进度光条（紧贴顶栏下沿）：
           只动 transform:scaleX（GPU 合成器无重排，禁动画 width）；
           百分比由 useReaderController.handleMarkdownScroll 已算好的 pct 单向直写，
           滚动期零 React 重渲染；正文文字节点永不挂本文件任何动效类。
-          实机走查修复：轨道常驻可见（--ink-faint，随 data-reader-dark 换档；
-          实测对壳底 3.15 浅 / 3.71 夜航，≥3:1 图形门槛）——正文停在 scrollTop=0
-          （scaleX(0) 零宽）时轨道仍可证明光条本体已渲染，滚动后鸢尾紫填充随之推进。 */}
+          轨道常驻可见（--ink-faint，随 data-reader-dark 换档，满足 ≥3:1 图形对比度），
+          正文停在 scrollTop=0（scaleX(0) 零宽）时轨道仍可见，滚动后鸢尾紫填充随之推进。 */}
       <div
         ref={readerProgressTrackRef}
         role="progressbar"
@@ -190,9 +187,9 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
         )}
       </div>
 
-      {/* D04 · 锚点批注层（抽屉切换钮/清单抽屉/撰写卡）：
-          阅读子模式 + md/svg/pdf 三格式才挂载；无批注时切换钮零 DOM——
-          D01-a 像素基线结构性零扰动（发现路径=段落悬停「批注」/SVG「框选批注」/PDF「批注此页」） */}
+      {/* 锚点批注层（抽屉切换钮/清单抽屉/撰写卡）：
+          阅读子模式 + md/svg/pdf 三格式才挂载；无批注时切换钮不渲染
+          （发现路径=段落悬停「批注」/SVG「框选批注」/PDF「批注此页」） */}
       {anchorLayerActive && (
         <>
           {!annotationsOpen && !annotationComposer && annotations.length > 0 && (

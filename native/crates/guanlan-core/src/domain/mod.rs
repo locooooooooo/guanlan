@@ -1,4 +1,4 @@
-//! 领域规则：身份、版本、事件、时间与证据规则（方案 §2）。
+//! 领域规则：身份、版本、事件、时间与证据规则。
 //!
 //! 契约来源：native/docs/contract-storage.md
 //! - §2 身份规则（全部逐字兼容）：rootKey（Node `path.resolve` + SHA-256 前 16 hex，
@@ -6,30 +6,24 @@
 //! - §5 读取相关历史语义：内容未变不增版本、纯日期不补午夜不做时区换算、
 //!   发生/采集/来源/精度四字段独立、A→B→A 三次版本出现两份内容。
 //!
-//! 本批（批次一）落地读取侧所需的部分：rootKey / workspace_id / file_id /
-//! revision_id 的精确兼容实现。批次二已补写入侧所需的事件身份要素：
-//! `stable_short`（事件 id 里的路径/状态短摘要）与 `uniq_event_identity`
-//! 去重语义的写入侧实现（见 [`crate::index::writer`]）。
+//! 本模块提供 rootKey / workspace_id / file_id / revision_id 的逐字兼容实现；
+//! 写入侧事件身份要素 `stable_short` 与 `uniq_event_identity` 去重语义见 [`crate::index::writer`]。
 //!
 //! 平台口径：观澜是 Windows 本地应用，rootKey 身份以 Node win32 `path.resolve`
 //! 为准绳（契约 §2.1），因此在所有平台上统一按 win32 规则求值，不随编译目标切换。
 
 pub(crate) mod path_win32;
 
-/// 领域模型（PRD v2.0 §2.1 四层资产）：Initiative / Artifact / DecisionItem
+/// 领域模型（四层资产）：Initiative / Artifact / DecisionItem
 pub mod candidate_weaver;
 pub mod model;
 
-/// C02 混合倒排索引分词器：建索引侧与查询侧共用的纯函数规则（契约 §2.4）
+/// 混合倒排索引分词器：建索引侧与查询侧共用的纯函数规则（契约 §2.4）
 pub mod search_tokens;
 
-/// C05 跨项目只读挂载：参考工作区路径规范化（plain() 语义）、父子互斥判定与
+/// 跨项目只读挂载：参考工作区路径规范化（plain() 语义）、父子互斥判定与
 /// 挂载身份稳定哈希（契约 contract-storage.md §13）
 pub mod mounts;
-
-/// E01 丞相台四车道可解释分流（`inform / login / decide / delegate`）与
-/// 五道安全闸 fail-closed 政策守门（吸收主仓 `workflow-triage.js` + `workflow-policy.js`）
-pub mod triage;
 
 #[cfg(test)]
 #[path = "vectors_fixture_test.rs"]
@@ -266,11 +260,10 @@ mod tests {
         );
     }
 
-    /// 契约 §2.1/§2.3 明列的具体值 + 本会话 node v24.19.0 实测补充
-    /// （实测命令见会话记录：`node gen.mjs` 用与源码逐字相同的算法计算）。
+    /// 契约 §2.1/§2.3 明列的具体值 + Node `path.win32.resolve` 实测向量补充。
     #[test]
     fn contract_stated_identity_values() {
-        let cwd = r"C:\Users\34689\AppData\Local\Temp\rslv-vectors";
+        let cwd = r"C:\Users\tester\AppData\Local\Temp\rslv-vectors";
         // 契约 §2.1 示例：D:\notebooks\demo → 6d74a29df40616ec
         assert_eq!(
             root_key_of_resolved(&path_win32::resolve_with(
@@ -299,7 +292,7 @@ mod tests {
             stable_file_id("6d74a29df40616ec", "notes/readme.md"),
             "f_b967338b81904b60abf8374e"
         );
-        // 中文路径（本会话实测）
+        // 中文路径实测向量
         assert_eq!(
             root_key_of_resolved(&path_win32::resolve_with(
                 &[r"D:\观澜\工作区"],
@@ -316,11 +309,10 @@ mod tests {
         assert_eq!(workspace_id_of("6d74a29df40616ec"), "ws_6d74a29df40616ec");
     }
 
-    /// 本会话采集的 resolve/join 向量：node v24.19.0 `path.win32.resolve/join`
-    /// 对 60 个 resolve 输入与 12 个 join 输入的实际返回（脚本存于会话临时目录，
-    /// cwd = "C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors"，一并注入）。
+    /// Node `path.win32.resolve/join` 对 60 个 resolve 输入与 12 个 join 输入的实测向量
+    /// （cwd = "C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors"，一并注入）。
     /// JSON 结构：[输入, 期望输出]。
-    const SESSION_VECTORS: &str = r#"{"cwd":"C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors","resolve":[["D:\\notebooks\\demo","D:\\notebooks\\demo"],["d:/notebooks/demo","d:\\notebooks\\demo"],["D:/notebooks/demo/","D:\\notebooks\\demo"],["D:","D:\\"],["d:","d:\\"],["D:\\\\","D:\\"],["D:/","D:\\"],["/","C:\\"],["\\","C:\\"],["D:\\notebooks\\..\\demo","D:\\demo"],["D:\\.\\notebooks\\demo","D:\\notebooks\\demo"],["D:\\notebooks\\\\demo","D:\\notebooks\\demo"],["D:\\notebooks\\demo\\..","D:\\notebooks"],["c:\\x\\y\\z\\..\\w","c:\\x\\y\\w"],["C:\\","C:\\"],["Z:/A/B","Z:\\A\\B"],["z:/a/b","z:\\a\\b"],["foo","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\foo"],["foo\\bar","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\foo\\bar"],["foo/bar","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\foo\\bar"],["./foo","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\foo"],[".\\foo","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\foo"],["foo\\..\\bar","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\bar"],["foo\\..\\..\\bar","C:\\Users\\34689\\AppData\\Local\\Temp\\bar"],[".","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors"],["..","C:\\Users\\34689\\AppData\\Local\\Temp"],["...","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\..."],["a//b","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\a\\b"],["a/./b","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\a\\b"],["a\\/.\\/b","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\a\\b"],["a\\b\\","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\a\\b"],["a\\b\\\\","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\a\\b"],["C:a","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\a"],["C:a\\b","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\a\\b"],["C:.\\b","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\b"],["C:..\\b","C:\\Users\\34689\\AppData\\Local\\Temp\\b"],["D:.\\x","D:\\x"],["D:..","D:\\"],["\\\\server\\share","\\\\server\\share\\"],["\\\\server\\share\\","\\\\server\\share\\"],["\\\\server\\share\\a\\b","\\\\server\\share\\a\\b"],["//server/share/a","\\\\server\\share\\a"],["\\\\?\\C:\\x\\y","\\\\?\\C:\\x\\y"],["\\\\?\\UNC\\server\\share\\a","\\\\?\\UNC\\server\\share\\a"],["\\\\.\\x","\\\\.\\x"],["\\\\a\\b","\\\\a\\b\\"],["\\\\a","C:\\a"],["\\\\\\","C:\\"],["","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors"],[" ","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\ "],["file.md","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\file.md"],["?","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\?"],["*","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\*"],["/\\foo","C:\\foo"],["\\/foo","C:\\foo"],["\\foo","C:\\foo"],["/foo/bar","C:\\foo\\bar"],["D:\\Notes\\ReadMe.MD","D:\\Notes\\ReadMe.MD"],["中文\\目录","C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors\\中文\\目录"],["D:\\a b\\c d","D:\\a b\\c d"]],"join":[[["C:\\base","Guanlan","workspaces","6d74a29df40616ec"],"C:\\base\\Guanlan\\workspaces\\6d74a29df40616ec"],[["C:/base","Guanlan","workspaces","6d74a29df40616ec"],"C:\\base\\Guanlan\\workspaces\\6d74a29df40616ec"],[["C:/base/","","Guanlan","6d74a29df40616ec"],"C:\\base\\Guanlan\\6d74a29df40616ec"],[["C:\\","sub","6d74a29df40616ec"],"C:\\sub\\6d74a29df40616ec"],[["C:\\base\\",""],"C:\\base\\"],[["base","x"],"base\\x"],[["","x"],"x"],[["",""],"."],[["\\\\srv\\share","a","b"],"\\\\srv\\share\\a\\b"],[["C:\\base","a\\b","c"],"C:\\base\\a\\b\\c"],[["C:/base","a/b","c"],"C:\\base\\a\\b\\c"],[["C:\\base",".",".."],"C:\\"]],"rootKey":[["D:\\notebooks\\demo","6d74a29df40616ec"],["D:\\notebooks\\demo\\","6d74a29df40616ec"],["d:/notebooks/demo","4c04a8aa7634d59c"],["D:\\观澜\\工作区","df515ae695087507"],["C:\\Users\\34689\\AppData\\Local\\Temp\\rslv-vectors","377d41a5d7ed5743"]],"fileId":[["6d74a29df40616ec","Notes\\ReadMe.MD","f_b967338b81904b60abf8374e"],["6d74a29df40616ec","notes/readme.md","f_b967338b81904b60abf8374e"],["6d74a29df40616ec","docs/方案.md","f_422b0386a77ef4e4f9eafd30"],["0123456789abcdef","a/b/c.svg","f_40700c3ee03f5b6c73d29880"]]}"#;
+    const SESSION_VECTORS: &str = r#"{"cwd":"C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors","resolve":[["D:\\notebooks\\demo","D:\\notebooks\\demo"],["d:/notebooks/demo","d:\\notebooks\\demo"],["D:/notebooks/demo/","D:\\notebooks\\demo"],["D:","D:\\"],["d:","d:\\"],["D:\\\\","D:\\"],["D:/","D:\\"],["/","C:\\"],["\\","C:\\"],["D:\\notebooks\\..\\demo","D:\\demo"],["D:\\.\\notebooks\\demo","D:\\notebooks\\demo"],["D:\\notebooks\\\\demo","D:\\notebooks\\demo"],["D:\\notebooks\\demo\\..","D:\\notebooks"],["c:\\x\\y\\z\\..\\w","c:\\x\\y\\w"],["C:\\","C:\\"],["Z:/A/B","Z:\\A\\B"],["z:/a/b","z:\\a\\b"],["foo","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\foo"],["foo\\bar","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\foo\\bar"],["foo/bar","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\foo\\bar"],["./foo","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\foo"],[".\\foo","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\foo"],["foo\\..\\bar","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\bar"],["foo\\..\\..\\bar","C:\\Users\\tester\\AppData\\Local\\Temp\\bar"],[".","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors"],["..","C:\\Users\\tester\\AppData\\Local\\Temp"],["...","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\..."],["a//b","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\a\\b"],["a/./b","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\a\\b"],["a\\/.\\/b","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\a\\b"],["a\\b\\","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\a\\b"],["a\\b\\\\","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\a\\b"],["C:a","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\a"],["C:a\\b","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\a\\b"],["C:.\\b","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\b"],["C:..\\b","C:\\Users\\tester\\AppData\\Local\\Temp\\b"],["D:.\\x","D:\\x"],["D:..","D:\\"],["\\\\server\\share","\\\\server\\share\\"],["\\\\server\\share\\","\\\\server\\share\\"],["\\\\server\\share\\a\\b","\\\\server\\share\\a\\b"],["//server/share/a","\\\\server\\share\\a"],["\\\\?\\C:\\x\\y","\\\\?\\C:\\x\\y"],["\\\\?\\UNC\\server\\share\\a","\\\\?\\UNC\\server\\share\\a"],["\\\\.\\x","\\\\.\\x"],["\\\\a\\b","\\\\a\\b\\"],["\\\\a","C:\\a"],["\\\\\\","C:\\"],["","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors"],[" ","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\ "],["file.md","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\file.md"],["?","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\?"],["*","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\*"],["/\\foo","C:\\foo"],["\\/foo","C:\\foo"],["\\foo","C:\\foo"],["/foo/bar","C:\\foo\\bar"],["D:\\Notes\\ReadMe.MD","D:\\Notes\\ReadMe.MD"],["中文\\目录","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\中文\\目录"],["D:\\a b\\c d","D:\\a b\\c d"]],"join":[[["C:\\base","Guanlan","workspaces","6d74a29df40616ec"],"C:\\base\\Guanlan\\workspaces\\6d74a29df40616ec"],[["C:/base","Guanlan","workspaces","6d74a29df40616ec"],"C:\\base\\Guanlan\\workspaces\\6d74a29df40616ec"],[["C:/base/","","Guanlan","6d74a29df40616ec"],"C:\\base\\Guanlan\\6d74a29df40616ec"],[["C:\\","sub","6d74a29df40616ec"],"C:\\sub\\6d74a29df40616ec"],[["C:\\base\\",""],"C:\\base\\"],[["base","x"],"base\\x"],[["","x"],"x"],[["",""],"."],[["\\\\srv\\share","a","b"],"\\\\srv\\share\\a\\b"],[["C:\\base","a\\b","c"],"C:\\base\\a\\b\\c"],[["C:/base","a/b","c"],"C:\\base\\a\\b\\c"],[["C:\\base",".",".."],"C:\\"]],"rootKey":[["D:\\notebooks\\demo","6d74a29df40616ec"],["D:\\notebooks\\demo\\","6d74a29df40616ec"],["d:/notebooks/demo","4c04a8aa7634d59c"],["D:\\观澜\\工作区","df515ae695087507"],["C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors","8296ea6b493a5036"]],"fileId":[["6d74a29df40616ec","Notes\\ReadMe.MD","f_b967338b81904b60abf8374e"],["6d74a29df40616ec","notes/readme.md","f_b967338b81904b60abf8374e"],["6d74a29df40616ec","docs/方案.md","f_422b0386a77ef4e4f9eafd30"],["0123456789abcdef","a/b/c.svg","f_40700c3ee03f5b6c73d29880"]]}"#;
 
     #[test]
     fn session_measured_resolve_join_identity_vectors() {

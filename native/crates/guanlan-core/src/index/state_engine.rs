@@ -1,14 +1,14 @@
 //! 状态机落库引擎（SSOT 三层的执行器）：声明式槽位重算、三级状态迁移记账、
 //! checkpoint 同步受理。
 //!
-//! 职责（冻结契约 B2/E + 评审约束1/2/4）：
+//! 职责：
 //! - [`state_machine_recompute`]：每轮 reconcile 收尾对**全部专项**做五槽位
 //!   声明式重算与三级状态迁移（专项/文档/节点），迁移才记账、首建静默；
 //! - [`commit_checkpoint`]：POST /checkpoints 的同步受理核心——校验、插行、
-//!   事件、槽位推进与重算同事务（阻塞2）；node_id 缺省时按
-//!   (initiative_id, stage) 反查槽位（约束1）；checkpoint seq 由库内派生（约束2）。
+//!   事件、槽位推进与重算同事务提交；`node_id` 缺省时按 `(initiative_id, stage)`
+//!   反查槽位；checkpoint `seq` 由库内已有行数派生。
 //!
-//! **首建静默（约束4 裁定 a）**：`artifact_states`/`task_nodes`/`initiatives`
+//! **首建静默**：`artifact_states`/`task_nodes`/`initiatives`
 //! 无既有行时首次落库不发迁移事件、不计 changed、不 bump generation——
 //! 多级迁移记账仅适用于两个已持久状态之间的重算。recompute 在 reconcile 的
 //! 代际判定**之前**执行，迁移事件计入 `ReconcileReport.events_inserted`，
@@ -19,7 +19,7 @@
 //!
 //! **调用约定**：[`commit_checkpoint`] 与 [`recompute_inner`] 不开自有事务——
 //! 前者由服务层 CheckpointCommit 处理器在 `Writer::transaction` 内调用
-//! （校验、插行、事件、推进与重算原子提交，阻塞2），后者由
+//! （校验、插行、事件、推进与重算原子提交），后者由
 //! [`state_machine_recompute`] 包装。
 
 use std::collections::HashMap;
@@ -38,7 +38,7 @@ use crate::index::state_machine::{
 use crate::index::writer::{CheckpointInput, NewEvent, Writer, CHECKPOINT_STATUSES};
 use crate::storage::{internal_sql, ArtifactStateRow, InitiativeRow, TaskNodeRow};
 
-/// 派生段产出的 checklist 计数（建议7：全文已在内存时同步计数，不二次读 blob；
+/// 派生段产出的 checklist 计数（全文已在内存时同步计数，避免二次读 blob；
 /// 未变文件沿用 artifact_states 既有值）
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DerivedChecklist {
@@ -54,7 +54,7 @@ pub struct Transition {
     pub kind: &'static str,
     /// 事件主体：`artifact` | `initiative` | `task_node`
     pub subject_kind: &'static str,
-    /// 迁移身份（阻塞4）：`{id}:{from}->{to}`
+    /// 迁移身份编码：`{id}:{from}->{to}`（确保多级迁移各单步身份互异）
     pub subject_id: String,
     pub from: String,
     pub to: String,
@@ -73,7 +73,7 @@ pub struct RecomputeOutcome {
     pub events_skipped: usize,
 }
 
-/// checkpoint 受理结果（阻塞2：同步 201 通道的回传体）
+/// checkpoint 受理结果（同步 201 通道的回传体）
 #[derive(Debug, Clone)]
 pub struct CheckpointCommitOutcome {
     pub checkpoint_id: String,
@@ -187,7 +187,7 @@ fn collect_file_signals(
         .map(|row| (row.file_id.as_str(), (row.done, row.total)))
         .collect();
 
-    // C01：已采纳候选的成员归属优先于路径规则（用户显式确认的映射，重算固化不回退；
+    // 已采纳候选事项的成员归属优先于路径规则（用户显式确认的映射，重算固化不回退；
     // 未覆盖的文件仍走 `recognize_initiative` 路径规则）
     let adopted_map = writer.adopted_candidate_map(workspace_id)?;
 
@@ -209,7 +209,7 @@ fn collect_file_signals(
             } else if let Some((done, total)) = init_checklists.get(&file.file_id) {
                 (*done, *total)
             } else {
-                // 有既有状态行：沿用既有值（建议7：不二次读 blob）
+                // 有既有状态行：沿用既有值，避免二次读 blob
                 match existing_artifacts.get(file.file_id.as_str()) {
                     Some(row) => (
                         row.checklist_done.max(0) as u32,
@@ -243,7 +243,7 @@ fn collect_file_signals(
 }
 
 /// 载荷优先级解析：detail_json 的 `priority` 键（P0/P1/P2）；无键按 P2 计
-/// （裁定值：既有抽取规则产出的陈述无优先级证据，不阻塞——登记 §4.3）
+/// （旧抽取规则产出的陈述不含优先级字段，不作为阻塞项处理，见 `contract-storage.md` §4.3）
 fn pending_bucket(detail_json: &str) -> usize {
     serde_json::from_str::<serde_json::Value>(detail_json)
         .ok()
@@ -337,7 +337,7 @@ fn compute_slots(
     slots
 }
 
-/// 迁移事件落库（阻塞4 身份编码：subject_id=`{id}:{from}->{to}`；
+/// 迁移事件落库（身份编码：subject_id=`{id}:{from}->{to}`；
 /// occurred_at=迁移时刻（clock::now_iso）；同迁移重试同身份由
 /// uniq_event_identity 去重跳过——幂等成立）
 fn write_transition_event(
@@ -378,7 +378,7 @@ fn write_transition_event(
         revision_id: None,
         occurred_at: Some(moved_at.clone()),
         occurred_precision: "second".to_owned(),
-        // 新来源值：迁移由状态机引擎判定（§5.5 枚举扩展，登记 §4.3）
+        // 迁移由状态机引擎判定（扩展 occurred_source 枚举，见 `contract-storage.md` §4.3）
         occurred_source: Some("state_machine".to_owned()),
         observed_at: moved_at,
         headline: transition.headline.clone(),
@@ -407,7 +407,7 @@ fn days_since(activity_at: Option<&str>, today_days: i64) -> u32 {
         .unwrap_or(0)
 }
 
-/// 从持久化状态词出发重算到不动点；无既有行时从初始态静默推导（约束4 a）。
+/// 从持久化状态词出发重算到不动点；无既有行时从初始态静默推导。
 /// 返回（最终态，单步迁移路径）。
 fn resolve_state_path(
     persisted: Option<&str>,
@@ -424,7 +424,7 @@ fn resolve_state_path(
 
 /// 每轮 reconcile 收尾的重算入口（自有事务）。
 ///
-/// 位置：reconcile 的代际判定**之前**（约束4）；迁移事件计入
+/// 位置：reconcile 的代际判定**之前**；迁移事件计入
 /// `ReconcileReport.events_inserted`，与既有「有变化才 bump」口径一致。
 pub fn state_machine_recompute(
     writer: &mut Writer,
@@ -432,9 +432,9 @@ pub fn state_machine_recompute(
     observed_at: &str,
     derived_checklists: &[DerivedChecklist],
 ) -> Result<RecomputeOutcome, GuanlanError> {
-    // 事务外 IO：首轮初始化的 checklist 读一次快照（建议7 的例外：无既有行可沿用）
-    // B05：既有状态行全量只读一次，init 检查 / signals 收集 / 重算核心三处共用，
-    // 不再逐文件 get_artifact_state 点查（万级库上省 ~2 万次查询）。
+    // 事务外 IO：首轮初始化的 checklist 读一次快照（无既有行可沿用时的兜底读取）
+    // 既有状态行全量只读一次，init 检查 / signals 收集 / 重算核心三处共用，
+    // 不再逐文件 get_artifact_state 点查（大工作区可显著减少点查次数）。
     let existing_artifacts: HashMap<String, ArtifactStateRow> = writer
         .list_artifact_states(workspace_id)?
         .into_iter()
@@ -459,7 +459,7 @@ pub fn state_machine_recompute(
 }
 
 /// 首轮初始化 checklist：无既有 artifact_states 行、又不在本轮派生清单里的
-/// md 文件，读一次快照计数；有既有行则沿用既有值（建议7 主口径）
+/// md 文件，读一次快照计数；有既有行则沿用既有值
 fn prepare_init_checklists(
     writer: &Writer,
     workspace_id: &str,
@@ -491,8 +491,8 @@ fn prepare_init_checklists(
     Ok(init)
 }
 
-/// 事务内全量重算的便捷入口（B05：文件操作/节点唤醒等调用方——内部加载既有
-/// 状态行全表后走 [`recompute_inner`]；既有行数为文件数上界，一次 JOIN 查询）
+/// 事务内全量重算的便捷入口（供文件操作/节点唤醒等调用方复用：内部一次性加载
+/// 既有状态行全表后走 [`recompute_inner`]，避免逐文件点查）
 pub(crate) fn recompute_full(
     writer: &mut Writer,
     workspace_id: &str,
@@ -554,7 +554,7 @@ pub(crate) fn recompute_inner(
     let now_for_today = clock::now_iso();
     let today_days = clock::days_since_epoch_of_iso(&now_for_today).unwrap_or(0);
 
-    // ---------- 五槽位重算（阻塞1：同输入重算结果稳定，running 持久跨轮） ----------
+    // ---------- 五槽位重算（同输入重算结果稳定，running 持久跨轮） ----------
     let mut plans: Vec<InitiativePlan> = Vec::new();
     for initiative_id in &group_ids {
         let members = groups.get(initiative_id).expect("分组键来自信号表");
@@ -757,7 +757,7 @@ pub(crate) fn recompute_inner(
         }
     }
 
-    // ---------- 文档行（三级投影之第三级）：迁移才记账，首建静默（约束4 a） ----------
+    // ---------- 文档行（三级投影之第三级）：迁移才记账，首建静默 ----------
     let plan_by_initiative: HashMap<&str, &InitiativePlan> = plans
         .iter()
         .map(|plan| (plan.initiative_id.as_str(), plan))
@@ -804,7 +804,7 @@ pub(crate) fn recompute_inner(
         writer.upsert_artifact_state(&row)?;
         outcome.artifacts_upserted += 1;
 
-        // 多级迁移逐步记账（阻塞4）：fixpoint 的每一单步身份互异
+        // 多级迁移逐步记账：fixpoint 的每一单步身份互异
         if existing.is_some() {
             let mut from = existing
                 .and_then(|row| DocState::parse(&row.state))
@@ -833,20 +833,20 @@ pub(crate) fn recompute_inner(
     Ok(outcome)
 }
 
-// ---------- checkpoint 同步受理（阻塞2 + 约束1/2） ----------
+// ---------- checkpoint 同步受理 ----------
 
 /// POST /checkpoints 的同步受理核心。
 ///
-/// **调用方必须在 [`Writer::transaction`] 内调用**（阻塞2：校验、插行、事件、
+/// **调用方必须在 [`Writer::transaction`] 内调用**：校验、插行、事件、
 /// 槽位推进与重算同事务原子提交；HTTP 层在 spawn_blocking 内等命令回执，
-/// 超时 503——受理与校验原子，校验失败时 checkpoint 不落库、无 job_id）。
+/// 超时返回 503——受理与校验原子，校验失败时 checkpoint 不落库、无 job_id。
 ///
 /// - 校验 initiative/stage 存在 → 失败返回 NOT_FOUND（调用方以 404 直接重试）；
-/// - node_id 缺省时按 (initiative_id, stage) 反查槽位推进（约束1：外部 agent
-///   的提交载荷不含 node_id 也能推进 generate 槽）；
-/// - status=SUCCESS 且命中节点 → 节点置 completed + latest_checkpoint_id，
+/// - `node_id` 缺省时按 `(initiative_id, stage)` 反查槽位推进（外部 agent
+///   的提交载荷不含 `node_id` 也能推进执行槽）；
+/// - `status=SUCCESS` 且命中节点 → 节点置 completed + latest_checkpoint_id，
 ///   随后 recompute（generate 槽因 SUCCESS checkpoint 存在保持 completed；
-///   derive/await/deliver 槽为声明式，SUCCESS 行不影响其重算判据——登记 §4.3）；
+///   derive/await/deliver 槽为声明式，SUCCESS 行不影响其重算判据，详见 `contract-storage.md` §4.3）；
 /// - 非 SUCCESS 只落行与事件，不推进节点。
 pub fn commit_checkpoint(
     writer: &mut Writer,
@@ -871,7 +871,7 @@ pub fn commit_checkpoint(
         )));
     }
 
-    // 约束1：node_id 缺省时按 (initiative_id, stage) 反查；给定时必须存在
+    // node_id 缺省时按 (initiative_id, stage) 反查；给定时必须存在
     let resolved_node = match &input.node_id {
         Some(node_id) => {
             let row = writer
@@ -887,11 +887,11 @@ pub fn commit_checkpoint(
         None => writer.find_task_node_by_stage(&workspace_id, &initiative_id, &stage)?,
     };
 
-    // 插 checkpoint 行（约束2：seq 由库内派生，重启安全）
+    // 插 checkpoint 行：seq 由库内既有行数派生，重启安全
     let checkpoint_id = writer.insert_checkpoint(input)?;
 
-    // PRD 3.2 output_artifact_version（版本号如 v2）：由产出修订的 per-file seq
-    // 派生（TS 侧 versionNumber = revision.seq 同源口径）；无产出修订 → null
+    // output_artifact_version（版本号如 v2）：由产出修订的 per-file seq
+    // 派生（与 TS 侧 versionNumber = revision.seq 同源口径）；无产出修订 → null
     let output_artifact_version = match &input.output_revision_id {
         Some(revision_id) => writer
             .get_revision(revision_id)?
@@ -975,7 +975,7 @@ pub fn commit_checkpoint(
         }
     }
 
-    // 同事务重算（阻塞3 裁定：唤醒 = 同步函数调用，无 job 载体）
+    // 同事务同步重算（唤醒直接走同步函数调用，无独立后台 job 载体）
     let outcome = recompute_full(writer, &workspace_id, &input.created_at)?;
 
     // 回传推进后的节点状态

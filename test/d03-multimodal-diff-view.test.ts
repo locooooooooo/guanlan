@@ -1,5 +1,5 @@
 /**
- * D03 · 多模态 Diff 面板渲染契约（SSR 冒烟，与 commandPaletteView.test.ts 同风格）。
+ * 多模态 Diff 面板渲染契约（SSR 冒烟，与 commandPaletteView.test.ts 同风格）。
  * 交互逻辑（拖拽分隔线/模式切换）在客户端，此处锁定静态结构契约：
  * MD 人类视图三块与源码行折叠 / SVG 双图层+叠加框+模式钮 / 表格变化格高亮+数值 Δ+XLSX 工作表 tab。
  */

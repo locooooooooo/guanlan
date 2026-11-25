@@ -11,7 +11,7 @@ interface DragDropImportOverlayProps {
 }
 
 /**
- * 外部文件拖入工作区时的实时视觉引导浮层（A04）。
+ * 外部文件拖入工作区时的实时视觉引导浮层。
  * pointer-events-none 保持底层目录树/文件夹卡可继续被 elementFromPoint 命中。
  */
 export const DragDropImportOverlay: React.FC<DragDropImportOverlayProps> = ({

@@ -1,5 +1,5 @@
 /**
- * 观澜 · 全局应用主题存储（V01 · 对齐 coss.com/ui :root / .dark 语义双态体系）。
+ * 观澜 · 全局应用主题存储（对齐 coss.com/ui :root / .dark 语义双态体系）。
  *
  * 与既有画布局部主题（utils/canvasThemeStore.ts）职责分明：
  * - appThemeStore 负责整站壳层明暗偏好：'light'（默认素雅精密）| 'dark'（暗夜沉浸）| 'system'（跟随系统）
@@ -14,14 +14,14 @@ export type ResolvedAppTheme = 'light' | 'dark';
 
 const VALID_MODES: readonly AppThemeMode[] = ['light', 'dark', 'system'];
 
-/** V07 · 全站主题三态轮换顺序：浅色精密 → 暗夜沉浸 → 跟随系统 → 浅色精密。 */
+/** 全站主题三态轮换顺序：浅色精密 → 暗夜沉浸 → 跟随系统 → 浅色精密。 */
 export function nextAppThemeMode(mode: AppThemeMode): AppThemeMode {
   if (mode === 'light') return 'dark';
   if (mode === 'dark') return 'system';
   return 'light';
 }
 
-/** V07 · 全站主题中文展示标签（单一语义源）。 */
+/** 全站主题中文展示标签（单一语义源）。 */
 export function appThemeModeLabel(mode: AppThemeMode): string {
   if (mode === 'dark') return '深色';
   if (mode === 'system') return '跟随系统';

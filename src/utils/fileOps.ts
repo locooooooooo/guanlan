@@ -3,7 +3,7 @@ import { formatClassOf, normalizeFormatToken } from './formatMeta';
 import { normalizeRelativeWorkspacePath } from './workspacePaths';
 
 /**
- * A05 身份保真文件操作的前端纯函数校验与目录辅助模块（B01 同步放开格式族兼容重命名）。
+ * 身份保真文件操作的前端纯函数校验与目录辅助模块（支持格式族兼容重命名）。
  *
  * 与 Rust 内核 `guanlan-core/src/index/file_ops.rs` 和 `collector.rs` 保持同口径：
  * - 拒绝路径穿越（`..`）、绝对路径、盘符、UNC、NTFS 流冒号、控制符、点号隐藏名与 Windows 保留名；
@@ -302,7 +302,7 @@ export function collectWorkspaceFolderOptions(
   });
 }
 
-/** 构造 A05 操作成功后的用户可读反馈文案 */
+/** 构造文件操作成功后的用户可读反馈文案 */
 export function describeFileMutationSuccess(resp: FileMutationResponse): string {
   switch (resp.operation) {
     case 'file_renamed':

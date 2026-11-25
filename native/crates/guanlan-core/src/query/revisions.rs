@@ -3,9 +3,8 @@
 //! 行为准绳：server/project.ts（projectFileHistory :451-541、
 //! readRevisionContent :543-570、toRevision :132-172）。
 //!
-//! 批次一决定（见返回说明）：按版本内容只**定位**快照路径，正文/原始字节由
-//! guanlan-service 按路径流式返回（不整读大文件）；JSON 形状字段（raw_url 等）
-//! 仍按契约 §1.8 由服务层拼装。
+//! 职责边界：按版本内容只**定位**快照路径，正文/原始字节由 guanlan-service 按路径
+//! 流式返回（不整读大文件）；JSON 形状字段（raw_url 等）按契约 §1.8 由服务层拼装。
 
 use rusqlite::params_from_iter;
 use rusqlite::types::Value;
@@ -67,9 +66,9 @@ pub(crate) fn events_of_file(
     workspace_id: &str,
     file: &FileRow,
 ) -> Result<Vec<EventRow>, GuanlanError> {
-    // issue #26：四路 OR 改为 UNION——每路各有匹配索引可走，不再对整个工作区
-    // 逐条求值四路 OR；UNION 按 rowid 天然去重（seq 为 INTEGER PRIMARY KEY），
-    // 外层 ORDER BY seq ASC 与既有历史顺序一致，四路来源全部保留。
+    // 四路来源采用 UNION 而非 OR：每路各有匹配索引可走，避免对整个工作区逐条求值；
+    // UNION 按 rowid 天然去重（seq 为 INTEGER PRIMARY KEY），外层 ORDER BY seq ASC
+    // 与既有历史顺序一致，四路来源全部保留。
     let sql = "SELECT * FROM ( \
                  SELECT * FROM events WHERE workspace_id = ?1 AND subject_id = ?2 \
                  UNION \
@@ -162,7 +161,7 @@ pub(crate) fn edges_of_file(
 }
 
 /// 指定文件版本链分页（契约 §1.7：projectFileHistory 映射）
-/// issue #33：短读事务包装。
+/// 使用短读事务包装。
 pub fn file_revisions(
     store: &ReadonlyStore,
     file_id: &str,
@@ -202,10 +201,9 @@ pub fn file_revisions_tx(
     }
     let snapshot_generation = cursor.as_ref().map_or(current_gen, |c| c.snap) as u64;
 
-    // issue #24：精确总数首页 COUNT 一次，随游标携带给续页复用（不再每页重复
-    // COUNT 整条版本链）；同代际内无写入（writer 每次 bump generation），总数不漂。
-    // COUNT 而非 MAX(seq)：seq 空洞下仍准确（契约验收）。旧游标无 total 字段时
-    // 回退现算（行为正确，只是不省）。
+    // 精确总数仅在首页 COUNT 一次，随游标携带给续页复用（避免每页重复 COUNT 整条版本链）；
+    // 同代际内无写入（writer 每次 bump generation），总数不漂。
+    // 用 COUNT 而非 MAX(seq) 以保证 seq 空洞下仍准确；旧游标无 total 字段时回退现算。
     let total: i64 = match cursor.as_ref().and_then(|c| c.total) {
         Some(t) => t as i64,
         None => conn
@@ -263,9 +261,8 @@ pub fn file_revisions_tx(
 
     let revisions: Vec<RevisionSummary> = revs.iter().map(revision_summary).collect();
 
-    // include=events,statements,edges（契约 §1.7：文件级完整集合，首页一次带回）。
-    // issue #24：只在首页携带——续页请求不再重复查询/传输整文件关联集合
-    // （此前 Θ(V²/p) 的重复统计/传输主因）；客户端按首页取用的口径不变。
+    // include=events,statements,edges（契约 §1.7：文件级完整集合，仅在首页一次带回）。
+    // 续页请求不重复查询/传输整文件关联集合，避免随页数产生 Θ(V²/p) 的重复开销。
     let first_page = cursor.is_none();
     let include = &query.include;
     let contains = |section| include.contains(&section);
@@ -311,8 +308,8 @@ pub fn file_revisions_tx(
 }
 
 /// 阅读器兼容视图的版本行（project.ts:132-172 toRevision，camelCase 派生字段）。
-/// issue #20：不再内联任何正文（此前对每个 SVG 版本读快照内联 svgSource）——
-/// 单次响应不随版本数线性增长，正文一律经 §1.8 按版本端点单独取。
+/// 不内联任何正文（SVG 也不逐版本读快照内联 svgSource），保证单次响应不随版本数
+/// 线性增长；正文一律经 §1.8 按版本端点单独取。
 fn file_record_revision(
     rev: &RevisionRow,
     file: &FileRow,
@@ -367,12 +364,11 @@ fn file_record_revision(
     }
 }
 
-/// 文件详情/阅读器兼容视图（契约 §1.7 末段）——issue #20 契约迁移后：
-/// 只返回文件头 + 当前版（last_revision_id 命中优先，最高 seq 回退），
-/// 不读完整版本链、不内联任何正文（SVG 也不再逐版本读取，正文一律经 §1.8
-/// 按版本端点单独取）；附集合（events/statements/edges）限额 200 条作兼容
-/// 退场策略。版本链独立分页走 §1.7 `/files/{id}/revisions`。
-/// issue #33：短读事务包装。
+/// 文件详情/阅读器兼容视图（契约 §1.7 末段）：只返回文件头 + 当前版
+/// （last_revision_id 命中优先，最高 seq 回退），不读完整版本链、不内联任何正文
+/// （SVG 也不逐版本读取，正文一律经 §1.8 按版本端点单独取）；附集合
+/// （events/statements/edges）限额 200 条作兼容退场策略。版本链独立分页走 §1.7
+/// `/files/{id}/revisions`。使用短读事务包装。
 pub fn file_detail(
     store: &ReadonlyStore,
     file_id: &str,
@@ -415,7 +411,7 @@ pub fn file_detail_tx(
         Some(rev) => {
             // changedSectionsFromPrev 与摘要同源：只查当前版 modified 事件 payload
             let changed = changed_sections_of_revision(conn, &ws.workspace_id, &rev.revision_id);
-            // issue #38：isRollback 不下发到版本行（信息挂在事件上），不再传占位参数
+            // isRollback 不下发到版本行（信息挂在事件上）
             vec![file_record_revision(rev, &file, changed.as_ref())]
         }
         None => Vec::new(),
@@ -540,7 +536,7 @@ fn changed_sections_of_revision(
 
 /// 按版本读正文定位（契约 §1.8：仅按 revision_id 读取，不提供任意路径下载）。
 /// 只定位快照路径；服务层按路径流式返回正文/原始字节（不整读大文件）。
-/// issue #33：短读事务包装（只定位快照路径；文件 I/O 在事务外由服务层完成）。
+/// 使用短读事务包装（只定位快照路径；文件 I/O 在事务外由服务层完成）。
 pub fn revision_content(
     store: &ReadonlyStore,
     revision_id: &str,
@@ -559,13 +555,13 @@ pub fn revision_content_tx(
         .revision_by_id(revision_id)?
         .ok_or_else(|| GuanlanError::NotFound(format!("未找到该版本 {revision_id}")))?;
     if rev.snapshot_available == 0 {
-        // 现状提示文案（workspace-plugin.ts:345），v1 码改名 SNAPSHOT_UNAVAILABLE
+        // 沿用原提示文案（workspace-plugin.ts:345），错误码为 SNAPSHOT_UNAVAILABLE
         return Err(GuanlanError::SnapshotUnavailable(
             "此版本正文已过保留期，仅保留版本元数据；可打开当前版本或查看其他仍可用的版本。"
                 .to_owned(),
         ));
     }
-    // issue #36：非法 hash 返回明确错误（此前按字节切片可能 panic）
+    // 非法 hash 返回明确错误，避免后续按字节切片触发 panic
     let snapshot_path = store.blob_path_for(&rev.content_hash)?;
     if !snapshot_path.exists() {
         return Err(GuanlanError::SnapshotUnavailable(
@@ -582,7 +578,7 @@ pub fn revision_content_tx(
     let is_binary = !is_utf8_text;
     Ok(RevisionContentResponse {
         ok: true,
-        // 非 UTF-8 文本格式（PDF / 图片 / Office / 归档等）：raw_url 指向自身 v1 raw=1 流式路径
+        // 非 UTF-8 文本格式（PDF / 图片 / Office / 归档等）：raw_url 指向自身 `/api/v1/...?raw=1` 流式路径
         raw_url: is_binary.then(|| {
             format!(
                 "/api/v1/revisions/{}/content?raw=1",
@@ -594,7 +590,7 @@ pub fn revision_content_tx(
         // 正文不整读：UTF-8 文本格式由服务层按 snapshot_path 流式 utf-8 返回
         text: None,
         snapshot_path: (!is_binary || query.raw).then_some(snapshot_path),
-        // issue #37：稳定 ETag 的来源（内容寻址）
+        // 稳定 ETag 的来源（内容寻址）
         content_hash: rev.content_hash.clone(),
     })
 }

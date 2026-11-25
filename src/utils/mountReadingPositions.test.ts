@@ -8,7 +8,7 @@ import {
 } from './mountReadingPositions';
 
 /**
- * C05 行为锁定：外挂资料阅读位置按规范化路径稳定哈希（来源工作区 root_key）
+ * 外挂资料阅读位置行为锁定：按规范化路径稳定哈希（来源工作区 root_key）
  * 分桶持久保留——
  * · 桶键稳定：同 rootKey 同键（`guanlan.mountReading.v1.<rootKey>`）；
  * · record/load roundtrip：同文件覆盖、不同文件并存、同版本重复记录零写入；

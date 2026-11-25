@@ -132,7 +132,7 @@ test('buildVersionChain：主序 seq 降序（上新下旧）、prev 沿修订�
   assert.deepEqual(buildVersionChain(historyOf([])).map((node) => node.label), []);
 });
 
-test('TA-01 逆序 fixture：occurred 日与 seq 相反时链仍为 v6→…→v1，prev 沿修订链、仅 v1 为基线', () => {
+test('逆序 fixture：occurred 日与 seq 相反时链仍为 v6→…→v1，prev 沿修订链、仅 v1 为基线', () => {
   // occurred 日随 seq 递减（材料日期"逆序"），模拟文档自述日期早于晚收录的版本
   const reversed = Array.from({ length: 6 }, (_, i) => {
     const seq = i + 1;
@@ -172,7 +172,7 @@ test('TA-01 逆序 fixture：occurred 日与 seq 相反时链仍为 v6→…→v
   assert.equal(detectDateDisorder(buildVersionChain(historyOf(ordered))), false);
 });
 
-test('TA-01 悬空 prev：prev_revision_id 不在集合时回退 seq 前驱，resolvePrevNode 不落 baseline', () => {
+test('悬空 prev：prev_revision_id 不在集合时回退 seq 前驱，resolvePrevNode 不落 baseline', () => {
   const revs = Array.from({ length: 5 }, (_, i) => {
     const seq = i + 1;
     return revision({
@@ -207,7 +207,7 @@ test('listBaselineSections：文档头部与顶层章节均入清单并带行范
     [['文档头部', 1, 2], ['甲', 3, 4], ['乙', 5, 6]]);
 });
 
-// ---------- TA-03 时间口径统一 ----------
+// ---------- 时间口径统一 ----------
 
 test('timeFormat.formatLocalStamp：含时刻按本地时区输出 MM-DD HH:mm，纯日期取 MM-DD 且无尾空格', () => {
   assert.equal(formatLocalStamp('2026-11-09T01:30:00.000Z', 'Asia/Shanghai'), '11-09 09:30');

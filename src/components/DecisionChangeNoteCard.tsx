@@ -6,10 +6,10 @@ import {
 import type { DecisionChangeNote } from '../utils/decisionChangeNote';
 
 /**
- * 证道阁内的《最新已拍板决策变更单》卡片（PRD 3.3 第 3 步 / AC-03）。
+ * 上下文清单内的《最新已拍板决策变更单》卡片。
  *
  * 纯展示组件：App 在 Inline 拍板完成或 SSE decision_writeback 到达时生成
- * DecisionChangeNote 并“推送”到证道阁；抽屉打开时置顶展示最新一条。
+ * DecisionChangeNote 并推送到上下文清单；抽屉打开时置顶展示最新一条。
  * 缺失字段如实显示「未记录」，不造确认人/日期。
  */
 export const DecisionChangeNoteCard: React.FC<{ note: DecisionChangeNote }> = ({ note }) => {

@@ -1,6 +1,6 @@
 //! guanlan-service 库入口：把 `guanlan serve` 的启动流程暴露成可编程接口，
 //! 供 CLI 与桌面壳（guanlan-desktop，Tauri 进程内嵌）共用同一份服务实现——
-//! 方案 §7「桌面壳不复制数据库与索引代码」：壳只启动/连接同一服务，不另建实现。
+//! 桌面壳不复制数据库与索引代码，只启动或连接同一服务，不另建实现。
 //!
 //! 读取路径与 CLI 完全一致：数据目录解析 → 同工作区 OS 级排他锁 → 只读打开
 //! index.db 并认领工作区行 → 绑定 127.0.0.1 → axum 路由。任何一步失败返回
@@ -26,12 +26,12 @@ pub struct ServeConfig {
     /// 工作区根目录（原始字符串参与身份计算，契约 §2.1：按 Node path.resolve(win32)
     /// 口径解析，不提前经 PathBuf 规范化）。
     pub root: String,
-    /// 监听端口；0 = 内核分配随机端口（方案 §7）。
+    /// 监听端口；0 = 内核分配随机端口。
     pub port: u16,
     /// 桌面壳模式：为 Tauri WebView（http(s)://tauri.localhost）与本机开发端口放行
     /// CORS。CLI serve 同源访问不需要，保持默认 false 不改变现有行为。
     pub cors_desktop: bool,
-    /// 后台增量索引（PRD v2.0 §3.4）：启用后启动 File Watcher（OS 原生事件驱动，
+    /// 后台增量索引：启用后启动 File Watcher（OS 原生事件驱动，
     /// 100ms 滑动防抖 + 220ms 合并上限，见 [`watcher`]），
     /// 并在启动时入队一次整库核验，让「打开即见已存数据、后台并入最新改动」成立。
     ///
@@ -53,7 +53,7 @@ pub struct RunningService {
     pub endpoint: String,
     /// 实际监听地址（随机端口口径下的权威值）。
     pub local_addr: SocketAddr,
-    /// 服务实例身份（方案 §6 SSE 三元组之一）。
+    /// 服务实例身份（SSE 通知三元组之一）。
     pub instance_id: String,
     /// 初始主工作区数据目录（index.db 与 blobs/ 所在）。
     pub data_dir: PathBuf,
@@ -153,16 +153,15 @@ pub async fn start_service_with_projects_file(
 
     // 1) 数据目录解析（契约 contract-storage.md §3.1：GUANLAN_DATA_DIR 整体替换 base）
     let data_dir = guanlan_core::storage::default_data_dir(&root)?;
-    // C05：主区根 plain() 规范化（挂载互斥基准；主区 root_key 身份口径不受影响）
+    // 主区根 plain() 规范化（挂载互斥基准；主区 root_key 身份口径不受影响）
     let root_normalized = guanlan_core::domain::mounts::normalize_mount_root(&root)?;
-    // 2) 同工作区 OS 级排他锁（方案 §7，:151）
+    // 2) 同工作区 OS 级排他锁
     let lock = runtime::acquire_workspace_lock(&data_dir)?;
-    // 3) 写侧就位（批次二）：打开（或创建）可写库，确保 schema 与工作区行存在，
-    //    写连接随后移交专用写线程（方案 §0「唯一写入线程」）。
-    //    批次一在这里是「index.db 不存在直接拒绝启动」；批次二由写入侧自己建库，
-    //    桌面壳因此可以在没有历史库时直接跑起来。
+    // 3) 写侧就位：打开（或创建）可写库，确保 schema 与工作区行存在，
+    //    写连接随后移交专用写线程（「唯一写入线程」，contract-storage.md §4.2）；
+    //    首次运行时由写入侧建库，桌面壳因此可以在没有历史库时直接启动。
     let writer = guanlan_core::index::Writer::open_at(&data_dir, &root)?;
-    // SSE 通知中枢（冻结契约 J）：写线程处理函数经桥（同步 mpsc）投递，
+    // SSE 通知中枢（contract-query-api.md §2.2）：写线程处理函数经桥（同步 mpsc）投递，
     // 桥泵线程转发给 NoticeHub（broadcast::send 为同步调用，无需 async）
     let notices = runtime::NoticeHub::new();
     let (bridge_tx, bridge_rx) = std::sync::mpsc::channel::<index_jobs::SseNotice>();
@@ -183,7 +182,7 @@ pub async fn start_service_with_projects_file(
         cfg.background_index,
     );
     // 4) 只读打开并认领工作区行（契约 §2.2/§4-2：只按库内已有行认领，不新建）；
-    //    issue #4：连接池按 GUANLAN_QUERY_POOL_SIZE（默认 4）开 N 条独立只读连接，
+    //    连接池按 GUANLAN_QUERY_POOL_SIZE（默认 4）开 N 条独立只读连接，
     //    各自认领同一工作区行——轻量读取不再互等（有界执行见 http::query_exec）
     let pool_size = http::query_exec::pool_size_from_env().max(1);
     let primary = match ReadonlyStore::open_for_root(&root) {
@@ -281,15 +280,15 @@ pub async fn start_service_with_projects_file(
 
     let state = http::AppState {
         exec: primary_exec,
-        // issue #32：响应字节预算（GUANLAN_RESPONSE_BUDGET_MIB / _MAX_MIB 可调）
+        // 响应字节预算（GUANLAN_RESPONSE_BUDGET_MIB / _MAX_MIB 可调）
         budget: Arc::new(http::ResponseBudget::from_env()),
         instance_id: instance_id.clone(),
         dist: runtime::resolve_dist_dir(),
         jobs: jobs.clone(),
         watcher: watcher_handle.clone(),
         notices: Some(notices.clone()),
-        // C05：只读参考工作区挂载注册表（侧车 mounts.json 装载 + 离线降级；
-        // 挂载互斥以规范化后的主区根为基准——quiet-md 外挂目录隔离纪律）
+        // 只读参考工作区挂载注册表（侧车 mounts.json 装载 + 离线降级；
+        // 挂载互斥以规范化后的主区根为基准，严禁外挂目录与主区互为父子）
         mounts: primary_mounts,
         projects: Some(Arc::clone(&project_hub)),
     };
@@ -299,9 +298,9 @@ pub async fn start_service_with_projects_file(
         http::build_router(state)
     };
 
-    // 7) 启动后台对账（方案第 7 行「打开已有工作区先显示已保存的数据，后台对账
+    // 7) 启动后台对账（「打开已有工作区先显示已保存的数据，后台对账
     //    不阻塞正文读取与事件查询」）：读路径立即可用，写线程随后把最新文档并进来。
-    //    建议3（重启孤儿闭合）：先重入队上轮遗留的 queued/running 任务（job_runs
+    //    重启孤儿闭合：先重入队上轮遗留的 queued/running 任务（job_runs
     //    持久化），再排整库核验——其收尾 recompute 对全部 suspended/running 节点
     //    幂等重判，『决策已清零但唤醒未执行』与『作业挂起中重启』两类孤儿都被闭合。
     if cfg.background_index {

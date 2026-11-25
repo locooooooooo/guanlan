@@ -30,7 +30,7 @@ export interface UseFileOpsOptions {
 }
 
 /**
- * A05 身份保真文件操作状态与执行 Hook（独立抽离，避免继续向 App.tsx 堆叠业务逻辑）。
+ * 身份保真文件操作状态与执行 Hook（独立抽离，避免继续向 App.tsx 堆叠业务逻辑）。
  */
 export function useFileOps({
   workspaceEpoch,
@@ -134,7 +134,7 @@ export function useFileOps({
         setModalRequest(null);
         setServerError(null);
         onMutationSuccess(resp, describeFileMutationSuccess(resp));
-        // C04：返回结果供宿主接线判断是否需要跟进确认制引用路径修复（成功后才有资格写引用）
+        // 返回结果供宿主接线判断是否需要跟进确认制引用路径修复（成功后才写引用）
         return true;
       } finally {
         setSubmitting(false);

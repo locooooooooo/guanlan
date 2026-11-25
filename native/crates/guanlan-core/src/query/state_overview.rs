@@ -1,4 +1,4 @@
-//! 统一状态机投影（PRD v2.0 §2.2 / apiContract A：GET /api/v1/state-overview）。
+//! 统一状态机投影（GET /api/v1/state-overview）。
 //!
 //! 四视图（专项卡片、详情下拉、星图节点、文档顶栏）的唯一数据源：
 //! 只读 `initiatives` / `artifact_states`（+ `files` 补标题与路径），不现场重算
@@ -23,7 +23,7 @@ pub fn state_overview(
     initiative_id: Option<&str>,
 ) -> Result<StateOverview, GuanlanError> {
     if store.schema_version()? < 2 {
-        // v0/v1 库：新表尚未由写入侧建出，投影为空（首轮 reconcile 后有数）
+        // schema 版本低于 2 的旧库尚无状态投影表，返回空投影（首轮 reconcile 后有数）
         return Ok(StateOverview::default());
     }
     let conn = store.conn();

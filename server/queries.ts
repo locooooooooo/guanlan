@@ -1,7 +1,7 @@
 /**
- * 观澜 v0.4 第一轮 —— 事件分页查询
+ * 观澜 Node 对拍基线 —— 事件分页查询
  *
- * 方案 §5：支持日期、事项、格式、事件种类、时间口径和游标。
+ * 支持日期、事项、格式、事件种类、时间口径和游标：
  * - 首屏返回事件摘要与下一页游标
  * - 游标绑定筛选与首次查询时的最大事件序号
  * - 新增事件先提示「有新变化」，用户刷新后进入新的查询窗口
@@ -368,7 +368,7 @@ export function safeJson(raw: string): Record<string, unknown> {
 
 // ============================================================
 // 按日/事项聚合：工程画布的标尺刻度与虚线折叠组
-// （方案 §2：一天内同一明确事项的事件放进现有虚线折叠组，组标题显示真实数量）
+// （一天内同一明确事项的事件放进虚线折叠组，组标题显示真实数量）
 // ============================================================
 
 export interface EventDayItem {
@@ -435,12 +435,12 @@ export interface EventDaysQuery {
   /** 桶粒度：day（默认，逐日）/ week（周一为桶键）/ month（YYYY-MM） */
   granularity?: EventDayGranularity;
   limitDays?: number;
-  /** 每桶返回的样本卡片数（画布卡片密度，方案 §5 首屏密度） */
+  /** 每桶返回的样本卡片数（画布卡片密度） */
   samplesPerDay?: number;
 }
 
 /**
- * 桶键表达式（T03 全工程时间覆盖 + TA-03 本地日口径）：
+ * 桶键表达式（全工程时间覆盖，本地日口径）：
  * - day = YYYY-MM-DD（本地日历日）
  * - month = YYYY-MM
  * - week = 该日所在周的周一（YYYY-MM-DD）：先回退 6 天再前进到最近的周一，7 天窗口内恰有一个周一
@@ -626,7 +626,7 @@ export function queryEventDays(store: WorkspaceStore, query: EventDaysQuery): Ev
   const undated = groupMap.get('');
 
   // 有日期的组按桶键倒序（day/month/week 的键均为可排序的 YYYY-MM-DD / YYYY-MM）；
-  // 「日期待考」永远排在最后（方案 §3）
+  // 「日期待考」永远排在最后
   const groups = Array.from(groupMap.values())
     .filter((g) => g.date !== '')
     .sort((a, b) => (a.date < b.date ? 1 : -1))

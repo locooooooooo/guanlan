@@ -1,8 +1,8 @@
 /**
- * AC-05：证道阁双模导出「抽屉真实装配」接线测试。
+ * 智能体上下文双模导出「抽屉真实装配」接线测试。
  *
- * 纯函数层（zhendaoge-preset-01.test.ts）已按 PRD 模板逐字锁定；本文件锁的是
- * F21 指出的最后一公里——AgentContextDrawer 实际调用 buildGuanlanContextMarkdown /
+ * 纯函数层（agent-context-preset.test.ts）已锁定默认包与模板；本文件锁定
+ * AgentContextDrawer 实际调用 buildGuanlanContextMarkdown /
  * buildMcpPayload 时是否传齐 initiative / versionLabel / stateLabel /
  * sessionCheckpointId，而不是只传 path+granularityLabel。
  */
@@ -13,7 +13,7 @@ import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 
 import { AgentContextDrawer } from '../src/components/ModalsAndDrawers';
-import { buildMcpPayload } from '../src/utils/zhendaogeExport';
+import { buildMcpPayload } from '../src/utils/agentContextExport';
 import type { EvidencePointer } from '../src/types/guanlan';
 
 const stripComments = (html: string): string => html.replace(/<!--.*?-->/g, '');
@@ -58,7 +58,7 @@ function drawerProps(overrides: Record<string, unknown> = {}) {
   };
 }
 
-test('AC-05 抽屉模式 A：根标签带 initiative/stage，引用行带 (v2 · 选中修订)', () => {
+test('上下文抽屉模式 A：根标签带 initiative/stage，引用行带 (v2 · 选中修订)', () => {
   const html = stripComments(
     renderToString(createElement(AgentContextDrawer, drawerProps()))
   );
@@ -73,7 +73,7 @@ test('AC-05 抽屉模式 A：根标签带 initiative/stage，引用行带 (v2 ·
   );
 });
 
-test('AC-05 模式 B：session_checkpoint_id / initiative / context_bundle.version 均有值', () => {
+test('上下文导出模式 B：session_checkpoint_id / initiative / context_bundle.version 均有值', () => {
   const payload = buildMcpPayload({
     workspaceRoot: 'H:/ws',
     initiative: { id: 'init_04', name: '04-智能体代码', stage: '执行' },
@@ -98,9 +98,9 @@ test('AC-05 模式 B：session_checkpoint_id / initiative / context_bundle.versi
   assert.equal(payload.context_bundle[0].uri, 'guanlan://04-智能体代码/README.md');
 });
 
-test('AC-05 接线：抽屉传齐字段，App 提供 initiative/sessionCheckpoint/referenceMeta', () => {
+test('上下文导出接线：抽屉传齐字段，App 提供 initiative/sessionCheckpoint/referenceMeta', () => {
   const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8');
-  // V08 拆解 ModalsAndDrawers 后，AgentContextDrawer 实现位于 components/modals/AgentContextDrawer.tsx
+  // 拆解 ModalsAndDrawers 后，AgentContextDrawer 实现位于 components/modals/AgentContextDrawer.tsx
   const drawer = [
     '../src/components/ModalsAndDrawers.tsx',
     '../src/components/modals/AgentContextDrawer.tsx',
@@ -117,7 +117,7 @@ test('AC-05 接线：抽屉传齐字段，App 提供 initiative/sessionCheckpoin
     assert.ok(drawer.includes(token), `AgentContextDrawer 缺 ${token}`);
   }
 
-  // D01-a 拆层后 App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
+  // 拆层后 App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
   const app = ['../src/App.tsx', '../src/stores/useWorkspaceStore.tsx', '../src/components/app/AppModalsStack.tsx']
     .map((p) => read(p))
     .join(String.fromCharCode(10))

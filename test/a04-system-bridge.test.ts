@@ -19,7 +19,7 @@ import {
   type NativeDragDropEvent,
 } from '../src/services/desktopBridge';
 
-describe('A04 工作区路径防线与原生系统桥接', () => {
+describe('工作区路径防线与原生系统桥接', () => {
   const originalWindow = (globalThis as { window?: unknown }).window;
   const originalNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
 

@@ -1,12 +1,10 @@
 /**
- * 观澜 Guanlan v0.4 第一轮 —— Vite 开发服务器中间件
+ * 观澜 Node 对拍基线 —— Vite 开发服务器中间件（已冻结，仅作测试与历史参考）
  *
- * 职责（方案 §5 改动表）：
+ * 职责：
  * - 扫描器只产出路径、字节哈希、mtime 和内容；本服务比对持久库后分配版本与事件
- * - 查询接口改为分页：/api/workspace/events 支持日期、事项、格式、种类、时间口径和游标
+ * - 查询接口支持分页：/api/workspace/events 支持日期、事项、格式、种类、时间口径和游标
  * - 按文件/版本 ID 读取内容，不提供任意路径下载（/api/workspace/file 仅限已配置根目录）
- *
- * 后续 MCP 适配器可直接复用 reconcile / queryEvents / projectFileHistory 这些服务函数。
  */
 
 import type { Plugin } from 'vite';
@@ -227,7 +225,7 @@ export function guanlanWorkspacePlugin(options: WorkspacePluginOptions): Plugin 
         watcher?.stop();
         broadcaster.closeAll();
       });
-      // 启动预热：后台对账一次，浏览器首屏直接命中缓存（方案 §5 首屏密度）
+      // 启动预热：后台对账一次，浏览器首屏直接命中缓存
       setTimeout(() => {
         try {
           doScan(false);
@@ -482,7 +480,6 @@ export function guanlanWorkspacePlugin(options: WorkspacePluginOptions): Plugin 
 
 /**
  * 路径边界校验：拒绝越界访问（..、盘符越界、UNC）
- * 对应 v0.3 §10 安全要求
  */
 export function validatePath(
   rootPath: string,

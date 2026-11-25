@@ -34,9 +34,9 @@ import { ContextCapsuleModal } from '../src/components/ContextCapsuleModal';
 import type { FileRecord } from '../src/types/guanlan';
 
 /**
- * U3 批次 · 浮层动效与结构契约（ui-ux-polish-03-overlays）。
+ * 浮层动效与结构契约（ui-ux-polish-03-overlays）。
  *
- * U07 · 时空命令面板（Ctrl+K）双栏检索台与可点击语法胶囊（任务卡 §4 U07）：
+ * 时空命令面板（Ctrl+K）双栏检索台与可点击语法胶囊：
  *  ① 动效硬契约：面板浮层所用的动效类「声明 + prefers-reduced-motion 降级」双登记；
  *     keyframes 只动 transform/opacity；时长缓动只吃 --dur-* / --ease-* 令牌；
  *     共享动效层零 will-change、零布局属性动画（motion.css §头部硬契约）。
@@ -45,7 +45,7 @@ import type { FileRecord } from '../src/types/guanlan';
  *  ③ 补全接线（源码级）：胶囊点击 / Token × 移除一律经 onQueryChange 只改 query
  *     字符串（130ms 防抖与过期响应丢弃纪律不被绕过）；呼出即聚焦、打开路径零 IO。
  *
- * U08 · 批阅看板视觉降噪、六态分布带与「已知悉」正向动效退场（任务卡 §4 U08）：
+ * 批阅看板视觉降噪、六态分布带与「已知悉」正向动效退场：
  *  ④ 六态比例带纯计算：分项和诚实分母、零态剔除、total=0 诚实空态、weight 守恒；
  *  ⑤ 泳道主次：行动泳道 primary、已办结 muted 降噪、unknown 恒 secondary
  *     （诚实标示绝不降噪，停机红线）；
@@ -58,7 +58,7 @@ import type { FileRecord } from '../src/types/guanlan';
  * 既有口径冻结；test/b02-quick-preview.test.ts 的 Space 守卫依赖 data-esc-layer="open"；
  * test/e04-hitl-review-board.test.ts 的六态键序 / 已知悉 / 孤儿修复锚点完整不回退。
  *
- * U09 · 原位轻预览（QuickLook）与证据篮玻璃动效质感统一（任务卡 §4 U09）：
+ * 原位轻预览（QuickLook）与证据篮玻璃动效质感统一：
  *  ⑨ 队列进度胶囊纯函数（底栏「3 / 18」+ 前后预览提示 + 首末边界诚实文案）；
  *  ⑩ QuickPreviewModal / ContextCapsuleModal 统一 glass-pop 琉璃材质 + glx-popover-in
  *     入场；队列切换（←/→）内容区以既有 glx-fade-in（--dur-1 纯 opacity）交叉淡入；
@@ -114,7 +114,7 @@ function renderPalette(
 
 // ---------- ① 动效硬契约（声明 + reduce 降级双登记） ----------
 
-test('U07 动效契约：面板浮层动效类「声明 + reduce 降级」双登记，keyframes 只动 transform/opacity，全层零 will-change', () => {
+test('命令面板·动效契约：面板浮层动效类「声明 + reduce 降级」双登记，keyframes 只动 transform/opacity，全层零 will-change', () => {
   const motionCss = readFileSync(
     fileURLToPath(new URL('../src/styles/motion.css', import.meta.url)),
     'utf8'
@@ -122,7 +122,7 @@ test('U07 动效契约：面板浮层动效类「声明 + reduce 降级」双登
   const reduceSection = motionCss.slice(
     motionCss.indexOf('@media (prefers-reduced-motion: reduce)')
   );
-  // U07 三类全部是既有已登记类（不新增动效类 = 零新增降级欠账）：
+  // 三类全部是既有已登记类（不新增动效类 = 零新增降级欠账）：
   // 面板入场 glx-popover-in / 遮罩 glx-backdrop-in / 胶囊悬停触感 glx-pill-tactile
   for (const cls of ['.glx-popover-in', '.glx-backdrop-in', '.glx-pill-tactile']) {
     assert.ok(motionCss.includes(cls), `motion.css 应声明 ${cls}`);
@@ -149,7 +149,7 @@ test('U07 动效契约：面板浮层动效类「声明 + reduce 降级」双登
 
 // ---------- ② SSR 结构锚点 ----------
 
-test('U07 结构锚点：esc-layer/listbox/option/aria-selected 完整不回退 + lg 双栏 60/40 + 右预览窗', () => {
+test('命令面板·结构锚点：esc-layer/listbox/option/aria-selected 完整不回退 + lg 双栏 60/40 + 右预览窗', () => {
   const items: PaletteItem[] = [
     fileItem({ revisionId: 'rev_svg9', format: 'svg', coverage: 'svg_text', pendingDecisions: 2 }),
     fileItem({ key: 'srv:f2:rev_f2', fileId: 'f2' }),
@@ -161,7 +161,7 @@ test('U07 结构锚点：esc-layer/listbox/option/aria-selected 完整不回退 
   assert.ok(html.includes('role="option"'), '结果行 option 语义');
   assert.ok(html.includes('aria-selected="true"'), '选中行 aria-selected');
   assert.ok(html.includes('data-command-palette-input'), '呼出即输入入口');
-  // U07 双栏与预览窗
+  // 双栏与预览窗
   assert.ok(html.includes('glx-popover-in'), '面板入场柔和缩放淡入');
   assert.ok(html.includes('glx-backdrop-in'), '遮罩淡入');
   assert.ok(html.includes('lg:w-[60%]') && html.includes('lg:w-[40%]'), 'lg ≥1024px 双栏 60/40');
@@ -176,7 +176,7 @@ test('U07 结构锚点：esc-layer/listbox/option/aria-selected 完整不回退 
   assert.ok(html.includes('Ctrl+Enter') && html.includes('Tab 加入证据篮'));
 });
 
-test('U07 语法胶囊行：五枚常驻胶囊逐字 + aria-pressed 开关语义 + 胶囊点击即补全接线', () => {
+test('命令面板·语法胶囊行：五枚常驻胶囊逐字 + aria-pressed 开关语义 + 胶囊点击即补全接线', () => {
   const html = renderPalette([], { query: '' });
   assert.ok(html.includes('data-command-palette-grammar'), '输入栏下方常驻胶囊行');
   for (const s of PALETTE_GRAMMAR_SUGGESTIONS) {
@@ -207,7 +207,7 @@ test('U07 语法胶囊行：五枚常驻胶囊逐字 + aria-pressed 开关语义
   assert.equal(parsePaletteTokens('type:md').length, 1);
 });
 
-test('U07 Token 微标签：语法意图 token 彩色微标签 + 未识别诚实标注（数据区禁飞不适用：纯 chrome 层）', () => {
+test('命令面板·Token 微标签：语法意图 token 彩色微标签 + 未识别诚实标注（数据区禁飞不适用：纯 chrome 层）', () => {
   const html = renderPalette([], { query: '@今天 type:md @近7天' });
   assert.ok(html.includes('data-command-palette-tokens'), 'Token 微标签容器');
   assert.ok(html.includes('data-palette-token="@今天"'));
@@ -228,7 +228,7 @@ test('U07 Token 微标签：语法意图 token 彩色微标签 + 未识别诚实
 });
 
 // ══════════════════════════════════════════════════════════════════════════
-// U08 · 批阅看板视觉降噪、六态分布带与「已知悉」正向动效退场
+// 批阅看板视觉降噪、六态分布带与「已知悉」正向动效退场
 // ══════════════════════════════════════════════════════════════════════════
 
 function makeBoardCard(overrides: Partial<ReviewBoardCard> = {}): ReviewBoardCard {
@@ -315,7 +315,7 @@ function renderBoard(
 
 // ---------- ④ 六态比例带纯计算 ----------
 
-test('U08 六态比例带纯计算：分项和诚实分母、零态剔除、total=0 诚实空态、weight 守恒', () => {
+test('批阅看板·六态比例带纯计算：分项和诚实分母、零态剔除、total=0 诚实空态、weight 守恒', () => {
   // 常规六态：段序恒同 REVIEW_BOARD_LANES 键序；weight=count 天然守恒
   const band = computeReviewBoardRatioBand(
     makeCounts({
@@ -371,7 +371,7 @@ test('U08 六态比例带纯计算：分项和诚实分母、零态剔除、tota
 
 // ---------- ⑤ 泳道主次权重与 statement 反查 ----------
 
-test('U08 泳道主次：行动泳道 primary、已办结 muted、unknown 恒 secondary（诚实标示绝不降噪）', () => {
+test('批阅看板·泳道主次：行动泳道 primary、已办结 muted、unknown 恒 secondary（诚实标示绝不降噪）', () => {
   assert.equal(reviewBoardLanePriority('pending_decision'), 'primary');
   assert.equal(reviewBoardLanePriority('awaiting_receipt'), 'primary');
   assert.equal(reviewBoardLanePriority('dispatchable'), 'secondary');
@@ -409,7 +409,7 @@ test('U08 泳道主次：行动泳道 primary、已办结 muted、unknown 恒 se
 
 // ---------- ⑥ SSR 结构：比例带 + glx-t-panel 弹簧抽屉 + 泳道降噪 ----------
 
-test('U08 SSR：六态比例带替代冗长说明、抽屉统一 glx-t-panel 两段式弹簧入场、泳道 tier 锚点', () => {
+test('批阅看板·SSR：六态比例带替代冗长说明、抽屉统一 glx-t-panel 两段式弹簧入场、泳道 tier 锚点', () => {
   const board = makeBoard(
     makeCounts({
       pending_decision: 1,
@@ -509,7 +509,7 @@ test('U08 SSR：六态比例带替代冗长说明、抽屉统一 glx-t-panel 两
   assert.ok(html.includes('原位拍板'));
 });
 
-test('U08 SSR 空态：全零 counts 诚实渲染空比例带（不伪装占比），看板其余锚点不回退', () => {
+test('批阅看板·SSR 空态：全零 counts 诚实渲染空比例带（不伪装占比），看板其余锚点不回退', () => {
   const html = renderBoard(makeBoard(makeCounts({ total: 0 }), []));
   assert.ok(html.includes('data-review-board-ratio-band="empty"'), '诚实空态带');
   assert.ok(html.includes('看板暂无在办事项'), '空态文案（sr-only 语义可读）');
@@ -521,7 +521,7 @@ test('U08 SSR 空态：全零 counts 诚实渲染空比例带（不伪装占比�
 
 // ---------- ⑦ 正向反馈接线（唯一触发源 = 后端 CAS 确认成功） ----------
 
-test('U08 反馈接线：脉冲只在 notice.kind==="ok"（后端 CAS 确认）后沿 busyKey 释放沿触发，点击绝不直接触发', () => {
+test('批阅看板·反馈接线：脉冲只在 notice.kind==="ok"（后端 CAS 确认）后沿 busyKey 释放沿触发，点击绝不直接触发', () => {
   const src = readSrc('components/ReviewBoardDrawer.tsx');
   const codeOnly = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   // 门控行逐字：busyKey 释放沿 + ok notice 双条件
@@ -552,7 +552,7 @@ test('U08 反馈接线：脉冲只在 notice.kind==="ok"（后端 CAS 确认）�
 
 // ---------- ⑧ 动效契约：声明 + reduce 降级双登记 ----------
 
-test('U08 动效契约：glx-ack-mark / glx-card-settle 声明与 reduce 停帧双登记，光环装饰层整层隐藏，时长零写死', () => {
+test('批阅看板·动效契约：glx-ack-mark / glx-card-settle 声明与 reduce 停帧双登记，光环装饰层整层隐藏，时长零写死', () => {
   const motionCss = readFileSync(
     fileURLToPath(new URL('../src/styles/motion.css', import.meta.url)),
     'utf8'
@@ -584,14 +584,14 @@ test('U08 动效契约：glx-ack-mark / glx-card-settle 声明与 reduce 停帧�
       `${kf} 禁 width/height/top/left 布局动画`
     );
   }
-  // U08 新增段（§3.27 至 reduce 块前）时长缓动只吃令牌，零写死 ms
+  // 批阅看板动效新增段（§3.27 至 reduce 块前）时长缓动只吃令牌，零写死 ms
   const u08Block = motionCss.slice(
     motionCss.indexOf('§3.27'),
     motionCss.indexOf('@media (prefers-reduced-motion: reduce)')
   );
   assert.ok(
     !/\d+(\.\d+)?ms/.test(u08Block),
-    'U08 动效时长零写死 ms（只吃 --dur-* 令牌）'
+    '批阅看板动效时长零写死 ms（只吃 --dur-* 令牌）'
   );
   assert.ok(u08Block.includes('var(--dur-2)'), '徽记弹出走 --dur-2');
   assert.ok(u08Block.includes('var(--dur-3)'), '光环扩散与卡片退场走 --dur-3');
@@ -600,14 +600,14 @@ test('U08 动效契约：glx-ack-mark / glx-card-settle 声明与 reduce 停帧�
 });
 
 // ══════════════════════════════════════════════════════════════════════════
-// U09 · 原位轻预览（QuickLook）与证据篮玻璃动效质感统一（任务卡 §4 U09）：
+// 原位轻预览（QuickLook）与证据篮玻璃动效质感统一：
 //  ⑨ 队列进度胶囊纯函数：底栏「3 / 18」等宽进度 + 前后预览提示 + 边界诚实文案；
 //  ⑩ QuickPreviewModal SSR：glass-pop + glx-popover-in 统一琉璃入场，胶囊随队列渲染；
 //  ⑪ Space <100ms 缓存命中首帧红线（源码级）：同步缓存命中与 80ms spinner 阈值原样
 //     不动，交叉淡入只在 ←/→ 导航沿挂载（首帧零动画）；
 //  ⑫ 证据篮徽标脉冲：唯一触发源 = store 实际入篮（计数仅上升沿），点击链零脉冲
 //     （假乐观红线）；
-//  ⑬ ContextCapsuleModal 琉璃统一 + F01 两阶段门禁锚点不回退；
+//  ⑬ ContextCapsuleModal 琉璃统一 + 两阶段门禁锚点不回退；
 //  ⑭ 动效契约：glx-badge-pop「声明 + reduce 停帧」双登记，队列淡入复用既有
 //     glx-fade-in（--dur-1 纯 opacity），零新增入场类欠账。
 // ══════════════════════════════════════════════════════════════════════════
@@ -679,8 +679,8 @@ function renderCapsule(overrides: Record<string, unknown> = {}): string {
 
 // ---------- ⑨ 队列进度胶囊纯函数（底栏「3 / 18」+ 前后预览提示） ----------
 
-test('U09 队列进度纯函数：进度文案、三级标题回退、首末边界诚实提示、单份/非法索引不出胶囊', () => {
-  // 进度文案（任务卡口径逐字「3 / 18」）
+test('轻预览与证据篮·队列进度纯函数：进度文案、三级标题回退、首末边界诚实提示、单份/非法索引不出胶囊', () => {
+  // 进度文案（逐字「3 / 18」）
   assert.equal(formatQuickQueueProgressLabel(2, 18), '3 / 18');
   assert.equal(formatQuickQueueProgressLabel(0, 18), '1 / 18');
   assert.equal(formatQuickQueueProgressLabel(17, 18), '18 / 18');
@@ -742,7 +742,7 @@ test('U09 队列进度纯函数：进度文案、三级标题回退、首末边�
 
 // ---------- ⑩ 轻预览 SSR：琉璃统一 + 队列胶囊 + Space 首帧红线 ----------
 
-test('U09 QuickPreviewModal SSR：glass-pop + glx-popover-in 统一琉璃入场，底栏队列进度胶囊随队列渲染', () => {
+test('轻预览与证据篮·QuickPreviewModal SSR：glass-pop + glx-popover-in 统一琉璃入场，底栏队列进度胶囊随队列渲染', () => {
   const { queue, files } = qpQueue([
     ['f_a', '登录方案'],
     ['f_b', '架构决策'],
@@ -752,7 +752,7 @@ test('U09 QuickPreviewModal SSR：glass-pop + glx-popover-in 统一琉璃入场�
   // Esc 阶梯 / Space 守卫依赖不回退（useQuickPreview 全局捕获器早退依赖）
   assert.ok(html.includes('data-esc-layer="open"'), 'data-esc-layer="open" 不回退');
   assert.ok(html.includes('data-quick-preview-modal'), '轻预览根锚点');
-  // U09 琉璃统一：glass-pop 材质（inset 顶沿高光 + 双层深影 + blur28）+ glx-popover-in
+  // 琉璃统一：glass-pop 材质（inset 顶沿高光 + 双层深影 + blur28）+ glx-popover-in
   // 柔和缩放淡入 + glx-backdrop-in 遮罩淡入；描边统一 --glass-hairline（与命令面板同配方）
   assert.ok(html.includes('glass-pop'), 'glass-pop 琉璃浮层材质');
   assert.ok(html.includes('glx-popover-in'), 'glx-popover-in 弹窗入场');
@@ -776,7 +776,7 @@ test('U09 QuickPreviewModal SSR：glass-pop + glx-popover-in 统一琉璃入场�
   assert.ok(!renderQuickPreview(solo.queue, solo.files).includes('data-quick-preview-queue-pill'));
 });
 
-test('U09 首帧红线（源码级）：缓存命中同步路径与 80ms spinner 阈值原样不动，交叉淡入只在 ←/→ 导航沿挂载', () => {
+test('轻预览与证据篮·首帧红线（源码级）：缓存命中同步路径与 80ms spinner 阈值原样不动，交叉淡入只在 ←/→ 导航沿挂载', () => {
   const src = readSrc('components/QuickPreviewModal.tsx');
   const codeOnly = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   // 停机红线：Space <100ms 缓存命中首帧 —— 同步缓存命中 + 80ms spinner 阈值不得前移
@@ -803,7 +803,7 @@ test('U09 首帧红线（源码级）：缓存命中同步路径与 80ms spinner
 
 // ---------- ⑪ 证据篮徽标脉冲：唯一触发源 = store 实际入篮 ----------
 
-test('U09 徽标脉冲接线：TopHeader 只在计数上升沿触发 glx-badge-pop（store 实际入篮事实源），点击链零脉冲', () => {
+test('轻预览与证据篮·徽标脉冲接线：TopHeader 只在计数上升沿触发 glx-badge-pop（store 实际入篮事实源），点击链零脉冲', () => {
   const headerSrc = readSrc('components/TopHeader.tsx');
   const headerCode = headerSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   // 触发门控：仅上升沿（store 的 contextPointers.length 增长 = 实际入篮落地）
@@ -852,9 +852,9 @@ test('U09 徽标脉冲接线：TopHeader 只在计数上升沿触发 glx-badge-p
   );
 });
 
-// ---------- ⑫ 胶囊弹窗琉璃统一 + F01 门禁锚点不回退 ----------
+// ---------- ⑫ 胶囊弹窗琉璃统一 + 两阶段门禁锚点不回退 ----------
 
-test('U09 ContextCapsuleModal SSR：统一 glass-pop + glx-popover-in 琉璃材质，两阶段门禁锚点原样保留', () => {
+test('轻预览与证据篮·ContextCapsuleModal SSR：统一 glass-pop + glx-popover-in 琉璃材质，两阶段门禁锚点原样保留', () => {
   const html = renderCapsule();
   // 琉璃统一：glass-pop（inset 顶沿白线高光 + 双层深影 + blur28）+ 柔和入场
   assert.ok(html.includes('glass-pop'), 'glass-pop 琉璃浮层材质');
@@ -870,12 +870,12 @@ test('U09 ContextCapsuleModal SSR：统一 glass-pop + glx-popover-in 琉璃材�
     !html.includes('bg-[color:var(--depth-2-bg,white)]'),
     '私货 depth-2 底色清零（材质单一来源）'
   );
-  // 两阶段门禁锚点不回退（F01）
+  // 两阶段门禁锚点不回退
   assert.ok(html.includes('data-capsule-mode="with_snapshots"'), '带快照模式锚点');
   assert.ok(html.includes('data-capsule-mode="manifest_only"'), '仅清单模式锚点');
   assert.ok(html.includes('data-capsule-submit'), '导出提交锚点');
   assert.ok(html.includes('打包胶囊') && html.includes('秒开 / 核验胶囊'), '双 tab 文案');
-  // 源码级：F01 门禁令牌原样（preview → token → confirmed_preview: true 才可导出）
+  // 源码级：两阶段门禁令牌原样（preview → token → confirmed_preview: true 才可导出）
   const capsuleSrc = readSrc('components/ContextCapsuleModal.tsx');
   for (const token of [
     'previewCapsule',
@@ -885,13 +885,13 @@ test('U09 ContextCapsuleModal SSR：统一 glass-pop + glx-popover-in 琉璃材�
     'confirmed_preview: true',
     'data-capsule-confirm',
   ]) {
-    assert.ok(capsuleSrc.includes(token), `F01 门禁令牌保留：${token}`);
+    assert.ok(capsuleSrc.includes(token), `胶囊两阶段门禁令牌保留：${token}`);
   }
 });
 
 // ---------- ⑬ 动效契约：声明 + reduce 降级双登记 ----------
 
-test('U09 动效契约：glx-badge-pop 声明与 reduce 停帧双登记、keyframes 只动 transform、队列淡入复用 glx-fade-in（--dur-1）', () => {
+test('轻预览与证据篮·动效契约：glx-badge-pop 声明与 reduce 停帧双登记、keyframes 只动 transform、队列淡入复用 glx-fade-in（--dur-1）', () => {
   const motionCss = readFileSync(
     fileURLToPath(new URL('../src/styles/motion.css', import.meta.url)),
     'utf8'
@@ -899,9 +899,9 @@ test('U09 动效契约：glx-badge-pop 声明与 reduce 停帧双登记、keyfra
   const reduceSection = motionCss.slice(
     motionCss.indexOf('@media (prefers-reduced-motion: reduce)')
   );
-  // U09 复用与新增的动效类「声明 + reduce 降级」双登记
+  // 复用与新增的动效类「声明 + reduce 降级」双登记
   for (const cls of [
-    '.glx-badge-pop', // U09 新增（本轮唯一新增类）
+    '.glx-badge-pop', // 证据篮徽标脉冲类
     '.glx-popover-in', // 复用：弹窗入场
     '.glx-backdrop-in', // 复用：遮罩入场
     '.glx-fade-in', // 复用：队列切换交叉淡入（--dur-1 纯 opacity）
@@ -919,18 +919,18 @@ test('U09 动效契约：glx-badge-pop 声明与 reduce 停帧双登记、keyfra
     !/\b(width|height|top|left)\s*:/.test(kfBody),
     '徽标脉冲禁 width/height/top/left 布局动画'
   );
-  // U09 新增段（§3.28 至 reduce 块前）时长缓动只吃令牌，零写死 ms（对齐 U08 同款断言）
+  // 徽标脉冲新增段（§3.28 至 reduce 块前）时长缓动只吃令牌，零写死 ms
   const u09Block = motionCss.slice(
     motionCss.indexOf('§3.28'),
     motionCss.indexOf('@media (prefers-reduced-motion: reduce)')
   );
-  assert.ok(!/\d+(\.\d+)?ms/.test(u09Block), 'U09 动效时长零写死 ms（只吃 --dur-* 令牌）');
+  assert.ok(!/\d+(\.\d+)?ms/.test(u09Block), '徽标脉冲动效时长零写死 ms（只吃 --dur-* 令牌）');
   assert.ok(u09Block.includes('var(--dur-2)'), '徽标脉冲走 --dur-2');
   assert.ok(u09Block.includes('var(--ease-spring)'), '徽标脉冲走 --ease-spring');
   const u09CssNoComment = u09Block.replace(/\/\*[\s\S]*?\*\//g, '');
   // 声明形扫描（带冒号）：切片自注释中部起，裸词 will-change 会命中注释文字，
   // 以 `will-change:` 才是 CSS 声明（§3.28 头注释只作禁令记载）。
-  assert.ok(!u09CssNoComment.includes('will-change:'), 'U09 段零 will-change 声明');
+  assert.ok(!u09CssNoComment.includes('will-change:'), '徽标脉冲段零 will-change 声明');
   // 队列切换交叉淡入 = 既有 glx-fade-in（--dur-1 --ease-fade 纯 opacity）
   assert.ok(
     motionCss.includes('animation: glx-fade-in var(--dur-1) var(--ease-fade) both'),

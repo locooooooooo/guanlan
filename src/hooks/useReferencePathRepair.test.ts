@@ -4,8 +4,8 @@ import { isMoveBlockedBySelfDrag } from './useSidebarTreeDrag';
 import { relativeHrefFromDir, rewriteMarkdownReferences } from './useReferencePathRepair';
 
 /**
- * C04 行为锁定：树内拖拽防成环纯函数 + Markdown 引用路径改写纯函数
- * （任务卡 §5 C04：拖向自身 100% 拦截防成环；引用修复严格确认制、锚点/语法保真）。
+ * 行为锁定：树内拖拽防成环纯函数 + Markdown 引用路径改写纯函数
+ * （拖向自身 100% 拦截防成环；引用修复严格确认制、锚点/语法保真）。
  */
 
 test('isMoveBlockedBySelfDrag：拖回当前所在目录 100% 拦截（大小写无关）', () => {

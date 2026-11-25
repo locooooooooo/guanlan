@@ -18,7 +18,7 @@ import type { DecisionAssertion, FileRecord } from '../src/types/guanlan';
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const SRC_ROOT = path.resolve(TEST_DIR, '../src');
 
-describe('B04 · PDF 页码证据锚点解析纯函数', () => {
+describe('PDF 页码证据锚点解析纯函数', () => {
   it('parsePdfLinkHref 兼容 page=14 / p=14 / 14 / RFC 3778 拼接并拒绝非法页码', () => {
     const canonical = parsePdfLinkHref('../specs/spec.pdf#page=14');
     assert.equal(canonical.pathWithoutFragment, '../specs/spec.pdf');
@@ -98,7 +98,7 @@ describe('B04 · PDF 页码证据锚点解析纯函数', () => {
   });
 });
 
-describe('B04 · fetchRevisionPdf 客户端契约请求', () => {
+describe('fetchRevisionPdf 客户端契约请求', () => {
   let server: http.Server | null = null;
 
   afterEach(async () => {
@@ -177,7 +177,7 @@ describe('B04 · fetchRevisionPdf 客户端契约请求', () => {
   });
 });
 
-describe('B04 · 独立组件架构与端到端页码直达接线检查', () => {
+describe('独立组件架构与端到端页码直达接线检查', () => {
   it('PdfReaderView 独立落地并接入 ReaderView / QuickPreviewModal / 决定卡片直达', () => {
     const pdfViewSrc = fs.readFileSync(
       path.join(SRC_ROOT, 'components/PdfReaderView.tsx'),
@@ -209,7 +209,7 @@ describe('B04 · 独立组件架构与端到端页码直达接线检查', () => 
     );
     assert.ok(inspectorSrc.includes('pickPrimaryPdfEvidence'), '检查器关联决定卡支持直达 PDF 页码证据');
 
-    // D01-a 巨石拆层后画布叙事抽屉数据装配在 graph/useGraphCanvasController.tsx——
+    // 拆层后画布叙事抽屉数据装配在 graph/useGraphCanvasController.tsx——
     // 断言读取装配层+控制器联合文本（语义不变，路径跟随拆分）
     const graphSrc = [
       'components/GraphCanvasView.tsx',
@@ -220,7 +220,7 @@ describe('B04 · 独立组件架构与端到端页码直达接线检查', () => 
       .join('\n');
     assert.ok(graphSrc.includes('pickPrimaryPdfEvidence'), '画布叙事抽屉支持直达 PDF 页码证据');
 
-    // D01-a 拆层后阅读器 = 装配层 + 行为控制器 + SVG/PDF 插件层——联合文本断言（边界语义不变）
+    // 拆层后阅读器 = 装配层 + 行为控制器 + SVG/PDF 插件层——联合文本断言（边界语义不变）
     const readerSrc = [
       'components/ReaderView.tsx',
       'components/reader/useReaderController.tsx',
@@ -237,7 +237,7 @@ describe('B04 · 独立组件架构与端到端页码直达接线检查', () => 
       'ReaderView 仅透传 pdfAnchor 并复用独立 PdfReaderView'
     );
 
-    // D01-a 拆层后 App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
+    // 拆层后 App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
     const appSrc = ['App.tsx', 'stores/useWorkspaceStore.tsx', 'components/app/AppLibraryStage.tsx']
       .map((p) => fs.readFileSync(path.join(SRC_ROOT, p), 'utf8'))
       .join(String.fromCharCode(10))

@@ -1,6 +1,6 @@
-//! 索引与对账（方案 §2）：采集、稳定读取、对账、陈述与引用抽取。
+//! 索引与对账：采集、稳定读取、对账、陈述与引用抽取。
 //!
-//! 批次二落地。这里是**唯一写入路径**：把工作区目录与持久库对账，写入版本、
+//! 这里是**唯一写入路径**：把工作区目录与持久库对账，写入版本、
 //! 事件与证据。语义与既有 TS 管线（`server/reconcile.ts` + `server/derive.ts`）
 //! 逐字对齐——同一套表、同一套身份规则、同一套事件去重身份。契约 §2.1 第 2 条
 //! 明令「不生成第二套历史」：任何身份公式的偏差都会让库里出现两套事实。
@@ -10,7 +10,7 @@
 //!
 //! 与 TS 的两处有意差异：
 //! - **未变文件批量提交**：TS 对每个未变文件各开一次事务（2709 个文件 = 2709 次
-//!   事务）；这里合并成一次（方案 §89「取消逐文件独立事务」）。
+//!   事务）；这里合并成一次，取消逐文件独立事务以降低写事务开销。
 //! - **目录项按名排序**：TS 用 OS 目录序；这里按名排序，保证扫描顺序可复现。
 
 pub mod clock;
@@ -81,7 +81,7 @@ pub struct ReconcileOptions {
     pub max_depth: usize,
     /// 注入采集时刻（测试重放用）
     pub observed_at: Option<String>,
-    /// 快照配额策略（B01 三档存储策略：文本 <10MB / 二进制 <50MB 全量快照，
+    /// 快照配额策略（三档存储策略：文本 <10MB / 二进制 <50MB 全量快照，
     /// 音视频与未知二进制只记元数据）。为 `None` 时自动按「环境变量 → 工作区 `meta`
     /// → 默认 10MB/50MB」结算。
     pub snapshot_policy: Option<SnapshotPolicy>,
@@ -117,7 +117,7 @@ impl ReconcileOptions {
     ///   但范围外的文件这轮进不来（工作区比上限大时要调高）。
     /// - `GUANLAN_MAX_DEPTH`：目录深度上限（根目录算第 0 层）。
     /// - `GUANLAN_SNAPSHOT_TEXT_MAX_MB` / `GUANLAN_SNAPSHOT_BINARY_MAX_MB`：
-    ///   B01 三档快照阈值（默认 10MB / 50MB），可按工作区上调；仅当显式设置时覆盖工作区配置。
+    ///   三档快照阈值（默认 10MB / 50MB），可按工作区上调；仅当显式设置时覆盖工作区配置。
     pub fn from_env() -> Self {
         let mut options = Self::default();
         if let Some(value) = read_env_usize("GUANLAN_MAX_FILES") {
@@ -167,7 +167,7 @@ pub struct ReconcileReport {
     pub statements_upserted: usize,
     pub edges_upserted: usize,
     pub snapshots_written: usize,
-    /// 本轮「只记元数据不存快照」的版本数（B01 三档策略的第三档 + 超限降级）
+    /// 本轮「只记元数据不存快照」的版本数（第三档元数据策略与超限降级）
     pub metadata_only_revisions: usize,
     /// 本轮被 `.gitignore` 排除的路径数（诊断用）
     pub ignored_paths: usize,
@@ -175,22 +175,22 @@ pub struct ReconcileReport {
     pub backfilled_doc_date_events: usize,
     /// 状态机重算落库行数：initiatives + artifact_states + task_nodes（每轮幂等重算）
     pub state_rows_upserted: usize,
-    /// 状态机迁移事件条数（首建静默不计——约束4 裁定 a）
+    /// 状态机迁移事件条数（首次建行静默不计）
     pub state_transitions: usize,
-    /// 本轮出现新版本的 md 文件 id（L4A 后台沉淀队列入队依据，契约 §3.4）
+    /// 本轮出现新版本的 md 文件 id（L4A 后台沉淀队列入队依据）
     pub changed_file_ids: Vec<String>,
-    /// 状态机迁移事件种类（去重；SSE kinds 依据——冻结契约 J）
+    /// 状态机迁移事件种类（去重，供 SSE `kinds` 字段推送）
     pub state_event_kinds: Vec<String>,
-    /// C02 派生检索索引本轮同步的文档数（差分重建含全量；派生变化不推代际）
+    /// 派生检索索引本轮同步的文档数（含差分同步与全量重建；派生变化不推代际）
     pub search_docs_synced: usize,
-    /// C02 派生检索索引本轮是否全量重建（规则版本不符 / 首建 / 显式重建）
+    /// 派生检索索引本轮是否全量重建（规则版本不符 / 首建 / 显式重建）
     pub search_index_rebuilt: bool,
     pub duration_ms: u64,
 }
 
 /// 各格式文件数。
 ///
-/// B01 起白名单放开，格式不再只有三种：`md / svg / pdf` 三个既有计数**逐字保留**
+/// 全文件类型采集下格式不再限于三种：`md / svg / pdf` 三个既有计数**逐字保留**
 /// （基线事件载荷与既有统计口径不变），其余格式按 token 计入 `by_token`。
 #[derive(Debug, Clone, Default)]
 pub struct FormatCounts {
@@ -332,8 +332,8 @@ pub fn reconcile(
     reconcile_collected(writer, options, workspace, collected, started)
 }
 
-/// 定向对账：只核对给定相对路径（冻结契约 C『单路径 changed_paths 对账』——
-/// 决策回写/草案采纳后的 <200ms 通道；采集范围不完整 → 不判任何文件缺失）。
+/// 定向对账：只核对给定相对路径（决策回写或草案采纳后的低延迟单路径对账通道，
+/// 目标延迟 <200ms；采集范围不完整 → 不判任何文件缺失）。
 pub fn reconcile_paths(
     writer: &mut Writer,
     options: &ReconcileOptions,
@@ -387,7 +387,7 @@ fn reconcile_collected(
     let mut pending: Vec<PendingRevision> = Vec::new();
     let mut unchanged: Vec<UnchangedUpdate> = Vec::new();
     let workspace_root = Path::new(&workspace.root_path);
-    // B05：身份恢复候选由 SQL 侧过滤（missing/trashed 通常极少），不再全表 FileRow 反序列化
+    // 身份恢复候选由 SQL 侧过滤（missing/trashed 通常极少），不再全表 FileRow 反序列化
     let mut missing_candidates: Vec<FileRow> = writer.list_recovery_candidates(&workspace_id)?;
 
     for file in &collected.files {
@@ -487,7 +487,7 @@ fn reconcile_collected(
 
         // 需要新版本
         let seq = latest.as_ref().map(|row| row.seq).unwrap_or(0) + 1;
-        // B01 三档存储策略：档位在采集时刻判定并落进 `snapshot_available`，
+        // 三档存储策略：档位在采集时刻判定并落进 `snapshot_available`，
         // 之后不再重算——历史版本的档位永远稳定。
         let tier = effective_policy.tier_for(file.format.class(), file.size_bytes);
         let snapshot_available = if tier.stores_bytes() { 1 } else { 0 };
@@ -531,7 +531,7 @@ fn reconcile_collected(
     let mut unstable_during_write: Vec<String> = Vec::new();
     for plan in &mut pending {
         check_cancelled(options, "写入快照")?;
-        // B01：只记元数据的档位（音视频 / 未知二进制 / 超阈值文件）**不复制字节**。
+        // 只记元数据的档位（音视频 / 未知二进制 / 超阈值文件）**不复制字节**。
         // 这里连源文件都不再读第二遍——采集阶段已经算过流式哈希。
         if plan.revision.snapshot_available == 0 {
             report.metadata_only_revisions += 1;
@@ -602,7 +602,7 @@ fn reconcile_collected(
     // 进入写事务前的最后一道取消检查；一旦开始写事务便不再中断，保证数据库事实完整。
     check_cancelled(options, "事务提交前")?;
     // 路径索引：已入库文件 + 本轮待写入文件，保证引用能解析到已有路径
-    // （B05：改用两列轻查询，避免万级库整表 FileRow 反序列化）
+    // （使用两列轻查询，避免大工作区整表 FileRow 反序列化）
     let mut path_index: HashMap<String, String> = HashMap::new();
     for (current_path, file_id) in writer.all_path_ids(&workspace_id)? {
         path_index.insert(normalize_rel_path(&current_path), file_id);
@@ -614,7 +614,7 @@ fn reconcile_collected(
         );
     }
 
-    // B05：缺失检测只在范围完整遍历时才有意义——`missing_files` 惰性化，
+    // 缺失检测只在范围完整遍历时才有意义：`missing_files` 惰性化，
     // 定向增量对账（collected_complete=false）不再白付一次全库查询。
     let collected_complete = collected.complete;
     let missing_files = if collected_complete {
@@ -632,7 +632,7 @@ fn reconcile_collected(
     let mut new_statements: Vec<StatementRow> = Vec::new();
     let mut derived_statements = 0usize;
     let mut derived_edges = 0usize;
-    // 建议7：派生段全文已在内存，checklist 同步计数随派生收集（不二次读 blob）
+    // 派生段全文已在内存，checklist 同步计数随派生收集，避免二次读 blob
     let mut derived_checklists: Vec<DerivedChecklist> = Vec::new();
 
     writer.transaction(|writer| {
@@ -816,7 +816,7 @@ fn reconcile_collected(
                 "exact_path",
             )?;
 
-            // B01：只记元数据的版本**不登记 blob**（磁盘上没有这份字节），
+            // 只记元数据的版本不登记 blob（磁盘上没有这份字节），
             // `insert_revision` 对 `snapshot_available = 0` 也不要求 blob 行。
             if plan.revision.snapshot_available != 0 {
                 writer.register_blob_ref(&plan.revision.content_hash, plan.revision.size_bytes)?;
@@ -1023,7 +1023,7 @@ fn reconcile_collected(
         .count();
     writer.transaction(|writer| {
         if initial_baseline {
-            // B01：白名单放开后格式不再只有三种——基线卡按「格式族」汇总，
+            // 全文件类型采集下格式不再限于三种：基线卡按格式汇总，
             // 既有 md/svg/pdf 三个数字逐字保留，其余格式按 token 追加。
             let mut detail = format!(
                 "{} 份 MD、{} 份 SVG、{} 份 PDF。",
@@ -1127,8 +1127,8 @@ fn reconcile_collected(
     })?;
 
     // ---------- 派生索引：陈述与关系（按新版本粒度） ----------
-    // B05：单条 GROUP BY 取「文件 → 最新版本」，替代逐文件 latest_revision 的 N+1
-    // 查询（万级库上这一处就从秒级降到毫秒级）
+    // 单条 GROUP BY 取「文件 → 最新版本」，替代逐文件 latest_revision 的 N+1
+    // 查询（大工作区上可将耗时从秒级降到毫秒级）
     let mut target_revision_index: HashMap<String, String> = HashMap::new();
     for (file_id, revision_id) in writer.latest_revision_ids()? {
         target_revision_index.insert(file_id, revision_id);
@@ -1147,7 +1147,7 @@ fn reconcile_collected(
         }
     }
 
-    // B03：在写事务外先完成 Office（.docx / .xlsx）L2 解压解析或按 content_hash 复用缓存，
+    // 在写事务外先完成 Office（.docx / .xlsx）L2 解压解析或按 content_hash 复用缓存，
     // 绝不把 ZIP/XML 解压计算塞进 SQLite 写锁持有期。
     let mut office_parsed: HashMap<String, office::OfficeExtractRecord> = HashMap::new();
     let mut office_newly_cached: HashMap<String, office::OfficeExtractRecord> = HashMap::new();
@@ -1187,7 +1187,7 @@ fn reconcile_collected(
         office_parsed.insert(hash.clone(), record);
     }
 
-    // B04：在写事务外先完成 PDF 逐页正文提取或按 content_hash 复用缓存，
+    // 在写事务外先完成 PDF 逐页正文提取或按 content_hash 复用缓存，
     // 绝不把流解压/页面解析塞进 SQLite 写锁持有期。
     let mut pdf_parsed: HashMap<String, pdf::PdfExtractRecord> = HashMap::new();
     let mut pdf_newly_cached: HashMap<String, pdf::PdfExtractRecord> = HashMap::new();
@@ -1372,10 +1372,10 @@ fn reconcile_collected(
     report.backfilled_doc_date_events =
         backfill_document_self_events(writer, &workspace_id, &mut report)?;
 
-    // ---------- 状态机重算（SSOT 三层执行器；冻结契约 B2 + 约束4） ----------
+    // ---------- 状态机重算（SSOT 三层执行器） ----------
     // 位置：代际判定**之前**——迁移事件计入 events_inserted，由既有
     // 「有变化才 bump」口径统一推进；首轮建行静默（不发事件、不 bump），
-    // 节点/文档状态为声明式跨轮持久态，每轮幂等重算（阻塞1 修复）。
+    // 节点/文档状态为声明式跨轮持久态，每轮幂等重算。
     let state_outcome =
         state_machine_recompute(writer, &workspace_id, &observed_at, &derived_checklists)?;
     report.events_inserted += state_outcome.events_inserted;
@@ -1395,7 +1395,7 @@ fn reconcile_collected(
         kinds
     };
 
-    // ---------- C02 派生检索索引同步（可随时丢弃重建）----------
+    // ---------- 派生检索索引同步（可随时丢弃重建）----------
     // 位置：状态机重算后、代际判定前——索引行反映本轮落库后的完整库态；
     // 规则版本不符或标记缺失时自动全量重建（损坏自愈）。派生索引变化不进
     // `changed` 代际门（代际只属事实层），避免纯派生回填推动 SSE 通知。
@@ -1645,7 +1645,7 @@ fn rebuild_derived_if_needed(
         return Ok(RebuildOutcome::default());
     }
 
-    // B05：与 reconcile 主流程同口径——批量轻查询替代逐文件 N+1
+    // 与 reconcile 主流程同口径：批量轻查询替代逐文件 N+1
     // （重派生事务本身仍需全量 FileRow 走 format 过滤，保留 list_files）
     let files = writer.list_files(workspace_id, true)?;
     let mut path_index: HashMap<String, String> = HashMap::new();

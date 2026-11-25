@@ -29,7 +29,7 @@ import {
 } from './ui';
 
 /**
- * E04 · 轻量「批阅看板」抽屉（承接轮序七态精简版：待拍板 / 可派发 / Agent 运行中 /
+ * 轻量「批阅看板」抽屉（五态分栏：待拍板 / 可派发 / Agent 运行中 /
  * 待批阅回执 / 已办结 + 失联/无回执诚实 unknown 孤儿诊断与安全修复入口）。
  *
  * 停机红线守卫：
@@ -37,12 +37,12 @@ import {
  *  - 无回执或进程失联一律诚实标 `unknown`，仅允许「重置为可派发」或「挂起待人工核查」；
  *  - 点击「已知悉」强制走后端 CAS 写回原 `.md` + SQLite 提交 + 状态机重算，三处状态同步。
  *
- * U08 · 视觉降噪与正向动效退场：
+ * 视觉降噪与正向动效退场：
  *  - 抽屉统一接入 `.glx-t-panel` 弹簧抽屉双轨（两段式入场，rAF 翻转终态；
- *    与 FileTimelineDrawer 同款先例），不再叠挂 `glx-drawer-in` 一次性 keyframes；
- *  - 顶部新增 6 态琉璃比例分布带（纯计算 `computeReviewBoardRatioBand`），
+ *    与 FileTimelineDrawer 一致），不叠挂 `glx-drawer-in` 一次性 keyframes；
+ *  - 顶部 6 态琉璃比例分布带（纯计算 `computeReviewBoardRatioBand`），
  *    替代顶栏冗长文字说明；段宽走静态 flex-grow 权重（零布局动画），
- *    整条带入场复用既有 `.glx-progress-grow`（scaleX 生长，reduce 已登记）；
+ *    整条带入场复用 `.glx-progress-grow`（scaleX 生长，reduce 已登记）；
  *  - 泳道主次分层：待拍板 / 待批阅回执为行动泳道（primary），已办结默认降噪
  *    （muted：不渲染 bucket_reason、收紧内距、标题转次文）；unknown 恒 secondary，
  *    诚实标示绝不降噪（停机红线）；
@@ -96,7 +96,7 @@ export function reviewBoardAttentionCount(board: ReviewBoardResponse | null): nu
   );
 }
 
-/** 泳道主次权重（U08）：行动泳道（待拍板 / 待批阅回执）视觉强化为 primary；
+/** 泳道主次权重：行动泳道（待拍板 / 待批阅回执）视觉强化为 primary；
  *  dispatchable / agent_running 归 secondary；已办结默认视觉降噪为 muted。
  *  ⚠ unknown 恒 secondary——诚实标示绝不被降噪弱化（停机红线）。 */
 export type ReviewBoardLaneTier = 'primary' | 'secondary' | 'muted';
@@ -115,7 +115,7 @@ export function reviewBoardLanePriority(bucket: ReviewBoardBucket): ReviewBoardL
   }
 }
 
-/** 六态比例带段（U08）：颜色只引用既有语义令牌（graphic 档），零新增色值。 */
+/** 六态比例带段：颜色只引用既有语义令牌（graphic 档），零新增色值。 */
 export interface ReviewBoardRatioSegment {
   bucket: ReviewBoardBucket;
   label: string;
@@ -148,7 +148,7 @@ const BUCKET_RATIO_COLOR: Record<ReviewBoardBucket, string> = {
   unknown: 'var(--stage-ink-anomaly)',
 };
 
-/** 六态琉璃比例分布带纯计算（U08）：按 REVIEW_BOARD_LANES 键序产出六段、
+/** 六态琉璃比例分布带纯计算：按 REVIEW_BOARD_LANES 键序产出六段、
  *  零态剔除、诚实分母（分项和）与空态判定。 */
 export function computeReviewBoardRatioBand(counts: ReviewBoardCounts): ReviewBoardRatioBand {
   const segments: ReviewBoardRatioSegment[] = REVIEW_BOARD_LANES.map((lane) => {
@@ -213,7 +213,7 @@ const BUCKET_BADGE_STYLE: Record<ReviewBoardBucket, string> = {
     'border-[color:var(--stage-ink-anomaly)] bg-[color:color-mix(in_srgb,var(--stage-ink-anomaly)_12%,transparent)] text-[color:var(--stage-ink-anomaly-text)]',
 };
 
-/** U08 反馈相位计时（与 motion.css 令牌对齐的 JS 镜像，仅推进相位，不定义样式）：
+/** 反馈相位计时（与 motion.css 令牌对齐的 JS 镜像，仅推进相位，不定义样式）：
  *  pulse = 徽记弹出 --dur-2(180ms) + 光环扩散 --dur-3(260ms) + 余量；
  *  exit = 卡片退场 --dur-3(260ms) + 余量。 */
 const ACK_PULSE_PHASE_MS = 520;
@@ -240,11 +240,11 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
   onRepairOrphan,
 }) => {
   const [filter, setFilter] = useState<ReviewBoardFilter>('all');
-  // U08 弹簧抽屉两段式入场：首帧偏移态（translateX + opacity:0）→ rAF 翻转终态，
+  // 弹簧抽屉两段式入场：首帧偏移态（translateX + opacity:0）→ rAF 翻转终态，
   // 过渡由 .glx-t-panel 双轨承担（transform→spring / opacity→fade，只动这两属性）。
   // reduce 用户走 motion.css 既有 .glx-t-panel → transition:none，第二帧瞬时落位。
   const [entered, setEntered] = useState(false);
-  // U08 正向反馈：后端 CAS 确认成功（notice.kind === 'ok'）后的勾选脉冲与卡片退场
+  // 正向反馈：后端 CAS 确认成功（notice.kind === 'ok'）后的勾选脉冲与卡片退场
   const [settledAction, setSettledAction] = useState<SettledAction | null>(null);
   const [settledHidden, setSettledHidden] = useState<string[]>([]);
   const prevBusyRef = useRef<string | null>(null);
@@ -352,7 +352,7 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* V08：coss Sheet (variant="inset") 悬浮抽屉材质 + U08 glx-t-panel 弹簧双轨入场 */}
+      {/* coss Sheet (variant="inset") 悬浮抽屉材质 + glx-t-panel 弹簧双轨入场 */}
       <div
         data-sheet-variant="inset"
         className="glx-t-panel bg-popover/95 dark:bg-popover/95 backdrop-blur-2xl w-full max-w-2xl h-full flex flex-col overflow-hidden rounded-2xl border border-border/85 text-foreground"
@@ -522,7 +522,7 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
                   laneTier === 'muted' ? 'p-3' : 'p-4'
                 } ${settled?.phase === 'exit' ? 'glx-card-settle' : ''}`}
               >
-                {/* U08 翠绿勾选徽记：后端 CAS 确认成功后的唯一正向反馈装饰（aria-hidden 纯装饰层） */}
+                {/* 翠绿勾选徽记：后端 CAS 确认成功后的唯一正向反馈装饰（aria-hidden 纯装饰层） */}
                 {settled && (
                   <span
                     aria-hidden="true"

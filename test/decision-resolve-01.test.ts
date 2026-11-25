@@ -27,15 +27,15 @@ import {
 } from '../src/services/workspaceClient';
 
 /**
- * decision-resolve-01：Inline 拍板闭环（PRD 3.3 / 方案 F5）。
+ * decision-resolve-01：Inline 拍板闭环。
  *
  * 覆盖：
- * - 卡点块解析：[P0/P1/P2 - 待确认] 标记 + PRD 3.3 标准字段行 + 围栏字面量不识别
+ * - 卡点块解析：[P0/P1/P2 - 待确认] 标记 + 标准字段行 + 围栏字面量不识别
  *   + 已定案块 + 组合优先级（blocking 语义）；
  * - 「可选方案/推荐理由」预设选项提取（章节列表 / 行内标签 / 推荐理由不进选项）；
  * - 拍板载荷组装（trim、空可选省略键、范围+日期合并）；
  * - 确认人/角色本机记忆（node 无 window 安全降级 + 去重上限）；
- * - statement ↔ 区块行号匹配；阻塞清零判定（AC-03 本地口径）；
+ * - statement ↔ 区块行号匹配；阻塞清零判定；
  * - 契约 C 全链（本地 http 桩）：恒 202 → job 轮询 → report.writeback 三分支
  *   （cas_ok=true / cas_ok=false 存草案 / 任务失败）+ 409 CONFLICT（archived 主体）
  *   + 轮询超时 JOB_POLL_TIMEOUT。
@@ -304,7 +304,7 @@ const STATEMENTS: StatementDetailDTO[] = [
   },
 ];
 
-describe('matchStatementToBlock 与阻塞清零（AC-03 本地口径）', () => {
+describe('matchStatementToBlock 与阻塞清零', () => {
   test('行号在块范围内命中；范围外返回 null', () => {
     const blocks = parseDecisionBlocks(DECISION_DOC);
     const p1 = blockAtLine(blocks, 5);

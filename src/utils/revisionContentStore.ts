@@ -1,5 +1,5 @@
 /**
- * 观澜 —— 统一版本正文仓库（issue #29）
+ * 观澜 —— 统一版本正文仓库
  *
  * 此前正文分散在三套缓存且没有共享请求协调：
  * - App.ensureRevisionContent（fileCache 版本行并入）——contentRequestedRef 永久标记，
@@ -105,7 +105,7 @@ export function getRevisionContent(revisionId: string): RevisionContentEntry | u
   return entries.get(revisionId);
 }
 
-/** pin：当前阅读/对比版本不被字节预算逐出（issue #29 验收） */
+/** pin：当前阅读/对比版本不被字节预算逐出 */
 export function pinRevisionContent(revisionId: string): void {
   if (revisionId) pinned.add(revisionId);
 }
@@ -199,7 +199,7 @@ export async function requestRevisionContentsBatch(
 }
 
 /**
- * 晚到 FileDetail 与已加载正文的合并（issue #29 修复点，纯函数）：
+ * 晚到 FileDetail 与已加载正文的合并（纯函数）：
  * 版本链元数据以 incoming（detail）为准，但已加载的正文绝不丢失——
  * 优先级：incoming 自带 > 既有版本行已并入 > store ready 条目。
  * `format` 是文件级格式（同一文件各版本同格式），决定正文落在哪个字段。

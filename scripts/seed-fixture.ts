@@ -1,5 +1,5 @@
 /**
- * 观澜批次一端到端验证 —— 夹具工作区生成 + 期望结果导出 + 身份向量
+ * 观澜端到端验证 —— 夹具工作区生成 + 期望结果导出 + 身份向量
  *
  * 用法（在仓库根目录执行，不新增依赖）：
  *   node node_modules/tsx/dist/cli.mjs scripts/seed-fixture.ts
@@ -97,7 +97,7 @@ function fillerMd(i: number): string {
     '',
     `文档日期：${fillerDate(i)}`,
     '',
-    `本样本用于批次一端到端验证的事件量与按日聚合检查，内容编号 ${n}，无其他业务语义。`,
+    `本样本用于端到端验证的事件量与按日聚合检查，内容编号 ${n}，无其他业务语义。`,
     '',
   ];
   // 前 5 份带格式 B 决策节（### Q1Nx：标题，derive.ts 格式 B），其余为普通样本
@@ -117,7 +117,7 @@ const SVG_V1 = [
   '  <rect x="8" y="8" width="304" height="144" fill="#f4f6fb" stroke="#8899bb"/>',
   '  <text x="24" y="48" font-size="18">观澜架构示意 v1</text>',
   '  <text x="24" y="84" font-size="12">采集 → 持久 → 查询</text>',
-  '  <text x="24" y="116" font-size="12">批次一：独立读服务</text>',
+  '  <text x="24" y="116" font-size="12">独立读服务</text>',
   '</svg>',
   '',
 ].join('\n');
@@ -127,7 +127,7 @@ const SVG_V2 = [
   '  <rect x="8" y="8" width="304" height="164" fill="#eef4ff" stroke="#5577cc"/>',
   '  <text x="24" y="48" font-size="18">观澜架构示意 v2</text>',
   '  <text x="24" y="84" font-size="12">采集 → 持久 → 查询</text>',
-  '  <text x="24" y="116" font-size="12">批次一：独立读服务（Rust）</text>',
+  '  <text x="24" y="116" font-size="12">独立读服务（Rust）</text>',
   '  <text x="24" y="148" font-size="12">events/days/range 游标窗口</text>',
   '</svg>',
   '',
@@ -400,7 +400,7 @@ function buildFileSummaries(files: FileRecord[], rows: FileRow[]): Array<Record<
 }
 
 /**
- * 事件日桶的决定边界字段（issue #25）：
+ * 事件日桶的决定边界字段：
  * Node 的 `queryEventDays` 不产出 `decision_total` / `decisions_truncated`（这两个字段是
  * v1 契约 §1.5 新增）。期望基线按同一语义补齐：
  * - `decision_total` = 桶内去重 decision_id 数（Node 侧已是「一决定一行」的聚合结果）；
@@ -478,10 +478,10 @@ function exportExpected(
       active_files: activeRows.length,
       missing_files: rows.length - activeRows.length,
     },
-    // 批次一恒空（contract-query-api.md §1.2）：Rust StatusResponse 恒带 active_jobs: []，
+    // 默认恒空（contract-query-api.md §1.2）：Rust StatusResponse 恒带 active_jobs: []，
     // 期望基线须含同键，smoke 的键集合并集深比才不会多出 $.active_jobs 差异
     active_jobs: [],
-    // PRD v2.0 §3.4 增量字段（contract-query-api.md §1.2）：L4A 非阻塞进度横幅与
+    // 增量状态字段（contract-query-api.md §1.2）：L4A 非阻塞进度横幅与
     // watcher 状态。Node 管线没有 watcher/后台队列，等价口径即「未启用、队列为空」；
     // 键必须常驻（不按运行模式增删），否则客户端会看到随配置变化的响应形状。
     watcher: {
@@ -585,7 +585,7 @@ function exportExpected(
   const bootstrapDays = withBucketDecisionBoundary(
     queryEventDays(store, { workspaceId: wsId, limitDays: 120, samplesPerDay: 6 }),
   );
-  // A05：处于 missing / trashed 可恢复态的 file_id，供前端剪枝阅读进度时保留
+  // 处于 missing / trashed 可恢复态的 file_id，供前端剪枝阅读进度时保留
   const recoverableFileIds = rows
     .filter((r) => r.status === 'missing' || String(r.status) === 'trashed')
     .map((r) => r.file_id)
@@ -610,7 +610,7 @@ function exportExpected(
     decisions: projection.decisions,
     relations_total: projection.relations.length,
     config: projection.config,
-    index_jobs: [], // §1.1：批次一恒为空数组
+    index_jobs: [], // 静态夹具基线恒为空数组
     ...(recoverableFileIds.length > 0 ? { recoverable_file_ids: recoverableFileIds } : {}),
   });
 
@@ -708,7 +708,7 @@ function exportExpected(
 
   // ---- v1 字段名映射表（供 Rust DTO 与前端改造对照） ----
   writeJson('_field-map.json', {
-    basis: 'native/docs/contract-query-api.md（批次一 v1 契约）',
+    basis: 'native/docs/contract-query-api.md（v1 查询契约）',
     exports: {
       'bootstrap.json':
         '§1.1 bootstrap；event_days/events/time_range/decisions/config 保留现有 wire 命名（§0.1），workspace/counts 为 snake_case',
@@ -1003,7 +1003,7 @@ function main(): void {
     for (const f of checkFailures) console.error('  -', f);
     process.exit(1);
   }
-  console.log('\n下一步（批次一服务实现后）：');
+  console.log('\n下一步（对拍验证）：');
   console.log(
     '  node node_modules/tsx/dist/cli.mjs scripts/smoke-v1.ts --exe <guanlan.exe 路径>'
   );

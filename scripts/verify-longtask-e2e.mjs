@@ -119,7 +119,7 @@ async function main() {
       '---',
       '# 00-需求蓝图',
       '',
-      '明确目标：打通长任务引擎与证道阁上下文闭环。',
+      '明确目标：打通长任务引擎与智能体上下文闭环。',
     ].join('\n'),
     'utf8'
   );
@@ -299,7 +299,7 @@ async function main() {
       { label: 'HomeView loaded' }
     );
 
-    console.log('[4/7] 验证 AC-01 四视图状态一致 & AC-04 首页证道阁自动勾选...');
+    console.log('[4/7] 验证四视图状态一致 & 首页上下文抽屉自动勾选...');
     const ac01Home = await cdp.eval(`
       const card = Array.from(document.querySelectorAll('[data-gallery-card]')).find(el => el.innerText.includes('04-智能体代码'));
       const cardState = card?.querySelector('[data-doc-state]')?.getAttribute('data-doc-state');
@@ -322,12 +322,12 @@ async function main() {
         if (!badge) return null;
         return { state: badge.getAttribute('data-doc-state'), text: badge.innerText };
       `),
-      { label: 'AC-01 GraphCanvasView pending_review badge' }
+      { label: 'GraphCanvasView pending_review badge' }
     );
     assert.equal(ac01Canvas.state, 'pending_review');
     assert.equal(ac01Canvas.text, '待用户确认');
 
-    // 返回首页并打开证道阁（global 意图）
+    // 返回首页并打开上下文抽屉（global 意图）
     await cdp.eval(`
       const tabs = Array.from(document.querySelectorAll('[role="tab"], button'));
       tabs.find(t => t.innerText.trim() === '首页')?.click();
@@ -340,7 +340,7 @@ async function main() {
       const btn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('证据篮'));
       btn?.click();
     `);
-    const zhendaogeGlobal = await waitFor(
+    const contextGlobal = await waitFor(
       () => cdp.eval(`
         const dlg = document.querySelector('[role="dialog"][aria-label*="上下文"]');
         if (!dlg) return null;
@@ -351,17 +351,17 @@ async function main() {
           text: txt,
         };
       `),
-      { label: 'AC-04 global drawer' }
+      { label: 'global context drawer' }
     );
-    assert.equal(zhendaogeGlobal.hasAutoMounted, true, '首页总览证道阁首帧必须自动勾选默认包');
-    assert.ok(!zhendaogeGlobal.text.includes('(0 项已选)'), '不得出现 0 项已选');
+    assert.equal(contextGlobal.hasAutoMounted, true, '首页总览上下文抽屉首帧必须自动勾选默认包');
+    assert.ok(!contextGlobal.text.includes('(0 项已选)'), '不得出现 0 项已选');
     await cdp.eval(`
       const dlg = document.querySelector('[role="dialog"][aria-label*="上下文"]');
       Array.from(dlg.querySelectorAll('button')).find(b => b.innerText.includes('清空'))?.click();
       document.querySelector('button[aria-label="关闭上下文抽屉"]')?.click();
     `);
 
-    console.log('[5/7] 验证 AC-02 (<300ms 无阻塞首屏) & AC-03 (Inline 拍板回写 + 未决减一 + 解锁)...');
+    console.log('[5/7] 验证阅读器首屏 (<300ms 无阻塞) & 原位拍板回写 (未决减一 + 解锁)...');
     await cdp.eval(`
       const tabs = Array.from(document.querySelectorAll('[role="tab"], button'));
       tabs.find(t => t.innerText.includes('知识资产库'))?.click();
@@ -435,7 +435,7 @@ async function main() {
         const radarAria = document.querySelector('button[aria-label^="未决决策"]')?.getAttribute('aria-label') || '';
         return body.includes('拍板已回写至源文件') && radarAria === '未决决策 0';
       `),
-      { label: 'AC-03 decision resolved in UI' }
+      { label: 'decision resolved in UI' }
     );
 
     const diskAfterResolve = fs.readFileSync(decisionDocPath, 'utf8');
@@ -447,7 +447,7 @@ async function main() {
     const awaitNodeAfter = tasksAfterResolve.nodes.find((n) => n.node_kind === 'await_decision');
     assert.equal(awaitNodeAfter.state, 'completed', 'P1 清零后决策槽必须自动恢复为 completed');
 
-    console.log('[6/7] 验证 AC-04/AC-05 证道阁双模输出与真实 MCP stdio 回写闭环...');
+    console.log('[6/7] 验证上下文抽屉双模输出与真实 MCP stdio 回写闭环...');
     await cdp.eval(`
       const homeTab = Array.from(document.querySelectorAll('[role="tab"], button')).find(t => t.innerText.trim() === '首页');
       homeTab?.click();
@@ -469,7 +469,7 @@ async function main() {
       const btn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('证据篮'));
       btn?.click();
     `);
-    const zhendaogeDoc = await waitFor(
+    const contextDoc = await waitFor(
       () => cdp.eval(`
         const dlg = document.querySelector('[role="dialog"][aria-label*="上下文"]');
         if (!dlg) return null;
@@ -481,27 +481,27 @@ async function main() {
           markdown: pre,
         };
       `),
-      { label: 'AC-05 Mode A Markdown' }
+      { label: 'Mode A Markdown' }
     );
-    assert.equal(zhendaogeDoc.hasAutoMounted, true, '文档入口打开证道阁必须自动勾选上下文');
-    assert.ok(zhendaogeDoc.markdown.includes('[全文] 04-智能体代码/01-方案设计.md'), 'Mode A 应包含当前文档完整路径与[全文]标识');
-    assert.ok(zhendaogeDoc.markdown.includes('<confirmed_decisions>'), 'Mode A 应包含已拍板段');
+    assert.equal(contextDoc.hasAutoMounted, true, '文档入口打开上下文抽屉必须自动勾选上下文');
+    assert.ok(contextDoc.markdown.includes('[全文] 04-智能体代码/01-方案设计.md'), 'Mode A 应包含当前文档完整路径与[全文]标识');
+    assert.ok(contextDoc.markdown.includes('<confirmed_decisions>'), 'Mode A 应包含已拍板段');
 
     await cdp.eval(`
       const dlg = document.querySelector('[role="dialog"][aria-label*="上下文"]');
       Array.from(dlg.querySelectorAll('button')).find(b => b.innerText.includes('MCP 载荷'))?.click();
     `);
-    const zhendaogeJson = await waitFor(
+    const contextJson = await waitFor(
       () => cdp.eval(`
         const dlg = document.querySelector('[role="dialog"][aria-label*="上下文"]');
         const pre = dlg?.querySelector('pre')?.innerText || '';
         if (!pre.includes('"guanlan-mcp/v1"')) return null;
         return JSON.parse(pre);
       `),
-      { label: 'AC-05 Mode B JSON' }
+      { label: 'Mode B JSON' }
     );
-    assert.equal(zhendaogeJson.protocol, 'guanlan-mcp/v1');
-    assert.deepEqual(zhendaogeJson.allowed_mcp_tools, [
+    assert.equal(contextJson.protocol, 'guanlan-mcp/v1');
+    assert.deepEqual(contextJson.allowed_mcp_tools, [
       'guanlan.read_artifact',
       'guanlan.propose_revision',
       'guanlan.resolve_decision',
@@ -572,7 +572,7 @@ async function main() {
         const toast = document.querySelector('[data-proposal-toast]');
         return toast ? toast.innerText : null;
       `),
-      { timeoutMs: 5000, label: 'AC-05 ProposalToast within 5s' }
+      { timeoutMs: 5000, label: 'ProposalToast within 5s' }
     );
     const toastElapsed = Date.now() - proposeStarted;
     console.log(`  MCP propose_revision → 前端 ProposalToast 弹出耗时: ${toastElapsed}ms`);
@@ -604,7 +604,7 @@ async function main() {
     const execNodeAfter = tasksAfterCkpt.nodes.find((n) => n.stage === '执行');
     assert.equal(execNodeAfter.state, 'completed', 'commit_checkpoint SUCCESS 后执行槽应推进为 completed');
 
-    console.log('[7/7] PRD v2.0 AC-01 ~ AC-05 全链路真实浏览器 + MCP + HTTP 实测全部通过！');
+    console.log('[7/7] 全链路真实浏览器 + MCP + HTTP 实测全部通过！');
   } finally {
     cdp?.close();
     if (mcpProc && !mcpProc.killed) mcpProc.kill();

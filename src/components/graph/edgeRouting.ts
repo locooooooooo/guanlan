@@ -1,8 +1,7 @@
 /**
- * D01-b · 比例锚点绑定与正交避障连线引擎（任务卡 D01 阶段 b）。
+ * 比例锚点绑定与正交避障连线引擎（纯函数几何引擎）。
  *
- * 在 D01-a 拆出的纯函数几何层（geometry.ts）旁边落地的第二块纯函数几何引擎：
- * 零 React / 零 DOM 依赖、确定性（同输入恒同输出）、全部可单测。三大能力：
+ * 零 React / 零 DOM 依赖、确定性（同输入恒同输出）、可单测。三大能力：
  *  ① 归一化比例锚点绑定（FixedPointBinding + bindingGap 呼吸间距）——
  *    连线出口/端点以 0..1 比例绑定宿主卡片矩形，卡片移动/展开/缩放时重算即自动跟随；
  *  ② 稀疏非均匀网格 A* 正交圆角避障路由——直线 → 单拐 L → 双拐 Z → A* 分层择优
@@ -11,13 +10,8 @@
  *  ③ 线上镂空语义微标签——标签放在路由折线段上，对文字包围盒做线体裁切
  *    （cutout 永不重叠：文字区域处的线被切开）。
  *
- * 兼容纪律（D01-a 像素基线护栏）：走廊无障碍时逐字节返回
- * guanlanEngine.computeDynamicEdgePath 的既有贝塞尔（test/d01b-edge-routing.test.ts
- * 的「基线场景零偏移矩阵」单测锁定）。命中障碍才升级为绑定锚点 + 避障路由。
- *
- * 与 guanlanEngine 的依赖方向保持 components → utils（同 geometry.ts 先例），
- * 绝不反向；guanlanEngine 本文件零改动（该文件历史遗留字面 NUL 字节使 Read/Edit
- * 工具链按二进制拒绝——本引擎因此落位 components/graph/，交接台账已登记）。
+ * 兼容策略：走廊无障碍时直接返回 guanlanEngine.computeDynamicEdgePath 的既有贝塞尔；
+ * 命中障碍时再升级为绑定锚点 + 避障路由。依赖方向保持 components → utils（与 geometry.ts 一致）。
  */
 
 import { computeDynamicEdgePath } from '../../utils/guanlanEngine';
@@ -197,7 +191,7 @@ export interface OrthoRouteOptions {
 }
 
 export type EdgeRouteStrategy =
-  | 'legacy-clear' // 走廊无障碍 → 既有贝塞尔逐字节保留（D01-a 像素零偏移）
+  | 'legacy-clear' // 走廊无障碍 → 直接保留既有贝塞尔曲线
   | 'straight' // 正交直线无障碍
   | 'one-bend' // 单拐 L 形
   | 'two-bend' // 双拐 Z 形
@@ -650,8 +644,8 @@ export interface EdgeRoute {
 }
 
 /**
- * 升级版连线：走廊无障碍 → 逐字节返回既有贝塞尔（D01-a 基线零偏移）；
- * 命中卡片本体 → 绑定锚点（呼吸间距）+ 正交圆角避障路由。
+ * 绑定避障连线主入口：走廊无障碍时直接返回既有贝塞尔；
+ * 命中卡片本体时升级为绑定锚点（呼吸间距）+ 正交圆角避障路由。
  */
 /** 端点宿主剔除（公开口径，relation 直连路由与 computeBoundEdgeRoute 同用）：
  *  含端点（±margin 膨胀闭式判定）的障碍不参与阻断——端点本就贴在宿主边上。 */
@@ -725,7 +719,7 @@ export interface EdgeMicroLabel {
   kind: EdgeLabelKind;
   /** 常态克制短文本（如「引用 · L12」「决策依据」）；完整理由走 detail（悬停承载） */
   text: string;
-  /** 悬停展开的完整理由（C01 理由胶囊 / 推断原因） */
+  /** 悬停展开的完整理由（理由胶囊 / 推断原因） */
   detail?: string;
 }
 

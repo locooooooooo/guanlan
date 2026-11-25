@@ -50,7 +50,7 @@ function makeReadingState(fileId: string, note: string): ReadingState {
   };
 }
 
-describe('A05 身份保真文件操作校验（fileOps.ts）', () => {
+describe('身份保真文件操作校验（fileOps.ts）', () => {
   it('validateRenameInput：放行同格式有效新名称并拒绝非法路径、保留名与格式不兼容', () => {
     const okMd = validateRenameInput('03-拍板清单.md', '01-演示专项/03-待确认事项.md', 'md');
     assert.equal(okMd.ok, true);
@@ -196,7 +196,7 @@ describe('A05 身份保真文件操作校验（fileOps.ts）', () => {
   });
 });
 
-describe('A05 阅读进度连续性与事件标签', () => {
+describe('阅读进度连续性与事件标签', () => {
   it('pruneReadingStates：移入回收站期间经 recoverable_file_ids 保留进度，还原后无缝重连', () => {
     const initial: ReadingStateMap = {
       f_keep: makeReadingState('f_keep', '继续保留'),
@@ -250,7 +250,7 @@ describe('A05 阅读进度连续性与事件标签', () => {
   });
 });
 
-describe('A05 workspaceClient 协议往返（postRenameFile / postMoveFile / postTrashFile）', () => {
+describe('workspaceClient 协议往返（postRenameFile / postMoveFile / postTrashFile）', () => {
   const originalFetch = globalThis.fetch;
 
   afterEach(() => {

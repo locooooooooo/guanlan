@@ -1,16 +1,15 @@
 /**
- * starfix2 · 星图展开框事件卡四行重构 + header 全量渲染 + 标题卡让位 + 主干刻度渲染侧去重。
+ * 星图展开框事件卡四行重构 + header 全量渲染 + 标题卡让位 + 主干刻度渲染侧去重。
  *
- * 四项断言面（与 starfix-date-axis-dedup / gc-12-date-rail 同款形制：纯函数与导出常量断言，
- * 不渲染 SVG）：
+ * 四项断言面（纯函数与导出常量断言，不渲染 SVG）：
  *  T1 事件卡几何与措辞单一出口——280x116 四行卡、槽位堆叠间距铁律、
  *     versionSpanCapsule（v6 → v8 (2次) / v8）与 canvasChangeDigestLine（变更章节：A / B — 描述）；
  *  T2 展开框组头全量渲染——fanOutDayHeaderLine 新措辞逐字锁定 + 自适应胶囊宽恒让位「收起」按钮；
  *  T3 主干左上固定文字组让位「工程事件轴」主卡——TRUNK_META_TEXT_Y 行2 基线 < 卡顶；
  *  T4 主干刻度渲染侧去重——dedupeTicksByDate 渲染入口产物同日期 ≤1（11-13/11-14/11-15 根除）。
  *
- * 授权留痕：旧口径「152x90 卡」「· N 条待展开 · 点击看全天 →」「今日演进 N 次」由本工票
- * 用户规格有意更改——dayMergeLabel 本身不动（日历/看板消费方），画布卡措辞走本层新出口。
+ * 口径说明：旧「152x90 卡」「· N 条待展开 · 点击看全天 →」「今日演进 N 次」已替换为画布卡新出口，
+ * dayMergeLabel 本身不动（供日历/看板消费）。
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -161,7 +160,7 @@ test('T4 场景出口 → 渲染入口全链：重复日期桶经 scene 后主�
 // ---------- T1 · 事件卡几何与措辞单一出口 ----------
 
 test('T1 事件卡几何：280x116 贴富预览卡栅格（280~300px 带内），常量单一出处', () => {
-  // 登记取舍：工票给 288 或「贴既有栅格值」二选一——取 RICH_CARD_W=280 同一画布栅格
+  // 贴既有栅格值：取 RICH_CARD_W=280 同一画布栅格
   assert.ok(EVENT_CARD_W >= 280 && EVENT_CARD_W <= 300, `卡宽 ${EVENT_CARD_W} 在 280~300 带内`);
   assert.equal(EVENT_CARD_W, 280, '与 canvas/RichDocPreviewCard RICH_CARD_W 同栅格');
   assert.ok(EVENT_CARD_H >= 100, `卡高 ${EVENT_CARD_H} 容纳四行内容`);
@@ -214,7 +213,7 @@ test('T1 版本跨度胶囊（versionSpanCapsule）：合并卡 v6 → v8 (2次)
     eventCount: 3,
     merged: true,
   };
-  // 工票逐字：右=轻量灰胶囊「v6 → v8 (2次)」（dayMergeLabel 旧「v6 → v8 · 今日演进 2 次」退役）
+  // 合并卡胶囊：右=轻量灰胶囊「v6 → v8 (2次)」（dayMergeLabel 旧「v6 → v8 · 今日演进 2 次」退役）
   assert.equal(versionSpanCapsule({ merged }), 'v6 → v8 (2次)');
   // 单版口径：仅末版可解析 / 同版 → 「v8」
   assert.equal(
@@ -236,7 +235,7 @@ test('T1 版本跨度胶囊（versionSpanCapsule）：合并卡 v6 → v8 (2次)
 });
 
 test('T1 变更章节摘要行（canvasChangeDigestLine）：章节名拼接 + 一句描述，严禁只写 +/- 行', () => {
-  // 工票式样：「变更章节：文档头部 / 构建说明 — …」——章节拼接 + deriveCanvasChangeSummary 描述
+  // 变更摘要行：「变更章节：文档头部 / 构建说明 — …」——章节拼接 + deriveCanvasChangeSummary 描述
   assert.equal(
     canvasChangeDigestLine({
       changedSections: ['文档头部', '构建说明'],
@@ -268,7 +267,7 @@ test('T1 变更章节摘要行（canvasChangeDigestLine）：章节名拼接 + �
 // ---------- T2 · 展开框组头全量渲染 ----------
 
 test('T2 组头新措辞逐字（fanOutDayHeaderLine）：共 n 条事件（已合并为 m 份活跃文档 · 点击查看全天 →）', () => {
-  // 工票逐字：「2026-11-13 · 共 12 条事件（已合并为 4 份活跃文档 · 点击查看全天 →）」
+  // 展开框组头格式：「2026-11-13 · 共 12 条事件（已合并为 4 份活跃文档 · 点击查看全天 →）」
   assert.equal(
     fanOutDayHeaderLine('2026-11-13', 12, 4),
     '2026-11-13 · 共 12 条事件（已合并为 4 份活跃文档 · 点击查看全天 →）'
@@ -278,8 +277,8 @@ test('T2 组头新措辞逐字（fanOutDayHeaderLine）：共 n 条事件（已�
   assert.equal(FANOUT_DAY_HEADER_TAIL, '点击查看全天 →）');
   // 旧措辞退役留痕：不再产出「条待展开」「今日演进」
   const line = fanOutDayHeaderLine('2026-11-13', 12, 4);
-  assert.ok(!line.includes('待展开'), '旧「N 条待展开」措辞已废弃（starfix2 授权）');
-  assert.ok(!line.includes('个事项'), '旧「N 个事项」措辞已由新句式取代（starfix2 授权）');
+  assert.ok(!line.includes('待展开'), '旧「N 条待展开」措辞已废弃');
+  assert.ok(!line.includes('个事项'), '旧「N 个事项」措辞已由新句式取代');
 });
 
 test('T2 自适应胶囊宽：全量文本 + 内边距，右缘恒在「收起」按钮左缘之前（任何盒宽不重叠）', () => {

@@ -12,7 +12,7 @@
  *   markdownBodyPreview 函数体自 graphEvents.ts 私有定义原样迁入并由此导出
  *   （graphEvents 若反向持有会让缓存层↔画布事件层成环，故落点在本模块）。
  *
- * issue #31 缓存状态纪律（2026-11-16 深度 review 整改）：
+ * 缓存状态纪律：
  * - 只缓存「可判定的终态」：预览就绪（ready，有可派生预览）与已加载为空/不可派生
  *   （unavailable，如 SVG 源已取回但为空串）。两类都带状态标记，消费方可区分。
  * - 「未加载」（svg 无 svgSource / md 无 markdownContent）一律**不落缓存**：
@@ -27,19 +27,19 @@
 import type { FileRecord } from '../types/guanlan';
 import { sanitizeSvgForPreview } from './guanlanEngine';
 
-/** 预览缓存条目状态（issue #31）：
+/** 预览缓存条目状态：
  * - `ready`：预览可派生且已生成（svgDataUri/bodyPreview 至少一项成立）；
  * - `unavailable`：正文已加载但确认不可派生（如 SVG 源已取回但为空串）——终态，但仍区分于未加载。 */
 export type FilePreviewState = 'ready' | 'unavailable';
 
 export interface FilePreviewCacheEntry {
-  /** 缓存状态（issue #31）：不返回 not_loaded——未加载的文件不产生缓存条目 */
+  /** 缓存状态：不返回 not_loaded——未加载的文件不产生缓存条目 */
   state: FilePreviewState;
   /** SVG 预览 dataUri：清洗 → encodeURIComponent 一次成型（含 data: 前缀，三处消费同式） */
   svgDataUri?: string;
   /** 正文前 3 行预览：md=markdownBodyPreview 剥离行；pdf=首页抽取文字行（空则既有占位词汇） */
   bodyPreview?: string[];
-  /** D01-a 有界内存：最近一次被渲染消费的时刻（Date.now()）。离屏（超时未访问）
+  /** 有界内存：最近一次被渲染消费的时刻（Date.now()）。离屏（超时未访问）
    *  的条目由 sweep 在下次访问时回收——概览墙滚走后 30s，高分辨率 SVG dataUri
    *  不再常驻内存（每条可达几十 KB）。0 = 未跟踪（旧条目兼容）。 */
   lastAccessAt?: number;
@@ -47,12 +47,12 @@ export interface FilePreviewCacheEntry {
 
 /** 缓存条目数上限：覆盖 2200 张卡量级的概览墙全量驻留，仅防极端增长 */
 export const FILE_PREVIEW_CACHE_CAPACITY = 2048;
-/** 字节预算（issue #31）：单条 SVG dataUri 可达几十 KB，条数上限挡不住字节膨胀；
+/** 字节预算：单条 SVG dataUri 可达几十 KB，条数上限挡不住字节膨胀；
  *  24 MiB 约等于 2200 份 × 10KB 的概览墙常规驻留，超出按 LRU 逐最旧 */
 export const FILE_PREVIEW_CACHE_BYTE_BUDGET = 24 * 1024 * 1024;
-/** D01-a 离屏回收窗口：条目超过该时长未被渲染消费即视为离屏，可被回收。
- *  30s 取自任务卡 D01-a ⑤「离屏 30s 回收」口径——足够覆盖一次滚动画布/翻页的
- *  回访间隔（快速滚回不丢缓存），又保证离开视口的高分辨率条目不无限驻留。 */
+/** 离屏回收窗口：条目超过该时长未被渲染消费即视为离屏，可被回收。
+ *  30s 足够覆盖一次滚动画布/翻页的回访间隔（快速滚回不丢缓存），
+ *  又保证离开视口的高分辨率条目不无限驻留。 */
 export const FILE_PREVIEW_OFFSCREEN_RECYCLE_MS = 30_000;
 
 const cache = new Map<string, FilePreviewCacheEntry>();
@@ -61,7 +61,7 @@ let totalBytes = 0;
 let nowMsForTest: (() => number) | null = null;
 const nowMs = (): number => (nowMsForTest ? nowMsForTest() : Date.now());
 
-/** D01-a 离屏回收：逐出「上次消费距今超过 idleMs」的条目（LRU 访问序，最旧先逐）。
+/** 离屏回收：逐出「上次消费距今超过 idleMs」的条目（LRU 访问序，最旧先逐）。
  *  返回本次回收的条目数。每次 getFilePreviewEntry 前调用一次——无需全局定时器，
  *  消费本身就是节拍器（概览墙每帧都会触发），单次 O(n) 扫描 n≤容量上限，开销可忽略。 */
 function sweepOffscreenEntries(idleMs: number, preserveKey: string): number {
@@ -145,9 +145,9 @@ function evictBeyondBudget(preserveKey: string): void {
 
 /** per-file 预览缓存唯一入口。
  *  - 正文未加载（svg 无 svgSource / md 无 markdownContent）：返回空对象且**不写缓存**——
- *    同版本正文补齐后下次调用即派生并缓存（issue #31 修复点）；
+ *    同版本正文补齐后下次调用即派生并缓存；
  *  - 已加载：现算一次并缓存（ready / unavailable），之后 O(1) 命中（修订变更 → 新键 → 重算一次）；
- *  - D01-a 有界内存：每次消费前先做离屏回收（超 30s 未访问的条目逐出），命中/写入
+ *  - 有界内存：每次消费前先做离屏回收（超 30s 未访问的条目逐出），命中/写入
  *    都刷新 lastAccessAt——「正在被渲染消费」的条目永不回收，离开视口的 30s 后回收。 */
 export function getFilePreviewEntry(file: FileRecord): FilePreviewCacheEntry {
   const rev = resolveCurrentRevision(file);
@@ -161,7 +161,7 @@ export function getFilePreviewEntry(file: FileRecord): FilePreviewCacheEntry {
     return hit;
   }
 
-  // issue #31：未加载不落缓存——不产生阻止后续补齐的终态命中
+  // 未加载不落缓存——不产生阻止后续补齐的终态命中
   const svgLoaded = file.format === 'svg' && rev?.svgSource !== undefined;
   const mdLoaded = file.format === 'md' && rev?.markdownContent !== undefined;
   if (file.format === 'svg' && !svgLoaded) return { state: 'unavailable' };

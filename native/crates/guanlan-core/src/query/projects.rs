@@ -4,7 +4,7 @@
 //! - 单项目实时脉搏统计（文件数 / 真实目录数 / 待拍板数 / 最近活跃时间）；
 //! - 单项目侧栏完整目录树（含真实空目录 + 轻量文件摘要，用于左侧栏多项目并列展开）；
 //! - 跨项目待拍板决策与近期活跃文档采样（供今日首页多项目总览聚合）；
-//! - 单项目多策略搜索（优先 C02 混合倒排全文检索，并兜底文件名/路径即时匹配，
+//! - 单项目多策略搜索（优先混合倒排全文检索，并兜底文件名/路径即时匹配，
 //!   确保新加入尚未建完倒排索引的项目也能立即可搜）。
 
 use std::collections::HashSet;
@@ -275,7 +275,7 @@ pub fn project_recent_files(
     Ok(out)
 }
 
-/// 单项目检索（优先 C02 混合倒排全文检索，同时兜底标题/路径大小写不敏感子串匹配）
+/// 单项目检索（优先混合倒排全文检索，同时兜底标题/路径大小写不敏感子串匹配）
 pub fn project_search(
     store: &ReadonlyStore,
     project_id: &str,
@@ -292,7 +292,7 @@ pub fn project_search(
     let mut hits: Vec<CrossProjectSearchHit> = Vec::new();
     let mut seen_files: HashSet<String> = HashSet::new();
 
-    // 1) C02 混合倒排索引全文检索（索引未就绪时返回空 items，不阻断兜底）
+    // 1) 混合倒排索引全文检索（索引未就绪时返回空 items，不阻断兜底）
     let sq = SearchQuery {
         q: trimmed.to_owned(),
         format: None,

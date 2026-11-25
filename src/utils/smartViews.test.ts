@@ -12,7 +12,7 @@ import {
 import type { FileRecord, ReadingState } from '../types/guanlan';
 import type { ArtifactStateView } from '../services/apiTypes';
 
-/** C04 行为锁定：五类智能视图成员/计数同源守恒（任务卡 §5 C04 量化验收口径）。 */
+/** 五类智能视图成员/计数同源守恒单测。 */
 
 const NOW = Date.parse('2026-11-21T12:00:00+08:00');
 

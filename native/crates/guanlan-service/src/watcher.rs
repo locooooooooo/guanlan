@@ -1,4 +1,4 @@
-//! OS 原生事件驱动 File Watcher（A03；PRD v2.0 §3.4）。
+//! OS 原生事件驱动 File Watcher。
 //!
 //! - Windows：基于 `ReadDirectoryChangesW`（`FILE_FLAG_OVERLAPPED` + `bWatchSubtree = TRUE`
 //!   + `stop_event` 零延迟唤醒退出），闲置时阻塞在内核等待对象，CPU 近似 0%；
@@ -29,7 +29,7 @@ pub const DEBOUNCE_MS: u64 = 100;
 pub const MAX_COALESCE_WAIT_MS: u64 = 220;
 /// 兜底轻量核验间隔（仅作长周期保险，平时靠 OS 事件驱动零扫描）
 pub const FALLBACK_POLL_INTERVAL_MS: u64 = 300_000;
-/// 单次提交路径上限（冻结契约 G：changed_paths 必填 ≤2000）
+/// 单次提交路径上限（changed_paths 必填 ≤2000）
 pub const MAX_PATHS: usize = 2000;
 
 /// Watcher 运行句柄（/status 的 watcher 段数据源）
@@ -370,7 +370,7 @@ fn is_editor_temp_name(name: &str) -> bool {
         || lower.ends_with('~')
 }
 
-/// B01：采集白名单放开后，watcher 监听工作区内全部非忽略常规文件
+/// 采集白名单放开后，watcher 监听工作区内全部非忽略常规文件
 /// （排除系统/依赖目录黑名单、点前缀、编辑器临时文件及 `.gitignore` 规则）。
 fn is_watchable_path(root: &Path, rel: &str) -> bool {
     if should_ignore_rel_path(rel) {
@@ -438,7 +438,7 @@ async fn poll_once_fallback(
     *handle.last_poll_at.lock().expect("轮询时刻锁") = Some(guanlan_core::index::clock::now_iso());
 }
 
-/// 全树 stat 扫描（不哈希——版本判定交给对账；B01 遵循排除目录与 `.gitignore`）
+/// 全树 stat 扫描（不哈希——版本判定交给对账；遵循排除目录与 `.gitignore`）
 fn scan_tree(root: &Path, out: &mut HashMap<String, f64>) {
     scan_dir(root, root, "", out);
 }
@@ -1161,7 +1161,7 @@ mod tests {
         assert!((first.mtime_ms - first.mtime_ms.trunc()).abs() < 1.0);
     }
 
-    /// 扫描树：B01 放开后全格式计入、排除目录/点目录/.gitignore 跳过、mtime 与磁盘一致
+    /// 扫描树：全格式常规文件计入、排除目录/点目录/.gitignore 跳过、mtime 与磁盘一致
     #[test]
     fn scan_tree_respects_exclusions_and_formats() {
         let dir = TempDirGuard::new("scan");
@@ -1180,12 +1180,12 @@ mod tests {
         scan_tree(&root, &mut out);
         assert!(out.contains_key("docs/a.md"));
         assert!(out.contains_key("docs/b.svg"));
-        assert!(out.contains_key("docs/c.txt"), "B01 全格式皆应纳入");
+        assert!(out.contains_key("docs/c.txt"), "全格式常规文件皆应纳入");
         assert!(!out.contains_key("docs/ignored.log"), ".gitignore 命中不计");
         assert!(!out.contains_key("node_modules/x.md"), "排除目录不计");
     }
 
-    /// 事件驱动防抖与风暴上限常量契约（A03：< 300ms 端到端链路）
+    /// 事件驱动防抖与风暴上限常量契约（< 300ms 端到端链路）
     #[test]
     fn timing_constants_match_contract() {
         const {
@@ -1243,7 +1243,7 @@ mod tests {
         assert!(plan2.need_verify_all);
     }
 
-    /// 端到端实测（A03 量化验收口径）：
+    /// 端到端实测（事件驱动 watcher 延迟与抗风暴）：
     /// 1) 外部编辑器保存文件后，SSE `workspace-change` 在 < 300ms 内送达；
     /// 2) 连续 100 次/秒保存风暴合并入列，绝不丢最终内容、绝不 SQLITE_BUSY；
     /// 3) 闲置期零多余轮询且 stop() 秒级释放句柄。
@@ -1367,7 +1367,7 @@ mod tests {
             }
         }
         let latency = watcher_latency_ms.expect("应收到 watcher workspace-change SSE 通知");
-        eprintln!("[A03 实测] 外部编辑 → SSE workspace-change 延迟 = {latency}ms");
+        eprintln!("[watcher 实测] 外部编辑 → SSE workspace-change 延迟 = {latency}ms");
         assert!(
             latency < 300,
             "外部保存后 SSE 通知必须 < 300ms，实测 {latency}ms"
@@ -1418,7 +1418,7 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
         eprintln!(
-            "[A03 实测] 100 次连续保存风暴耗时 {storm_ms}ms，终态 final-marker-100 落库={final_synced}"
+            "[watcher 实测] 100 次连续保存风暴耗时 {storm_ms}ms，终态 final-marker-100 落库={final_synced}"
         );
         assert!(
             final_synced,

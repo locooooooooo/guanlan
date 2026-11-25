@@ -1,9 +1,9 @@
 /**
- * D05 · 全景时间轴（列表态）J/K 上下事件 · H/L 收起展开事项——视图级键盘导航 Hook。
+ * 全景时间轴（列表态）J/K 上下事件 · H/L 收起展开事项——视图级键盘导航 Hook。
  *
- * 任务卡 D05 改动与产物①：J/K 上下事件、H/L 收起展开事项。监听挂在 TimelineView
- * （事项组折叠状态 collapsedBatches / openIdentityClusters / openVersionHistories 与
- * 选中事件的组归属都在视图内，事件卡点击链 onSelectEvent 直写 store selectedEventId）。
+ * 监听挂在 TimelineView（事项组折叠状态 collapsedBatches / openIdentityClusters /
+ * openVersionHistories 与选中事件的组归属都在视图内，事件卡点击链 onSelectEvent
+ * 直写 store selectedEventId）。
  *
  * 键位（keyboardShortcuts.resolveShortcutActionFromEvent 单一语义源）：
  *  - J = 下一可见事件（列表上新下旧，视觉向下 = 更旧）；K = 上一可见事件（更新）；
@@ -12,7 +12,7 @@
  *  - L = 展开选中事件所属事项组；无组（single 卡）则仅滚动定位；
  *  - 步进后把选中卡滚入视口（prefers-reduced-motion 动态降级为 behavior:'auto'）。
  *
- * 停机护栏：编辑面 / 浮层打开（hasBlockingDomOverlay + shortcutTargetYields）不生效。
+ * 护栏：编辑面 / 浮层打开（hasBlockingDomOverlay + shortcutTargetYields）不生效。
  */
 import { useEffect, useRef } from 'react';
 import {

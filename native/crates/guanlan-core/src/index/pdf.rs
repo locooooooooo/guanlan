@@ -1,4 +1,4 @@
-//! B04 · PDF 页级正文抽取与页码证据锚定（纯 Rust 零外部工具依赖，支持流式解压、
+//! PDF 页级正文抽取与页码证据锚定（纯 Rust 零外部工具依赖，支持流式解压、
 //! ToUnicode CMap、PDF 1.5+ ObjStm/XRef 流、扫描件诚实降级与跨版本页码直达）。
 //!
 //! 设计原则：
@@ -37,7 +37,7 @@ macro_rules! pdf_trace {
     };
 }
 
-/// 只读/索引期 PDF 解析体量上限（50 MiB，与 B01 L2 PDF 快照上限对齐）
+/// 只读/索引期 PDF 解析体量上限（50 MiB，与 L2 PDF 快照上限对齐）
 pub const MAX_PDF_PARSE_BYTES: usize = 50 * 1024 * 1024;
 /// 单个 PDF 最多解析的页数（防畸形超深页树撑爆内存）
 const MAX_PDF_PAGES: usize = 2000;

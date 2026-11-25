@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react';
 import type { DecisionAssertion, FileRecord, RelationEdge } from '../types/guanlan';
 
 /**
- * C04 · 确认制引用路径修复 Hook（§5 C04 ④；围栏内独立 Hook，§4.2 防膨胀）。
+ * 确认制引用路径修复 Hook。
  *
  * 语义（严格确认制，绝不静默改写原文档）：
  * - 移动/重命名一个被 Markdown 决定证据引用的附件（.pdf/.xlsx/.docx/.svg，含 md 本身
@@ -59,7 +59,7 @@ export interface ReferenceRepairOutcome {
 
 export interface ReferenceRepairMutationInput {
   fileId: string;
-  /** A05 响应中的旧/新工作区相对路径（rename/move 均有）。 */
+  /** 文件变更响应中的旧/新工作区相对路径（rename/move 均有）。 */
   oldPath: string;
   newPath: string;
   /** 弹窗确认标志；false 时本函数不落任何字节（严格确认制）。 */

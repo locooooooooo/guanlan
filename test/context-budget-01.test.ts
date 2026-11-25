@@ -1,5 +1,5 @@
 /**
- * context-budget-01：Token 估算与预算条（方案 F0/F4；契约 B0/B7 冻结公式）。
+ * context-budget-01：Token 估算与预算条（前后端同源公式）。
  *
  * 向量单源 = native/testdata/token-vectors.json（git 内静态文件，与 Rust
  * include_str! 编译期读取同源；无 seed 依赖）。公式：
@@ -48,10 +48,10 @@ describe('estimateTokensFromText 与冻结向量逐条一致（双端同源）',
   });
 });
 
-describe('三档注入粒度因子与预算视图（PRD 4.2）', () => {
+describe('三档注入粒度因子与预算视图', () => {
   const TEXT = 'Hello 世界'; // 6 non-cjk bytes + 2 cjk → ceil(6/3.5 + 1.4) = ceil(3.114) = 4
 
-  test('全文 ×1 / 摘要 ×0.2（PRD「降低约 80%」）/ 仅决策 ×0.05（裁定值）', () => {
+  test('全文 ×1 / 摘要 ×0.2（降低约 80%）/ 仅决策 ×0.05', () => {
     assert.equal(SUMMARY_GRANULARITY_FACTOR, 0.2);
     assert.equal(DECISIONS_ONLY_GRANULARITY_FACTOR, 0.05);
     assert.equal(estimateItemTokens({ fileId: 'f', granularity: 'full', text: TEXT }), 4);
@@ -97,7 +97,7 @@ describe('三档注入粒度因子与预算视图（PRD 4.2）', () => {
     assert.deepEqual(view.downgradeSuggestions, []);
   });
 
-  test('预算条文案（PRD 4.2 口径）', () => {
+  test('预算条文案', () => {
     assert.equal(
       formatBudgetLine({ selected: 4, estTokens: 18400, threshold: 65536, overThreshold: false, downgradeSuggestions: [] }),
       '已选 4 项 · 约 18.4k Tokens (推荐阈值 < 64k)'

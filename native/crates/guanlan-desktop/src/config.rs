@@ -21,8 +21,8 @@ pub struct RecentWorkspaceEntry {
     pub last_opened_at: String,
 }
 
-/// 全局呼出热键默认值（C03；`desktop.json` 的 `hotkey` 字段可覆盖——
-/// 可配置性是硬约束：抢占系统常规快捷键且不可配置即停，任务卡 C03）。
+/// 全局呼出热键默认值（`desktop.json` 的 `hotkey` 字段可覆盖——
+/// 必须支持用户配置，禁止硬编码抢占系统常规快捷键）。
 pub const DEFAULT_HOTKEY: &str = "alt+k";
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -32,7 +32,7 @@ pub struct DesktopConfig {
     pub last_root: Option<String>,
     #[serde(default)]
     pub recent_workspaces: Vec<RecentWorkspaceEntry>,
-    /// C03 全局呼出热键（如 "alt+k" / "ctrl+shift+p"）；None = 默认值。
+    /// 全局呼出热键（如 "alt+k" / "ctrl+shift+p"）；None = 默认值。
     /// 非法值在注册处告警并回退默认（parse_hotkey 校验）。
     #[serde(default)]
     pub hotkey: Option<String>,
@@ -130,7 +130,7 @@ pub fn write_config_at(path: Option<&Path>, config: &DesktopConfig) {
     }
 }
 
-/// F03：从命令行参数解析初始打开目录（承接 Windows 资源管理器右键「用观澜打开此文件夹」）。
+/// 从命令行参数解析初始打开目录（承接 Windows 资源管理器右键「用观澜打开此文件夹」）。
 /// 支持两种形式：`guanlan-desktop --open "<目录>"` 或位置参数 `guanlan-desktop "<目录>"`。
 pub fn parse_cli_startup_dir(args: &[String]) -> Option<String> {
     let mut idx = 0;

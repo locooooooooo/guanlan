@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { Archive, ArrowRight, Compass, FileText, FileCode, FileSpreadsheet, Info, Sparkles, X } from 'lucide-react';
 import type { FileRecord, TimelineEvent, FileFormat } from '../types/guanlan';
-// TA-03：密度栅格的事件日按本地日历日（纯日期不换算）
+// 密度栅格的事件日按本地日历日（纯日期不换算）
 import { localDay } from '../utils/timeFormat';
 import type { DesktopFileActionCallbacks } from './FileContextMenu';
 import { getCalendarFormatColor } from '../utils/formatMeta';
 import { Badge, ScrollArea } from './ui';
 
-// 密度五档（§5 热力档 AA 修正：数据编码保留五级有序，文字全档 --ink-strong——
+// 密度五档（热力档 AA 对比度修正：数据编码保留五级有序，文字全档 --ink-strong——
 // 原最高档实心薰衣草＋白字 4.17 违 AA，改「底 /45＋2px --accent-iris 边框＋600」。
 // 图例复用同一组类，与格子逐一对应。）
 const DENSITY_LEVEL_BGS = [
@@ -66,10 +66,10 @@ function dayLevelClass(n: number, isToday: boolean): string {
 }
 
 /**
- * T3（走查「迷你月历默认停在 2013-10」）：活跃日期集合的最大月份（YYYY-MM）。
- * 为什么取最大：脏数据把最早有事件的月拖到 2013-10，迷你月历若按渲染序默认
- * 停在列表头部，读者第一眼落在十三年前的历史月；默认定位口径 = 最新活跃月份
- * （如 2026-11）。纯函数供 calfix 断言；输入不要求有序（YYYY-MM-DD 字典序恒
+ * 活跃日期集合的最大月份（YYYY-MM）。
+ * 为什么取最大：脏数据可能把最早有事件的月拉到多年前，迷你月历若按升序默认
+ * 停在列表头部，读者第一眼会落在远古历史月；默认定位口径 = 最新活跃月份
+ * （如 2026-11）。纯函数供单测断言；输入不要求有序（YYYY-MM-DD 字典序恒
  * 可比，内部取最大即可）；非字符串/非纯日期格式的输入跳过（调用方传来的
  * activeDayKeys 已是合法日历日，此处只作防御）。空集合返回 null（上层不渲染月历）。
  */
@@ -82,7 +82,7 @@ export function latestActiveMonth(days: string[]): string | null {
   return max === null ? null : max.slice(0, 7);
 }
 
-/** V05 · 迷你热力月历远古空月断层判定阈值：相邻活跃月之间连续空白 > 12 个月即折叠为「更早归档」胶囊。 */
+/** 迷你热力月历远古空月断层判定阈值：相邻活跃月之间连续空白 > 12 个月即折叠为「更早归档」胶囊。 */
 export const CALENDAR_ANCIENT_GAP_MONTHS = 12;
 
 export type DensityMonthListEntry<T extends { month: string }> =
@@ -102,7 +102,7 @@ function monthSerialOf(ym: string): number | null {
 }
 
 /**
- * V05 · 迷你热力月历空月断层折叠纯函数（单测锁定）：
+ * 迷你热力月历空月断层折叠纯函数：
  * 输入降序（新→旧）活跃月份序列，当相邻两个活跃月之间连续空月 > maxGapMonths（默认 12 个月）时，
  * 插入「更早归档」断层胶囊（如「更早归档 · 跨 13 年」），消除顶部「跳过 149 个空月」噪音。
  */
@@ -166,9 +166,8 @@ export function CalendarSidePanels({
   const [showAllMonths, setShowAllMonths] = useState(false);
   const fileById = useMemo(() => new Map(files.map((f) => [f.file_id, f])), [files]);
 
-  // 卡①：密度栅格数据——WF1-P1：只枚举**有事件的日**，并按自然月分组；
-  // 0 事件月份不再渲染格子（旧实现从事件最早日 min 到最晚日 max 逐日 while，
-  // 4,776 天里 4,750 天空格、158 个月里 151 个整月 0 事件 → 迷你日历 5.7k DOM）
+  // 卡①：密度栅格数据——只枚举有事件的日，并按自然月分组；
+  // 跳过零事件月份，避免跨年稀疏数据产生大量空月格子导致 DOM 膨胀
   const density = useMemo(() => {
     const counts = new Map<string, number>();
     for (const ev of events) {
@@ -233,13 +232,13 @@ export function CalendarSidePanels({
       months,
       activeDayCount: activeDayKeys.length,
       skippedMonths,
-      // T3：默认定位口径 = 活跃日期集合的最大月份（如 2026-11），严禁停在 2013-10 脏月
+      // 默认定位口径 = 活跃日期集合的最大月份（如 2026-11），避免停在早期异常月
       latestMonth: latestActiveMonth(activeDayKeys),
     };
   }, [events]);
 
-  // T3：渲染序改「新→旧」——最新活跃月是列表第一块（默认定位即落在它，
-  // 不再依赖滚动容器把 2013-10 头部月滚出视口）
+  // 渲染序采用「新→旧」——最新活跃月排在列表第一块（默认定位即落在它，
+  // 不依赖滚动容器把早期月份滚出视口）
   const orderedMonths = useMemo(() => [...density.months].reverse(), [density.months]);
   // 默认只常驻最近 DENSITY_MONTH_CAP 个有事件月份；更早的按需展开
   // （新序取前 N 个 = 最近 N 个，与旧序 slice(-N) 是同一集合、只是方向反转）
@@ -248,12 +247,12 @@ export function CalendarSidePanels({
       ? orderedMonths
       : orderedMonths.slice(0, DENSITY_MONTH_CAP);
   const foldedMonthCount = density.months.length - visibleMonths.length;
-  // V05：超 12 个连续空月的远古跨度在列表中插入优雅「更早归档」断层胶囊，消除顶部「跳过 149 个空月」噪音
+  // 超 12 个连续空月的远古跨度在列表中插入「更早归档」断层胶囊，避免顶部出现大量跳过空月提示
   const partitionedMonths = useMemo(
     () => partitionCalendarDensityMonths(visibleMonths),
     [visibleMonths]
   );
-  // T3：默认高亮最新活跃月份（初始值口径 = activeDayKeys 的最大月份）
+  // 默认高亮最新活跃月份（初始值口径 = activeDayKeys 的最大月份）
   const focusMonth = density.latestMonth;
   const skippedRange =
     density.skippedMonths.length > 0

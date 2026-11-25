@@ -7,10 +7,10 @@ import { documentEvents, findDocumentEvent, orderedEvents, type DocumentEvent } 
 import { documentLinks } from '../utils/documentLinks';
 import { fetchRevisionContent } from '../services/workspaceClient';
 import type { FileRecord } from '../types/guanlan';
-// DoD1：下钻视图只显核心文件名，完整路径进 title
+// 下钻视图只显核心文件名，完整路径进 title
 import { basenameOf } from '../utils/documentIdentity';
 import { isTimeMachineFormat } from '../utils/formatMeta';
-// css 装载上移 App.tsx（总装，指挥授权）：node --test/tsx 测试链加载不了 .css 扩展名
+// css 装载放在 App.tsx：node --test/tsx 测试链无法直接加载 .css 扩展名
 // （凡 import 本组件的测试链同受影响）；本组件由 App 舷窗常驻渲染，时序恒先于首帧
 
 export interface EventFrame {
@@ -18,7 +18,7 @@ export interface EventFrame {
   revisionId: string;
   line?: number;
   name: string;
-  /** v0.4：从工程事件下钻时保留事件 ID（面包屑与返回定位用） */
+  /** 从工程事件下钻时保留事件 ID（面包屑与返回定位用） */
   eventId?: string;
 }
 type Props = Omit<GraphCanvasViewProps, 'onExploreFile'> & {
@@ -61,7 +61,7 @@ export function KnowledgeGraph({ visible, root, trail, setTrail, onReadEvidence,
   }, [visible, trail]);
   return <>
     <div className={trail.length ? 'hidden' : 'flex h-full w-full flex-1 min-h-0'}>
-      {/* issue #27：把宿主可见性透传给画布——隐藏时停止渲染与昂贵派生（组件仍挂载保状态） */}
+      {/* 把宿主可见性透传给画布——隐藏时停止渲染与昂贵派生（组件仍挂载保状态） */}
       <GraphCanvasView {...graph} visible={visible} onExploreFile={(id, revisionId, eventId) => {
         const file = graph.files.find(f => f.file_id === id);
         if (file) go(file, undefined, file.title, revisionId ?? file.current_revision_id, eventId);
@@ -107,7 +107,7 @@ export function EventLevel({ active, frame, trail, root, file, graph, onGo, onBa
     if (!active || file.format !== 'md' || frame.line === undefined || content !== undefined || !rev || error) return;
     let cancelled = false;
     (async () => {
-      // v0.4：按版本读取快照，历史版本不会拿磁盘当前内容冒充
+      // 按版本读取快照，历史版本不会拿磁盘当前内容冒充
       const result = await fetchRevisionContent(frame.revisionId);
       if (!result.ok) {
         throw Error(
@@ -176,7 +176,7 @@ export function EventLevel({ active, frame, trail, root, file, graph, onGo, onBa
   const dated = entries.length > 0 && entries.every(e => e.date && /^\d{4}-/.test(e.date)) ||
     entries.length > 0 && entries.every(e => e.date && /^\d{1,2}:/.test(e.date));
   const offset = page * PAGE_SIZE;
-  // vm_4 / D03：depth-1 文档下钻——MD、多模态格式（SVG/CSV/TSV/XLSX）与全部第一档 UTF-8 文本/源码
+  // depth-1 文档下钻——MD、多模态格式（SVG/CSV/TSV/XLSX）与全部第一档 UTF-8 文本/源码
   // 格式（如 .mjs/.ts/.py/.json/.txt）统一走文档版本时光机（版本轴 + 按格式分派的对比侧面板）；
   // 章节下钻（frame.line 有值）与非时光机格式（PDF/位图/二进制等）走三栏事件图谱
   if (isTimeMachineFormat(file.format) && frame.line === undefined) {

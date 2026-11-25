@@ -1,11 +1,8 @@
 /**
- * 观澜 v0.4 第一轮 —— 持久库 → 前端契约的投影
+ * 观澜 Node 对拍基线 —— 持久库 → 前端契约的投影
  *
- * 目的：现有 Graph / Timeline / Reader / Diff 组件不改结构，只把数据来源换成持久库。
- * 方案 §4「一份历史记录，同时服务三个视图」：三个视图读取同一份 versions/events。
- *
- * 注意：完整的多版本 revisions 全部投影给前端（第一轮要求「重启后仍能打开三个版本」），
- * 正文按快照大小内联；超大快照留给按版本取内容接口。
+ * 目的：Graph / Timeline / Reader / Diff 共享同一份持久库 versions/events。
+ * 完整的多版本 revisions 全部投影给前端，正文按快照大小内联；超大快照留给按版本取内容接口。
  */
 
 import fs from 'node:fs';

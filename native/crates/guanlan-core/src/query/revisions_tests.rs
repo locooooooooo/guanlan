@@ -470,7 +470,7 @@ fn revision_content_unavailable_cases() {
     cleanup_dir(&fixture.dir);
 }
 
-/// 阅读器兼容视图（契约 §1.7 末段，issue #20 迁移后）：只返回当前版
+/// 阅读器兼容视图（契约 §1.7 末段）：只返回当前版
 /// （camelCase 派生字段、changedSectionsFromPrev 单版本口径、summaryNote），
 /// 不展开完整版本链、不内联任何正文；附集合限额保留
 #[test]
@@ -478,7 +478,7 @@ fn file_detail_reader_view() {
     let (fixture, ws, store, file_id, _r1, _r2) = setup_chain("chain-detail");
     let detail = file_detail(&store, &file_id).expect("详情失败");
     assert!(detail.ok);
-    // issue #20：只返回当前版（last_revision_id → r3），不读完整版本链
+    // 只返回当前版（last_revision_id → r3），不读完整版本链
     assert_eq!(detail.revisions.len(), 1);
     assert_eq!(detail.revisions[0].version_number, 3);
     assert_eq!(detail.revisions[0].content_sha256, H1);
@@ -504,7 +504,7 @@ fn file_detail_reader_view() {
     assert_eq!(detail.edges.len(), 2);
     let _ = ws;
 
-    // SVG 文件同样不内联（issue #20：单次响应不随版本数线性增长）
+    // SVG 文件同样不内联（单次响应不随版本数线性增长）
     let hash = "ee0000000000000000000000000000000000000000000000000000000000eeee";
     fixture.blob(hash, 44, 1);
     fixture.write_blob_file(hash, b"<svg><text>A</text><rect/><text>B</text></svg>");

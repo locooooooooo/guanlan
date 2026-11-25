@@ -8,19 +8,19 @@ import {
 } from '../src/utils/documentIdentity';
 
 /**
- * T1 列表净化 · isToolNoisePath 扩展回归（列表工匠）：
+ * 列表净化 · isToolNoisePath 扩展回归：
  *
  * 列表页（TimelineView）顶部「仅看核心文档与计划」开关默认开启，消费本函数
- * 隐藏运行态缓存与机器派生条目（工票：output/…/run-<长数字>/…/<UUID> 这类
+ * 隐藏运行态缓存与机器派生条目（例如 output/…/run-<长数字>/…/<UUID> 这类
  * 机器生成的无意义长路径）。判定单一出口在 documentIdentity，不另设第二口径，
  * 故此处锁纯函数口径；组件侧过滤为 filteredEvents 内一行消费（无 DOM 测试基建，
- * 逻辑见 TimelineView.tsx「T1」注释块）。
+ * 逻辑见 TimelineView.tsx）。
  *
  * 断言清单：
  *  B1 向后兼容：draw 形态 / `_` 前缀既有判定逐字不变（镜像 highValueReading.test.ts A1）；
  *  B2 run-<纯数字≥8> 运行态缓存段拦截；带 T 的既有任务包名与短人工 id 不误拦；
  *  B3 长 hex / UUID 段拦截（含剥扩展名的文件名核）；短 hex 与正常词不误拦；
- *  B4 工票真实形态端到端：output/…/run-<长数字>/…/<UUID> 全链命中，win32 反斜杠同判；
+ *  B4 真实形态端到端：output/…/run-<长数字>/…/<UUID> 全链命中，win32 反斜杠同判；
  *  B5 既有导出语义零变化：basenameOf 去扩展基名、normalizePath 统一斜杠。
  */
 
@@ -90,12 +90,12 @@ test('B3 长 hex/UUID 段拦（含剥扩展名文件名核），短 hex 与正�
   assert.equal(isToolNoisePath('01-方案文档/项目计划与需求/路线图.md'), false, '正常中文路径零误伤');
 });
 
-// ---------- B4 工票真实形态端到端 ----------
+// ---------- B4 真实形态端到端 ----------
 
-test('B4 工票真实形态：output/…/run-<长数字>/…/<UUID> 全链命中；win32 反斜杠同判', () => {
+test('B4 真实形态：output/…/run-<长数字>/…/<UUID> 全链命中；win32 反斜杠同判', () => {
   const ticketPath =
     'output/mech-win/run-1758123456789/3f2a8b1c-4d5e-4f6a-8b7c-9d0e1f2a3b4c/001-derived-preview.svg';
-  assert.equal(isToolNoisePath(ticketPath), true, '工票示例全链命中（run 段 + UUID 段）');
+  assert.equal(isToolNoisePath(ticketPath), true, '运行态缓存路径示例全链命中（run 段 + UUID 段）');
   assert.equal(
     isToolNoisePath(ticketPath.split('/').join('\\')),
     true,

@@ -1,7 +1,6 @@
-//! C05 跨项目只读挂载——参考工作区路径规范化与互斥判定（吸收 quiet-md `mounts.rs`
-//! 外挂目录隔离纪律）。
+//! 跨项目只读挂载——参考工作区路径规范化与互斥判定。
 //!
-//! 三条硬规则（任务卡 C05 / 契约 contract-storage.md §13）：
+//! 三条硬规则（契约 contract-storage.md §13）：
 //! 1. **plain() 语义**：Windows 扩展前缀 `\\?\`（长路径）与 `\\?\UNC\` 统一剥离，
 //!    规范化结果无 `\\?\` 泄漏——挂载身份哈希对「同一目录的不同写法」稳定一致；
 //! 2. **父子目录互斥**：当前工作区与参考工作区（以及挂载区彼此之间）严禁互为
@@ -24,7 +23,7 @@ use crate::error::GuanlanError;
 pub fn strip_extended_prefix(path: &str) -> String {
     // 大小写无关匹配前缀（Windows 对设备前缀同样大小写无关）。
     // 必须用 get() 按字符边界取前缀：path.len() 是字节数，非 ASCII 路径
-    // （如 `F:/拥抱AI`）的第 8 字节可能落在多字节字符中间，直接 `path[..n]`
+    // （如 `F:/观澜项目`）的第 8 字节可能落在多字节字符中间，直接 `path[..n]`
     // 会在启动挂载规范化阶段 panic（end byte index is not a char boundary）。
     let starts_with = |prefix: &str| {
         path.get(..prefix.len())
@@ -145,27 +144,27 @@ mod tests {
     }
 
     /// 回归：非 ASCII 根路径不得在扩展前缀探测时 panic。
-    /// `F:/拥抱AI` 的第 8 字节落在多字节字符「抱」中间，旧实现直接
+    /// `F:/观澜项目` 的第 8 字节落在多字节字符「澜」中间，旧实现直接
     /// `path[..8]` 会以 `not a char boundary` 在启动阶段崩掉整个进程。
     #[test]
     fn non_ascii_root_does_not_panic_on_prefix_probe() {
         for p in [
-            "F:/拥抱AI",
-            "F:\\拥抱AI",
-            "C:/拥抱AI工作区",
-            "D:/数据/拥抱AI",
+            "F:/观澜项目",
+            "F:\\观澜项目",
+            "C:/观澜项目工作区",
+            "D:/数据/观澜项目",
         ] {
             assert_eq!(strip_extended_prefix(p), p);
         }
         // 真正的前缀仍必须剥离（尾段为中文同样安全）
-        assert_eq!(strip_extended_prefix("\\\\?\\F:\\拥抱AI"), "F:\\拥抱AI");
+        assert_eq!(strip_extended_prefix("\\\\?\\F:\\观澜项目"), "F:\\观澜项目");
         assert_eq!(
-            strip_extended_prefix("\\\\?\\UNC\\srv\\分享\\拥抱AI"),
-            "\\\\srv\\分享\\拥抱AI"
+            strip_extended_prefix("\\\\?\\UNC\\srv\\分享\\观澜项目"),
+            "\\\\srv\\分享\\观澜项目"
         );
         // 启动路径规范化链路（serv / 桌面壳均会走）不得 panic
-        assert_eq!(norm("F:/拥抱AI"), "F:\\拥抱AI");
-        assert_eq!(norm("\\\\?\\F:\\拥抱AI"), "F:\\拥抱AI");
+        assert_eq!(norm("F:/观澜项目"), "F:\\观澜项目");
+        assert_eq!(norm("\\\\?\\F:\\观澜项目"), "F:\\观澜项目");
     }
 
     /// 验收「Windows 长路径/混合斜杠目录规范化结果无 \\?\ 泄漏且哈希稳定一致」：

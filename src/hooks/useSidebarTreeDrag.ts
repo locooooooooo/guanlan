@@ -2,15 +2,14 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { isFolderMoveBlocked } from '../utils/sidebarTree';
 
 /**
- * C04 · 左栏目录树内拖拽整理 Hook（§5 C04 ①；quiet-md sidebar_drag/sidebar_drop
- * 手感移植；围栏内独立 Hook，§4.2 防膨胀）。
+ * 左栏目录树内拖拽整理 Hook（参考 quiet-md 的 sidebar_drag/sidebar_drop 交互手感）。
  *
  * 职责边界：本 Hook 只承载**拖拽 UI 状态机**（谁在拖、悬停谁、自动展开计时、
  * 边缘自动滚屏、落地微反馈）与**防成环拦截**；真正的跨目录移动 IO 由宿主
- * （LeftSidebar → App 接线）在 onDropMove 回调里直连 A05 `/move` 完成——
- * file_id / 版本链 / 阅读进度 100% 不断链由 A05 身份保真语义保证。
+ * （LeftSidebar → App 接线）在 onDropMove 回调里直连文件移动接口 `/move` 完成——
+ * file_id / 版本链 / 阅读进度 100% 不断链由服务端身份保真语义保证。
  *
- * 交互契约（量化验收口径）：
+ * 交互约定：
  * - 「拖入目标文件夹」：目标行高亮 + 悬停折叠目录 450ms 自动展开 + 释放落地微反馈；
  * - 「行间落点」仅目录行是合法目标（文件行不吸掷）；拖向自身当前所在目录
  *   （无变化落点）100% 拦截，不高亮、不吸掷、drop 拒绝；
@@ -36,7 +35,7 @@ export interface SidebarTreeDragOptions {
   onAutoExpand: (folderPath: string) => void;
   /** 滚动容器（树滚动区）；用于边缘自动滚屏。 */
   scrollContainerRef: RefObject<HTMLElement | null>;
-  /** 释放落点（文件）：直连 A05 /move（宿主接线；有引用时宿主转确认弹窗）。 */
+  /** 释放落点（文件）：直连文件移动接口 /move（宿主接线；有引用时宿主转确认弹窗）。 */
   onDropMove: (fileId: string, targetDir: string) => void;
   /** 释放落点（文件夹）：直连 /api/v1/folders/move（防成环拦截后回调）。 */
   onDropMoveFolder?: (folderPath: string, targetParentDir: string) => void;
@@ -61,8 +60,8 @@ export interface SidebarTreeDragState {
 
 /**
  * 目标目录是否为「被拖文件当前所在目录」（文件级防成环：同目录落点＝无变化，
- * A05 会报「目标路径与当前文件位置相同」——前端先行 100% 拦截）。
- * 目录段比较一律大小写无关（Windows 工作区口径，与 A05 collide 校验
+ * 服务端移动接口会报「目标路径与当前文件位置相同」——前端先行 100% 拦截）。
+ * 目录段比较一律大小写无关（Windows 工作区口径，与服务端冲突校验
  * eq_ignore_ascii_case 同语义；中文/非 ASCII 段不受影响）。
  */
 export function isMoveBlockedBySelfDrag(fromDir: string | null, targetDir: string): boolean {

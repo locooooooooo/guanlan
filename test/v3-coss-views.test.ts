@@ -1,7 +1,7 @@
 /**
- * V3 批次（V07–V09）· 全站 coss 原语统一、全站明暗双态与实机穿帮清零单测集。
+ * 全站 coss 原语统一、全站明暗双态与实机穿帮清零单测集。
  *
- * V07 覆盖：
+ * 覆盖：
  * 1. buildPackageVisualFingerprint：近 14 天变更 Sparkline（零造数：安静包全 0 水平线、活跃包精确逐日计数）、
  *    格式构成彩带严格 MECE 守恒（∑count === docs.length）、清晰更新相对时间与去重防线；
  * 2. appThemeStore 三态轮换（light → dark → system → light）与持久化；
@@ -121,9 +121,9 @@ function makeConfig(): WorkspaceConfig {
   };
 }
 
-// ===== V07 · 真实数据驱动微视觉指纹（零造数） =====
+// ===== 真实数据驱动微视觉指纹（零造数） =====
 
-test('V07 · buildPackageVisualFingerprint：近 14 天 Sparkline 精确计数、重复 revision 去重与安静包全 0 基线', () => {
+test('buildPackageVisualFingerprint：近 14 天 Sparkline 精确计数、重复 revision 去重与安静包全 0 基线', () => {
   const anchorIso = '2026-11-23T12:00:00+08:00';
   const days = buildTrailing14Days(anchorIso);
   assert.equal(days.length, 14);
@@ -212,9 +212,9 @@ test('V07 · buildPackageVisualFingerprint：近 14 天 Sparkline 精确计数�
   assert.ok(yValues.every((y) => y === SPARKLINE_VIEWBOX_H - 2), '全 0 序列必须平贴底线，零假波动');
 });
 
-// ===== V07 · 全站明暗主题三态轮换与 TopHeader coss Toolbar/Group 重排 =====
+// ===== 全站明暗主题三态轮换与 TopHeader coss Toolbar/Group 重排 =====
 
-test('V07 · appThemeStore 三态轮换（light→dark→system→light）与 TopHeader Toolbar/Group/Kbd 渲染', () => {
+test('appThemeStore 三态轮换（light→dark→system→light）与 TopHeader Toolbar/Group/Kbd 渲染', () => {
   assert.equal(nextAppThemeMode('light'), 'dark');
   assert.equal(nextAppThemeMode('dark'), 'system');
   assert.equal(nextAppThemeMode('system'), 'light');
@@ -269,9 +269,9 @@ test('V07 · appThemeStore 三态轮换（light→dark→system→light）与 To
   assert.ok(headerHtml.includes('data-slot="kbd"'), '检索提示应使用 coss Kbd 原语');
 });
 
-// ===== V07 · 首页 Frame/CardFrame + 多项目零折行 + 叠卡零孤字 + 专项指纹橱窗 =====
+// ===== 首页 Frame/CardFrame + 多项目零折行 + 叠卡零孤字 + 专项指纹橱窗 =====
 
-test('V07 · MultiProjectOverviewStrip / FeaturedFocusCards / TaskPackageGallery / HomeView 结构与防穿帮验收', () => {
+test('MultiProjectOverviewStrip / FeaturedFocusCards / TaskPackageGallery / HomeView 结构与防穿帮验收', () => {
   // 1. 多项目工作台：coss Frame + 全指标 whitespace-nowrap（根治 720 文\n件）
   const mpHtml = renderToStaticMarkup(
     React.createElement(MultiProjectOverviewStrip, {
@@ -279,7 +279,7 @@ test('V07 · MultiProjectOverviewStrip / FeaturedFocusCards / TaskPackageGallery
       projects: [
         {
           project_id: 'p1',
-          name: '拥抱AI真实大工程',
+          name: '大型示例工程',
           root_path: 'H:/workspace/ai-repo',
           status: 'online',
           is_active: true,
@@ -420,9 +420,9 @@ test('V07 · MultiProjectOverviewStrip / FeaturedFocusCards / TaskPackageGallery
   assert.ok(homeHtml.includes('data-slot="card-frame"'));
 });
 
-// ===== V08 · CommandPanel 双栏 L4A 富预览、零 f_ 裸哈希、Sheet (inset) 嵌套栈与 ModalsAndDrawers 拆解 =====
+// ===== CommandPanel 双栏 L4A 富预览、零 f_ 裸哈希、Sheet (inset) 嵌套栈与 ModalsAndDrawers 拆解 =====
 
-test('V08 · CommandPalette：零 f_/rev_ 裸哈希泄露 + L4A 摘要与大纲派生 + 无摘要优雅回退 + CommandPanel/Kbd 双栏渲染', () => {
+test('CommandPalette：零 f_/rev_ 裸哈希泄露 + L4A 摘要与大纲派生 + 无摘要优雅回退 + CommandPanel/Kbd 双栏渲染', () => {
   // 1. 内部裸哈希识别与净化
   assert.equal(isOpaqueInternalHash('f_0114325c93a8b7c6'), true);
   assert.equal(isOpaqueInternalHash('rev_aabbccdd11223344'), true);
@@ -526,7 +526,7 @@ test('V08 · CommandPalette：零 f_/rev_ 裸哈希泄露 + L4A 摘要与大纲�
   assert.ok(!paletteHtml.includes('rev_aabbccdd11223344'), 'SSR 渲染文本绝不可泄露 rev_ 内部裸哈希');
 });
 
-test('V08 · ModalsAndDrawers 巨石拆解(<120行) + 分栏设置弹窗 + Sheet (inset) & --nested-dialogs 全浮层栈', () => {
+test('ModalsAndDrawers 巨石拆解(<120行) + 分栏设置弹窗 + Sheet (inset) & --nested-dialogs 全浮层栈', () => {
   // 1. ModalsAndDrawers.tsx 行数严格 < 120 且导出向后兼容
   const facadeSrc = readFileSync(
     new URL('../src/components/ModalsAndDrawers.tsx', import.meta.url),
@@ -652,9 +652,9 @@ test('V08 · ModalsAndDrawers 巨石拆解(<120行) + 分栏设置弹窗 + Sheet
   assert.ok(capsuleHtml.includes('data-dialog-nested-stack=""'), 'ContextCapsuleModal 应挂载嵌套景深栈锚点');
 });
 
-// ===== V09 · 全景列表司辰时光流、资产库概览折叠护栏与星图/时光机/阅读器实机精修 =====
+// ===== 全景列表司辰时光流、资产库概览折叠护栏与星图/时光机/阅读器实机精修 =====
 
-test('V09 · TimelineView 司辰时光流：按日 Frame 聚组 + Toolbar/SegmentedControl + 「在星图定位此日」直跳', () => {
+test('TimelineView 司辰时光流：按日 Frame 聚组 + Toolbar/SegmentedControl + 「在星图定位此日」直跳', () => {
   // 1. 纯函数按日聚组（保序不重排 + 精确事件计和 + undated 分流）
   const buckets = groupTimelineRenderItemsByDay(
     [
@@ -733,7 +733,7 @@ test('V09 · TimelineView 司辰时光流：按日 Frame 聚组 + Toolbar/Segmen
   assert.ok(emptyHtml.includes('data-slot="empty"'), '空筛选结果应使用 coss Empty');
 });
 
-test('V09 · AtlasView 资产库概览：超大目录代表件折叠 60fps 护栏 + CardFrame 数据指纹 + Toolbar 模式切换', () => {
+test('AtlasView 资产库概览：超大目录代表件折叠 60fps 护栏 + CardFrame 数据指纹 + Toolbar 模式切换', () => {
   // 1. 纯函数代表件折叠：优先未读，其次最新 observedAt，严格截断到 ATLAS_LARGE_FOLDER_CAP=12
   assert.equal(ATLAS_LARGE_FOLDER_CAP, 12);
   const rawItems = Array.from({ length: 30 }, (_, i) => ({
@@ -775,7 +775,7 @@ test('V09 · AtlasView 资产库概览：超大目录代表件折叠 60fps 护�
   assert.ok(atlasHtml.includes('展开剩余 18 份'));
 });
 
-test('V09 · 时光机 ≥360px 防截断 + 星图首尾安全区/预览卡 + 阅读器 Toolbar/Group 与全局明暗同步', () => {
+test('时光机 ≥360px 防截断 + 星图首尾安全区/预览卡 + 阅读器 Toolbar/Group 与全局明暗同步', () => {
   // 1. 时光机防右缘截断护栏（守住 ≥360px 宽、xMinYMid 避让、Toolbar/SegmentedControl 语义与 overflow:hidden）
   const tmSrc = readFileSync(
     new URL('../src/components/DocumentTimeMachineView.tsx', import.meta.url),
@@ -818,7 +818,7 @@ test('V09 · 时光机 ≥360px 防截断 + 星图首尾安全区/预览卡 + �
   const f1 = makeFile('f_reader', 'docs/v09.md', 'md', [
     { id: 'r_reader', v: 1, observedAt: '2026-11-23T10:00:00+08:00' },
   ]);
-  f1.revisions[0].markdownContent = '# V09 标题\n\n测试正文。';
+  f1.revisions[0].markdownContent = '# 示例标题\n\n测试正文。';
 
   // 全局暗夜模式下，阅读器首帧自动落入暗夜阅读纸
   applyAppTheme('dark', false);

@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import type { DesktopFileActionCallbacks } from './FileContextMenu';
 import { formatUiMeta } from '../utils/formatMeta';
-// B2 组件化 + V09 coss 原语统一
+// 组件化 + coss 原语统一
 import { Button, Chip } from './ui/primitives';
 import {
   Badge,
@@ -53,8 +53,8 @@ import {
   versionFoldRangeLabel,
 } from '../utils/graphEvents';
 import type { SameFileDayVersionGroup } from '../utils/graphEvents';
-// R1-identity-dedup：同哈希∪同名拷贝的身份并组（共享纯工具），时间线同分钟/同日同名拷贝折成可展开簇卡
-// T1 列表净化：isToolNoisePath 是运行态缓存/机器派生条目的判定单一出口；normalizePath 供核心文件名取末段
+// 同哈希∪同名拷贝的身份并组（共享纯工具），时间线同分钟/同日同名拷贝折成可展开簇卡
+// 列表净化：isToolNoisePath 是运行态缓存/机器派生条目的判定单一出口；normalizePath 供核心文件名取末段
 import {
   basenameOf,
   groupByIdentity,
@@ -62,13 +62,13 @@ import {
   normalizePath,
 } from '../utils/documentIdentity';
 import type { IdentityItem } from '../utils/documentIdentity';
-// TA-03：卡片时刻 / 日期筛选 / 选项统一走本地时区口径（纯日期不换算）
+// 卡片时刻 / 日期筛选 / 选项统一走本地时区口径（纯日期不换算）
 import { eventCardStamp, eventFilterDay } from '../utils/timeFormat';
 import type { EventDaysResult, EventPage, EventPageItem } from '../services/workspaceClient';
-// wf_2：任务包名（语义聚合层既有导出）——每行标题前的 [任务包名] mono chip（DoD3：
-// 所属专项任务一眼可见；排序/筛选/时间口径逻辑零改动）
+// 任务包名（语义聚合层既有导出）——每行标题前的 [任务包名] mono chip
+// （所属专项任务一眼可见；排序/筛选/时间口径逻辑零改动）
 import { taskPackageOf } from '../utils/taskPackages';
-// D05：时间轴列表态 J/K 上下事件 · H/L 收起展开事项组（纯键盘遍历，reduced-motion 静态降级）
+// 时间轴列表态 J/K 上下事件 · H/L 收起展开事项组（纯键盘遍历，reduced-motion 静态降级）
 import {
   buildTimelineFocusGroups,
   collectNavigableTimelineEvents,
@@ -77,31 +77,31 @@ import {
   type TimelineRenderGroupSnapshot,
 } from '../hooks/useTimelineKeyboardNav';
 
-// TA-03：抽为可单测的纯函数（实现见 utils/timeFormat.ts），组件内只消费
+// 抽为可单测的纯函数（实现见 utils/timeFormat.ts），组件内只消费
 export { eventCardStamp, eventFilterDay };
 
 interface TimelineViewProps {
   events: TimelineEvent[];
-  /** v0.4：同一持久查询的分页事件（Graph 与 Timeline 共用筛选与游标） */
+  /** 同一持久查询的分页事件（Graph 与 Timeline 共用筛选与游标） */
   page?: EventPage | null;
   loadingPage?: boolean;
   undatedOnly?: boolean;
-  /** v0.4：时间口径（发生时间 / 采集时间），两种口径各自独立查询 */
+  /** 时间口径（发生时间 / 采集时间），两种口径各自独立查询 */
   eventOrder?: 'occurred' | 'observed';
   onToggleOrder?: () => void;
   onLoadMore?: () => void;
   onRefresh?: () => void;
   onToggleUndated?: () => void;
-  /** T05：全量有事件的日子（/events/days 聚合），日期筛选选项的来源 */
+  /** 全量有事件的日子（/events/days 聚合），日期筛选选项的来源 */
   eventDays?: EventDaysResult | null;
-  /** T05：受控日期筛选（'all' 或具体日期；服务端 from/to 下推由 App 处理） */
+  /** 受控日期筛选（'all' 或具体日期；服务端 from/to 下推由 App 处理） */
   dateFilter?: string;
   onDateFilterChange?: (date: string) => void;
-  /** pm_3：受控事件类型筛选——服务端按 kind 过滤（与页脚 total_in_window 同口径），
+  /** 受控事件类型筛选——服务端按 kind 过滤（与页脚 total_in_window 同口径），
    *  不再对已返回的一页做本地过滤（否则第 1 页没有就误报 0 条） */
   kindFilter: TimelineEventKind | 'all';
   onKindFilterChange: (kind: TimelineEventKind | 'all') => void;
-  /** pm_3：空态「重置时间线筛选」一次性清空类型 + 日期（同一请求，避免两次查询竞态） */
+  /** 空态「重置时间线筛选」一次性清空类型 + 日期（同一请求，避免两次查询竞态） */
   onResetFilters?: () => void;
   files: FileRecord[];
   readingStates: Record<string, ReadingState>;
@@ -112,18 +112,18 @@ interface TimelineViewProps {
     revisionId: string,
     mode: 'read' | 'diff_since_read' | 'relations' | 'history'
   ) => void;
-  /** T04：打开文件时间线抽屉（版本链 + 相关事件） */
+  /** 打开文件时间线抽屉（版本链 + 相关事件） */
   onOpenFileTimeline?: (fileId: string) => void;
-  /** B02：空格键 / 按钮触发原位轻预览 */
+  /** 空格键 / 按钮触发原位轻预览 */
   onQuickPreview?: (fileId: string, revisionId?: string) => void;
   onOpenDecisionFromTimeline: (decisionId: string) => void;
-  /** V09：一键「在星图定位此日」（精确 YYYY-MM-DD 跳回司辰星图并锁定聚焦刻度） */
+  /** 一键「在星图定位此日」（精确 YYYY-MM-DD 跳回司辰星图并锁定聚焦刻度） */
   onJumpToStarMap?: (day: string) => void;
-  /** A04：资源管理器定位 / 默认应用打开 / 复制相对绝对路径 / 右键菜单 */
+  /** 资源管理器定位 / 默认应用打开 / 复制相对绝对路径 / 右键菜单 */
   systemActions?: DesktopFileActionCallbacks;
 }
 
-/** V09 · 司辰时光流按日聚组（保序不重排，严格沿用 occurred/observed 当前单一口径） */
+/** 司辰时光流按日聚组（保序不重排，严格沿用 occurred/observed 当前单一口径） */
 export interface TimelineDayBucket<T> {
   /** YYYY-MM-DD 或 'undated' */
   day: string;
@@ -156,7 +156,7 @@ export function groupTimelineRenderItemsByDay<T>(
   return buckets;
 }
 
-// 批次一：App 复用同一份 wire→视图转换（bootstrap/分页事件并入累计事件表），不再各自为政
+// App 复用同一份 wire→视图转换（bootstrap/分页事件并入累计事件表），不再各自为政
 export function pageItemToEvent(item: EventPageItem): TimelineEvent {
   const payload = (item.payload || {}) as Record<string, unknown>;
   const folder = item.file_path
@@ -171,26 +171,26 @@ export function pageItemToEvent(item: EventPageItem): TimelineEvent {
     revision_id: item.revision_id || '',
     observed_at: item.observed_at,
     source_time: item.occurred_at || undefined,
-    // TA-03：服务端已随 EventPageItem 下发 occurred_source/occurred_precision，
+    // 服务端已随 EventPageItem 下发 occurred_source/occurred_precision，
     // 卡片据此标注三值依据与「仅日期」，不再一律显示采集时刻
     occurred_source: item.occurred_source ?? null,
     occurred_precision: item.occurred_precision ?? null,
     topic_lane: folder,
     headline: item.headline,
     detail: item.detail,
-    // T06：事件真实格式（决策事件由服务端从 payload 回填）；无法判定为 null，图标落中性
+    // 事件真实格式（决策事件由服务端从 payload 回填）；无法判定为 null，图标落中性
     format: item.format ?? null,
     changedSections: Array.isArray(payload.changed_sections)
       ? (payload.changed_sections as string[])
       : undefined,
-    // T5：服务端 reconcile 写进 payload 的真实 diff 行数直入事件表——章节变更事件的
+    // 服务端 reconcile 写进 payload 的真实 diff 行数直入事件表——章节变更事件的
     // detail 只有「变更章节：A、B」不带行数定式，画布摘要的 +/- 靠这两个结构化字段；
     // 非 number 不映射（旧事件 payload 缺字段时 undefined，摘要层兜底解析 detail）
     addedLines: typeof payload.added_lines === 'number' ? payload.added_lines : undefined,
     removedLines:
       typeof payload.removed_lines === 'number' ? payload.removed_lines : undefined,
     isRollback: payload.is_rollback === true,
-    // pm_3：决策事件的动作与来源文件 ID 在 payload 里——卡片用词（提出问题/来源不一致/决策更新）
+    // 决策事件的动作与来源文件 ID 在 payload 里——卡片用词（提出问题/来源不一致/决策更新）
     // 与「看相关决策」入口都靠它，缺失时色块/文字会落空
     action: typeof payload.action === 'string' ? payload.action : undefined,
     time_basis: typeof payload.time_basis === 'string' ? payload.time_basis : null,
@@ -199,12 +199,12 @@ export function pageItemToEvent(item: EventPageItem): TimelineEvent {
   };
 }
 
-// UNTANGLE 事件线色（品牌升级 v0.6 §5/M1 六色映射表）：kind → 色块 graphic 原值
+// 事件线色（六色映射表）：kind → 色块 graphic 原值
 // （16px 方块 aria-hidden，非文字底）。modified→exec / appeared→blueprint /
 // discovered·workspace_baseline·read_recovered→deliver / decision_*→plan /
 // moved_or_copied→decision / missing·read_error·isRollback→anomaly（第六色保住
 // 「内容修改(红)」与「缺失/回滚(玫瑰)」的区分度）；未知 kind 灰块→--ink-soft。
-// CalendarBoardView.tsx KIND_TICK_COLORS 与本表同源（P3：同一 kind 跨视图同色）。
+// CalendarBoardView.tsx KIND_TICK_COLORS 与本表同源（同一 kind 跨视图同色）。
 const KIND_CHIP_COLORS: Record<TimelineEventKind, string> = {
   modified: 'bg-[color:var(--stage-ink-exec)]',
   appeared: 'bg-[color:var(--stage-ink-blueprint)]',
@@ -221,7 +221,7 @@ const KIND_CHIP_COLORS: Record<TimelineEventKind, string> = {
   read_error: 'bg-[color:var(--stage-ink-anomaly)]',
 };
 
-// T2 路径缩短：核心文件名 = 相对路径末段原样（保留扩展名，派生截图 .svg/.pdf 的
+// 路径缩短：核心文件名 = 相对路径末段原样（保留扩展名，派生截图 .svg/.pdf 的
 // 类型一眼可辨）。与 documentIdentity.basenameOf 的「去扩展基名」刻意不同——基名
 // 口径服务身份并组（PLAN.md/PLAN 拷贝并簇），列表行不做并组，丢扩展名反而同名难辨。
 const coreFileNameOf = (path: string): string =>
@@ -254,26 +254,26 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   onJumpToStarMap,
   systemActions,
 }) => {
-  // 分页事件优先：Graph 与 Timeline 读同一份持久查询（方案 §2）
+  // 分页事件优先：Graph 与 Timeline 读同一份持久查询
   const sourceEvents = useMemo<TimelineEvent[]>(
     () => (page ? page.items.map(pageItemToEvent) : events),
     [page, events]
   );
-  // pm_3：类型筛选受控于 App（服务端按 kind 过滤 + 游标指纹同口径），本地不再持有筛选状态
-  // v0.4：日期筛选来自真实事件范围，不再写死演示日期
-  // T05：筛选值受控于 App（与服务端 from/to 窗口一致），未受控时回退本地状态
+  // 类型筛选受控于 App（服务端按 kind 过滤 + 游标指纹同口径），本地不再持有筛选状态
+  // 日期筛选来自真实事件范围，非静态演示日期
+  // 筛选值受控于 App（与服务端 from/to 窗口一致），未受控时回退本地状态
   const [localDateFilter, setLocalDateFilter] = useState<string>('all');
   const dateFilter = dateFilterProp ?? localDateFilter;
   const changeDateFilter = (next: string) => {
     setLocalDateFilter(next);
     onDateFilterChange?.(next);
   };
-  // T1 列表净化：「仅看核心文档与计划」默认开启——运行态缓存与机器派生条目
+  // 列表净化：「仅看核心文档与计划」默认开启——运行态缓存与机器派生条目
   // （路径含 run-<纯数字≥8> 段或长 hex/UUID 段）不进列表；关闭则如实全显。
   // 纯本地开关，不进服务端查询：隐藏条数在页脚如实标注，绝不静默吞数据。
   const [coreOnly, setCoreOnly] = useState(true);
 
-  // T1：事件 → 运行态缓存条目判定（路径形态单一出口 documentIdentity.isToolNoisePath）。
+  // 事件 → 运行态缓存条目判定（路径形态单一出口 documentIdentity.isToolNoisePath）。
   // 无关联文件的事件（决策/基线）不按路径判定，恒 false——不受开关影响。
   // 必须放在 filteredEvents 之前：噪声条目不进任何下游（身份簇/版本折叠/分组渲染同受控）。
   const noisePathByEventId = useMemo(() => {
@@ -286,7 +286,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     return map;
   }, [sourceEvents, files]);
 
-  // T1：被范围开关隐藏的运行态缓存条数——页脚如实透出，不让「已显示 N 条」谎报
+  // 被范围开关隐藏的运行态缓存条数——页脚如实透出，不让「已显示 N 条」谎报
   const hiddenNoiseCount = useMemo(
     () =>
       coreOnly
@@ -295,15 +295,15 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     [coreOnly, sourceEvents, noisePathByEventId]
   );
   const [collapsedBatches, setCollapsedBatches] = useState<Record<string, boolean>>({});
-  // R1：身份簇卡的展开态（键在 members.length>1 才有意义；未触碰时回退「选中成员自动展开」）
+  // 身份簇卡的展开态（键在 members.length>1 才有意义；未触碰时回退「选中成员自动展开」）
   const [openIdentityClusters, setOpenIdentityClusters] = useState<Record<string, boolean>>({});
-  // 1.3：同文件同日多版本的展开态——默认收起（选中成员所在组默认展开），
+  // 同文件同日多版本的展开态——默认收起（选中成员所在组默认展开），
   // 展开前子版本卡完全不挂 DOM（懒挂载），折叠态列表只剩 1 条主卡
   const [openVersionHistories, setOpenVersionHistories] = useState<Record<string, boolean>>({});
 
-  // T05：选项来自 /events/days 的全量日期（所有有事件的日子，含老日期），
+  // 选项来自 /events/days 的全量日期（所有有事件的日子，含老日期），
   // 不再从已加载分页取前 6 个；eventDays 缺失时退回已加载事件去重。
-  // T03：仅 day 粒度的桶键是具体日期；week/month 的桶键（周一 / YYYY-MM）不是「某天」，
+  // 仅 day 粒度的桶键是具体日期；week/month 的桶键（周一 / YYYY-MM）不是「某天」，
   // 作为筛选选项会向服务端发出非法的 from=to，此时退回已加载事件去重
   const dateOptions = useMemo(() => {
     const dates = new Set<string>();
@@ -314,7 +314,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     }
     if (dates.size === 0) {
       for (const ev of sourceEvents) {
-        // TA-03：选项与当前口径同源（occurred→发生日、observed→观察日），
+        // 选项与当前口径同源（occurred→发生日、observed→观察日），
         // 与服务端 /events/days 的本地日桶保持一致；纯日期不经时区换算
         const day = eventFilterDay(ev, eventOrder);
         if (day) dates.add(day);
@@ -323,10 +323,8 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     return Array.from(dates).sort((a, b) => (a < b ? 1 : -1));
   }, [eventDays, sourceEvents, eventOrder]);
 
-  // R4-first-screen-hierarchy：日期筛选改「快捷候选范围 + 下拉」形制（只改选择器，不改筛选语义）。
-  // 近 7 天/近 30 天/更早 是下拉候选范围快捷键位：以最新事件日为锚按自然日窗口截取 dateOptions；
-  // 选中具体日期仍走 changeDateFilter 既有单一数据流（服务端单日窗口；TA-03 的
-  // occurred/observed 单一口径不变），任何日期一击可达、不再被屏幕裁切。
+  // 日期筛选采用「快捷候选范围 + 下拉」形制：近 7 天/近 30 天/更早以最新事件日为锚按自然日窗口截取 dateOptions；
+  // 选中具体日期统一走 changeDateFilter 单一数据流（服务端单日窗口，保持 occurred/observed 单一口径）。
   const [dateScope, setDateScope] = useState<'recent7' | 'recent30' | 'all'>('recent30');
   const scopedDateOptions = useMemo(() => {
     if (dateScope === 'all' || dateOptions.length === 0) return dateOptions;
@@ -355,11 +353,11 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     setCollapsedBatches((prev) => ({ ...prev, [batchId]: !prev[batchId] }));
   };
 
-  // 审计⑥：版本号（`${fileId}_r${seq}` 形态）截中段，完整值进卡根悬浮
+  // 版本号（`${fileId}_r${seq}` 形态）截中段，完整值进卡根悬浮
   const formatRevision = (rev: string) =>
     rev.length > 16 ? `${rev.slice(0, 8)}…${rev.slice(-6)}` : rev;
 
-  // pm_3：类型用词与画布同源（graphEvents.eventKindLabel）——决策事件不再空白，
+  // 类型用词与画布同源（graphEvents.eventKindLabel）——决策事件不再空白，
   // decision_raised 显示「提出问题 / 来源不一致」，A→B→A 回滚仍走专用词
   const getEventKindLabel = (ev: TimelineEvent) =>
     ev.isRollback
@@ -367,20 +365,20 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
       : eventKindLabel({ kind: ev.kind, time_basis: ev.time_basis, action: ev.action });
 
   const filteredEvents = sourceEvents.filter((ev) => {
-    // T1：范围开关默认开启——运行态缓存条目不进列表（batch 内逐条过滤，
+    // 范围开关默认开启——运行态缓存条目不进列表（batch 内逐条过滤，
     // 全噪音 batch 因无成员而整卡消失，部分噪音 batch 只剩核心成员）
     if (coreOnly && noisePathByEventId.get(ev.event_id)) return false;
     // 服务端已按 kind 过滤（分页 items 只含该类型）；本地仅在无分页页（离线兜底）时补一次
     if (!page && kindFilter !== 'all' && ev.kind !== kindFilter) return false;
     if (dateFilter !== 'all') {
-      // TA-03：离线兜底也按单一时间口径过滤（occurred→发生日、observed→观察日），
+      // 离线兜底也按单一时间口径过滤（occurred→发生日、observed→观察日），
       // 不再「observed 或 occurred 任一命中」——与分页态服务端窗口同源
       if (eventFilterDay(ev, eventOrder) !== dateFilter) return false;
     }
     return true;
   });
 
-  // ---------- R1-identity-dedup：文档身份聚簇（纯展示层）----------
+  // ---------- 文档身份聚簇（纯展示层）----------
   // 无 batch_id 的单条事件里，「同一时刻口径（同分钟；仅日期口径则同日）+ 同身份
   // （同哈希∪同基名的拷贝）+ 同类型」折成一张可展开簇卡（如 07:22 新出现 ×87 · LICENSE）：
   // 簇卡落位 = 成员中最新事件的既有位置（服务端排序不动，上新下旧不变），展开才逐份透出
@@ -524,7 +522,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     groupedRenderList.push({ type: 'single', item: ev });
   });
 
-  // D05：事件 → 所属事项组查表 + 当前可见可步进事件序列（折叠组只占 1 步，展开后遍历全成员）
+  // 事件 → 所属事项组查表 + 当前可见可步进事件序列（折叠组只占 1 步，展开后遍历全成员）
   const focusGroupByEventId = useMemo(() => {
     const versionGroups: Array<{ key: string; members: TimelineEvent[] }> = [];
     for (const group of versionFold.groups) {
@@ -613,8 +611,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     onCollapseGroup: handleKeyboardCollapseGroup,
   });
 
-  // T06：格式图标按事件真实格式着色（事件自带优先，files 回查兜底）；
-  // UNTANGLE 映射：md 橙 / svg 青 / pdf 黄（画布 RULER_FORMAT_COLORS 属范围外未同步）
+  // 格式图标按事件真实格式着色（事件自带优先，files 回查兜底）：md 橙 / svg 青 / pdf 黄
   const renderFormatIcon = (ev: TimelineEvent) => {
     const file = files.find((f) => f.file_id === ev.file_id);
     const fmt = ev.format ?? file?.format ?? null;
@@ -638,12 +635,12 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
       ? hasUnreadChanges(file, st)
       : { isUnread: false, reason: 'up_to_date' as const, changedSectionsSinceRead: [] as string[] };
     const isSelected = ev.event_id === selectedEventId;
-    // TA-03：卡片可见时刻与页头自述/排序同口径（occurred 优先，缺失回退采集）
+    // 卡片可见时刻与页头自述/排序同口径（occurred 优先，缺失回退采集）
     const stamp = eventCardStamp(ev, eventOrder);
 
-    // 审计①：泳道 / 任务号 / 文档日期 / Git 提交 / 完整版本号下沉为卡根悬浮，不占卡内行
+    // 泳道 / 任务号 / 文档日期 / Git 提交 / 完整版本号下沉为卡根悬浮，不占卡内行
     const cardTitleParts: string[] = [`泳道：${ev.topic_lane}`];
-    // TA-03：时间依据与「仅日期」同样下沉卡根，不新增可见 badge（遵守审计①去噪决策）
+    // 时间依据与「仅日期」同样下沉卡根，不新增可见 badge（保持卡片低噪）
     cardTitleParts.push(`时间依据：${stamp.basis}`);
     if (stamp.dayOnly) cardTitleParts.push('仅日期');
     if (ev.task_code) cardTitleParts.push(`任务号 ${ev.task_code}`);
@@ -715,12 +712,12 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           )}
         </div>
 
-        {/* Main Title & File Path (Max 2 lines per §3.2) */}
+        {/* Main Title & File Path (Max 2 lines) */}
         <div className="mt-2 flex items-start justify-between gap-4">
           <div className="space-y-1 min-w-0">
             <h3 className="text-[length:var(--text-item-title)] leading-[var(--lh-item-title)] font-semibold text-[color:var(--ink-strong)] flex items-center gap-2 line-clamp-2">
               {renderFormatIcon(ev)}
-              {/* wf_2：任务包 chip（DoD3——所属专项任务一眼可见；hover 可查包内完整路径） */}
+              {/* 任务包 chip（所属专项任务一眼可见；hover 可查包内完整路径） */}
               {file && (
                 <span
                   title={`任务包：${taskPackageOf(file.relative_path).name}`}
@@ -729,7 +726,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   {taskPackageOf(file.relative_path).name}
                 </span>
               )}
-              {/* T2 路径缩短：appeared 的 headline 是「新出现：<完整相对路径>」——行内只显
+              {/* 路径缩短：appeared 的 headline 是「新出现：<完整相对路径>」——行内只显
                   核心文件名（保留扩展名）；file 记录缺失（资产已清理）时也按 headline 自带
                   路径段缩短（「新出现：」4 字后即完整相对路径）。完整相对路径只留在卡根
                   title 与事件详情内，任何情况不在行内透出 */}
@@ -802,7 +799,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                 </Button>
               )}
 
-              {/* T04：以文件为中心的时间线——一步看到该文件完整版本链与相关事件 */}
+              {/* 以文件为中心的时间线——一步看到该文件完整版本链与相关事件 */}
               {ev.file_id && onOpenFileTimeline && (
                 <Button
                   variant="ghost"
@@ -917,7 +914,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     );
   };
 
-  // R1：身份簇卡（members>1 才成簇；单成员回退普通事件卡，行为与旧版逐字节一致）。
+  // 身份簇卡（members>1 才成簇；单成员回退普通事件卡）。
   // 收起态一行可读全当天身份条目；展开逐份透出完整 relative_path（点行选中该事件，
   // 右侧「阅读」直达正文）。选中唯一性不变：选中态仍只挂在 selectedEventId 一处。
   const renderIdentityClusterCard = (clusterKey: string) => {
@@ -972,7 +969,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           <span className="shrink-0 rounded-[var(--r-ctl)] border border-[color:color-mix(in_srgb,var(--accent-iris)_60%,transparent)] bg-white/70 px-1.5 py-0.5 text-[length:var(--text-micro)] font-mono font-medium leading-none text-[color:var(--accent-iris-deep)] tabular-nums">
             ×{cluster.members.length}
           </span>
-          {/* wf_2：任务包 chip（簇卡标题前——同名拷贝簇同样一眼看到所属专项任务） */}
+          {/* 任务包 chip（簇卡标题前——同名拷贝簇同样一眼看到所属专项任务） */}
           {(() => {
             const newestFile = newest.file_id ? filesById.get(newest.file_id) : null;
             return newestFile ? (
@@ -1240,7 +1237,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     );
   };
 
-  // V09：按当前口径（occurred/observed）将渲染节点聚为日级司辰时光流桶，保序零重排
+  // 按当前口径（occurred/observed）将渲染节点聚为日级司辰时光流桶，保序零重排
   const dayBuckets = useMemo(() => {
     return groupTimelineRenderItemsByDay(groupedRenderList, (group) => {
       if (group.type === 'single') {
@@ -1270,8 +1267,8 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   }, [groupedRenderList, eventOrder, identityClusters, filteredEvents]);
 
   return (
-    // 字体分工（品牌口径 §1.2 母题三）：sans＝界面骨架；mono 只留给时间/编号/口径
-    // 数据行（各行已显式携带 font-mono）。原根级 font-mono 摘除＝mono 中文撤离。
+    // 字体分工：sans＝界面骨架；mono 只留给时间/编号/口径
+    // 数据行（各行已显式携带 font-mono），中文界面标签不使用 mono。
     <div
       data-timeline-chronos-stream=""
       className="flex-1 h-full overflow-y-auto text-foreground px-6 py-5"
@@ -1325,7 +1322,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
             )}
           </div>
 
-          {/* V09：coss Toolbar + SegmentedControl 统一筛选控制台 */}
+          {/* coss Toolbar + SegmentedControl 统一筛选控制台 */}
           <Toolbar
             aria-label="时光流筛选工具栏"
             className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-border/80 bg-card/85 p-1.5 shadow-[var(--glass-shadow)]"
@@ -1355,7 +1352,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
 
             <ToolbarSeparator className="hidden sm:block" />
 
-            {/* T1 列表净化：内容范围开关（默认开启） */}
+            {/* 列表净化：内容范围开关（默认开启） */}
             <ToolbarGroup
               role="group"
               aria-label="内容范围筛选"
@@ -1375,7 +1372,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
 
             <ToolbarSeparator className="hidden sm:block" />
 
-            {/* R4 + V09：日期筛选 SegmentedControl + 统一样式下拉 */}
+            {/* 日期筛选 SegmentedControl + 统一样式下拉 */}
             <ToolbarGroup
               role="group"
               aria-label="日期筛选"
@@ -1427,7 +1424,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           </Toolbar>
         </div>
 
-        {/* V09 Timeline Stream：左侧发光司辰时光脊柱 + 按日 coss Frame 沉淀卡群（零位移动效，遵守 §6.3 数据区禁飞） */}
+        {/* Timeline Stream：左侧发光司辰时光脊柱 + 按日 coss Frame 沉淀卡群（零位移动效，数据区禁飞） */}
         {groupedRenderList.length === 0 ? (
           <Empty className="rounded-2xl border border-dashed border-border/80 bg-card/65 py-12">
             <EmptyHeader>
@@ -1586,11 +1583,11 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           </div>
         )}
 
-        {/* v0.4 第二轮：同一持久查询的分页与日期待考口径（审计④：口径切换已上移页头） */}
+        {/* 同一持久查询的分页与日期待考口径（口径切换已上移页头） */}
         {(page || undatedOnly) && (
           <div className="flex flex-wrap items-center justify-between gap-3 px-1 py-1 text-[length:var(--text-micro)] font-mono text-[color:var(--ink-soft)] tabular-nums">
             <span>
-              {/* T1：范围开关隐藏的运行态缓存条数如实透出——「已显示」按可见条目计，
+              {/* 范围开关隐藏的运行态缓存条数如实透出——「已显示」按可见条目计，
                   不静默吞数据；开关关闭时回到原始口径 */}
               {hiddenNoiseCount > 0
                 ? `已显示 ${(page?.items.length ?? 0) - hiddenNoiseCount} / 共 ${page?.total_in_window ?? 0} 条 · 另有 ${hiddenNoiseCount} 条运行态缓存已隐藏`
@@ -1615,7 +1612,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   有新变化 {page.newer_count} 条 · 刷新
                 </button>
               )}
-              {/* T05：服务端日期窗口激活时提供一键「回到最新/全部」出口 */}
+              {/* 服务端日期窗口激活时提供一键「回到最新/全部」出口 */}
               {page && (page.window.from || page.window.to) && (
                 <button
                   type="button"

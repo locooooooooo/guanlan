@@ -1,8 +1,8 @@
 /**
- * 《最新已拍板决策变更单》数据层（PRD 3.3 第 3 步 / AC-03）。
+ * 《最新已拍板决策变更单》数据层。
  *
- * PRD 原文：若该专项下所有阻塞性 P0/P1 事项均已确认，自动唤醒处于
- * `Suspended_On_HITL` 状态的长任务节点，并向「证道阁」推送一条
+ * 当某专项下所有阻塞性 P0/P1 事项均已确认时，自动唤醒处于
+ * `Suspended_On_HITL` 状态的长任务节点，并向上下文清单推送一条
  * 《最新已拍板决策变更单》。
  *
  * 本模块只做纯数据组装（node --test 直跑，禁 .css/React）：
@@ -17,7 +17,7 @@
 
 import type { DecisionAssertion } from '../types/guanlan';
 
-/** 变更单标题（PRD 3.3 逐字；测试锁词） */
+/** 变更单标题（测试锁词） */
 export const DECISION_CHANGE_NOTE_TITLE = '最新已拍板决策变更单';
 
 /** 来源：inline=本端 Inline 拍板；writeback=SSE decision_writeback 观测 */
@@ -43,7 +43,7 @@ export interface DecisionChangeNote {
   filePath: string | null;
   lineStart: number | null;
   lineEnd: number | null;
-  /** PRD 3.3 第 3 步：本文档阻塞性 P0/P1 已全部清零 */
+  /** 本文档阻塞性 P0/P1 已全部清零 */
   blockingCleared: boolean;
   source: DecisionChangeNoteSource;
   /** 变更单生成时刻（本地 ISO） */

@@ -1,8 +1,8 @@
 /**
- * D01-a 拆解 · Scene 层 · GraphSceneCards（从 GraphCanvasView.tsx 原样迁入的 右侧 280x116 事件卡 + 任务包分组容器横排（富预览卡））。
- * 迁移纪律：JSX 与类名逐字一致（像素回归护栏）；数据一律来自 controller ctx；
- * d3 zoom/drag effect 仍在控制器（按 data-node-id / .d3-draggable-node 类选择器跨
- * 子组件查询，DOM 结构不变即行为不变）。
+ * Scene 卡片层 · GraphSceneCards：
+ * 承载右侧 280x116 事件卡与任务包分组容器横排（富预览卡）。
+ * 数据一律来自 controller ctx；d3 zoom/drag effect 仍在控制器（按 data-node-id /
+ * .d3-draggable-node 类选择器跨子组件查询，保持稳定 DOM 结构）。
  */
 import React from 'react';
 import { BookOpen, GitBranch } from 'lucide-react';
@@ -11,7 +11,7 @@ import PackageGroupFrame, { PACKAGE_GROUP_FRAME_H } from '../canvas/PackageGroup
 import RichDocPreviewCard from '../canvas/RichDocPreviewCard';
 import { cleanDisplayText } from '../../utils/displayText';
 import { computeDynamicEdgePath, hasUnreadChanges, unreadStatusLabel } from '../../utils/guanlanEngine';
-// issue #27：视口裁剪纯函数（Scene 层消费挂载判定与连接线判定）
+// 视口裁剪纯函数（Scene 层消费挂载判定与连接线判定）
 import { shouldDrawGroupConnector } from '../../utils/canvasViewport';
 import {
   artifactStageBadgeText,
@@ -113,7 +113,7 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
     fileById,
     spotlight,
   } = ctx;
-  // D02 增量聚光灯：当前批阅条目的 file_id（关闭态恒 null → 卡面零样式注入，像素基线零扰动）。
+  // 增量聚光灯：当前批阅条目的 file_id（关闭态恒 null，卡面不注入聚光灯样式）。
   // 游标对列表长度取模（与 GraphSpotlightBar 同一归一式，数据缩胀永不越界）
   const spotlightCurrentFileId = (() => {
     if (!spotlight?.enabled || spotlight.items.length === 0) return null;
@@ -124,17 +124,14 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
     Boolean(spotlight?.enabled && fileId && spotlight.dimmedFileIds.has(fileId));
   return (
     <>
-        {/* 10. RIGHT FAN-OUT SUB-AGENT / DOCUMENT NODES
-            starfix2 T1：280x116 四行事件卡（旧 152x90 两行卡退役）——
-            行1 flex 两端对齐：左=加粗完整核心文档名（basename 链既有产物，目录前缀严禁拼名前，
+        {/* 10. RIGHT FAN-OUT SUB-AGENT / DOCUMENT NODES（280x116 四行事件卡）
+            行1 flex 两端对齐：左=加粗完整核心文档名（basename，目录前缀不拼名前，
             dirPrefix 降级为行2 前缀 + hover title）；右=轻量灰胶囊版本跨度（versionSpanCapsule）。
             行2=11px 浅灰所属专项路径（taskPackageOf(relative_path).id），独立一行不与标题抢位。
             行3=真实修改内容摘要限 2 行（modified=章节拼接+描述；appeared=extractCoreSummary
             正文核心结论；皆空回退 headline——严禁只写 +1/-1 行充当摘要）。
             行4 两端对齐：左=语义标签胶囊（stageOfPath 阶段；决策卡=决策）；右=+N/-M行 · HH:MM。
-            槽位/展开框/命中区已随 EVENT_CARD_W/H 与槽位重排连带核对（双列 x=468/784、行距 140）；
-            starfix2 T1 追记：叙事抽屉「直流电流」连线起点（:4404 sx=卡左缘+EVENT_CARD_W）
-            亦随卡宽常量化连带核对，旧 152 字面退役 */}
+            槽位/展开框/命中区统一对齐 EVENT_CARD_W/H（双列 x=468/784、行距 140）。 */}
         {(isFanOutCollapsed && canvasLayoutMode === 'xray'
           ? subAgentCards.slice(0, 2)
           : subAgentCards
@@ -147,15 +144,14 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
             ? hasUnreadChanges(fileRec, readingStates[card.fileId])
             : null;
           const isUnread = unreadInfo?.isUnread ?? false;
-          // D02 增量聚光灯：已读未变 → 低对比度背景骨架（仅聚光灯开启时注入类，零基线扰动）；
+          // 增量聚光灯：已读未变 → 低对比度背景骨架（仅聚光灯开启时注入类）；
           // 当前批阅条目 → 琥珀描边高亮（行动信号保留全对比度）
           const spotlightDimmed = spotlightDim(card.fileId);
           const spotlightCurrent = Boolean(card.fileId && card.fileId === spotlightCurrentFileId);
           const inTimeSlice = isNodeInActiveTimeSlice(card.timeBucket);
-          // starfix2 T1 行4 左：阶段语义胶囊词——stageOfPath 链既有产物（待分类沿用既有
-          // 惯例不渲染，与旧任务包 chip 同口径）；决策/无文件事件退「决策」（卡本体即决策纸）。
-          // F1/F2（AC-01）：有 /state-overview artifact 行 → 六态词（胶囊形制仍走画布暗端件）；
-          // 无行 → stateProjection.artifactStageBadgeText 阶段回退词（既有基线逐字不变）。
+          // 行4 左：阶段语义胶囊词——优先使用 /state-overview 的六态投影词，
+          // 无投影时回退 stateProjection.artifactStageBadgeText（待分类不渲染）；
+          // 决策/无文件事件展示「决策」。
           const artifactState = artifactStateOf(stateIndex, card.fileId);
           const stageBadgeText = artifactState
             ? DOC_STATE_LABEL[artifactState.state]
@@ -172,11 +168,11 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
                 : card.format === 'md'
                   ? LANE_COLORS.md
                   : LANE_COLORS.unknown;
-          // starfix2 T1 行1 hover：完整定位串（dirPrefix 存在时补目录前缀——重名拷贝互相可指认）
+          // 行1 hover：完整定位串（dirPrefix 存在时补目录前缀——重名拷贝互相可指认）
           const cardTitle = card.dirPrefix
             ? `${card.dirPrefix}/${card.fileName}`
             : card.fileName;
-          // starfix2 T1 行2：所属专项路径；同组重名拷贝时前置目录段保住区分度
+          // 行2：所属专项路径；同组重名拷贝时前置目录段保住区分度
           const pkgLine = card.dirPrefix
             ? `${card.dirPrefix} · ${card.pkgPath || card.kindLabel || ''}`
             : card.pkgPath || card.kindLabel || '';
@@ -201,7 +197,7 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
                 if (card.fileId) exploreAfterClick(card.fileId, card.revisionId ?? undefined, card.eventId);
               }}
               onDoubleClick={() => {
-                // v0.8 R3③：双击=查看详情（叙事抽屉滑出），「打开原文」迁抽屉 footer 首位钮
+                // 双击查看详情（叙事抽屉滑出），「打开原文」在抽屉 footer 首位按钮
                 if (card.fileId) {
                   openNarrativeDrawer({ nodeId: card.id, fileId: card.fileId });
                 } else if (card.decisionId) {
@@ -235,9 +231,8 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
                   transformOrigin: 'left center',
                 }}
               >
-              {/* C7① 强选中唯一化：发光圈仅 isSelected 触发（hover 只剩边框），描边改橙——
-                  全画布同一时刻至多一张卡带橙色发光圈。
-                  starfix2 T1：圈随卡几何走 EVENT_CARD_W/H（旧 158x96 字面退役） */}
+              {/* 强选中唯一化：发光圈仅 isSelected 触发（hover 只剩边框），描边用橙色——
+                  全画布同一时刻至多一张卡带橙色发光圈，尺寸与 EVENT_CARD_W/H 同步。 */}
               {isSelected && xrayLaserEnabled && (
                 <rect
                   x="-3"
@@ -377,7 +372,7 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
                     <div className="flex items-center gap-1 shrink-0 min-w-0">
                       {isUnread && !isSelected && unreadInfo && (
                         <span
-                          /* R3：未读角标措辞走 GL-01 单一出口，不再自造「未读更新」 */
+                          /* 未读角标措辞统一走 unreadStatusLabel 出口，避免各处自造文案 */
                           title={unreadStatusLabel(unreadInfo.reason)}
                           className="w-1.5 h-1.5 rounded-full bg-[color:var(--cv-unread)] shrink-0"
                         />
@@ -414,15 +409,15 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
           );
         })}
 
-        {/* 11. 任务包分组容器横排（v0.8 R1 任务空间桌面主场景）：
+        {/* 11. 任务包分组容器横排（任务空间桌面主场景）：
             焦点任务包置首，其余按包内最近事件新→旧（buildCanvasPackageGroups 工作流向）；
-            容器间贝塞尔连线（C 命令）+ dasharray 6 18 + .anim-pulse-flow（与旧 dash-flow
-            同速纪律，1.1s linear），光点流动表达「蓝图→交付」工作流向（左→右）。
-            starfix2 T1：上方事件卡改 280x116 四行卡（EVENT_CARD_W/H + 槽位重排），
-            富预览卡在分组容器内承载「不点开就能看懂」的文档面（R2，280 同栅格）。 */}
+            容器间贝塞尔连线（C 命令）+ dasharray 6 18 + .anim-pulse-flow（1.1s linear），
+            光点流动表达「蓝图→交付」工作流向（左→右）。
+            上方事件卡采用 280x116 四行卡（EVENT_CARD_W/H），下方富预览卡在分组容器内
+            承载「不点开就能看懂」的文档摘要（同为 280px 栅格）。 */}
         {canvasLayoutMode === 'xray' &&
           packageGroupLayouts.map(({ group, x, y, width }, groupIdx) => {
-            // issue #27：视口外的包不挂载（焦点包除外，由 mountedPkgIds 保证）
+            // 视口外的包不挂载（焦点包除外，由 mountedPkgIds 保证）
             if (!mountedPkgIds.has(group.pkgId)) return null;
             const cards = packageCardsByPkg.get(group.pkgId) ?? [];
             return (
@@ -469,10 +464,10 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
                 }}
               >
                 {cards.map((doc) => {
-                  // issue #27：共享 ID Map 取文件（不再逐卡 files.find）
+                  // 共享 ID Map 取文件（避免逐卡 files.find）
                   const fileRec = fileById.get(doc.fileId);
                   const isSelectedRich = selectedRichDocFileId === doc.fileId;
-                  // D02 增量聚光灯：已读未变退骨架 / 当前批阅条目琥珀描边（关闭态两参恒 false，零注入）
+                  // 增量聚光灯：已读未变退骨架 / 当前批阅条目琥珀描边（关闭态两参恒 false，零注入）
                   const richDimmed = spotlightDim(doc.fileId);
                   const richCurrent = Boolean(doc.fileId && doc.fileId === spotlightCurrentFileId);
                   return (
@@ -493,8 +488,8 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
                       dimmed={richDimmed}
                       spotlightCurrent={richCurrent}
                       onClick={() => {
-                        // v0.8 R2：单击选中并下钻进事件链（与事件卡同语义）；
-                        // 冒泡截断在卡片组件内部（契约 onClick 无事件参）
+                        // 单击选中并下钻进事件链（与事件卡同语义）；
+                        // 冒泡截断在卡片组件内部（onClick 不透传事件参数）
                         setSelectedRichDocFileId(doc.fileId);
                         if (fileRec) {
                           onSelectFile(fileRec.file_id);
@@ -502,7 +497,7 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
                         }
                       }}
                       onDoubleClick={() => {
-                        // v0.8 R3③：双击=查看详情（文件叙事抽屉）
+                        // 双击查看详情（文件叙事抽屉）
                         openNarrativeDrawer({ fileId: doc.fileId });
                       }}
                       onContextMenu={(e) => {

@@ -9,13 +9,12 @@ import {
 } from '../utils/decisionBlocks';
 
 /**
- * Inline 拍板卡点表单（PRD 3.3 / 方案 F5）：正文原位渲染的可交互卡点块。
+ * Inline 拍板卡点表单：正文原位渲染的可交互卡点块。
  *
- * 控件（PRD 3.3 逐项）：
+ * 控件：
  *  - 决定：下拉单选（预设=文档「可选方案/推荐理由」提取 ∪ 服务端 statement.options，
  *    调用方合并）+「自定义…」文本输入；
- *  - 确认人 / 角色：自由文本 + 最近值点选（datalist；无成员数据源，方案登记偏差——
- *    PRD 的「成员列表点选」待身份数据源引入），localStorage 记忆（decisionBlocks）；
+ *  - 确认人 / 角色：自由文本 + 最近值点选（datalist；无成员数据源时由 localStorage 记忆）；
  *  - 生效范围与日期：影响范围标签 chips（全量专项 / 仅当前分支）+ 自定义文本、
  *    原生 date 选择器（YYYY-MM-DD）。
  *
@@ -24,7 +23,7 @@ import {
  * 无陈述时表单保持可填写但提交禁用并如实提示（诚实降级，不伪造可用性）。
  */
 
-/** 影响范围标签预设（PRD 3.3 例词） */
+/** 影响范围标签预设 */
 const EFFECTIVE_SCOPE_PRESETS: readonly string[] = ['全量专项', '仅当前分支'];
 /** 自定义决定选项哨兵值 */
 const CUSTOM_OPTION = '__custom__';
@@ -81,7 +80,7 @@ const DecisionResolveCard: React.FC<DecisionResolveCardProps> = ({
   // 提交门禁：决定必填；确认人必填（回写占位符需要）；有服务端陈述才可提交
   const canSubmit =
     !!statement && !submitting && decisionValue.trim().length > 0 && confirmer.trim().length > 0;
-  // E04：「已知悉」快捷放行——仍强制走后端 CAS 写回原 .md、扣减未决并解锁下游，绝不跳过写盘
+  // 「已知悉」快捷放行——仍强制走后端 CAS 写回原 .md、扣减未决并解锁下游，绝不跳过写盘
   const canAcknowledge = !!statement && !submitting;
 
   const handleSubmit = () => {
@@ -147,7 +146,7 @@ const DecisionResolveCard: React.FC<DecisionResolveCardProps> = ({
         )}
       </div>
 
-      {/* 决定：预设下拉 + 自定义输入（PRD 3.3「自动提取选项 + 支持自定义」） */}
+      {/* 决定：预设下拉 + 自定义输入（自动提取选项 + 支持自定义） */}
       <div className="flex flex-wrap items-center gap-2 mb-2">
         <span className={labelClass}>决定</span>
         {!customMode ? (

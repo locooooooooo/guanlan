@@ -1,29 +1,29 @@
 /**
- * 证道阁上下文预算 · Token 估算与预算条（方案 F0/F4；契约 B0/B7 冻结公式）。
+ * 智能体上下文预算 · Token 估算与预算条（跨端一致公式）。
  *
  * 双端公式逐字（向量单源 native/testdata/token-vectors.json，TS 测试
  * test/context-budget-01.test.ts 用 fs.readFileSync 读，Rust include_str! 编译期读）：
  *   est_tokens = ceil(cjk_chars * 0.7 + non_cjk_bytes / 3.5)
  * CJK 码位写死：U+3000–U+303F ∪ U+4E00–U+9FFF ∪ U+F900–U+FAFF ∪ U+FF01–U+FF5E。
- * 估算为启发式（±20% 级）——阈值判定（<64k）双端同公式即满足 AC，不冒充精确值。
+ * 估算为启发式（±20% 级）——阈值判定（<64k）双端同公式即满足约束，不冒充精确值。
  *
- * 三档注入粒度（PRD 4.2）：全文（×1）/ 核心摘要与大纲（×0.2，PRD「Token 消耗
- * 降低约 80%」）/ 仅决策与契约（×0.05，裁定值——PRD 未给数字）。
+ * 注入粒度因子：全文（×1）/ 核心摘要与大纲（×0.2，约降 80%）/ 仅变更 Diff（×0.15）/
+ * 仅决策与契约（×0.05）/ 仅元数据路径（×0.02）。
  * 无正文可估时按 UTF-8 字节数 / 3.5 取上界（纯 ASCII 形态），粒度因子照乘。
  */
 
 import type { ContextGranularity } from '../services/apiTypes';
 
-/** 推荐阈值（PRD 4.2：<64k） */
+/** 推荐阈值（<64k） */
 export const CONTEXT_TOKEN_THRESHOLD = 65536;
 
-/** 摘要档因子：PRD「Token 消耗降低约 80%」→ 0.2 */
+/** 摘要档因子：Token 消耗约降 80% → 0.2 */
 export const SUMMARY_GRANULARITY_FACTOR = 0.2;
-/** 仅变更 Diff 档因子（E03：相对全文约降 85%） */
+/** 仅变更 Diff 档因子：相对全文约降 85% */
 export const DIFF_ONLY_GRANULARITY_FACTOR = 0.15;
-/** 仅元数据路径档因子（E03：零正文仅路径+版本+哈希） */
+/** 仅元数据路径档因子：零正文仅路径+版本+哈希 */
 export const METADATA_ONLY_GRANULARITY_FACTOR = 0.02;
-/** 仅决策与契约档因子（裁定值：PRD 未给数字） */
+/** 仅决策与契约档因子 */
 export const DECISIONS_ONLY_GRANULARITY_FACTOR = 0.05;
 
 const GRANULARITY_FACTOR: Record<ContextGranularity, number> = {
@@ -68,7 +68,7 @@ export function estimateTokensFromText(text: string): number {
   return Math.ceil(cjkChars * 0.7 + nonCjkBytes / 3.5);
 }
 
-/** 预算条输入项（证道阁每条已选资源） */
+/** 预算条输入项（上下文清单每条已选资源） */
 export interface BudgetItemInput {
   fileId: string;
   granularity: ContextGranularity;
@@ -83,7 +83,7 @@ export interface BudgetItemInput {
 export interface TokenBudgetView {
   /** 已选条数 */
   selected: number;
-  /** E03：估算字符总数（在线态以服务端实算为准，离线按粒度因子估算） */
+  /** 估算字符总数（在线态以服务端实算为准，离线按粒度因子估算） */
   estChars?: number;
   estTokens: number;
   threshold: number;
@@ -112,7 +112,7 @@ export function estimateItemTokens(item: BudgetItemInput): number {
 }
 
 /**
- * 预算视图（PRD 4.2：「已选 N 项 · 约 18.4k Tokens (推荐阈值 < 64k)」，超限高亮
+ * 预算视图（「已选 N 项 · 约 18.4k Tokens (推荐阈值 < 64k)」，超限高亮
  * 提示将背景文档降级为「核心摘要」）。降级建议确定性：按 base 估算体量降序，
  * 只挑 full 粒度且 downgradeEligible 的条目，逐个假想降级直到 estTokens ≤ 阈值
  * （或无可降条目停止）——纯函数，测试锁行为。

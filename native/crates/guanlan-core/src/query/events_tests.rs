@@ -532,7 +532,7 @@ fn cursor_payload_shape_matches_node() {
     assert_eq!(decoded, cursor);
 }
 
-// ===== issue #25：日桶先限展示范围再富化，桶内决定独立边界 =====
+// ===== 日桶先限展示范围再富化，桶内决定独立边界 =====
 
 /// 请求少量桶时：返回桶与 hidden_days/total/undated 口径不变；
 /// 桶内决定受独立上限约束，并提供总数与截断标记（不再无界嵌套集合）。

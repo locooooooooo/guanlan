@@ -4,7 +4,7 @@ import { TableProperties } from 'lucide-react';
 import type { TableDiffResult, TableCellChange, TableDiffRow, XlsxDiffResult } from '../../utils/multimodalDiff';
 
 /**
- * D03 ③ · CSV/TSV/XLSX 表格数值 Diff 面板：增删行列 + 单元格数值变化高亮。
+ * CSV/TSV/XLSX 表格数值 Diff 面板：增删行列 + 单元格数值变化高亮。
  *
  * - CSV/TSV：buildTableDiff 结果直渲；XLSX：buildXlsxDiff 逐工作表 tab（只列有变化的工作表，
  *   新增/删除工作表以名单 chip 呈现）；

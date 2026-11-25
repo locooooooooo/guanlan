@@ -27,7 +27,7 @@ function makePendingDecision(idx: number): DecisionAssertion {
   };
 }
 
-test('V03: DecisionRadar displays server SSOT unresolvedTotal over paginated decisions.length', () => {
+test('DecisionRadar displays server SSOT unresolvedTotal over paginated decisions.length', () => {
   const twoItems = [makePendingDecision(1), makePendingDecision(2)];
   const html = renderToStaticMarkup(
     React.createElement(DecisionRadar, {
@@ -49,7 +49,7 @@ test('V03: DecisionRadar displays server SSOT unresolvedTotal over paginated dec
   assert.match(fallbackHtml, />2</);
 });
 
-test('V03: HomeView displays server SSOT decisionsUnresolvedTotal consistently in greeting pill and focus card', () => {
+test('HomeView displays server SSOT decisionsUnresolvedTotal consistently in greeting pill and focus card', () => {
   const twoItems = [makePendingDecision(1), makePendingDecision(2)];
   const html = renderToStaticMarkup(
     React.createElement(HomeView, {
@@ -73,7 +73,7 @@ test('V03: HomeView displays server SSOT decisionsUnresolvedTotal consistently i
   assert.match(html, />288</);
 });
 
-test('V03: useWorkspaceStore polls L4A by queue_depth > 0, reacts to SSE l4a notice, and wires SSOT unresolved_total', () => {
+test('useWorkspaceStore polls L4A by queue_depth > 0, reacts to SSE l4a notice, and wires SSOT unresolved_total', () => {
   const storeSrc = fs.readFileSync(path.join(ROOT, 'src/stores/useWorkspaceStore.tsx'), 'utf8');
   assert.ok(
     storeSrc.includes('decisionsUnresolvedTotal'),

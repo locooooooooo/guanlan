@@ -24,7 +24,7 @@ import { copyTextWithDesktopFallback } from "../../services/desktopBridge";
 import { basenameOf } from "../../utils/documentIdentity";
 import { cleanDisplayText } from "../../utils/displayText";
 import { taskPackageOf } from "../../utils/taskPackages";
-import type { ZhendaogeIntent } from "../../utils/zhendaogePresets";
+import type { AgentContextIntent } from "../../utils/agentContextPresets";
 import {
   buildGuanlanContextMarkdown,
   buildHostMcpJsonConfig,
@@ -33,7 +33,7 @@ import {
   MCP_HOST_TARGETS,
   type GuanlanContextBlockerLine,
   type GuanlanContextDecisionLine,
-} from "../../utils/zhendaogeExport";
+} from "../../utils/agentContextExport";
 import {
   computeTokenBudget,
   estimateItemChars,
@@ -53,9 +53,9 @@ import {
 } from "../ui";
 
 /* ============================================================================
- * 3. 证据篮抽屉（P1-6 定名：题改「给智能体的上下文清单」，全库不再中英并存，§2.2, §10）
+ * 3. 证据篮抽屉（给智能体的上下文清单）
  * ==========================================================================*/
-/** 契约②卡片首行「来源视图」徽：evidence_kind → 展示文案 */
+/** 卡片首行「来源视图」徽：evidence_kind → 展示文案 */
 const EVIDENCE_KIND_LABEL: Record<EvidencePointer['evidence_kind'], string> = {
   explicit_source: '阅读器/画布',
   decision_record: '决策卡',
@@ -63,7 +63,7 @@ const EVIDENCE_KIND_LABEL: Record<EvidencePointer['evidence_kind'], string> = {
   metadata_only: '检视器',
 };
 
-/** 契约②卡片第二行「类型」：locator.kind → 展示文案 */
+/** 卡片第二行「类型」：locator.kind → 展示文案 */
 const formatLocatorLabel = (locator: EvidencePointer['locator']): string => {
   switch (locator.kind) {
     case 'lines':
@@ -85,32 +85,32 @@ export interface AgentContextDrawerProps {
   onRemovePointer: (index: number) => void;
   onClearPointers: () => void;
   workspaceRoot: string;
-  /** E03：当前焦点文件 id（传入 POST /api/v1/context 以便服务端同源组装与抽取上游规范片段） */
+  /** 当前焦点文件 id（传入 POST /api/v1/context 以便服务端同源组装与抽取上游规范片段） */
   focusFileId?: string | null;
-  // ── 证道阁改造（PRD 4.1–4.3 / 方案 F4）─────────────────────────────────
-  /** AC-05：当前专项（模式 A 根标签 initiative/stage、模式 B initiative 对象）；
+  // ── 路由上下文组装与双模导出 ─────────────────────────────────────────────
+  /** 当前专项（模式 A 根标签 initiative/stage、模式 B initiative 对象）；
    *  首页总览入口无专项焦点时为 null（如实省略/置 null，不造专项）。 */
   initiative?: { id: string; name: string; stage: string } | null;
-  /** AC-05：本次会话/专项最新成功 Checkpoint（模式 B session_checkpoint_id）；
+  /** 本次会话/专项最新成功 Checkpoint（模式 B session_checkpoint_id）；
    *  无专项、无 checkpoint 或查询失败时为 null。 */
   sessionCheckpointId?: string | null;
-  /** AC-05：引用行版本/状态标签（App 由 files + /state-overview 提供）；
+  /** 引用行版本/状态标签（App 由 files + /state-overview 提供）；
    *  返回 null 的字段如实省略，不造版本/状态。 */
   referenceMetaOf?: (pointer: EvidencePointer) => {
     versionLabel?: string | null;
     stateLabel?: string | null;
   };
   /** 路由意图（App 推导：文档正文页 document / 专项详情 initiative / 首页总览 global） */
-  intent: ZhendaogeIntent;
-  /** 预置任务意图模板（PRD 4.1 第三列） */
+  intent: AgentContextIntent;
+  /** 预置任务意图模板 */
   intentTemplate: string;
-  /** 默认包（AC-04 消除「0项已选」）：App 由 buildZhendaogePreset 组装的入篮条目 */
+  /** 默认包：App 由 buildAgentContextPreset 组装的入篮条目 */
   presetPointers: EvidencePointer[];
   /** 推荐挂载（基于星图血缘与代码引用）：App 预转的入篮条目 + reason 徽标 */
   recommendedMounts: Array<{ pointer: EvidencePointer; reason: string }>;
   /** 带入清单（追加去重归 App） */
   onMountPointers: (items: EvidencePointer[]) => void;
-  /** 单条注入粒度切换（E03 四档 + 兼容 decisions_only） */
+  /** 单条注入粒度切换（五档语义词） */
   onUpdatePointerGranularity: (
     index: number,
     granularity: ContextGranularity
@@ -118,9 +118,9 @@ export interface AgentContextDrawerProps {
   /** 模式 A 决策段数据（App 由 decisions 过滤出的已确认/未决行） */
   confirmedDecisions: GuanlanContextDecisionLine[];
   pendingBlockers: GuanlanContextBlockerLine[];
-  /** AC-03：App 主动推送到证道阁的《最新已拍板决策变更单》；null=暂无 */
+  /** App 主动推送到上下文清单的《最新已拍板决策变更单》；null=暂无 */
   decisionChangeNote?: DecisionChangeNote | null;
-  /** E03：测试/首屏预注服务端同源 ContextResponse（使预览区/复制/MCP 逐字节一致可单测锁定） */
+  /** 测试或首屏预注的服务端同源 ContextResponse（保证预览区、复制与 MCP 输出逐字节一致） */
   initialServerContext?: ContextResponse | null;
 }
 
@@ -170,19 +170,19 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
   const [promptCopied, setPromptCopied] = useState(false);
   const [mcpJsonCopied, setMcpJsonCopied] = useState(false);
   const [viewFormat, setViewFormat] = useState<'markdown' | 'json'>('markdown');
-  // E03：主流宿主一键配置（ZCode / Claude Code / Cursor）
+  // 主流宿主一键配置（ZCode / Claude Code / Cursor）
   const [selectedHost, setSelectedHost] = useState<McpHostTarget>('zcode');
   const [hostConfigBusy, setHostConfigBusy] = useState(false);
   const [hostConfigNotice, setHostConfigNotice] = useState<{
     ok: boolean;
     message: string;
   } | null>(null);
-  // E03：服务端同源组装结果（保证预览区、一键复制与 MCP get_context_bundle 逐字节一致）
+  // 服务端同源组装结果（保证预览区、一键复制与 MCP get_context_bundle 逐字节一致）
   const [serverContext, setServerContext] = useState<ContextResponse | null>(
     initialServerContext
   );
   const [serverSyncing, setServerSyncing] = useState(false);
-  // MCP 连接自检（F4 ⑤）：抽屉打开时探测本地服务（GET /api/v1/status 轻端点）。
+  // MCP 连接自检：抽屉打开时探测本地服务（GET /api/v1/status 轻端点）。
   // 可达 → 绿灯；不可达/网络层失败 → 琥珀提示（阅读/批注可用，MCP 回写待服务启动）
   const [mcpStatus, setMcpStatus] = useState<'checking' | 'ok' | 'down'>('checking');
 
@@ -199,7 +199,7 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
     };
   }, [isOpen]);
 
-  // E03：构造请求指纹并同步拉取服务端 POST /api/v1/context（单一真相源）
+  // 构造请求指纹并同步拉取服务端 POST /api/v1/context（单一数据源）
   const serverRequestKey = JSON.stringify({
     intent,
     focusFileId: focusFileId ?? null,
@@ -247,7 +247,7 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
     };
   }, [isOpen, serverRequestKey, initialServerContext]);
 
-  // AC-04：默认包自动勾选的兜底通道——App 打开抽屉前已预挂载（首帧即 N 项）；
+  // 默认包自动勾选的兜底通道——App 打开抽屉前已预挂载（首帧即 N 项）；
   // 若打开时数据尚未就绪（presetPointers 为空）或未来有新入口绕过 openContextDrawer，
   // 数据到达后自动补挂。每个打开周期只补一次：用户手动移除条目后不会被 effect 反复补回。
   const autoMountedRef = useRef(false);
@@ -283,14 +283,14 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
   const upstreamSnippets = effectiveServerContext?.upstream_snippets ?? [];
   const redactedSecretsCount = effectiveServerContext?.redacted_secrets_count ?? 0;
 
-  // AC-04：默认包已挂载数（App 在打开抽屉前自动挂载；此处仅用于展示状态/补齐按钮）。
+  // 默认包已挂载数（App 在打开抽屉前自动挂载；此处仅用于展示状态/补齐按钮）。
   // 用去重键比较，避免同一文件不同粒度被误判为未挂载。
   const mountedPresetCount = presetPointers.filter((p) => {
     const key = pointerKeyOf(p);
     return pointers.some((q) => pointerKeyOf(q) === key);
   }).length;
 
-  // 每条条目注入粒度（PRD 4.2 + E03；EvidencePointer.granularity 缺省 full）
+  // 每条条目注入粒度（EvidencePointer.granularity 缺省 full）
   const granularityOf = (p: EvidencePointer): ContextGranularity => p.granularity ?? 'full';
 
   // Token + 字符预算（在线优先采信服务端实算结果，离线按双端同源公式估算）
@@ -313,7 +313,7 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
       }
     : localBudgetView;
 
-  // 双模导出（PRD 4.3 + E03）：离线降级走 zhendaogeExport，在线优先采用服务端
+  // 双模导出：离线降级走 agentContextExport，在线优先采用服务端
   // POST /api/v1/context 响应（与 MCP guanlan.get_context_bundle 逐字节同源一致）
   const granularityLabelForOffline = (
     g: ContextGranularity
@@ -375,7 +375,7 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
       setFlag(true);
       setTimeout(() => setFlag(false), 2000);
     } else {
-      // C4：复制失败不再谎报成功——重置为 false
+      // 复制失败不再谎报成功——重置为 false
       setFlag(false);
     }
   };
@@ -432,14 +432,14 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="证据篮（证道阁上下文包）"
+      aria-label="证据篮（智能体上下文清单）"
       data-esc-layer="open"
       className="glx-backdrop-in fixed inset-0 z-50 bg-[color:var(--ink-anchor)]/38 dark:bg-black/62 backdrop-blur-sm flex justify-end p-2 sm:p-3"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* V08：coss Sheet (variant="inset") 悬浮抽屉材质，明暗双态自适应 */}
+      {/* coss Sheet (variant="inset") 悬浮抽屉材质，明暗双态自适应 */}
       <div
         data-sheet-variant="inset"
         className="glx-drawer-in bg-popover/95 dark:bg-popover/95 backdrop-blur-2xl w-full max-w-xl h-full flex flex-col overflow-hidden rounded-2xl border border-border/85 text-foreground"
@@ -461,10 +461,10 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
 
         <ScrollArea scrollFade className="flex-1 min-h-0">
         <div className="p-6 space-y-4">
-          {/* AC-03：App 主动推送的最新已拍板决策变更单（置顶，先于默认包/清单） */}
+          {/* App 主动推送的最新已拍板决策变更单（置顶，先于默认包/清单） */}
           {decisionChangeNote && <DecisionChangeNoteCard note={decisionChangeNote} />}
 
-          {/* MCP 连接自检 + E03 本机主流宿主 .mcp.json 零冷启动配置（ZCode / Claude Code / Cursor） */}
+          {/* MCP 连接自检 + 本机主流宿主 .mcp.json 零冷启动配置（ZCode / Claude Code / Cursor） */}
           <div className="rounded-[var(--r-block)] border border-border/80 bg-card/75 px-3 py-2.5 space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="flex items-center gap-1.5 text-[length:var(--text-ui)] leading-[var(--lh-ui)]">
@@ -567,7 +567,7 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
             </div>
           )}
 
-          {/* 路由意图 + 默认包（PRD 4.1 / AC-04）：消除「一键复制上下文清单 (0项已选)」空态——
+          {/* 路由意图 + 默认包：消除「一键复制上下文清单 (0项已选)」空态——
               预填条目一键带入，意图模板随路由预置 */}
           <div className="rounded-[var(--r-block)] border border-[color:var(--glass-hairline)] bg-white/60 px-3 py-2.5 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -580,7 +580,7 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
             </div>
             {presetPointers.length > 0 &&
               (mountedPresetCount === presetPointers.length ? (
-                /* AC-04：默认包已自动勾选（App 打开抽屉前挂载）——展示状态而非再要求点击 */
+                /* 默认包已自动勾选（App 打开抽屉前挂载）——展示状态而非再要求点击 */
                 <p
                   data-preset-auto-mounted=""
                   className="flex items-center gap-1.5 text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--stage-ink-deliver-text)]"
@@ -607,7 +607,7 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
           </div>
 
           <div className="flex items-center justify-between gap-2 text-xs">
-            {/* 双模导出分段轨（PRD 4.3）：模式 A=Markdown 提示词清单 / 模式 B=MCP 载荷 (JSON) */}
+            {/* 双模导出分段轨：模式 A=Markdown 提示词清单 / 模式 B=MCP 载荷 (JSON) */}
             <div className="inline-flex items-center gap-1 rounded-[10px] bg-[color:var(--depth-1-bg)] p-0.5">
               <Chip
                 active={viewFormat === 'markdown'}
@@ -625,7 +625,7 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
               </Chip>
             </div>
 
-            {/* 破坏性动作归 danger 描边式（§4.1 变体表） */}
+            {/* 破坏性动作归 danger 描边式 */}
             {pointers.length > 0 && (
               <Button
                 variant="danger"
@@ -684,7 +684,7 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
                     <p className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-soft)] line-clamp-2">
                       {cleanDisplayText(p.excerpt) || p.excerpt}
                     </p>
-                    {/* 注入粒度 chips（E03 四档）：全文 / 仅大纲与结论 / 仅变更 Diff / 仅元数据路径 */}
+                    {/* 注入粒度 chips（四档）：全文 / 仅大纲与结论 / 仅变更 Diff / 仅元数据路径 */}
                     <div className="flex flex-wrap items-center gap-1 pt-0.5">
                       <span className="text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)] mr-0.5">
                         注入粒度
@@ -762,7 +762,7 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
             ))}
           </div>
 
-          {/* Token 预算条（PRD 4.2）：已选 N 项 · 约 Xk Tokens (推荐阈值 < 64k) + 可视化预算水位条 */}
+          {/* Token 预算条：已选 N 项 · 约 Xk Tokens (推荐阈值 < 64k) + 可视化预算水位条 */}
           <div
             className={`space-y-2 rounded-[12px] border px-3.5 py-2.5 text-[length:var(--text-ui)] leading-[var(--lh-ui)] tabular-nums ${
               budgetView.overThreshold
@@ -817,7 +817,7 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
             </div>
           </div>
 
-          {/* 推荐挂载（PRD 4.1「基于星图血缘与代码引用」折叠栏）：reason 徽标 + 一键挂载 */}
+          {/* 推荐挂载（基于星图血缘与代码引用的折叠栏）：reason 徽标 + 一键挂载 */}
           {recommendedMounts.length > 0 && (
             <details className="rounded-[var(--r-block)] border border-[color:var(--glass-hairline)] bg-white/60 px-3 py-2">
               <summary className="cursor-pointer text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-medium text-[color:var(--ink-soft)]">
@@ -854,7 +854,7 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
             </details>
           )}
 
-          {/* E03：上游规范引用片段（服务端按星图引用边自动抽取并脱敏） */}
+          {/* 上游规范引用片段（服务端按星图引用边自动抽取并脱敏） */}
           {upstreamSnippets.length > 0 && (
             <details
               open

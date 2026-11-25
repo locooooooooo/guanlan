@@ -41,7 +41,7 @@ function samplePreview(overrides: Partial<CapsulePreviewResponse> = {}): Capsule
   };
 }
 
-describe('F01：事项资料胶囊（Context Capsule）两阶段门禁与证据跳转', () => {
+describe('事项资料胶囊（Context Capsule）两阶段门禁与证据跳转', () => {
   it('字节体积格式化按 B / KiB / MiB / GiB 确定性输出', () => {
     assert.equal(formatCapsuleBytes(0), '0 B');
     assert.equal(formatCapsuleBytes(512), '512 B');

@@ -1,5 +1,5 @@
 /**
- * localStorage 容错读取（工票「浮层 Esc 仲裁与存储容错」）。
+ * localStorage 容错读取。
  *
  * 为什么渲染路径不能裸读 localStorage：Chrome「阻止所有 Cookie」等隐私收紧环境下，
  * 首次访问 window.localStorage 属性即抛 SecurityError——此前 TopHeader/ModalsAndDrawers

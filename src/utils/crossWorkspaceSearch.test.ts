@@ -13,7 +13,7 @@ import type { PaletteItem } from './commandPaletteResults';
 import { MountManagerPanel } from '../components/MountManagerPanel';
 
 /**
- * C05 行为锁定（纯函数 + SSR 冒烟）：
+ * 跨项目联合检索行为锁定（纯函数 + SSR 冒烟）：
  * · 跨库命中 → 面板条目携带 sourceWorkspace 徽标数据（工作区名 + 身份哈希）；
  *   主区命中（无 source_workspace）不进入跨库层；
  * · 三层合并 fileId 去重（主区优先）与 score 排序；离线挂载零条目；

@@ -1,4 +1,4 @@
-//! 响应字节预算与限长读取（issue #32）。
+//! 响应字节预算与限长读取。
 //!
 //! 此前 content 路由 `tokio::fs::read` 整读快照、`from_utf8_lossy` 复制一份、
 //! `Json(...).into_response()` 再同步序列化一份——单请求峰值 ≈ 3×B，K 并发 ≈ 3KB，
@@ -119,7 +119,7 @@ impl BudgetedPermit {
 pub struct BudgetGuard(Option<OwnedSemaphorePermit>);
 
 /// 带预算守护的响应体：许可直到响应体被读完/丢弃才释放，
-/// 覆盖「构造响应缓冲 → 发送」全生命周期（issue #32 验收 2）。
+/// 覆盖「构造响应缓冲 → 发送」全生命周期。
 pub struct BudgetedBody {
     inner: Body,
     guard: BudgetGuard,

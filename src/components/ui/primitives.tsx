@@ -1,19 +1,18 @@
 /**
- * 观澜 · 基础控件（B2 组件化批次的基建件）
- * 依据：docs/guanlan/观澜-品牌界面升级-v0.6/设计规范.md §4.1-§4.4
+ * 观澜 · 基础控件
  *
- * 纪律（评委硬约束的工程化）：
+ * 设计纪律：
  * · 本文件不出现字面色值——一切颜色/尺寸/时长/缓动取自 src/index.css 的 :root
- *   令牌（组件级令牌段）；将来做暗色主题只换 ：root，不触组件。
+ *   令牌（组件级令牌段）；将来做暗色主题只换 :root，不触组件。
  * · 动效只走 transform 与 opacity（滑块位移/按下位移/淡入）；transition 仅限
  *   background/border/color/box-shadow/transform 这几个非布局属性的
  *   var(--dur-1) 微动，且全部包 motion-safe:——prefers-reduced-motion 下
  *   状态切换为瞬时（无过渡）。
- * · 不用 Tailwind 的 translate-* 与 scale-* 工具类做动画目标：v4 里它们落在
+ * · 不用 Tailwind 的 translate-* 与 scale-* 工具类做动画目标：Tailwind v4 里它们落在
  *   独立的 translate/scale 属性上，不在本组件的 transform 过渡清单内；
  *   位移一律写 [transform:...] 任意属性。
- * · 文案一律由调用方传入（中文为主）；Guanlan 字标、测试锁定文案不在本层。
- * · 焦点环不在此重复声明——走 index.css §6.8 全局 :focus-visible 规则。
+ * · 文案一律由调用方传入（中文为主）。
+ * · 焦点环不在此重复声明——走 index.css 全局 :focus-visible 规则。
  */
 import {
   type ButtonHTMLAttributes,
@@ -31,22 +30,18 @@ type ClassPart = string | false | null | undefined;
 
 const cx = (...parts: ClassPart[]) => parts.filter(Boolean).join(' ');
 
-/* 微动契约：非布局属性的 --dur-1 过渡（规范 §4.1 只列了 background/box-shadow/
-   transform；此处补 border-color 与 color——§4.1 状态表自身就在变边框透明度
-   （secondary/danger）与文字色（ghost），不列进过渡会在 120ms 微动里突跳，
-   二者均为纯重绘属性，不违「只动 transform/opacity」的运动约束。） */
+/* 微动过渡：非布局属性的 --dur-1 过渡。除 background/box-shadow/transform 外，
+   同步包含 border-color 与 color——secondary/danger 在交互态会变边框透明度、
+   ghost 会变文字色，纳入过渡可避免 120ms 微动里突跳，且二者均为纯重绘属性。 */
 const INTERACTIVE_TRANSITION =
   'motion-safe:[transition:background-color_var(--dur-1)_var(--ease-fade),border-color_var(--dur-1)_var(--ease-fade),color_var(--dur-1)_var(--ease-fade),box-shadow_var(--dur-1)_var(--ease-fade),transform_var(--dur-1)_var(--ease-fade)]';
 
 const DISABLED_STATES = 'disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none';
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Button（§4.1）
-   变体 primary / secondary / ghost / danger × default/hover/active/disabled。
-   （ask 点名前三种；ghost 为规范 D12/§4.1 第一类变体——映射表里
-   TimelineView「对比差异」等 3 行野生态归宿是 ghost，缺位则 11 行映射表无家。）
-   尺寸 md=--ctl-h 28px / sm=--ctl-h-sm 24px；fullWidth=全宽形态
-   （规范明示 width:100% 是 prop 不是变体）。
+   Button
+   变体 primary / secondary / ghost / danger × default/hover/active/disabled；
+   尺寸 md=--ctl-h 28px / sm=--ctl-h-sm 24px；fullWidth=全宽形态（以 prop 控制）。
    ══════════════════════════════════════════════════════════════════════════ */
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
@@ -122,7 +117,7 @@ export function Button({
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   IconButton（§4.1 icon 形态）
+   IconButton
    32×32 r6 方玻璃；子节点 svg 由 CSS 钉成 16px/1.5px 描边（lucide 线性图标
    直接作 children 传入即可，无需各自带 size/strokeWidth）；color 走文字色链。
    ══════════════════════════════════════════════════════════════════════════ */
@@ -152,13 +147,13 @@ export function IconButton({ label, className, type = 'button', children, ...res
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Tabs（§4.2 ModeTabs 契约）
+   Tabs
    激活语法＝「标线为界」：墨字＋2px 标线，永不填充。标线是共享滑块：
    容器+按钮 refs 测量，基准宽 100px，transform = translateX(偏移) scaleX(宽/100)，
-   180ms var(--ease-spring)，不动画 left/width（零布局位移，约束④）。
-   theme='dark' 只换 CSS 变量取值，不动结构（暗画布 chrome 与浅色同契约双端）。
-   未读点：6px --accent-wave 恒 α1.0；光环 ping 一次 600ms 由动效批次
-   （motion.css .glx-ping-once）就位后由调用方叠加，本件只渲染静态核（§6.5）。
+   180ms var(--ease-spring)，不动画 left/width（零布局位移）。
+   theme='dark' 只换 CSS 变量取值，不动结构（暗画布 chrome 与浅色双端同构）。
+   未读点：6px --accent-wave 恒 α1.0；光环 ping 一次 600ms（motion.css .glx-ping-once）
+   由调用方叠加，本件只渲染静态核。
    键盘：role=tablist + roving tabindex + ←/→/Home/End（选中随焦点移动）。
    ══════════════════════════════════════════════════════════════════════════ */
 
@@ -180,7 +175,7 @@ export interface TabsProps {
   className?: string;
 }
 
-const SLIDER_BASE_WIDTH = 100; // px，scaleX 基准宽（§4.2 契约）
+const SLIDER_BASE_WIDTH = 100; // px，scaleX 基准宽
 
 const TAB_THEME = {
   light: {
@@ -198,7 +193,7 @@ const TAB_THEME = {
       'enabled:hover:text-[color:var(--paper-dark)] enabled:hover:[box-shadow:inset_0_-1px_0_var(--tab-hover-line-dark)]',
     ),
     selected: 'text-[color:var(--paper-dark)] font-semibold',
-    count: 'text-[color:var(--claude-ink-secondary)]', /* #A1A09A，画布现役资产（D15） */
+    count: 'text-[color:var(--claude-ink-secondary)]', /* #A1A09A，暗画布次要文字色 */
     slider: 'bg-[color:var(--paper-dark)]',
   },
 } as const;
@@ -245,7 +240,7 @@ export function Tabs({
     ro.observe(list);
     for (const el of buttonRefs.current.values()) ro.observe(el);
     let cancelled = false;
-    /* 字体就位后标签宽度会变，补测一次（离线兜底场景同理，D2） */
+    /* 字体就位后标签宽度会变，补测一次（离线兜底场景同理） */
     document.fonts?.ready
       .then(() => {
         if (!cancelled) measure();
@@ -338,23 +333,22 @@ export function Tabs({
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Chip（§4.3 胶囊语法 + §4.4 status-capsule 语法）
+   Chip（筛选胶囊 + 状态胶囊）
    · 筛选胶囊：active 走薰衣草语法——iris 10% 底 + 60% 边 + --accent-iris-ink 字；
      idle 白玻璃淡底 + hairline 边 + --ink-soft 字。
    · 身份点：dot + dotColor（格式 md/svg/pdf、kind 身份色由调用方传画布泳道
-     原值，豁免区色值不进本文件）；stage 态的点用 graphic 原值。
+     原值，避免色值硬编码进本文件）；stage 态的点用 graphic 原值。
    · stage（状态胶囊）：语义六色双层——底 graphic/10、边 graphic/45（hover /70）、
-     字 -text 深档。文案中文字族走 sans（mono 中文撤离），计数数字才 mono。
-     文本档取 --text-ui 12px：§4.1 表与 §4.4 的 11px/12px 记载互斥，
-     以令牌层 --text-ui 为准（mono 11px 仅留给计数徽标，--text-micro）。
+     字 -text 深档。文案中文字族走 sans，计数数字用 mono。
+     文本档统一取 --text-ui（12px），mono 11px 仅留给计数徽标（--text-micro）。
    ══════════════════════════════════════════════════════════════════════════ */
 
 export type ChipStage = 'blueprint' | 'plan' | 'decision' | 'exec' | 'deliver' | 'anomaly';
 
 export interface ChipProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  /** 胶囊激活语法（§4.3：筛选/格式/视图 chips） */
+  /** 胶囊激活态（筛选/格式/视图 chips） */
   active?: boolean;
-  /** 语义状态胶囊（§4.4 语法）；给定时覆盖 active 配色 */
+  /** 语义状态胶囊；给定时覆盖 active 配色 */
   stage?: ChipStage;
   /** 6px 身份/状态点（aria-hidden 装饰） */
   dot?: boolean;

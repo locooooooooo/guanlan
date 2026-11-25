@@ -1,9 +1,9 @@
 /**
- * AC-03 / PRD 3.3 第 3 步：《最新已拍板决策变更单》推送单测。
+ * 《最新已拍板决策变更单》推送单测。
  *
  * 覆盖三层：
  *  ① 纯数据组装：Inline 表单值 / 服务端 DecisionAssertion → 变更单；
- *  ② 证道阁卡片与推送通知的 SSR 结构（标题、决定、确认人、清零标记、入口）；
+ *  ② 上下文清单卡片与推送通知的 SSR 结构（标题、决定、确认人、清零标记、入口）；
  *  ③ 接线回归锁：App 处理 SSE decision_writeback、ReaderView 上抛表单值、
  *     抽屉消费 decisionChangeNote、workspaceClient 提供 fetchDecisions。
  */
@@ -129,7 +129,7 @@ test('Inline 表单值 → 变更单：决定/确认人/生效日期逐字保留
   assert.equal(empty.decisionText, '', '无决定文本如实空串，不用问题原文冒充');
 });
 
-test('证道阁卡片 SSR：标题/决定/确认人/生效日期/来源/清零标记齐全', () => {
+test('上下文清单卡片 SSR：标题/决定/确认人/生效日期/来源/清零标记齐全', () => {
   const note = buildDecisionChangeNote({
     decisionId: 'dec_ac03',
     code: 'D-01',
@@ -157,7 +157,7 @@ test('证道阁卡片 SSR：标题/决定/确认人/生效日期/来源/清零�
   assert.ok(html.includes('阻塞已清零'), '清零标记');
 });
 
-test('推送通知 SSR：告知已推送证道阁并提供查看入口', () => {
+test('推送通知 SSR：告知已推送上下文清单并提供查看入口', () => {
   const note = buildDecisionChangeNote({
     decisionId: 'dec_ac03',
     code: 'D-01',
@@ -172,21 +172,21 @@ test('推送通知 SSR：告知已推送证道阁并提供查看入口', () => {
     renderToString(
       createElement(DecisionChangeToast, {
         note,
-        onOpenZhendaoge: () => {},
+        onOpenContextDrawer: () => {},
         onDismiss: () => {},
       })
     )
   );
   assert.ok(html.includes('data-decision-change-toast'), '通知条标记存在');
-  assert.ok(html.includes('已向证道阁推送'), '推送文案');
+  assert.ok(html.includes('已向上下文清单推送'), '推送文案');
   assert.ok(html.includes(DECISION_CHANGE_NOTE_TITLE), '变更单标题');
-  assert.ok(html.includes('查看证道阁'), '查看入口');
+  assert.ok(html.includes('查看上下文清单'), '查看入口');
   assert.ok(html.includes('本文档阻塞性 P0/P1 已清零'), '清零说明');
 });
 
 test('接线回归：App 处理 decision_writeback 并推送；抽屉/ReaderView 消费变更单', () => {
   const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8');
-  // D01-a 拆层后 App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
+  // 拆层后 App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
   const app = ['../src/App.tsx', '../src/stores/useWorkspaceStore.tsx', '../src/components/app/AppModalsStack.tsx']
     .map((rel) => read(rel))
     .join(String.fromCharCode(10))
@@ -203,7 +203,7 @@ test('接线回归：App 处理 decision_writeback 并推送；抽屉/ReaderView
   assert.match(app, /kinds\.includes\('decision_writeback'\)/, 'SSE 必须识别 decision_writeback');
   assert.match(app, /kinds\.includes\('proposal'\)/, '既有 proposal 分支保留');
 
-  // D01-a 拆层后拍板回写装配在 reader/useReaderController.tsx——联合文本断言（语义不变）
+  // 拆层后拍板回写装配在 reader/useReaderController.tsx——联合文本断言（语义不变）
   const reader = [
     '../src/components/ReaderView.tsx',
     '../src/components/reader/useReaderController.tsx',
@@ -214,7 +214,7 @@ test('接线回归：App 处理 decision_writeback 并推送；抽屉/ReaderView
     assert.ok(reader.includes(token), `ReaderView 缺 ${token}`);
   }
 
-  // V08 拆解 ModalsAndDrawers 后，AgentContextDrawer 实现位于 components/modals/AgentContextDrawer.tsx
+  // 拆解 ModalsAndDrawers 后，AgentContextDrawer 实现位于 components/modals/AgentContextDrawer.tsx
   const drawer = [
     '../src/components/ModalsAndDrawers.tsx',
     '../src/components/modals/AgentContextDrawer.tsx',

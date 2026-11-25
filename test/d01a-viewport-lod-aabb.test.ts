@@ -1,7 +1,6 @@
 /**
- * D01-a · canvasViewport 全图元 AABB 裁剪 + quarter-octave 缩放分桶 LOD 单测
- * （任务卡 D01-a ④ 纯算法层确定性单测）与 packageTitleStore 显示名固化单测
- * （任务卡 D01-a ③ 双击原位改名持久层）。
+ * canvasViewport 全图元 AABB 裁剪 + quarter-octave 缩放分桶 LOD 纯算法层单测，
+ * 以及 packageTitleStore 双击原位改名持久层单测。
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -21,7 +20,7 @@ import {
 
 /* ── 通用 AABB ── */
 
-test('#D01a computeWorldAABB：总包围盒含 pad 外扩；空集/全非法输入返回 null 不伪造', () => {
+test('computeWorldAABB：总包围盒含 pad 外扩；空集/全非法输入返回 null 不伪造', () => {
   assert.equal(computeWorldAABB([]), null);
   assert.equal(
     computeWorldAABB([
@@ -40,7 +39,7 @@ test('#D01a computeWorldAABB：总包围盒含 pad 外扩；空集/全非法输�
   assert.deepEqual(box, { x: -30, y: -50, width: 310, height: 160 });
 });
 
-test('#D01a isRectIntersectingViewport：AABB 相交/分离/含 margin 触达三态', () => {
+test('isRectIntersectingViewport：AABB 相交/分离/含 margin 触达三态', () => {
   const vp = { x: 0, y: 0, width: 100, height: 100 };
   assert.equal(isRectIntersectingViewport({ x: 50, y: 50, width: 100, height: 100 }, vp), true);
   assert.equal(isRectIntersectingViewport({ x: 101, y: 0, width: 10, height: 10 }, vp), false);
@@ -49,7 +48,7 @@ test('#D01a isRectIntersectingViewport：AABB 相交/分离/含 margin 触达三
   assert.equal(isRectIntersectingViewport({ x: 106, y: 0, width: 10, height: 10 }, vp, 5), false);
 });
 
-test('#D01a cullRectsByViewport：视口内挂载、焦点包视口外保留、视口未测量保守全挂', () => {
+test('cullRectsByViewport：视口内挂载、焦点包视口外保留、视口未测量保守全挂', () => {
   const rects = [
     { id: 'a', x: 0, y: 0, width: 100, height: 100 },
     { id: 'b', x: 5000, y: 0, width: 100, height: 100 },
@@ -63,8 +62,8 @@ test('#D01a cullRectsByViewport：视口内挂载、焦点包视口外保留、�
   assert.equal(all.size, 3);
 });
 
-test('#D01a visiblePackageGroupIds 与通用 AABB 出口同源：纵向无界带的裁剪答案不变（issue #27 回归）', () => {
-  // issue #27 原语义：横向相交判定；D01-a 改走 AABB 出口后同输入同答案
+test('visiblePackageGroupIds 与通用 AABB 出口同源：纵向无界带的裁剪答案不变', () => {
+  // 原语义：横向相交判定；改走 AABB 出口后同输入同答案
   const layouts = [
     { pkgId: 'p1', x: 0, width: 400 },
     { pkgId: 'p2', x: 464, width: 400 },
@@ -80,7 +79,7 @@ test('#D01a visiblePackageGroupIds 与通用 AABB 出口同源：纵向无界带
 
 /* ── quarter-octave LOD ── */
 
-test('#D01a quarterOctaveLevel：log2(k)×4 分桶（每档 ≈1.19×），k<=0 保守满档', () => {
+test('quarterOctaveLevel：log2(k)×4 分桶（每档 ≈1.19×），k<=0 保守满档', () => {
   assert.equal(quarterOctaveLevel(1), 0);
   assert.equal(quarterOctaveLevel(0.5), -4);
   assert.equal(quarterOctaveLevel(0.25), -8);
@@ -89,7 +88,7 @@ test('#D01a quarterOctaveLevel：log2(k)×4 分桶（每档 ≈1.19×），k<=0 
   assert.equal(quarterOctaveLevel(-1), Number.MAX_SAFE_INTEGER);
 });
 
-test('#D01a lodTierForScale：k≥0.5 全保真（基线机位零变化）/ 0.25≤k<0.5 收装饰 / <0.25 轻骨架', () => {
+test('lodTierForScale：k≥0.5 全保真（基线机位零变化）/ 0.25≤k<0.5 收装饰 / <0.25 轻骨架', () => {
   assert.equal(lodTierForScale(1), 'full');
   assert.equal(lodTierForScale(0.72), 'full', '折叠组近景镜头所在档');
   assert.equal(lodTierForScale(LOD_FULL_MIN_K), 'full');
@@ -99,7 +98,7 @@ test('#D01a lodTierForScale：k≥0.5 全保真（基线机位零变化）/ 0.25
   assert.equal(lodTierForScale(0), 'full', '未就绪保守全渲染');
 });
 
-test('#D01a lodGatesForTier：full 全开；mid 收流星/激光留流式与卡片；skeleton 仅骨架', () => {
+test('lodGatesForTier：full 全开；mid 收流星/激光留流式与卡片；skeleton 仅骨架', () => {
   assert.deepEqual(lodGatesForTier('full'), {
     meteors: true, laser: true, liveFlow: true, cardDetails: true,
   });
@@ -111,7 +110,7 @@ test('#D01a lodGatesForTier：full 全开；mid 收流星/激光留流式与卡�
   });
 });
 
-test('#D01a quarter-octave 桶内连续缩放档位恒定（跨档才翻转，不逐帧抖动）', () => {
+test('quarter-octave 桶内连续缩放档位恒定（跨档才翻转，不逐帧抖动）', () => {
   // 1 → 1.18：同桶（level 0 → floor(log2(1.18)*4)=floor(0.87)=0）
   assert.equal(quarterOctaveLevel(1), quarterOctaveLevel(1.18));
   // 1 → 1.20：跨桶（floor(log2(1.2)*4)=floor(0.97... *4)=floor(3.87... wait verify numerically below）
@@ -121,7 +120,7 @@ test('#D01a quarter-octave 桶内连续缩放档位恒定（跨档才翻转，�
 
 /* ── packageTitleStore（显示名固化）── */
 
-test('#D01a packageTitleStore：覆盖名优先、空串清除、同值短路不通知、订阅收到变更', async () => {
+test('packageTitleStore：覆盖名优先、空串清除、同值短路不通知、订阅收到变更', async () => {
   const store = await import('../src/stores/packageTitleStore');
   store.clearPackageTitleOverridesForTest();
   assert.equal(store.packageDisplayTitle('pkg_a', '派生名'), '派生名');

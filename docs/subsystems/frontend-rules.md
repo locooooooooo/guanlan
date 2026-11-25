@@ -64,7 +64,7 @@
 - **对 `apiTypes.ts` 只做类型导入**，编译期擦除，避免与 services 层形成运行时回环。
 - **`contextSanitizer.ts` 绝不读取 `process.env` 或任何宿主环境变量**，只做确定性的文本与路径检测。
 - **改镜像规则时，同一改动里两侧一起改**，并在提交说明里写明另一侧改了什么。
-- `DOC_STATE_STAGE` 与 `STAGE_DOC_STATE` 两张映射表是裁定值，PRD 的六态与既有五阶段没有同构映射，待确认。
+- `DOC_STATE_STAGE` 与 `STAGE_DOC_STATE` 两张映射表是裁定值，文档六态与既有五阶段没有同构映射，待确认。
 
 ## 验证
 

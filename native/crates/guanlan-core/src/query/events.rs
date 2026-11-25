@@ -25,19 +25,19 @@ use crate::storage::{internal_sql, ReadonlyStore};
 /// r→f 联表后格式必为 null，从 payload 的 file_id 回填来源文件格式。
 const FORMAT_EXPR: &str = "COALESCE(f.format, df.format)";
 
-/// 桶内决定样本上限（issue #25）：与 samples 独立——一个桶可能有几十个决定，
+/// 桶内决定样本上限：与 samples 独立——一个桶可能有几十个决定，
 /// 不再无界塞进嵌套集合；超出时 decision_total/decisions_truncated 如实标注，
 /// 客户端可经有界分页的 /api/v1/events 继续读该桶。
 const EVENT_DAY_DECISION_CAP: i64 = 20;
 
-/// 窗口统计缓存条目（issue #22）：total_in_window + undated_count
+/// 窗口统计缓存条目：total_in_window + undated_count
 #[derive(Debug, Clone)]
 struct WindowStats {
     total_in_window: u64,
     undated_count: u64,
 }
 
-/// 窗口统计缓存条目类型（issue #22/#16：拆开避免复杂返回类型内联）
+/// 窗口统计缓存键与映射类型（独立别名避免复杂返回类型内联）
 type WindowStatsCacheKey = (String, i64, i64, String);
 type WindowStatsCache =
     std::sync::Mutex<std::collections::HashMap<WindowStatsCacheKey, WindowStats>>;
@@ -45,7 +45,7 @@ type WindowStatsCache =
 /// 窗口统计缓存容量（窗口×筛选并存上限；超出按插入序逐最旧）
 const WINDOW_STATS_CACHE_CAPACITY: usize = 64;
 
-/// 窗口统计缓存（issue #22）：(ws_id, generation, snapshot_max_seq, 筛选指纹) → 统计。
+/// 窗口统计缓存：`(ws_id, generation, snapshot_max_seq, 筛选指纹) → 统计`。
 /// 事件只增不改且新事件不进已签发窗口（seq <= snap），同代际同窗口同筛选下
 /// 统计恒定，可安全复用。
 fn window_stats_cache() -> &'static WindowStatsCache {
@@ -55,8 +55,8 @@ fn window_stats_cache() -> &'static WindowStatsCache {
 
 /// 事件窗口过滤构建器（queries.ts:138-171 eventWindowFilter 逐字对齐）：
 /// 页查询与窗口计数（total_in_window）共用同一份条件。
-/// `snap_bound` 为 None 时省略 seq 上界（issue #22：首页 snap==current_max 时
-/// 上界恒真且会让查询规划器放弃排序表达式索引；一致性由 read_txn 快照保证）。
+/// `snap_bound` 为 None 时省略 seq 上界（首页 `snap == current_max` 时
+/// 上界恒真且会让查询规划器放弃排序表达式索引；一致性由 `read_txn` 快照保证）。
 fn event_window_filter(
     workspace_id: &str,
     query: &EventQuery,
@@ -102,7 +102,7 @@ fn event_window_filter(
 
 /// 事件分页（契约 §1.4：queryEvents 映射，绑定筛选指纹与 snapshot_max_seq）
 pub fn query_events(store: &ReadonlyStore, query: &EventQuery) -> Result<EventPage, GuanlanError> {
-    // issue #22：max_event_seq / 页查询 / 窗口统计固定在同一 DEFERRED 读快照内
+    // max_event_seq / 页查询 / 窗口统计固定在同一 DEFERRED 读快照内
     // （契约 §0.3-1 snapshot 语义的正确性前提，也为首页省略空转 seq 上界提供
     // 一致性保证）；只读连接上不产生任何写行为（契约 §4-1 边界不变）。
     store.read_txn(|_conn| query_events_tx(store, query))
@@ -129,11 +129,11 @@ pub fn query_events_tx(
     let snap = cursor.as_ref().map_or(current_max, |c| c.snap);
     if let Some(c) = &cursor {
         if c.fp != fp {
-            // v1：游标绑定筛选不一致 → CURSOR_STALE（契约 §0.2；现状为 INDEX_STALE）
+            // 游标绑定筛选不一致 → 返回 CURSOR_STALE（契约 §0.2）
             return Err(cursor_stale_fingerprint());
         }
     }
-    // issue #22：seq 上界仅在真正收紧窗口时下发（续页 snap < current_max）；
+    // seq 上界仅在真正收紧窗口时下发（续页 snap < current_max）；
     // 首页 snap==current_max 时上界恒真，省略后查询规划器才能选用排序表达式
     // 索引（idx_events_ws_occurred_sort / idx_events_ws_observed_sort）避免整窗排序。
     let snap_bound = (snap < current_max).then_some(snap);
@@ -143,7 +143,7 @@ pub fn query_events_tx(
     } else {
         "COALESCE(e.occurred_at, '')".to_owned()
     };
-    // TA-03：窗口按本地日历日归属（纯日期短路，含时刻 ISO 按 localtime 取日）
+    // 窗口按本地日历日归属（纯日期短路，含时刻 ISO 按 localtime 取日）
     let date_expr = if observed {
         local_day_expr("e.observed_at")
     } else {
@@ -225,8 +225,8 @@ pub fn query_events_tx(
     };
 
     // 窗口统计（不含游标条件）：与页查询共用过滤构建器（queries.ts:257-273）。
-    // issue #22：窗口总数按稳定快照（snapshot_max_seq）与筛选指纹（fp）缓存复用
-    // ——同代际内事件只增不改、新事件不进已签发窗口（seq <= snap），同窗口同
+    // 窗口总数按稳定快照（snapshot_max_seq）与筛选指纹（fp）缓存复用：
+    // 同代际内事件只增不改、新事件不进已签发窗口（seq <= snap），同窗口同
     // 筛选的续页不再重复做与窗口总量成正比的统计。
     let window_stats = {
         let key = (
@@ -258,7 +258,7 @@ pub fn query_events_tx(
                         r.get(0)
                     })
                     .map_err(internal_sql)?;
-                // pm_3：「日期待考 N」与当前类型筛选同口径（queries.ts:275-290）
+                // 「日期待考 N」与当前类型筛选同口径（与 queries.ts 一致）
                 let mut undated_clauses: Vec<String> = vec![
                     "e.workspace_id = ?".to_owned(),
                     "e.occurred_at IS NULL".to_owned(),
@@ -387,8 +387,7 @@ fn event_day_bucket_expr(order: EventOrder, granularity: EventGranularity) -> St
     }
 }
 
-/// 事件日桶聚合（契约 §1.5：queryEventDays 映射；无游标、无 snapshot 绑定）
-/// issue #33：短读事务包装。
+/// 事件日桶聚合（契约 §1.5：queryEventDays 映射；无游标、无 snapshot 绑定，短读事务包装）
 pub fn query_event_days(
     store: &ReadonlyStore,
     query: &EventDaysQuery,
@@ -449,11 +448,9 @@ pub fn query_event_days_tx(
         clauses.join(" AND ")
     );
 
-    // ── issue #25：先确定返回桶，再只为这些桶富化样本/详情 ──
+    // ── 先确定返回桶，再只为这些桶富化样本/详情 ──
     //
-    // 旧实现先对命中窗口的全部事件做桶×种类×格式聚合、全部桶的决策聚合与
-    // 「全窗口 ROW_NUMBER 选样本」，最后才 truncate(limit_days)——请求 5 个桶也要
-    // 处理整个窗口。现在：
+    // 先取返回桶集合再按桶下界聚合，避免请求少量桶时对全窗口做无界聚合与样本分区：
     //   ① 一次扫描拿 total / 有日期的桶数 / 待考事件数（全范围计数单独统计）；
     //   ② 再取 top N+1 个桶键（N=limit_days）→ 得到返回集合与 hidden_days；
     //   ③ 桶×种类×格式、决策、样本三类查询都加 `d = '' OR d >= min_key` 下界，
@@ -685,7 +682,7 @@ pub fn query_event_days_tx(
     }
 
     // 分组收尾（queries.ts:571-623）：空串桶 =「日期待考」，恒排最后。
-    // issue #25：返回桶已在上面确定，这里只按既有顺序取组，不再做全量 reduce。
+    // 返回桶已在上面确定，这里只按既有顺序取组，不再做全量 reduce。
     let total = total_events.max(0) as u64;
     let undated = group_map.remove("");
     let mut groups: Vec<EventDayGroup> = dated_keys
@@ -696,8 +693,7 @@ pub fn query_event_days_tx(
         // 决定样本截断标记（总数与样本数对比，不用额外查询）
         group.decisions_truncated = (group.decision_total as usize) > group.decisions.len();
     }
-    // issue #38：先取 count 再 move 组进 groups——此前 `u.clone()` 为稍后读 count
-    // 而复制整组（by_kind/decisions/samples 全带上），是纯多余的分配
+    // 先取 count 再 move 组进 groups，避免为读取 count 而克隆整组数据
     let undated_count = match undated {
         Some(mut u) if u.count > 0 => {
             u.decisions_truncated = (u.decision_total as usize) > u.decisions.len();

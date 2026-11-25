@@ -1,6 +1,6 @@
-//! 事项资料胶囊（Context Capsule）与离线阅读包导出（F01）。
+//! 事项资料胶囊（Context Capsule）与离线阅读包导出。
 //!
-//! 设计与停机红线（30 轮长任务卡 F01）：
+//! 设计与停机红线：
 //! 1. **两阶段强制预览门禁（Fail-Closed）**：
 //!    - 阶段一 `preview_capsule`（只读零副作用）：清点候选文件、估算总字节、执行路径/内容敏感扫描、
 //!      自动取消勾选全部敏感目录/凭据文件，并生成绑定本次选中集合与脱敏参数的 `preview_token`；
@@ -288,7 +288,7 @@ pub struct CapsuleFileContentResponse {
     pub text: Option<String>,
 }
 
-/// F01 敏感路径/目录判定（在 E03 `is_sensitive_secret_path` 基础上叠加常见敏感子目录防护）
+/// 敏感路径/目录判定（在 `is_sensitive_secret_path` 基础上叠加常见敏感子目录防护）
 pub fn is_sensitive_capsule_path(rel_path: &str) -> Option<&'static str> {
     if is_sensitive_secret_path(rel_path) {
         return Some("命中敏感凭据/环境变量文件名规则（.env / 私钥 / 凭据文件）");
@@ -1627,7 +1627,7 @@ mod tests {
         let preview = preview_capsule(&store, &req).unwrap();
         assert_eq!(preview.selected_file_count, 2, "仅勾选两份正常文档");
 
-        // F04 实机回归锁定：显式传 initiative_id 按 initiatives.root_dir 精准匹配，绝不误报 404
+        // 回归验证：显式传 initiative_id 按 initiatives.root_dir 精准匹配，绝不误报 404
         if let Ok(init_id) =
             store
                 .conn()

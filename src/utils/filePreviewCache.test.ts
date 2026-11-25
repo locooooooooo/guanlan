@@ -1,5 +1,5 @@
 /**
- * issue #31 —— 预览缓存状态纪律与字节预算验收测试：
+ * 预览缓存状态纪律与字节预算单测：
  * - 区分未加载 / 已加载为空 / 预览就绪，未加载不产生终态缓存命中；
  * - 同版本正文补齐后 MD/SVG 预览及时更新（此前空对象缓存阻止补齐）；
  * - 有效缓存继续 O(1) 复用；字节预算逐出按 LRU；条数上限保留。
@@ -44,7 +44,7 @@ function fileOf(format: FileRecord['format'], revisions: Revision[]): FileRecord
   };
 }
 
-test('#31 SVG 未加载不落缓存：占位版本行先到不产生终态命中，正文补齐后立即派生', () => {
+test('SVG 未加载不落缓存：占位版本行先到不产生终态命中，正文补齐后立即派生', () => {
   clearFilePreviewCacheForTest();
   // 摘要分页占位：无 svgSource（正文未取回）
   const placeholder = revision({ revision_id: 'rev_svg1', sizeBytes: 0, content_sha256: '' });
@@ -71,7 +71,7 @@ test('#31 SVG 未加载不落缓存：占位版本行先到不产生终态命中
   assert.equal(filePreviewCacheStatsForTest().entries, 1);
 });
 
-test('#31 MD 同版本正文补齐后 bodyPreview 及时出现；已加载为空为 unavailable 终态', () => {
+test('MD 同版本正文补齐后 bodyPreview 及时出现；已加载为空为 unavailable 终态', () => {
   clearFilePreviewCacheForTest();
   const placeholder = revision({ revision_id: 'rev_md1', sizeBytes: 0, content_sha256: '' });
   const file = fileOf('md', [placeholder]);
@@ -100,7 +100,7 @@ test('#31 MD 同版本正文补齐后 bodyPreview 及时出现；已加载为空
   assert.equal(filePreviewCacheStatsForTest().entries, 2);
 });
 
-test('#31 PDF 恒可判定：首页抽取文字缺失时给元数据占位词，缓存生效', () => {
+test('PDF 恒可判定：首页抽取文字缺失时给元数据占位词，缓存生效', () => {
   clearFilePreviewCacheForTest();
   const file = fileOf('pdf', [revision({ revision_id: 'rev_pdf1' })]);
   const entry = getFilePreviewEntry(file);
@@ -109,7 +109,7 @@ test('#31 PDF 恒可判定：首页抽取文字缺失时给元数据占位词，
   assert.equal(filePreviewCacheStatsForTest().entries, 1);
 });
 
-test('#31 字节预算：大 dataUri 超预算按 LRU 逐最旧，总量回到预算内', () => {
+test('字节预算：大 dataUri 超预算按 LRU 逐最旧，总量回到预算内', () => {
   clearFilePreviewCacheForTest();
   // 构造大 SVG 源（约 2MB 编码后）塞 20 条 → 超出 24MiB 预算触发逐出
   const bigSource = `<svg>${'<text>字'.repeat(1024 * 1024)}</svg>`;
@@ -125,7 +125,7 @@ test('#31 字节预算：大 dataUri 超预算按 LRU 逐最旧，总量回到�
   assert.equal(stats.entries <= 2048, true);
 });
 
-test('#31 修订变更即换键：旧键留表由容量/预算逐出，新键现算', () => {
+test('修订变更即换键：旧键留表由容量/预算逐出，新键现算', () => {
   clearFilePreviewCacheForTest();
   const rev1 = revision({ revision_id: 'rev_a', svgSource: '<svg><text>A</text></svg>' });
   const rev2 = revision({ revision_id: 'rev_b', svgSource: '<svg><text>B</text></svg>' });
@@ -137,16 +137,16 @@ test('#31 修订变更即换键：旧键留表由容量/预算逐出，新键现
   assert.match(second.svgDataUri ?? '', /B/);
 });
 
-test('#31 markdownBodyPreview 剥离口径回归（迁移自 graphEvents 原实现）', () => {
+test('markdownBodyPreview 剥离口径回归（迁移自 graphEvents 原实现）', () => {
   assert.deepEqual(
     markdownBodyPreview('# 大标题\n> 引用句\n- 列表项\n1. 有序项\n\n普通段落\n```code```\n第四行预览', 3),
     ['大标题', '引用句', '列表项']
   );
 });
 
-/* ═══ D01-a 有界内存：离屏 30s 回收（任务卡 D01-a ⑤）═══ */
+/* ═══ 有界内存：离屏 30s 回收 ═══ */
 
-test('#D01a 离屏 30s 回收：超时未消费的条目在下次访问时逐出，正在消费的条目永不回收', () => {
+test('离屏 30s 回收：超时未消费的条目在下次访问时逐出，正在消费的条目永不回收', () => {
   clearFilePreviewCacheForTest();
   let clock = 1_000_000;
   setFilePreviewClockForTest(() => clock);
@@ -176,7 +176,7 @@ test('#D01a 离屏 30s 回收：超时未消费的条目在下次访问时逐出
   }
 });
 
-test('#D01a 离屏回收与 LRU 预算并存：回收不复活超预算逐出，消费续期不丢热条目', () => {
+test('离屏回收与 LRU 预算并存：回收不复活超预算逐出，消费续期不丢热条目', () => {
   clearFilePreviewCacheForTest();
   let clock = 2_000_000;
   setFilePreviewClockForTest(() => clock);

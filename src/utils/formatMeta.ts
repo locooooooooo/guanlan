@@ -1,5 +1,5 @@
 /**
- * B01 · 全文件格式统一元数据映射（与 `guanlan-core/src/index/file_format.rs` 逐项对齐）。
+ * 全文件格式统一元数据映射（与 `guanlan-core/src/index/file_format.rs` 逐项对齐）。
  *
  * 原则：
  * - 单一数据源：所有组件（侧栏筛选、图集卡、日历、时间线、画布、阅读器、设置面板）
@@ -485,12 +485,12 @@ export function snapshotTierDescription(format: string | null | undefined): {
   };
 }
 
-// ===== V05 · 全景域过滤 SSOT（全部资产 / 业务文档 / 工程代码，严格 MECE 计数守恒） =====
+// ===== 全景域过滤 SSOT（全部资产 / 业务文档 / 工程代码，严格 MECE 计数守恒） =====
 
 export type AssetDomainFilter = 'all' | 'business' | 'code';
 
 /**
- * 复用 B01 文档族分类 SSOT（`formatClassOf`）将每份资产严格划分到两大互斥域：
+ * 复用文档族分类 SSOT（`formatClassOf`）将每份资产严格划分到两大互斥域：
  * - `code`（工程代码）：源码/配置/归档/字体/未知二进制（一键滤除数千份源码噪点）
  * - `business`（业务文档）：Markdown/纯文本/PDF/Office/表格/演示稿/SVG/位图/音视频
  * 恒满足：`business + code === all`（零重叠、零遗漏）。

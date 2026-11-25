@@ -1,6 +1,6 @@
-//! E05 · 多智能体并发 MCP 压测、权限沙箱审计与防篡改账本端到端集成测试。
+//! 多智能体并发 MCP 压测、权限沙箱审计与防篡改账本端到端集成测试。
 //!
-//! 量化验收口径（30 轮长任务卡 E05）：
+//! 量化验收口径：
 //! 1. 启动真实 `guanlan serve` + **5 个并发 `guanlan mcp` stdio 子进程** + **2 条并发人类 UI HTTP 线程**，
 //!    混合执行查询上下文（`get_context_bundle`）、全文检索（`search_workspace`）、读大文件（响应字节预算截断）、
 //!    提交修订草案（CAS 护栏）、提交检查点、以及人类在 UI 浏览与原位拍板回写，累计 **>= 500 次真实请求**：
@@ -193,7 +193,7 @@ fn e05_five_concurrent_mcp_clients_plus_ui_500_requests_sandbox_and_tamper_audit
     // 1. 构造含方案、待确认决策、大文档（>300KiB 触发 MCP 有界截断）及敏感 .env 的真实工作区
     let arch_orig =
         "# 观澜并发架构方案\n\n核心目标：保障多智能体并发访问零死锁、零越界、零篡改。\n";
-    let plan_orig = "# 实施计划\n\n阶段一：E05 压测与权限沙箱加固。\n";
+    let plan_orig = "# 实施计划\n\n阶段一：并发 MCP 压测与权限沙箱加固。\n";
     let decisions_orig = concat!(
         "# 待确认事项\n\n",
         "- [P0 - 待确认] **并发写入安全网策略**：外部智能体写入必须先落独立草案分支 `v(N+1)-agent-draft`。\n",
@@ -563,7 +563,7 @@ fn e05_five_concurrent_mcp_clients_plus_ui_500_requests_sandbox_and_tamper_audit
                     0 => "/api/v1/state-overview",
                     1 => "/api/v1/review-board",
                     2 => "/api/v1/files?limit=20",
-                    3 => "/api/v1/search?q=E05&limit=10",
+                    3 => "/api/v1/search?q=MCP&limit=10",
                     4 => "/api/v1/revision-proposals",
                     _ => "/api/v1/audit/ledger",
                 };

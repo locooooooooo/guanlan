@@ -1,5 +1,5 @@
 /**
- * E02 · 外部智能体文件写入 CAS 安全网、独立草案分支（v(N+1)-agent-draft）与
+ * 外部智能体文件写入 CAS 安全网、独立草案分支（v(N+1)-agent-draft）与
  * 「查看多模态 Diff → 采纳落盘 / 退回重做」前端纯函数与 SSR 渲染契约测试。
  */
 import assert from 'node:assert/strict';
@@ -46,7 +46,7 @@ function makeDraftContent(
   };
 }
 
-describe('E02 ProposalToast 独立草案分支与多模态 Diff 摘要', () => {
+describe('ProposalToast 独立草案分支与多模态 Diff 摘要', () => {
   test('草案标题正确展示 v(N+1)-agent-draft 分支标签与短哈希芯片', () => {
     assert.equal(
       proposalToastTitle({ fileName: '02-实施计划.md', versionLabel: 'v3-agent-draft' }),

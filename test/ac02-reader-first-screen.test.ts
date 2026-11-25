@@ -1,7 +1,7 @@
 /**
- * AC-02 本地缓存与加载：首屏渲染 < 300ms 的测量与回归锁。
+ * 本地缓存与加载：首屏渲染 < 300ms 的测量与回归锁。
  *
- * PRD v2.0 验收表：点击打开任意本地 Markdown 文档（含首次打开与切换文档）时
+ * 验收口径：点击打开任意本地 Markdown 文档（含首次打开与切换文档）时
  * 「无『正在向智能体请求正文』阻塞遮罩，首屏渲染耗时 < 300ms」。
  *
  * 本文件锁三层：
@@ -12,7 +12,7 @@
  *     测得的同步首屏渲染耗时必须 < 300ms；同时校验 shell 与标题已在 HTML 中。
  *
  * 注：node 无 DOM，renderToString 不执行 useEffect（正文请求不会发起），
- * 因此本测试只测「首屏渲染」而非「正文到达」——与 AC-02 指标口径一致。
+ * 因此本测试只测「首屏渲染」而非「正文到达」——与首屏渲染预算指标口径一致。
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -79,7 +79,7 @@ function readerProps(file: FileRecord): ComponentProps<typeof ReaderView> {
   };
 }
 
-test('AC-02 首屏预算常量 = 300ms（PRD 验收表逐字）', () => {
+test('阅读器首屏预算常量 = 300ms', () => {
   assert.equal(READER_FIRST_SCREEN_BUDGET_MS, 300);
 });
 
@@ -167,7 +167,7 @@ test('冷启动正文未内联：ReaderView 首屏 SSR 渲染 < 300ms，shell �
 });
 
 test('ReaderView 接线：首屏测量与正文三态走 readerFirstScreen 单一出口', () => {
-  // D01-a 拆层后阅读器 = 装配层 + 行为控制器——联合文本断言（语义不变）
+  // 拆层后阅读器 = 装配层 + 行为控制器——联合文本断言（语义不变）
   const src = [
     '../src/components/ReaderView.tsx',
     '../src/components/reader/useReaderController.tsx',

@@ -5,7 +5,7 @@ import { sanitizeSvgForPreview } from '../../utils/guanlanEngine';
 import type { SvgDiffResult, SvgShapeChange } from '../../utils/multimodalDiff';
 
 /**
- * D03 ② · SVG 图纸半透明洋葱皮叠影（Onion-Skin）与滑动擦除（Swipe）对比面板。
+ * SVG 图纸半透明洋葱皮叠影（Onion-Skin）与滑动擦除（Swipe）对比面板。
  *
  * - 渲染红线：两版 SVG 一律经 sanitizeSvgForPreview 清洗后编 data:URI 走 <img>
  *   （readerSvgPdfSections.tsx 同款，绝不 inline 注入用户 SVG——脚本/事件处理器不执行）；

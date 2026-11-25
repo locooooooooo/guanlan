@@ -3,8 +3,7 @@
 //! 码表逐字对齐契约 native/docs/contract-query-api.md：
 //! - §0.2 六个错误码：ROOT_IN_USE / NOT_FOUND / SNAPSHOT_UNAVAILABLE /
 //!   INDEX_STALE / CURSOR_STALE / INDEX_BUSY；
-//! - §2 骨架期占位码 NOT_IMPLEMENTED（不在六码内，仅为骨架期占位，
-//!   前端不得当作业务错误码依赖）；
+//! - 占位码 NOT_IMPLEMENTED（不在六码内，前端不得当作业务错误码依赖）；
 //! - 内部错误（存储/IO）沿用旧实现的 INTERNAL 兜底码与 500 状态
 //!   （server/workspace-plugin.ts:134-140 `code || 'INTERNAL'`）。
 
@@ -23,7 +22,7 @@ pub struct ErrorEnvelope {
     /// 可选补充
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
-    /// 当前索引代（骨架期为 None，批次一实现时按当前代际补齐）
+    /// 当前索引代（无法获取当前代际时为 None）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub index_generation: Option<u64>,
 }
@@ -32,7 +31,7 @@ pub struct ErrorEnvelope {
 /// 的映射和契约 §0.2 码表逐字对齐。
 #[derive(Debug, thiserror::Error)]
 pub enum GuanlanError {
-    /// 409：第二个服务实例对同一工作区抢锁（方案 §7 排他锁）
+    /// 409：第二个服务实例对同一工作区抢锁（服务级排他锁）
     #[error("工作区已被另一个服务实例占用")]
     RootInUse,
     /// 404：workspace/file/revision/decision 等主体不存在
@@ -50,10 +49,10 @@ pub enum GuanlanError {
     /// 503：查询/索引有界队列饱和（响应附 Retry-After）
     #[error("索引队列饱和，请稍后重试")]
     IndexBusy,
-    /// 501：骨架期占位——该端点在批次二/三交付（契约 §2）。载荷为端点名。
-    #[error("该端点在批次二/三交付")]
+    /// 501：暂未实现的端点占位。载荷为端点名。
+    #[error("该端点暂未实现")]
     NotImplemented(&'static str),
-    /// 413：内容超出内联上限（issue #32 响应字节预算）。载荷为提示（含 raw=1 建议）。
+    /// 413：内容超出内联上限（响应字节预算）。载荷为提示（含 raw=1 建议）。
     /// 码表扩展项（非契约 §0.2 六码，与 INTERNAL/NotImplemented 同为本地扩展）。
     #[error("{0}")]
     UnsupportedContent(String),
@@ -62,17 +61,17 @@ pub enum GuanlanError {
     #[error("{0}")]
     BadRequest(String),
     /// 409：主体状态不允许该操作（archived 文档需先人工重开、对已结束任务 cancel）。
-    /// 码表扩展项（冻结契约 apiContract v1.2 新增本地扩展码 CONFLICT）。
+    /// 码表扩展项（本地扩展码 CONFLICT）。
     /// 仅用于「主体状态不允许该操作」：CAS 内容冲突不占错误码、走 job report。
     #[error("{0}")]
     Conflict(String),
     /// 409：挂载参考工作区被确定性拒绝（父子目录互斥 / 与已有挂载嵌套 / 重复挂载）。
-    /// C05 码表扩展项：quiet-md 外挂目录隔离纪律——挂载前强制互斥校验，绝不放行成环。
+    /// 码表扩展项：外挂目录隔离约束——挂载前强制互斥校验，绝不放行父子嵌套或成环。
     #[error("{0}")]
     MountRejected(String),
     /// 403：跨挂载边界写操作被确定性拒绝（参考工作区只读；主/挂载区之间硬性禁止
     /// move / rename / trash 与一切跨库写入，仅允许只读引用）。
-    /// C05 码表扩展项。
+    /// 码表扩展项。
     #[error("{0}")]
     CrossWorkspaceForbidden(String),
     /// 409：协作式取消或服务停机在事务提交点前安全中止长耗时扫描/对账（非服务故障）。
@@ -121,7 +120,7 @@ impl GuanlanError {
         }
     }
 
-    /// 组装统一错误包络；`index_generation` 由调用方按当前代际补齐（骨架期为 None）
+    /// 组装统一错误包络；`index_generation` 由调用方按当前代际补齐
     pub fn to_envelope(&self, index_generation: Option<u64>) -> ErrorEnvelope {
         ErrorEnvelope {
             ok: false,

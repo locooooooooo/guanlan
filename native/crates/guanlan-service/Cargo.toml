@@ -15,24 +15,24 @@ axum = { workspace = true }
 # 服务实例身份（instance_id，契约 contract-query-api.md §1.2）派生用
 sha2 = { workspace = true }
 hex = { workspace = true }
-# 批次一 runtime/http 落地新增（workspace 依赖说明见 native/Cargo.toml）：
+# runtime/http 核心依赖（workspace 版本说明见 native/Cargo.toml）：
 # - fs2：同工作区 OS 级排他锁（第二个实例 → ROOT_IN_USE，契约 §0.2）
 fs2 = { workspace = true }
 # - tokio-util：PDF 快照按 ReaderStream 流式回包（契约 §1.8 raw=1）
 tokio-util = { workspace = true }
-# - tower-http：dist 目录存在才挂载静态资源（ServeDir/ServeFile，方案 §7）
+# - tower-http：dist 目录存在才挂载静态资源（ServeDir/ServeFile）
 tower-http = { workspace = true }
 # - tower(util)：dist 存在时 fallback 内按路径守卫调用 ServeDir（oneshot）；
 #   axum 自身已传递依赖 tower，此处只为显式启用 util 特性，无新增编译产物
 tower = { version = "0.5", features = ["util"] }
-# SSE 事件流 Stream trait（冻结契约 J；axum 传递依赖同源版本，声明仅显式化）
+# SSE 事件流 Stream trait（axum 传递依赖同源版本，声明仅显式化）
 futures-core = "0.3"
 # 启动失败时输出一行统一错误包络 JSON（契约 §0.2；core 的 to_envelope 序列化用）
 serde = { workspace = true }
 serde_json = { workspace = true }
-# issue #32：BudgetedBody 实现 http_body::Body（预算随响应体释放）
+# BudgetedBody 实现 http_body::Body（预算随响应体释放）
 http-body = { workspace = true }
-# issue #4 有界查询通道：CancelGuard 持 rusqlite::InterruptHandle（workspace 同源版本）
+# 有界查询通道：CancelGuard 持 rusqlite::InterruptHandle（workspace 同源版本）
 rusqlite = { workspace = true }
 
 [dev-dependencies]

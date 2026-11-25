@@ -5,7 +5,7 @@ import { buildCanvasEventScene, type CanvasEventCard } from '../src/utils/graphE
 import { dayMergeLabel, stageOfPath, taskPackageOf } from '../src/utils/taskPackages';
 import { basenameOf } from '../src/utils/documentIdentity';
 import type { EventDayItem, EventDaysResult } from '../src/services/workspaceClient';
-// 组头胶囊几何常量与纯函数（复用 tl02/gu-cc 既有 exported 几何常量断言风格）
+// 组头胶囊几何常量与纯函数
 import {
   FANOUT_HEADER_BUTTON_W,
   FANOUT_HEADER_CAPSULE_H,
@@ -18,11 +18,11 @@ import {
 } from '../src/components/GraphCanvasView';
 
 /**
- * WF-2：全景溯源——同日同文件合并为一张卡（v1 → v3 · 今日演进 N 次）+
+ * 全景溯源——同日同文件合并为一张卡（v1 → v3 · 今日演进 N 次）+
  * 组头日期胶囊几何（文本预算 / 按钮右缘 / 司辰留白三组常量）。
  *
  * 合并为可选开启：buildCanvasEventScene 注入 resolveVersion 才合并；缺省逐卡旧行为
- * （v04-canvas-events 既有断言不动，本文件单独验证两档口径）。
+ * （既有断言不动，本文件单独验证两档口径）。
  */
 
 function item(over: Partial<EventDayItem> = {}): EventDayItem {
@@ -81,7 +81,7 @@ function singleDayFixture(samples: EventDayItem[]): EventDaysResult {
 
 // ---------- 验收：同 file_id 同日合并（DoD2 逐字口径） ----------
 
-test('wf_2 同 file_id 同日三版 → 1 张合并卡，changeLabel=v1 → v3 · 今日演进 2 次', () => {
+test('同 file_id 同日三版 → 1 张合并卡，changeLabel=v1 → v3 · 今日演进 2 次', () => {
   const samples = [
     item({ event_id: 'e1', revision_id: 'r1', observed_at: '2026-11-05T08:00:00+08:00' }),
     item({ event_id: 'e2', revision_id: 'r2', observed_at: '2026-11-05T09:00:00+08:00' }),
@@ -102,7 +102,7 @@ test('wf_2 同 file_id 同日三版 → 1 张合并卡，changeLabel=v1 → v3 �
   assert.equal(scene.active?.more, 0, '合并卡承载全部 3 条样本，无未展开余量');
 });
 
-test('wf_2 缺省（未传 resolveVersion）逐字旧行为：同日三版各自成卡、无 mergedDay', () => {
+test('缺省（未传 resolveVersion）逐字旧行为：同日三版各自成卡、无 mergedDay', () => {
   const samples = [
     item({
       event_id: 'e1',
@@ -135,7 +135,7 @@ test('wf_2 缺省（未传 resolveVersion）逐字旧行为：同日三版各自
   assert.equal(scene.active?.more, 0);
 });
 
-test('wf_2 两规则互不覆盖：先同 file_id 同日合并、再跨 file_id 同基名并组 → 1 张 ×3 卡', () => {
+test('两规则互不覆盖：先同 file_id 同日合并、再跨 file_id 同基名并组 → 1 张 ×3 卡', () => {
   const samples = [
     item({ event_id: 'a1', file_id: 'fa', revision_id: 'a1r1', file_path: 'runs/run-A/README.md', observed_at: '2026-11-05T08:00:00+08:00' }),
     item({ event_id: 'a2', file_id: 'fa', revision_id: 'a1r2', file_path: 'runs/run-A/README.md', observed_at: '2026-11-05T09:00:00+08:00' }),
@@ -158,7 +158,7 @@ test('wf_2 两规则互不覆盖：先同 file_id 同日合并、再跨 file_id 
 
 // ---------- 验收：组头胶囊几何（三组常量在渲染断言中覆盖） ----------
 
-test('wf_2 组头胶囊几何：文本预算 / 按钮右缘 / 司辰留白三组常量，任何盒宽不重叠', () => {
+test('组头胶囊几何：文本预算 / 按钮右缘 / 司辰留白三组常量，任何盒宽不重叠', () => {
   // 文本预算（ask 逐字口径）：fanOutBounds.width - 96 - 58（按钮宽）- 16
   assert.equal(FANOUT_HEADER_TEXT_BUDGET_OFFSET, 96 + FANOUT_HEADER_BUTTON_W + 16);
   assert.equal(FANOUT_HEADER_BUTTON_W, 58);
@@ -222,7 +222,7 @@ test('wf_2 组头胶囊几何：文本预算 / 按钮右缘 / 司辰留白三组
 
 // ---------- 验收：DoD1 抽查（任务包名 + 核心文档名替代截断前缀路径） ----------
 
-test('wf_2 DoD1 抽查：ask 原例路径 → 任务包名+核心文档名，行首不含连续截断前缀', () => {
+test('路径降噪抽查：深层容器路径 → 任务包名+核心文档名，行首不含连续截断前缀', () => {
   const p = '01-方案文档/产品需求与任务包/PDM四专项需求核对_2026-11-04/01-需求单.md';
   const pkg = taskPackageOf(p);
   assert.equal(pkg.name, 'PDM四专项需求核对_2026-11-04', '任务包名 = 专项名_日期（ask 原例逐字）');

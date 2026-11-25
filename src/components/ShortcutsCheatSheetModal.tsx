@@ -1,10 +1,10 @@
 /**
- * V11 · 全站快捷键速查模态框（coss Dialog 语义 + Frame 分组 + Kbd 徽章）。
+ * 全站快捷键速查模态框（coss Dialog 语义 + Frame 分组 + Kbd 徽章）。
  *
  * 设计要点：
  *  - 复用 keyboardShortcuts.SHORTCUT_CHEATSHEET_GROUPS 单一语义源，键位定义绝不脱节；
  *  - 保留模型 / 快照代际 / 最后扫描时间诊断条与 data-testid="shortcut-cheatsheet-popover" /
- *    data-esc-layer="open" 契约，兼容既有 D05 回归单测与 Esc 阶梯仲裁；
+ *    data-esc-layer="open" 契约，兼容既有回归单测与 Esc 阶梯仲裁；
  *  - 明暗双态与 reduced-motion 静态降级全自适应。
  */
 

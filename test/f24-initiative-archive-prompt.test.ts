@@ -1,5 +1,5 @@
 /**
- * F24 / PRD §2.2：Delivered「一键归档」提示 + Archived「重开」入口。
+ * Delivered「一键归档」提示 + Archived「重开」入口。
  *
  * 验收口径：Delivered 已交付态必须有前端「一键归档」提示；归档/重开端点
  * （postInitiativeArchive/postInitiativeReopen）不再零调用方；归档完成后状态
@@ -67,8 +67,8 @@ test('initiativeArchiveWarn：仅提取 result.initiative.warn；缺失/非字�
   assert.equal(initiativeArchiveWarn({}), null);
 });
 
-test('F24 接线：App 渲染一键归档/重开提示并调用归档/重开 job', () => {
-  // D01-a 拆层后 App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
+test('接线：App 渲染一键归档/重开提示并调用归档/重开 job', () => {
+  // App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
   const app = ['../src/App.tsx', '../src/stores/useWorkspaceStore.tsx', '../src/components/app/AppBanners.tsx']
     .map((p) => readFileSync(new URL(p, import.meta.url), 'utf8'))
     .join(String.fromCharCode(10))

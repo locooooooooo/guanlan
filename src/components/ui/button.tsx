@@ -6,7 +6,7 @@ import { cn } from '../../lib/cn';
 import { Spinner } from './spinner';
 
 /**
- * 观澜 · coss.com/ui 风格 Button 原语（V01）。
+ * 观澜 · coss.com/ui 风格 Button 原语。
  *
  * 工艺特点：
  * - 基于 @base-ui/react/use-render 支持 render 多态组合（无需 asChild 嵌套 Hack）；

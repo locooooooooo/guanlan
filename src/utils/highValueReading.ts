@@ -8,8 +8,8 @@
  *    下划线系统目录；output/ 不整体拦（交付物可落 output/）；
  *  - 高价值判定＝零新造：直接复用 stageOfPath 的 STAGE_KEYWORDS 三阶段族
  *    （计划/决策/交付），不另写第二套关键词（taskPackages.ts:252-271）；
- *  - 待阅判定＝GL-01 三态复用：hasUnreadChanges 的 reason !== 'up_to_date'
- *    记待阅（guanlanEngine.ts:1275），已读高价值文档不进 entries；
+ *  - 待阅判定＝未读三态复用：hasUnreadChanges 的 reason !== 'up_to_date'
+ *    记待阅（guanlanEngine.ts），已读高价值文档不进 entries；
  *  - 排序＝「近期」修饰排序而非集合：决策>交付>计划，同级按当前版本
  *    observed_at 降序、无版本置尾、路径升序保稳定（镜像 readingIslandStats
  *    的稳定序纪律）。N 为全部高价值待阅的诚实全量，不因时间窗虚减；
@@ -21,8 +21,8 @@
 
 import type { FileFormat, FileRecord } from '../types/guanlan';
 import { hasUnreadChanges } from './guanlanEngine';
-// 同前缀复用 R1 身份工具：重名拷贝的 dirPrefix 与 readingIslandStats.ts:84 同式，
-// 让重名条目互相可指认（reading-island.test.ts:134-136 同口径）。
+// 同前缀复用身份工具：重名拷贝的 dirPrefix 与 readingIslandStats 同式，
+// 让重名条目互相可指认。
 import { isToolNoisePath, minimalDirPrefix } from './documentIdentity';
 import { stageOfPath, type StageRole } from './taskPackages';
 import type { ReadingStateMap } from './readingStateStore';
@@ -32,7 +32,7 @@ import type { ReadingStateMap } from './readingStateStore';
 /** 高价值三类别＝规格「PLAN、交付与复验、未决决策」对应的三阶段（StageRole 子集）。 */
 export type HighValueCategory = '计划' | '决策' | '交付';
 
-/** 展示优先级序（口径 §4）：决策 > 交付 > 计划。 */
+/** 展示优先级序：决策 > 交付 > 计划。 */
 export const HIGH_VALUE_STAGES: readonly HighValueCategory[] = ['决策', '交付', '计划'];
 
 /** StageRole 是否高价值：本文件不另写关键词，直接判 stageOfPath 的产出。 */
@@ -43,10 +43,9 @@ function isHighValueStage(stage: StageRole): stage is HighValueCategory {
 // ================= 工具脚本噪音过滤 =================
 
 /**
- * 噪音判定已上移 documentIdentity.isToolNoisePath 作单一出口（DoD3：任务包统计
+ * 噪音判定已上移 documentIdentity.isToolNoisePath 作单一出口（任务包统计
  * groupFilesIntoPackages 同口径复用，避免第二套路径形态判定漂移）；
- * 既有 import 供本层单趟过滤（:130 一带）继续调用，再导出保持本层 API 与
- * 既有测试锚点（highValueReading.test.ts:86-98）不变。
+ * 既有 import 供本层单趟过滤继续调用，再导出保持本层 API 与既有测试锚点不变。
  */
 export { isToolNoisePath };
 
@@ -68,13 +67,13 @@ export interface HighValueReadingEntry {
 export interface HighValueReadingStats {
   /** 「近期待阅（N 份）」的 N：高价值 ∩ 未读，全量计数不截断 */
   pendingCount: number;
-  /** 仅待阅条目，排序见 HIGH_VALUE_STAGES 与口径 §4 */
+  /** 仅待阅条目，排序见 HIGH_VALUE_STAGES 优先级序 */
   entries: HighValueReadingEntry[];
   /** 噪音过滤前参与判定的文档总数（title 溯源用，不进 UI 大字） */
   scannedCount: number;
 }
 
-/** 当前版本回退口径与 readingIslandStats.ts:52-57 同款：先按 current_revision_id 查，缺失取末版 */
+/** 当前版本回退口径与 readingIslandStats 同款：先按 current_revision_id 查，缺失取末版 */
 function currentRevisionOf(file: FileRecord) {
   return (
     file.revisions.find((r) => r.revision_id === file.current_revision_id) ||
@@ -91,8 +90,8 @@ function observedAtSortKey(observedAt: string): number {
 
 /**
  * 首页「近期待阅：核心方案与决策」聚合：
- * 高价值（stageOfPath ∈ 决策/交付/计划）∩ 未读（GL-01 reason !== 'up_to_date'）。
- * pendingCount === entries.length 且为全量（诚实呈现纪律 v0.6 原则⑤：不虚减、不截断）。
+ * 高价值（stageOfPath ∈ 决策/交付/计划）∩ 未读（reason !== 'up_to_date'）。
+ * pendingCount === entries.length 且为全量（诚实呈现纪律：不虚减、不截断）。
  */
 export function computeHighValueReading(
   files: FileRecord[],
@@ -154,7 +153,7 @@ export function computeHighValueReading(
 // ================= 文案单一出口 =================
 
 /**
- * 「近期待阅」标题的唯一出口（GL-01 同族惯例：组件不拼字串）。
+ * 「近期待阅」标题的唯一出口（组件不拼字串）。
  * n=0 时仍返回该句——空态的副文（改由组件层给）不复用标题措辞。
  */
 export function highValueReadingHeading(stats: { pendingCount: number }): string {

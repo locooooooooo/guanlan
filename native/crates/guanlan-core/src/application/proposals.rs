@@ -1,4 +1,4 @@
-//! E02 · 外部智能体修订草案（CAS 安全网、独立草案分支与 `derived_from_context` 因果边）。
+//! 外部智能体修订草案（CAS 安全网、独立草案分支与 `derived_from_context` 因果边）。
 //!
 //! 职责边界：
 //! - 统一计算独立草案分支版本标签 `v(N+1)-agent-draft`（与正式 `revisions.seq` 同源）；

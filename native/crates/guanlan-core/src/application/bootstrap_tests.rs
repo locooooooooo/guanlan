@@ -239,29 +239,25 @@ fn bootstrap_on_empty_workspace() {
     cleanup_dir(&fixture.dir);
 }
 
-/// status（契约 §1.2）：实例信息、api_version、schema_version=2（冻结契约 I）、覆盖计数
+/// status（契约 §1.2）：实例信息、api_version、schema_version=2、覆盖计数
 #[test]
 fn status_reports_instance_and_coverage() {
     let (fixture, ws_id, store) = setup_workspace("boot-status");
     let st = status(&store).expect("status 失败");
     assert!(st.ok);
-    assert_eq!(
-        st.instance_id.len(),
-        16,
-        "instance_id 16 hex（批次一生成即可）"
-    );
+    assert_eq!(st.instance_id.len(), 16, "instance_id 应为 16 位十六进制");
     assert_eq!(st.api_version, "v1");
-    assert_eq!(
-        st.schema_version, 2,
-        "现状无版本记录，首批定为 1（契约 §1.2）"
-    );
+    assert_eq!(st.schema_version, 2, "数据库 schema_version 应为 2");
     assert_eq!(st.workspace_id, ws_id);
     assert_eq!(st.data_dir, fixture.dir.to_string_lossy());
     assert_eq!(st.index_generation, 7);
     assert!(st.baseline);
     assert_eq!(st.index_coverage.active_files, 3);
     assert_eq!(st.index_coverage.missing_files, 1);
-    assert!(st.active_jobs.is_empty(), "批次一恒空");
+    assert!(
+        st.active_jobs.is_empty(),
+        "core 层只读查询返回空 active_jobs"
+    );
     assert_eq!(st.counts.events, 2);
     // 进程内 instance_id 稳定
     let st2 = status(&store).expect("二次 status");
@@ -269,7 +265,7 @@ fn status_reports_instance_and_coverage() {
     cleanup_dir(&fixture.dir);
 }
 
-/// B01：storage_stats 诚实汇总本地磁盘占用、仅元数据版本计数与格式族分布
+/// storage_stats 诚实汇总本地磁盘占用、仅元数据版本计数与格式族分布
 #[test]
 fn storage_stats_reports_disk_usage_and_format_breakdown() {
     let (fixture, ws_id, _store) = setup_workspace("boot-storage-stats");

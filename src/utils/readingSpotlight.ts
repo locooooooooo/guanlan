@@ -3,15 +3,15 @@ import type { ArtifactStateView } from '../services/apiTypes';
 import { hasUnreadChanges } from './guanlanEngine';
 
 /**
- * D02 · 「我离开后发生了什么」增量聚光灯纯函数引擎（阅读状态模块单一派生出口）。
+ * 「我离开后发生了什么」增量聚光灯纯函数引擎（阅读状态模块单一派生出口）。
  *
  * 一键开启聚光灯后：上次离开前已读且未变的节点退为低对比度背景骨架，仅高亮
  * 三类「读后真实变化」：
- *  - revision_update  新增版本：有阅读基线且当前版更新（GL-01 updated_since_last_read）；
+ *  - revision_update  新增版本：有阅读基线且当前版更新（updated_since_last_read）；
  *  - pending_decision 新挂起决定：有阅读基线且状态机投影 pending_p0+pending_p1 > 0；
- *  - agent_draft      Agent 新草案：契约 D 待审草案（mcp/agent）挂在后未批阅。
+ *  - agent_draft      Agent 新草案：待审草案（mcp/agent）挂在后未批阅。
  *
- * 停机条件护栏（D02）：「首次收录」与「读后变更」绝不混同——
+ * 停机红线护栏：「首次收录」与「读后变更」绝不混同——
  *  - never_read（未读新件）文件【不】进变化清单、【不】参与 M 计数，也不降亮度
  *    （它们是首次收录态，有自己的语义，不属于「我离开后发生的读后变化」）；
  *  - M 只统计读后真实变化处数（一个文件可同时命中多类，按类分条）。
@@ -44,7 +44,7 @@ export interface SpotlightInput {
   readingStates: Readonly<Record<string, ReadingState>>;
   /** /api/v1/state-overview 投影索引（file_id → 行）；null = 投影未就绪（诚实跳过）。 */
   artifactsByFileId: ReadonlyMap<string, ArtifactStateView> | null;
-  /** 契约 D 待审草案 file_id → 最新 created_at（ISO）；空表 = 无草案数据。 */
+  /** 待审草案 file_id → 最新 created_at（ISO）；空表 = 无草案数据。 */
   agentDraftAtByFileId: ReadonlyMap<string, string>;
   /** 排序基准时刻（单测注入固定值保证确定性；仅用于时间解析合法性兜底）。 */
   nowMs: number;
@@ -73,11 +73,11 @@ export function computeSpotlightChanges(input: SpotlightInput): SpotlightChangeI
   const items: SpotlightChangeItem[] = [];
   for (const file of input.files) {
     const st = input.readingStates[file.file_id];
-    // 停机条件护栏：从未读过（无基线）= 未读新件 = 首次收录，不是读后变化，
+    // 停机红线护栏：从未读过（无基线）= 未读新件 = 首次收录，不是读后变化，
     // 三类全部不命中（有基线才判读后变更）
     if (!st || !st.last_read_revision_id) continue;
     const title = file.title;
-    // ① 新增版本：GL-01 updated_since_last_read（有基线且当前版更新），时间取当前版 observed_at
+    // ① 新增版本：updated_since_last_read（有基线且当前版更新），时间取当前版 observed_at
     if (hasUnreadChanges(file, st).reason === 'updated_since_last_read') {
       const currentRev = file.revisions.find((r) => r.revision_id === file.current_revision_id);
       items.push({
@@ -97,7 +97,7 @@ export function computeSpotlightChanges(input: SpotlightInput): SpotlightChangeI
         title,
       });
     }
-    // ③ Agent 新草案：契约 D 待审清单命中，时间取草案 created_at
+    // ③ Agent 新草案：待审清单命中，时间取草案 created_at
     const draftAt = input.agentDraftAtByFileId.get(file.file_id);
     if (draftAt !== undefined) {
       items.push({
@@ -135,7 +135,7 @@ export function computeSpotlightSummary(items: readonly SpotlightChangeItem[]): 
 
 /**
  * 降亮度集合（「上次离开前已读且未变」的节点退为低对比度背景骨架）：
- * GL-01 up_to_date（有基线且当前版未变）且不在任何读后变化清单里的文件。
+ * up_to_date（有基线且当前版未变）且不在任何读后变化清单里的文件。
  * never_read（未读新件）不降亮度——首次收录是合法的独立态，绝不冒充背景骨架。
  */
 export function computeSpotlightDimmedFileIds(

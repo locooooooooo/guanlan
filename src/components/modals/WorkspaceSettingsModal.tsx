@@ -1,9 +1,9 @@
 /**
- * V08 · 工作区与项目设置弹窗（自 ModalsAndDrawers.tsx 拆解，coss 垂直 Tabs + 右侧 Frame 卡片表单重构）。
+ * 工作区与项目设置弹窗（左侧垂直 Tabs + 右侧 Frame 卡片表单）。
  *
  * 五大分栏：
  *  - workspace：工作区根目录、数据目录、文件枚举快照 KPI 与 .gitignore 扫描边界校验；
- *  - noise：目录静默清单（V06 工作区私有状态一键管理/恢复）+ 显式排除目录清单；
+ *  - noise：目录静默清单（工作区私有状态一键管理/恢复）+ 显式排除目录清单；
  *  - storage：快照配额水位条 + StorageUsageSection 空间占用与清理治理；
  *  - health：本地引擎运行态（索引代际 / 监听服务 / 数据库与一致性备份护栏）；
  *  - about：观澜版本信息、设计底座与本地优先隐私承诺。
@@ -86,7 +86,7 @@ export interface WorkspaceSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   config: WorkspaceConfig;
-  /** V06：工作区私有目录静默清单（只存本机私有存储，磁盘零写入业务目录） */
+  /** 工作区私有目录静默清单（只存本机私有存储，磁盘零写入业务目录） */
   mutedFolders?: readonly string[];
   onUnmuteFolder?: (folderPath: string) => void;
   onClearMutedFolders?: () => void;
@@ -254,7 +254,7 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
           </IconButton>
         </header>
 
-        {/* V08：左侧垂直 Tabs 导航 + 右侧 Frame 卡片表单 */}
+        {/* 左侧垂直 Tabs 导航 + 右侧 Frame 卡片表单 */}
         <Tabs
           orientation="vertical"
           value={activeTab}

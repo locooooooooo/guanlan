@@ -26,14 +26,13 @@ import { formatOfficeAnchorLabel, pickPrimaryOfficeEvidence } from '../utils/off
 import { InitiativeCandidatePanel } from './InitiativeCandidatePanel';
 import { formatPdfAnchorLabel, pickPrimaryPdfEvidence } from '../utils/pdfAnchor';
 import { hasUnreadChanges, unreadStatusLabel } from '../utils/guanlanEngine';
-// v0.8 总装-5：阅读票 R2 迁入的所属专项 readingOrder 上下游——经 taskPackages 既有
-// 纯函数在本组件重算（ReaderView 局部变量带不过来，判定零复写）
+// 所属专项 readingOrder 上下游：经 taskPackages 既有纯函数在本组件重算，避免重复判定
 import { groupFilesIntoPackages, taskPackageOf } from '../utils/taskPackages';
 import type { PackageDoc } from '../utils/taskPackages';
-// 统一状态机 SSOT（方案 F2）：版本「（最新）」后缀词与 ReaderView 收敛到单一出口；
-// F1/F2：所选对象详情同步渲染 /state-overview 六态徽标（与文档顶栏同源）；
-// U06：决策「待拍板 / 已定案」分组走 isUnresolvedDecision / DECIDED_DECISION_STATUSES
-// 单一出口（与 DecisionRadar / HomeView 卡 A 同源，禁第二套状态词表）
+// 统一状态投影单一出口：版本「（最新）」后缀词与 ReaderView 同源；
+// 所选对象详情同步渲染 /state-overview 六态徽标（与文档顶栏同源）；
+// 决策「待拍板 / 已定案」分组走 isUnresolvedDecision / DECIDED_DECISION_STATUSES
+// 单一出口（与 DecisionRadar / HomeView 同源，避免第二套状态词表）
 import {
   DECIDED_DECISION_STATUSES,
   DOC_STATE_LABEL,
@@ -43,16 +42,15 @@ import {
   isUnresolvedDecision,
   revisionVersionLabel,
 } from '../utils/stateProjection';
-// 契约⑧：长 ID 复制钮由 reader 单定义导出，检查器此处复用；
-// 相对时间改走 utils/timeFormat 单一出口
+// 长 ID 复制钮复用 ReaderView 导出定义；相对时间统一走 utils/timeFormat
 import { CopyIdButton } from './ReaderView';
 import { formatRelativeObservedAt } from '../utils/timeFormat';
-// GU-CC-02：摘录换源走既有版本内容加载链路（md 正文未内联时按版本补齐，绝不拿 summaryNote 冒充）
+// 摘录走既有版本内容加载链路（md 正文未内联时按版本补齐，不拿 summaryNote 冒充）
 import { fetchRevisionContent } from '../services/workspaceClient';
 import type { StateOverviewResponse } from '../services/apiTypes';
-// R1-identity-dedup：同标题拷贝的最小区分前缀（父目录段/任务包名），引用卡标题互相可指认
+// 同标题拷贝的最小区分前缀（父目录段/任务包名），保证引用卡标题互相可指认
 import { basenameOf, minimalDirPrefix } from '../utils/documentIdentity';
-// B2 组件化：底栏动作钮走 §4.1 映射表归宿（实心紫→primary 墨实心；描边钮→secondary）
+// 底栏动作钮复用基础按钮原语（墨实心 primary / 描边 secondary）
 import { Button } from './ui/primitives';
 import {
   Badge,
@@ -66,20 +64,19 @@ import {
   type DesktopFileActionCallbacks,
 } from './FileContextMenu';
 import { formatUiMeta, isUtf8TextFormat } from '../utils/formatMeta';
-// U06 · 时光轨迹卡：变动概览文案与「时光机格式集合」消费 U05 单一出口
-//（summarizeMiniVersionChange / canOpenTimeMachine 在 readerChromeSections.tsx 定义，
-// 与阅读器迷你版本轴共用同一叙事口径，禁第二套「快照已淘汰」词表）
+// 时光轨迹卡：变动概览文案与可跳转时光机的格式集合复用 readerChromeSections 单一出口，
+// 与阅读器迷你版本轴共用同一叙事口径（含「快照已淘汰」文案）
 import {
   canOpenTimeMachine,
   summarizeMiniVersionChange,
 } from './reader/readerChromeSections';
 
 /* ══════════════════════════════════════════════════════════════════════════
-   U06 · 时光轨迹卡纯函数层（无 DOM 依赖，测试直接 import）
+   时光轨迹卡纯函数层（无 DOM 依赖，便于单测直接导入）
    —— 时光轨迹卡映射的唯一出口：多版本 / 单版本 / 已淘汰快照三边界 + 空链防御。
    纪律：按修订链序（版本号降序 vN → v1）渲染，绝不按日期排；observed_at 相对时间
    与 occurred_at 口径绝不混写（本卡只呈现 observedLabel）；已淘汰快照绝不冒充可读旧版
- 　　　（diffAvailable=false，点开差异入口直接不渲染）。
+   （diffAvailable=false，点开差异入口直接不渲染）。
    ══════════════════════════════════════════════════════════════════════════ */
 
 /** 时光轨迹卡展示的版本上限（最近 4 节点；更早版本诚实收纳为计数，不丢不造）。 */
@@ -112,7 +109,7 @@ export interface TimeTrailNode {
   /** 章节级变更清单（来自 changedSectionsFromPrev，逐字透传，零造数）。 */
   changedSections: string[];
   changedCount: number;
-  /** 变动概览（消费 U05 summarizeMiniVersionChange 单一出口，与迷你版本轴同词）。 */
+  /** 变动概览（复用 readerChromeSections.summarizeMiniVersionChange，与迷你版本轴同词）。 */
   changeSummary: string;
   /** 是否可展开章节级差异（已淘汰快照恒 false——绝不以当前内容冒充旧版）。 */
   diffAvailable: boolean;
@@ -156,7 +153,7 @@ function timeTrailNodeOf(
     kind,
     changedSections,
     changedCount: changedSections.length,
-    // 已淘汰快照的变动概览一律落「快照已淘汰」行（剥掉章节清单后仍走 U05 summarize
+    // 已淘汰快照的变动概览一律落「快照已淘汰」行（剥掉章节清单后仍走 summarizeMiniVersionChange
     // 单一出口产出同词文案）；可读快照才按章节级变更优先呈现
     changeSummary: summarizeMiniVersionChange(
       snapshotAvailable ? rev : { ...rev, changedSectionsFromPrev: [] }
@@ -225,7 +222,7 @@ export function buildTimeTrail(
 }
 
 /**
- * U06 双向引用卡：悬停气泡预览目标摘要（无 DOM 依赖纯函数，测试直接 import）。
+ * 双向引用卡悬停预览目标摘要（无 DOM 依赖纯函数，便于单测直接导入）。
  * 文件＝当前版 summaryNote；决策＝决策问题；无摘要如实返回空串（调用方不带 title）。
  * 数据只取既有字段并截断 80 字（悬浮预览不是正文出口，绝不整段倾倒）。
  */
@@ -250,10 +247,9 @@ export function peerHoverPreviewOf(
   return '';
 }
 
-// ---------- R1 引用卡收敛：正/反向引用卡同构子组件 ----------
-// 原 outgoingPeerGroups / incomingPeerGroups 两段 map 回调 42 行×2 近逐字重复，
-// 仅差三处口径（label 色彩 token / 前缀文案 / 行号 title 提示语），收敛为单组件
-// 按 direction 参数化，锁死两口径漂移；按钮结构与语义逐字保留。
+// ---------- 正/反向引用卡同构子组件 ----------
+// 正向引用与反向被引用卡结构同构，仅在色彩令牌、前缀文案与行号提示语三处不同，
+// 收敛为单组件按 direction 参数化以防止两处样式与语义漂移。
 const PEER_REF_CARD_META = {
   out: {
     labelColor: 'text-[color:var(--accent-iris-deep)]',
@@ -285,9 +281,9 @@ interface PeerRefCardProps {
   peerTitle: { title: string; prefix: string };
   lineBadge: string;
   isFileTarget: boolean;
-  /** U06 双向引用卡：悬停气泡预览目标摘要（文件＝当前版摘要；决策＝决策问题；无则不带） */
+  /** 双向引用卡悬停气泡预览目标摘要（文件＝当前版摘要；决策＝决策问题；无则不带） */
   hoverPreview?: string;
-  /** V06：250ms 延迟触发的 Base UI PreviewCard 载荷与共享句柄 */
+  /** 250ms 延迟触发的 Base UI PreviewCard 载荷与共享句柄 */
   previewPayload?: PeerRefPreviewPayload;
   previewHandle?: ReturnType<typeof PreviewCardCreateHandle<PeerRefPreviewPayload>>;
   onOpenFile: (fileId: string) => void;
@@ -366,11 +362,11 @@ const PeerRefCard: React.FC<PeerRefCardProps> = ({
   return cardBtn;
 };
 
-// ---------- U06 · 时光轨迹卡（竖向微型版本链）子组件 ----------
+// ---------- 时光轨迹卡（竖向微型版本链）子组件 ----------
 
 interface TimeTrailCardProps {
   model: TimeTrailModel;
-  /** 未读三态标签（GL-01 单一出口；无未读基线记录时为 null 不占位） */
+  /** 未读三态标签（单一出口；无未读基线记录时为 null 不占位） */
   unreadLabel: string | null;
   /** 展开差异的版本 id 集合（当前版默认展开，其余点击展开） */
   expandedIds: Record<string, boolean>;
@@ -647,16 +643,16 @@ interface RightInspectorProps {
   onSavePersonalNote: (fileId: string, note: string) => void;
   onOpenFile: (fileId: string, revisionId?: string) => void;
   onOpenDecision: (decisionId: string, targetEvidence?: DecisionSourceEvidence) => void;
-  /** T04：打开文件时间线抽屉（版本链 + 相关事件） */
+  /** 打开文件时间线抽屉（版本链 + 相关事件） */
   onOpenFileTimeline?: (fileId: string) => void;
   onViewRelationsGraph: () => void;
-  /** GU-CC-02：点击后由 App 把统一导出器输出写入剪贴板并打开抽屉；
-   *  返回写入结果——true 才进入「已复制」态，失败不谎报成功（C4 同款） */
+  /** 点击后由 App 把统一导出器输出写入剪贴板并打开抽屉；
+   *  返回写入结果——true 才进入「已复制」态，失败不谎报成功 */
   onCopyObjectToAgent: (pointer: EvidencePointer) => Promise<boolean>;
   indexGeneration: number;
-  /** F1/F2（AC-01）：App 级 /state-overview 唯一数据源；所选文档六态徽标同源 */
+  /** App 级 /state-overview 唯一数据源；所选文档六态徽标同源 */
   stateOverview?: StateOverviewResponse | null;
-  /** A04：资源管理器定位 / 默认应用打开 / 复制相对绝对路径 / 右键菜单 */
+  /** 桌面文件操作回调（资源管理器定位 / 默认应用打开 / 复制路径 / 右键菜单） */
   systemActions?: DesktopFileActionCallbacks;
 }
 
@@ -679,14 +675,14 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
 }) => {
   const [expandFullPath, setExpandFullPath] = useState(false);
   const [noteInput, setNoteInput] = useState(readingState?.personalNote || '');
-  // 契约⑧⑥：file_id / 毫秒时间戳等裸元数据默认收起，ⓘ 一行按需展开；
+  // file_id / 毫秒时间戳等底层元数据默认收起，经详情/溯源按钮按需展开；
   // 阅读进度 / 笔记 / 底部操作按钮区不受影响
   const [metaExpanded, setMetaExpanded] = useState<boolean>(false);
-  // U06 双向引用卡：正/反向两组各自折叠（默认展开，折叠只收纳卡面不丢数据）
+  // 双向引用卡：正/反向两组各自折叠（默认展开，折叠只收纳卡面不丢数据）
   const [refsOpen, setRefsOpen] = useState<{ out: boolean; in: boolean }>({ out: true, in: true });
-  // V06：引用卡共享单一 250ms Base UI PreviewCard 句柄
+  // 引用卡共享单一 250ms Base UI PreviewCard 句柄
   const refPreviewHandle = useMemo(() => PreviewCardCreateHandle<PeerRefPreviewPayload>(), []);
-  // U06 时光轨迹卡：节点差异展开态（当前版默认展开；切换文件时重置）
+  // 时光轨迹卡：节点差异展开态（当前版默认展开；切换文件时重置）
   const [trailExpanded, setTrailExpanded] = useState<Record<string, boolean>>({});
 
   // Sync noteInput when selectedFile changes
@@ -705,19 +701,19 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
       (r) => r.revision_id === selectedFile.current_revision_id
     ) || selectedFile.revisions[selectedFile.revisions.length - 1];
 
-  // F1/F2（AC-01）：所选文档六态（/state-overview artifact 行；无行不占位）
+  // 所选文档六态（来自 /state-overview artifact 行；无行不占位）
   const stateIndex = useMemo(() => indexStateOverview(stateOverview), [stateOverview]);
   const artifactState = artifactStateOf(stateIndex, selectedFile.file_id);
 
-  // GU-CC-02：「复制给智能体」成功反馈——只在剪贴板真实写入成功后进入「已复制」态（C4 同款）
+  // 「复制给智能体」成功反馈：只在剪贴板真实写入成功后进入「已复制」态
   const [copiedToAgent, setCopiedToAgent] = useState(false);
 
   /**
-   * GU-CC-02：诚实证据指针。
-   * locator 一律 kind:'file'——检查器上下文没有行级选择，写死 L1–L35 / page 1 是虚构凭证；
+   * 构造诚实证据指针：
+   * locator 一律 kind:'file'——检查器上下文没有行级选择，不虚构行号或页码；
    * excerpt 取该 revision 真实正文：md 走内联或既有按版本加载链路，pdf/svg 取真实提取文本层；
    * 内容不可用时如实留空，绝不拿 summaryNote（摘要）冒充证据摘录。
-   * summaryNote 展示区（条目信息区）不受影响，仅证据指针的 excerpt 字段换源。
+   * summaryNote 展示区（条目信息区）不受影响，仅证据指针的 excerpt 字段取正文源。
    */
   const handleCopyObjectToAgent = async () => {
     let excerpt = '';
@@ -754,9 +750,9 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
 
   const unreadInfo = hasUnreadChanges(selectedFile, readingState);
 
-  // ---------- v0.8 总装-5：阅读票 R2 迁入的「阅读顺序」上下游（原 ReaderView ⓘ 内嵌抽屉区块平移） ----------
-  // 包上下文与 App.activePackage 同一条 groupFilesIntoPackages → taskPackageOf 反查链；
-  // 分组 memo 只依赖 files（不随选中重算 1061 份路径判定），命中未果传 null（不造包）。
+  // ---------- 所属专项「阅读顺序」上下游 ----------
+  // 包上下文与 App.activePackage 走同一条 groupFilesIntoPackages → taskPackageOf 反查链；
+  // 分组 memo 只依赖 files（不随选中重算路径判定），未命中传 null（不造包）。
   // 跳转走既有 onOpenFile（App 侧已接 setReaderSubMode('read') + setLibraryMode('read')）
   const packageListLocal = useMemo(() => groupFilesIntoPackages(files), [files]);
   const packageOfSelected = useMemo(() => {
@@ -782,14 +778,14 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
       ? packageOfSelected.readingOrder[activeDocIndex + 1]
       : null;
 
-  // v0.8 总装-5：版本行「（最新）」后缀只在 currentRev 确为版本链末版时标——本面板消费
+  // 版本行「（最新）」后缀只在 currentRev 确为版本链末版时标——本面板消费
   // 文件「当前版」摘要（不感知阅读器钉住版本），不得谎报钉住旧版为最新
   const latestRevisionId =
     selectedFile.revisions[selectedFile.revisions.length - 1]?.revision_id ?? '';
   const isLatestRev =
     selectedFile.revisions.length > 0 && currentRev.revision_id === latestRevisionId;
 
-  // U06 · 时光轨迹卡模型（多版本/单版本/已淘汰三边界的唯一映射出口）
+  // 时光轨迹卡模型（多版本/单版本/已淘汰三边界的唯一映射出口）
   const trailModel = useMemo(
     () => buildTimeTrail(selectedFile.revisions, currentRev.revision_id, latestRevisionId),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -806,7 +802,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
   const outgoingEdges = relations.filter((r) => r.source_id === selectedFile.file_id);
   const incomingEdges = relations.filter((r) => r.target_id === selectedFile.file_id);
 
-  // ---------- R1-identity-dedup：引用与反引用按「对端文档」折叠 ----------
+  // ---------- 引用与反引用按「对端文档」折叠 ----------
   // 同一对端的 N 条边（如本文档 22 处原文引用都指向同一份 PLAN）折成一张卡，
   // 徽章如实标「×N 处 · L12/L44/L90」——行号取 RelationEdge.locator.startLine（投影已有字段），
   // 去重升序、最多展示 4 个；区块计数 = 对端文档数（明显小于原边数），原边数保留在括号内。
@@ -847,7 +843,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
     return { title: peerId, prefix: '' };
   };
 
-  // U06 双向引用卡：悬停气泡预览目标摘要（纯函数见下方导出；此处只做查表接线）
+  // 双向引用卡悬停气泡预览目标摘要（纯函数见上方导出；此处只做查表接线）
   const peerPreviewOf = (peerId: string): string =>
     peerHoverPreviewOf(peerId, files, decisions);
 
@@ -870,7 +866,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
     d.evidences.some((ev) => ev.file_id === selectedFile.file_id)
   );
 
-  // U06 决策与归属卡：待拍板 / 已定案 / 候选线索三桶（SSOT 单一出口，禁第二套状态词表）
+  // 决策与归属卡：待拍板 / 已定案 / 候选线索三桶（单一状态投影出口，避免第二套状态词表）
   // 待拍板＝isUnresolvedDecision（待确认 + 来源不一致，候选线索不计入）；已定案＝DECIDED 集合；
   // 候选线索＝isCandidateOnly（编织候选，未定案也非待拍板，单独轻桶呈现不冒充）
   const linkedPending = linkedDecisions.filter((d) => isUnresolvedDecision(d));
@@ -885,7 +881,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
   // 直接在 files/decisions 中查表确定目标类型
   const isFileId = (id: string) => files.some((item) => item.file_id === id);
 
-  // U06 时光轨迹卡：跳时光机入口只在「该格式可直达时光机」时渲染（canOpenTimeMachine
+  // 时光轨迹卡：跳时光机入口只在「该格式可直达时光机」时渲染（canOpenTimeMachine
   // 与阅读器迷你版本轴同一集合）；跳转复用既有 onViewRelationsGraph 接线（App 层
   // enterEventFrame 下钻范式，纯视图跳转——不改 pinnedRevisionId / 未读基线 / 只读语义）
   const canJumpMachine = canOpenTimeMachine(selectedFile.format);
@@ -973,14 +969,14 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
   };
 
   return (
-    /* v0.8 总装面去边框：左缘 1px 生硬线退役——面板层级改由近白玻璃（bg-white/55）
-       浮于 --depth-0-base body 的色阶差承担（与外壳票 LeftSidebar 去 border-r 同一对称处理） */
+    /* 面板去边框：左缘 1px 生硬线退役——面板层级改由近白玻璃（bg-white/55）
+       浮于 --depth-0-base body 的色阶差承担（与 LeftSidebar 去 border-r 同一对称处理） */
     <aside
       aria-label="所选对象详情检查器"
       className="w-80 shrink-0 bg-white/62 backdrop-blur-xl shadow-[-1px_0_0_rgba(38,36,61,0.05)] text-[color:var(--ink-strong)] flex flex-col h-full overflow-hidden select-none"
     >
       <div className="flex-1 overflow-y-auto p-4 space-y-5">
-        {/* 0. C01 · 编织候选事项（独立子组件；采纳/否决/剔除全部显式操作） */}
+        {/* 0. 编织候选事项（独立子组件；采纳/否决/剔除全部显式操作） */}
         <section className="space-y-2 pb-1">
           <InitiativeCandidatePanel onOpenFile={onOpenFile} />
         </section>
@@ -1053,7 +1049,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
                 </div>
               );
             })()}
-            {/* F1/F2（AC-01）：六态徽标（与文档顶栏同源；无服务端行不占位） */}
+            {/* 六态徽标（与文档顶栏同源；无服务端行不占位） */}
             {artifactState && (
               <div className="flex items-center gap-1.5">
                 <span
@@ -1068,7 +1064,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
             <p className="text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)] text-[color:var(--ink-soft)] pt-1 border-t border-[color:var(--glass-hairline)]">
               {currentRev.summaryNote}
             </p>
-            {/* 分类证据来源（角色/主题 provenance；绝不伪造概率）：自 §5 时间溯源节收进详情卡 */}
+            {/* 分类证据来源（角色/主题 provenance，绝不伪造概率） */}
             <div className="p-2.5 rounded-[var(--r-block)] bg-white/55 space-y-1.5 text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)] shadow-[0_0_0_1px_rgba(38,36,61,0.045)]">
               <div className="flex items-center justify-between">
                 <span className="text-[color:var(--ink-soft)] flex items-center gap-1">
@@ -1112,7 +1108,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
           </div>
 
           {/* 三口径时间语义（observed_at / source_time / commit_time 绝不合并成一行「时间」）
-              ＋ 版本/大小/完整路径：ⓘ 按需展开的溯源明细（契约⑧⑥ 默认收起） */}
+              ＋ 版本/大小/完整路径：ⓘ 按需展开的溯源明细（默认收起） */}
           {metaExpanded ? (
             <div className="p-3 rounded-[var(--r-block)] bg-white/55 space-y-1.5 text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-mono tabular-nums shadow-[0_0_0_1px_rgba(38,36,61,0.045)]">
               <div className="flex items-center justify-between">
@@ -1137,9 +1133,9 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
                   {currentRev.agent_turn_hint || currentRev.author_hint || '未知'}
                 </span>
               </div>
-              {/* v0.8 总装-5：阅读票 R2 迁入的溯源 dl 补齐——版本（长 ID 复制钮随行）、
-                  文件大小、完整路径三行平移自原 ⓘ 内嵌抽屉（捕获时间/文档日期上方已有）。
-                  方案 F2：「（最新）」后缀词走 stateProjection.revisionVersionLabel 单一出口 */}
+              {/* 溯源 dl 补齐——版本（长 ID 复制钮随行）、
+                  文件大小、完整路径三行来自原 ⓘ 内嵌抽屉（捕获时间/文档日期上方已有）。
+                  「（最新）」后缀词走 stateProjection.revisionVersionLabel 单一出口 */}
               <div className="flex items-center justify-between pt-1 border-t border-[color:var(--glass-hairline)]">
                 <span className="text-[color:var(--ink-soft)] font-sans">版本</span>
                 <span className="flex items-center gap-1.5">
@@ -1346,7 +1342,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
               </>
             )}
 
-            {/* 所属专项上下游（v0.8 总装-5 迁入；无相邻文档不渲染） */}
+            {/* 所属专项上下游（无相邻文档不渲染） */}
             {(prevDoc || nextDoc) && (
               <div className="space-y-1.5 pt-1 border-t border-[color:var(--glass-hairline)]" data-inspector-package-flow="">
                 <div className="font-mono text-[length:var(--text-micro)] text-[color:var(--ink-soft)] pt-1">
@@ -1381,7 +1377,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
           </div>
         </section>
 
-        {/* 5. 个人阅读状态与本地备注 (§7: 只属于个人阅读状态，不改变工程决策状态) */}
+        {/* 5. 个人阅读状态与本地备注（只属于个人阅读状态，不改变工程决策状态） */}
         <section className="space-y-1.5">
           <label className="block text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-semibold text-[color:var(--ink-soft)]">
             个人阅读备注（仅保存本地 SQLite，不写回源文档）
@@ -1406,9 +1402,9 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
         </section>
       </div>
 
-      {/* Bottom Action Bar: [文件时间线] + [查看关联] [复制给智能体] per §3.1 */}
+      {/* Bottom Action Bar: [文件时间线] + [查看关联] [复制给智能体] */}
       <div className="p-3.5 border-t border-[color:var(--glass-hairline)] bg-white/82 backdrop-blur-xl space-y-2">
-        {/* T04：以文件为中心的时间线——完整版本链与相关事件（含决策与读取异常） */}
+        {/* 以文件为中心的时间线：完整版本链与相关事件（含决策与读取异常） */}
         {onOpenFileTimeline && (
           <Button
             variant="secondary"
@@ -1427,7 +1423,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
             <span>查看关联</span>
           </Button>
 
-          {/* 墨实心主钮（§4.1 primary：墨是唯一深色轴线，控件才允许实心） */}
+          {/* 墨实心主钮（primary 强调唯一主行动） */}
           <Button onClick={handleCopyObjectToAgent} className="whitespace-nowrap">
             {copiedToAgent ? (
               <>
@@ -1443,7 +1439,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
           </Button>
         </div>
       </div>
-      {/* V06：右检查器引用链接共享 Base UI PreviewCard（250ms 悬停向左弹出速览卡） */}
+      {/* 右检查器引用链接共享 Base UI PreviewCard（250ms 悬停向左弹出速览卡） */}
       <PreviewCard<PeerRefPreviewPayload> handle={refPreviewHandle}>
         {({ payload }) => {
           if (!payload) return null;

@@ -23,7 +23,7 @@ import type { DesktopSessionState, RecentWorkspaceStatus } from '../services/des
 import type { ProjectEntryDto } from '../services/apiTypes';
 import { DecisionAssertion, DecisionSourceEvidence, FileFormat, FileRecord, WorkspaceConfig } from '../types/guanlan';
 import { SearchHit, unreadStatusLabel } from '../utils/guanlanEngine';
-// DoD1：搜索结果只显【任务包名 + 核心文件名】，完整路径进 title
+// 搜索结果只显【任务包名 + 核心文件名】，完整路径进 title
 import { basenameOf } from '../utils/documentIdentity';
 import { taskPackageOf } from '../utils/taskPackages';
 import type { WorkspaceSource, FileFacets } from '../services/workspaceClient';
@@ -39,7 +39,7 @@ import { BrandMark } from './BrandMark';
 // 存储容错：渲染路径禁止裸读 localStorage（阻止所有 Cookie 等环境首访即抛
 // SecurityError，TopHeader 渲染失败=App 整树白屏）
 import { safeStorageGet } from '../utils/safeStorage';
-// V07：全站明暗主题一键切换（直连 V01 appThemeStore 单一真相源，持久化 + DOM .dark 同步）
+// 全站明暗主题一键切换（直连 appThemeStore 单一真相源，持久化 + DOM .dark 同步）
 import {
   appThemeModeLabel,
   applyAppTheme,
@@ -50,18 +50,18 @@ import {
   type AppThemeMode,
   type ResolvedAppTheme,
 } from '../stores/appThemeStore';
-// 壳层控件一律取 primitives + coss 原语（V07：Toolbar / Group / GroupSeparator / Kbd）
+// 壳层控件一律取 primitives + coss 原语（Toolbar / Group / GroupSeparator / Kbd）
 import { Button, IconButton, Tabs } from './ui/primitives';
 import type { ChipStage } from './ui/primitives';
 import { Group, GroupSeparator, Kbd, Toolbar } from './ui';
 
-// 「待办与决策」工作区已删除：顶层枚举为三工作区——
-// 'home'=今日观澜首页（玻璃改版新增，默认落地；见 HomeView）、
+// 顶层枚举为三工作区：
+// 'home'=今日观澜首页（默认落地；见 HomeView）、
 // 'panorama'=全景溯源（星图/列表/日历三态，见 GraphCanvasView 的 PanoramaMode）、
 // 'library'=知识资产库（阅读/概览两态，见下方 LibraryMode）
 export type PrimaryTab = 'home' | 'panorama' | 'library';
 
-// 契约⑥：知识资产库内部模式——'read'=ReaderView 中栏、'overview'=AtlasView embedded 卡片墙铺满中栏
+// 知识资产库内部模式：'read'=ReaderView 中栏、'overview'=AtlasView embedded 卡片墙铺满中栏
 export type LibraryMode = 'read' | 'overview';
 
 interface TopHeaderProps {
@@ -73,49 +73,49 @@ interface TopHeaderProps {
   onSelectSearchHit: (hit: SearchHit) => void;
   unreadFilesCount: number;
   contextBasketCount: number;
-  /** v0.4：顶栏计数来自真实数据（事件条数），不再写死演示数字 */
+  /** 顶栏计数来自真实数据（事件条数），非静态演示数字 */
   eventCount: number;
-  /** pm_4：未决决策雷达的数据面（只读；候选不计入） */
+  /** 未决决策雷达的数据面（只读；候选不计入） */
   decisions: DecisionAssertion[];
-  /** V03 SSOT：服务端全库未决待拍板真实总数 */
+  /** 服务端全库未决待拍板真实总数 */
   decisionsUnresolvedTotal?: number | null;
-  /** pm_4：点一行跳到该决策首条证据原文（复用 App.handleOpenDecisionReference） */
+  /** 点一行跳到该决策首条证据原文（复用 App.handleOpenDecisionReference） */
   onOpenDecision: (decisionId: string, targetEvidence?: DecisionSourceEvidence) => void;
-  /** v0.8 R5：未决决策受控展开信号（App 侧递增计数，如左栏主导航「未决决策」命中）——
+  /** 未决决策受控展开信号（App 侧递增计数，如左栏主导航「未决决策」命中）——
    *  本文件只做转发，展开/关闭逻辑归 DecisionRadar 本体 */
   openSignal?: number;
   config: WorkspaceConfig;
-  /** 契约③：数据同步三态胶囊的数据源——real=已同步 / loading=对账中 / error=同步失败 */
+  /** 数据同步三态胶囊的数据源：real=已同步 / loading=对账中 / error=同步失败 */
   dataSource: 'loading' | WorkspaceSource;
-  /** 契约③：胶囊 title 悬浮的对账摘要（rootPath · scanSummary） */
+  /** 胶囊 title 悬浮的对账摘要（rootPath · scanSummary） */
   scanSummary: string;
-  /** 契约③：error 态胶囊 title 展示的失败原因 */
+  /** error 态胶囊 title 展示的失败原因 */
   dataError: string | null;
-  /** 契约⑩：筛选下拉的数据面（App 传 filteredFiles，筛选同时驱动阅读列表与概览卡片墙） */
+  /** 筛选下拉的数据面（App 传 filteredFiles，筛选同时驱动阅读列表与概览卡片墙） */
   files: FileRecord[];
-  /** 批次一调整①：服务侧 facets（/api/v1/files），格式筛选计数优先取之；缺省回退本地计数 */
+  /** 服务侧 facets（/api/v1/files），格式筛选计数优先取之；缺省回退本地计数 */
   facets?: FileFacets | null;
   sidebarFilters: SidebarFilters;
   onUpdateSidebarFilters: (next: Partial<SidebarFilters>) => void;
   onResetSidebarFilters: () => void;
-  /** 契约⑥：知识资产库 阅读/概览 切换（仅 activeTab==='library' 时渲染在页签行内） */
+  /** 知识资产库 阅读/概览 切换（仅 activeTab==='library' 时渲染在页签行内） */
   libraryMode: LibraryMode;
   onLibraryModeChange: (mode: LibraryMode) => void;
   onOpenSettings: () => void;
   onOpenMcpConsole: () => void;
   onOpenContextDrawer: () => void;
-  /** E04：批阅看板抽屉入口（五态 + 失联 unknown 提示计数） */
+  /** 批阅看板抽屉入口（五态 + 失联 unknown 提示计数） */
   onOpenReviewBoard?: () => void;
   reviewBoardAttentionCount?: number;
-  /** 批次二：最后一次索引时间（ISO 串）；null = 从未扫描过 */
+  /** 最后一次索引时间（ISO 串）；null = 从未扫描过 */
   lastScanAt?: string | null;
-  /** 批次二：是否有索引任务在跑 */
+  /** 是否有索引任务在跑 */
   isScanning?: boolean;
-  /** 批次二：手动触发一轮整库核验 */
+  /** 手动触发一轮整库核验 */
   onRescan?: () => void;
-  /** PRD v2.0 §3.4：是否已启用后台 File Watcher（--watch / 桌面壳为 true） */
+  /** 是否已启用后台 File Watcher（--watch / 桌面壳为 true） */
   watcherEnabled?: boolean;
-  /** A02：多工作区管理（桌面壳注入桥；浏览器端如实展示当前接入工作区） */
+  /** 多工作区管理（桌面壳注入桥；浏览器端如实展示当前接入工作区） */
   desktopWorkspaceSupported?: boolean;
   desktopGateStatus?: DesktopSessionState['status'] | null;
   workspaceName?: string | null;
@@ -136,7 +136,7 @@ interface TopHeaderProps {
   activeProjectId?: string;
   onActivateProject?: (projectId: string) => void;
   onOpenAddProject?: () => void;
-  /** V02：阅读与存档顶栏微胶囊 + Sheet(inset) 入口（替代旧版右缘 fixed 遮挡悬浮条） */
+  /** 阅读与存档顶栏微胶囊 + Sheet(inset) 入口（替代右缘 fixed 遮挡悬浮条） */
   readingIslandFiles?: FileRecord[];
   readingStates?: ReadingStateMap;
   onOpenDocFromIsland?: (fileId: string) => void;
@@ -211,7 +211,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const [workspacePathInput, setWorkspacePathInput] = useState('');
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
-  // V07：全站明暗主题细粒度订阅（light / dark / system 三态轮换，SSR 安全默认 light）
+  // 全站明暗主题细粒度订阅（light / dark / system 三态轮换，SSR 安全默认 light）
   const appThemeMode = useSyncExternalStore<AppThemeMode>(
     subscribeAppTheme,
     getAppThemeMode,
@@ -227,7 +227,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
     applyAppTheme(nextThemeMode);
   };
 
-  /* U09 · 证据篮徽标微缩放脉冲（glx-badge-pop）：唯一触发源 = store 实际入篮生效——
+  /* 证据篮徽标微缩放脉冲（glx-badge-pop）：唯一触发源 = store 实际入篮生效——
      contextBasketCount 派生自 store 的 contextPointers.length（App.tsx 直传），计数
      「仅上升沿」即一次真实入篮落地；移除/清空等减量沿零触发，绝不假乐观伪造成功
      （QuickPreviewModal 的点击回调不在触发链上）。basketPulseSeq 以 key 重挂重播
@@ -496,7 +496,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
   return (
     <header className="relative z-30 select-none bg-background dark:bg-background text-[color:var(--ink-strong)] border-b border-border">
-      {/* V07 顶栏紧凑布局（lg 以上单行 --chrome-h 52px；窄屏与 200% 缩放自动折行零裁切） */}
+      {/* 顶栏紧凑布局（lg 以上单行 --chrome-h 52px；窄屏与 200% 缩放自动折行零裁切） */}
       <div className="flex flex-wrap lg:flex-nowrap items-center justify-between gap-x-2 gap-y-1.5 px-2.5 sm:px-3.5 py-1.5 lg:py-0 min-h-[var(--chrome-h)] lg:h-[var(--chrome-h)] min-w-0 max-w-full">
         {/* Left Zone: 目录栏开关 + Brand Breadcrumb + 工作区切换 + 工作区页签 */}
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 min-w-0 max-w-full">
@@ -533,7 +533,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             </span>
           </a>
 
-          {/* A02：当前工作区与多工作区秒切菜单 */}
+          {/* 当前工作区与多工作区秒切菜单 */}
           {(config.rootPath || desktopWorkspaceSupported) && (
             <div className="relative min-w-0 shrink-0" ref={workspaceMenuRef}>
               <button
@@ -828,8 +828,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             ]}
           />
 
-          {/* 契约⑥：知识资产库 阅读/概览 切换——嵌在页签行内，仅 library 工作区渲染
-              （§4.3 #2：去 glass-chip 填充，组件化为标线语法；玻璃 chip 只留分隔线） */}
+          {/* 知识资产库 阅读/概览 切换：嵌在页签行内，仅 library 工作区渲染，采用标线 Tabs 语法 */}
           {activeTab === 'library' && (
             <div className="flex items-center pl-3 border-l border-[color:var(--glass-hairline)] shrink-0">
               <Tabs
@@ -845,9 +844,9 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           )}
         </div>
 
-        {/* Right Zone · V07 coss Toolbar + Group 紧凑重排：核心行动组（检索 ⌘K · 筛选 · 未决决策 · 批阅）
+        {/* Right Zone · coss Toolbar + Group 紧凑排布：核心行动组（检索 ⌘K · 筛选 · 未决决策 · 批阅）
             | 唯一发丝隔线 | 静默工具组（同步 Group · 阅读存档微胶囊 · 证据篮 · [主题切换 | ? | 设置] 拼接 Group）。
-            横向紧凑瘦身 ≥25%，1280px / 1440px 明暗双态全程零折行。 */}
+            确保 1280px / 1440px 明暗双态全程零折行。 */}
         <Toolbar
           aria-label="顶栏操作工具栏"
           data-header-clusters=""
@@ -912,8 +911,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                       </strong>{' '}
                       处
                     </span>
-                    {/* P0-1 提示文本治理：调试键值对整段删除——代际信息由
-                        「?」帮助浮层「索引第 N 代」承担（与 P1-10 去重，不再双写） */}
+                    {/* 索引代际信息由「?」帮助浮层展示，此处不重复打印调试键值对 */}
                   </div>
 
                   {searchHits.length === 0 ? (
@@ -957,7 +955,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               )}
             </div>
 
-            {/* 契约⑩：筛选下拉（格式/角色/主题自左栏迁入）——仅 library 工作区渲染，
+            {/* 筛选下拉（格式/角色/主题）——仅 library 工作区渲染，
                 随检索同簇（它是检索工作流的一部分） */}
             {activeTab === 'library' && (
               <FilterDropdown
@@ -978,7 +976,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               />
             )}
 
-            {/* E04：批阅看板入口（待拍板 / 可派发 / 运行中 / 待批阅回执 / 已办结 + 失联孤儿修复） */}
+            {/* 批阅看板入口（待拍板 / 可派发 / 运行中 / 待批阅回执 / 已办结 + 失联孤儿修复） */}
             {onOpenReviewBoard && (
               <Button
                 variant={reviewBoardAttentionCount > 0 ? 'secondary' : 'ghost'}
@@ -1016,7 +1014,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             {/* 合一遥测胶囊（同步状态微点 + 时效 + 重扫）整块搬迁不拆（renderTelemetryCluster） */}
             {renderTelemetryCluster()}
 
-            {/* V02：阅读与存档顶栏紧凑微胶囊（点击唤出 coss Sheet inset 悬浮抽屉，全站零遮挡） */}
+            {/* 阅读与存档顶栏紧凑微胶囊（点击唤出 coss Sheet inset 悬浮抽屉，全站零遮挡） */}
             {readingIslandFiles &&
               readingIslandFiles.length > 0 &&
               readingStates &&
@@ -1064,7 +1062,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               )}
             </Button>
 
-            {/* V07：工具控件静默无框组（全站明暗一键切换 · ? 快捷键速查 · 项目设置） */}
+            {/* 工具控件静默无框组（全站明暗一键切换 · ? 快捷键速查 · 项目设置） */}
             <Group
               aria-label="外观与系统工具"
               data-header-tool-group=""
@@ -1088,7 +1086,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                   <Sun className="size-3.5 text-[color:var(--stage-ink-decision)]" aria-hidden="true" />
                 )}
               </button>
-              {/* B5 + V11：「?」全站快捷键速查 Dialog（融合工作区快照与 Frame + Kbd 分组速查表） */}
+              {/* 「?」全站快捷键速查 Dialog（融合工作区快照与 Frame + Kbd 分组速查表） */}
               <div className="relative flex h-full items-center" ref={helpRootRef}>
                 <button
                   type="button"
@@ -1121,9 +1119,8 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               </button>
             </Group>
 
-            {/* P0-4 提示文本治理：MCP 契约调试入口默认隐藏（开发向工具移出用户视线，
-                与 ModalsAndDrawers 弹层同键门控）。开法：控制台执行
-                localStorage.setItem('guanlan.debug.mcp', '1') 后刷新；按钮文案不改。 */}
+            {/* MCP 调试入口默认隐藏（与 ModalsAndDrawers 弹层同键门控）；
+                本地调试时可在控制台执行 localStorage.setItem('guanlan.debug.mcp', '1') 后刷新。 */}
             {safeStorageGet('guanlan.debug.mcp') === '1' && (
               <IconButton
                 label="MCP 契约调试"

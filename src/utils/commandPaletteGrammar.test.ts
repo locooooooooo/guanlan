@@ -9,7 +9,7 @@ import {
   resolveRelativeDay,
 } from './commandPaletteGrammar';
 
-/** p3 行为锁定：命令面板查询语法与摘要口径（任务卡 C03 / quiet-md search.rs 对齐）。 */
+/** 命令面板查询语法与摘要口径单测。 */
 
 test('parsePaletteQuery：语法 token 拆解与关键词合并', () => {
   const now = new Date('2026-11-20T12:00:00');

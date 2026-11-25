@@ -1,5 +1,5 @@
 /**
- * E04 · 原位拍板（HITL）唤醒任务与批次「批阅看板」联动前端契约单测。
+ * 原位拍板（HITL）唤醒任务与批次「批阅看板」联动前端契约单测。
  *
  * 覆盖：
  *  1. DecisionResolveCard：「确认拍板」与「已知悉」双通道渲染，缺失服务端陈述时诚实双禁用；
@@ -71,7 +71,7 @@ function makeCard(overrides: Partial<ReviewBoardCard> = {}): ReviewBoardCard {
   };
 }
 
-describe('E04 DecisionResolveCard 原位拍板与「已知悉」快捷写回', () => {
+describe('DecisionResolveCard 原位拍板与「已知悉」快捷写回', () => {
   const block: DecisionBlock = {
     line: 12,
     range: [12, 18],
@@ -131,7 +131,7 @@ describe('E04 DecisionResolveCard 原位拍板与「已知悉」快捷写回', (
   });
 });
 
-describe('E04 ReviewBoardDrawer 五态批阅看板与孤儿修复', () => {
+describe('ReviewBoardDrawer 五态批阅看板与孤儿修复', () => {
   test('纯函数：五态 + unknown 过滤、失联时长格式化与待关注聚合', () => {
     assert.deepEqual(
       REVIEW_BOARD_LANES.map((l) => l.key),

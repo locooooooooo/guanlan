@@ -1,30 +1,26 @@
 /**
- * D01-a 拆解 · App 薄装配层（任务卡 D01-a ②「单一工作区状态 Store」）。
+ * App 薄装配层：组装单一工作区状态 Store 与各主视图分节。
  *
- * 巨石（4210 行）已按层拆入：
+ * 按职责拆分到以下模块：
  *  - stores/useWorkspaceStore.tsx       单一工作区状态 Store（全部 state/effect/handler → ctx）
  *  - components/app/AppBanners.tsx      横幅栈与冷启动进度
  *  - components/app/AppMainViews.tsx    首页 / 全景三态
  *  - components/app/AppLibraryStage.tsx 知识资产库三栏
  *  - components/app/AppModalsStack.tsx  抽屉与弹窗栈
  *
- * 本文件只保留：单一 Store 调用 + TopHeader 接线 + 工作区门禁分支 + 分节组合
- * （DOM 嵌套结构与拆解前逐字一致，截图基线护栏覆盖）。
+ * 本文件只保留：单一 Store 调用 + TopHeader 接线 + 工作区门禁分支 + 分节组合。
  */
 
 import React from 'react';
 import { WorkspaceGateModal } from './components/WorkspaceGateModal';
 import { TopHeader } from './components/TopHeader';
-// v0.8 总装：画布五件的 .cvw-* 样式在此常驻装载（原由 canvas/RichDocPreviewCard.tsx:15
-// import，指挥授权越权单行上移）——node --test/tsx 测试链（gc-12/wf2/canvas-theme 经
-// GraphCanvasView 导出常量断言）无法加载 .css 扩展名，组件内 import 会令三个测试文件级
-// 失败（ERR_UNKNOWN_FILE_EXTENSION）；画布五件全部渲染在本文件舷窗子树内，import 时序
-// 恒先于首帧渲染，Vite 打包零视觉变化。C 契约「由 C3-C7 所在文件 import」条款与
-// node 测试链冲突，修订建议已记入总装 deviations。
+// 画布组件的 .cvw-* 样式在此入口层常驻装载：
+// node --test / tsx 测试链会导入 GraphCanvasView 的导出常量，无法加载 .css 扩展名
+// （会触发 ERR_UNKNOWN_FILE_EXTENSION），因此组件内不直接 import .css；
+// 画布组件均渲染在 App 树内，在此装载时序恒先于首帧渲染。
 import './components/canvas/canvasWidgets.css';
-// v0.8 总装（指挥授权）：同上——KnowledgeGraph.tsx:12 的 eventGraph.css 同法上移
-// （测试链闭包全量枚举后的最后一个 css import）；时光机/司辰/画布令牌块随 App
-// 常驻装载，时序恒先于首帧渲染
+// 同上：eventGraph.css（时光机 / 司辰 / 画布令牌样式）在入口层常驻装载，
+// 避免被 node 测试链闭包加载，且时序恒先于首帧渲染。
 import './components/eventGraph.css';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
 import { AppBanners } from './components/app/AppBanners';
@@ -94,7 +90,7 @@ function AppContent() {
     <ToastProvider position="bottom-right">
       <AnchoredToastProvider>
         <div className="glass-page h-screen w-screen flex flex-col text-[var(--ink-strong)] overflow-hidden">
-      {/* Top Header Bar：工作区页签 + 🟢 已同步胶囊（契约②③⑥⑩） */}
+      {/* Top Header Bar：工作区页签与同步状态胶囊 */}
       <TopHeader
         activeTab={activeTab}
         onSelectTab={handleSelectPrimaryTab}
@@ -104,18 +100,18 @@ function AppContent() {
         onSelectSearchHit={handleSelectSearchHit}
         unreadFilesCount={unreadFilesCount}        contextBasketCount={contextPointers.length}
         eventCount={workspaceSummary?.counts.events || 0}
-        // pm_4：未决决策雷达（只读）——数据来自 bootstrap decisions 首批，点一行复用决策引用跳证据原文
+        // 未决决策雷达（只读）——数据来自 bootstrap decisions 首批，点一行复用决策引用跳证据原文
         decisions={decisions}
         decisionsUnresolvedTotal={ctx.decisionsUnresolvedTotal}
         onOpenDecision={handleOpenDecisionReference}
-        // v0.8 总装-6：左栏主导航「未决决策」→ 雷达受控展开信号（App 只传 state，转发归 TopHeader）
+        // 左栏主导航「未决决策」→ 雷达受控展开信号（App 只传 state，转发归 TopHeader）
         openSignal={decisionRadarSignal}
         config={config}
         dataSource={dataSource}
         scanSummary={scanSummary}
         dataError={dataError}
         files={filteredFiles}
-        // 批次一调整①：格式/事项筛选计数来自服务 facets（契约 §1.3），缺失时回退本地计数
+        // 格式/事项筛选计数优先来自服务端 facets，缺失时回退本地计数
         facets={fileFacets ?? undefined}
         sidebarFilters={sidebarFilters}
         onUpdateSidebarFilters={(partial) =>
@@ -135,7 +131,7 @@ function AppContent() {
               reviewBoard.counts.unknown
             : 0
         }
-        // 批次二：数据时效（最后扫描时间）与手动重新扫描
+        // 数据时效（最后扫描时间）与手动重新扫描
         lastScanAt={workspaceSummary?.last_scan_at ?? null}
         isScanning={rescanState === 'running'}
         watcherEnabled={serviceStatus?.watcher?.enabled ?? false}

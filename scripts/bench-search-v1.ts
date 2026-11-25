@@ -1,5 +1,5 @@
 /**
- * C02 · 混合倒排检索自动化基准（10,000 份混合夹具上的服务端检索时延）
+ * 混合倒排检索自动化基准（10,000 份混合夹具上的服务端检索时延）
  *
  * 用法：
  *   npx tsx scripts/bench-search-v1.ts --exe <guanlan.exe 路径> \
@@ -7,14 +7,14 @@
  *     [--port 18411] [--samples 300]
  *
  * 前置：先运行 `npx tsx scripts/seed-bench-volume.ts <fixture目录>` 生成 10k 混合夹具
- * （与 B05 bench-v1 共用同一夹具，可复用其数据目录）。
+ * （与 bench-v1 共用同一夹具，可复用其数据目录）。
  *
- * 阶段与验收口径（任务卡 C02）：
+ * 阶段与验收口径：
  *   A 冷启动+建索引 —— 清库首启 + verify_all 全量索引（含检索派生索引首次构建；
- *      仅记录并与 B05 存档 78s 对照，不设硬阈值）
+ *      仅记录并与既有全量索引基线 78s 对照，不设硬阈值）
  *   B 检索时延 —— 六类查询（中文双字短语 / 多词编号 / SKU 编号 / 路径词 /
  *      单字 / format 筛选）顺序采样，p95 < 30ms（硬判）
- *   C 并发检索 —— 4 路并发混合查询 p95（记录；与 B05 并发查询口径对齐）
+ *   C 并发检索 —— 4 路并发混合查询 p95（记录；与 bench-v1 并发查询口径对齐）
  *   D 一键重建 —— POST /api/v1/search/rebuild 全量重建耗时（记录）+ 重建后命中回归
  *
  * 机制锚点：GET /api/v1/search（契约 §2.4）、POST /api/v1/search/rebuild（202 Job）、
@@ -193,7 +193,7 @@ async function sampleShape(shape: QueryShape, rounds: number, strict: boolean): 
 }
 
 async function main(): Promise<void> {
-  console.log(`C02 检索基准：exe=${args.exe}`);
+  console.log(`检索基准：exe=${args.exe}`);
   console.log(`  fixture=${args.fixture}\n  data=${args.data}\n  samples=${args.samples}\n`);
 
   // ===== A. 冷启动 + 全量索引（含检索派生索引首建）=====
@@ -270,14 +270,14 @@ async function main(): Promise<void> {
   row('D 重建后回归（中文短语 5 次采样 p95）', fmtMs(percentile([...postProbe].sort((a, b) => a - b), 95)), 'PASS');
 
   // ===== 汇总 =====
-  console.log('\n========== C02 检索基准结果 ==========');
+  console.log('\n========== 检索基准结果 ==========');
   for (const line of report.lines) console.log(line);
   if (report.failures.length) {
     console.log(`\n失败 ${report.failures.length} 项：`);
     for (const f of report.failures) console.log(`  - ${f}`);
     process.exitCode = 1;
   } else {
-    console.log(`\nC02 检索基准全部通过（采样 ${all.length + concAll.length} 次）。`);
+    console.log(`\n检索基准全部通过（采样 ${all.length + concAll.length} 次）。`);
   }
   await stopServe();
 }

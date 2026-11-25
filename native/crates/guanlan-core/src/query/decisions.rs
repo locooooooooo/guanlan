@@ -41,7 +41,7 @@ fn like_contains(hay: &str, needle: &str) -> bool {
 
 /// 决定列表（契约 §1.9）。游标语义按可变列表处理：游标绑定代际与筛选指纹，
 /// 相关提交使游标失效 → CURSOR_STALE（契约 §0.2/§1.9）。
-/// issue #33：短读事务包装——摘要与证据读取同一快照。
+/// 使用短读事务包装，保证摘要与证据读取同一快照。
 pub fn decisions(
     store: &ReadonlyStore,
     query: &DecisionsQuery,
@@ -75,7 +75,7 @@ pub fn decisions_tx(
     }
     let snapshot_generation = cursor.as_ref().map_or(current_gen, |c| c.snap) as u64;
 
-    // issue #23：两级投影——先取「一行一决定」的摘要（SQL 窗口函数按
+    // 两级投影：先取「一行一决定」的摘要（SQL 窗口函数按
     // 「来源文件最新版本观察时间 → 陈述观察时间 → 行号」选主陈述，project.ts:356-367
     // 口径不变），筛选/排序/分页全部作用于摘要；只为本页决定构造完整证据
     // （页外/未命中决定不再装载 statements 全量、不复制 quote、不建全库版本映射）。
@@ -135,8 +135,8 @@ pub fn decisions_tx(
     // 键集分页（内存摘要列表）：排序键 (status_rank, code, decision_id)；
     // 游标 k 编码为 "{rank}|{code}"（游标不透明，前端不解析）
     let total = items.len() as u64;
-    // V03 SSOT：与 query/projects.rs pending_decisions_count 同口径（活跃文件 ∧ 来源不一致|待确认），
-    // 在分页截断前全量计数，彻底消除 288 vs 100 跨视图分裂
+    // 统一待确认口径：与 query/projects.rs pending_decisions_count 同口径（活跃文件 ∧ 来源不一致|待确认），
+    // 在分页截断前全量计数，避免列表分页截断导致跨视图数字分裂
     let unresolved_total = items
         .iter()
         .filter(|d| d.file_active && d.rank <= 1)
@@ -214,7 +214,7 @@ pub fn decisions_tx(
             k: format!("{}|{}", status_rank(&last.status), last.code),
             s: last.decision_id.clone(),
             fp: fp.clone(),
-            // files/decisions 不使用 total（issue #24 仅版本链游标携带），序列化时省略
+            // files/decisions 不使用 total（仅版本链游标携带），序列化时省略
             total: None,
         })
     });
@@ -232,7 +232,7 @@ pub fn decisions_tx(
 }
 
 /// 单个业务决定的归并投影（project.ts:355-425 逐字迁移）。
-/// issue #23：只为本页决定调用；陈述携带关联好的来源路径与版本观察时间
+/// 只为本页决定调用；陈述携带关联好的来源路径与版本观察时间
 /// （SQL 内联子查询），不再需要全库 file/revision 映射。
 fn build_decision(decision_id: String, list: Vec<StatementMeta>) -> DecisionAssertion {
     // 以「来源文件最新版本」的陈述作为当前口径；同版本内按行号先后。
@@ -349,7 +349,7 @@ fn build_decision(decision_id: String, list: Vec<StatementMeta>) -> DecisionAsse
             }
         }
 
-        // 若 Markdown 陈述显式链接了 `.pdf#page=N`，追加一条可直跳 PDF 页码锚点的关联证据（B04）
+        // 若 Markdown 陈述显式链接了 `.pdf#page=N`，追加一条可直跳 PDF 页码锚点的关联证据
         if let Some(linked) = meta_detail.get("linkedPdf") {
             let target_file_id = linked.get("file_id").and_then(|v| v.as_str());
             let target_revision_id = linked.get("revision_id").and_then(|v| v.as_str());
@@ -431,7 +431,7 @@ fn build_decision(decision_id: String, list: Vec<StatementMeta>) -> DecisionAsse
     }
 }
 
-/// 摘要投影行（issue #23）：一行一决定，只携带筛选/排序/键集所需字段
+/// 摘要投影行：一行一决定，只携带筛选/排序/键集所需字段
 struct DecisionSummary {
     decision_id: String,
     status: String,
@@ -442,7 +442,7 @@ struct DecisionSummary {
     file_active: bool,
 }
 
-/// 证据构造的陈述行 + 关联元数据（issue #23）：来源路径与版本观察时间在 SQL 内
+/// 证据构造的陈述行 + 关联元数据：来源路径与版本观察时间在 SQL 内
 /// 关联给出（missing 文件/缺行文件 path 为空串；无版本行的陈述回退陈述观察时间）
 struct StatementMeta {
     row: StatementRow,
@@ -450,10 +450,10 @@ struct StatementMeta {
     rev_time: String,
 }
 
-/// 全量可落文件引用边（契约 §1.10：批次一过渡全量；project.ts:249-263 逐字对齐）。
+/// 全量可落文件引用边（契约 §1.10；与 `project.ts:249-263` 逐字对齐）。
 /// 过滤 `unresolved:` 前缀目标；label 按 resolution；locator 两端齐备才下发。
 /// 顺序沿用 listEdges 的无 ORDER BY（rowid 序，与 Node 现状一致）。
-/// issue #33：短读事务包装。
+/// 使用短读事务包装。
 pub fn relations(store: &ReadonlyStore) -> Result<RelationsResponse, GuanlanError> {
     store.read_txn(|_conn| relations_tx(store))
 }

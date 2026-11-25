@@ -63,7 +63,7 @@ function resolveInitialSheetIdx(
 }
 
 /**
- * B03 · Office（`.docx` / `.xlsx`）独立只读结构化阅读子视图。
+ * Office（`.docx` / `.xlsx`）独立只读结构化阅读子视图。
  * - `.docx`：大纲导航、1-based 段落序号（`¶ N`）、内嵌批注、修订增删摘要、段级跳转高亮与证据引用生成；
  * - `.xlsx`：Sheet 标签切换、数值列汇总卡片（min/max/sum + cell_range）、表格网格只读浏览、
  *   单元格/矩形选区交互与 `Sheet!CellRange` 一键锚定与高亮跳转；

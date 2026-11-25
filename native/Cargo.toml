@@ -1,7 +1,7 @@
-# 观澜 Rust workspace —— 代码组织依据 docs/guanlan/观澜-Rust服务拆分方案-v0.1.md §2（41-81 行）
-# - crates/guanlan-core：领域规则、只读存储、查询契约（不依赖 HTTP 框架，方案 :73）
+# 观澜 Rust workspace
+# - crates/guanlan-core：领域规则、存储、索引、查询契约（不依赖 HTTP 框架）
 # - crates/guanlan-service：runtime/http/mcp 接入层与 `guanlan serve` / `guanlan mcp` 入口
-# - crates/guanlan-desktop：Tauri v2 桌面壳，进程内嵌 guanlan-service（方案 §7 桌面包装阶段）
+# - crates/guanlan-desktop：Tauri v2 桌面壳，进程内嵌 guanlan-service
 # 契约依据：native/docs/contract-storage.md、native/docs/contract-query-api.md
 [workspace]
 resolver = "2"
@@ -12,26 +12,25 @@ version = "1.2.2"
 edition = "2021"
 
 [workspace.dependencies]
-# 依赖集合在实施时选定兼容版本并锁入 Cargo.lock（方案 §7，:155）
-# 本批骨架锁定的最小集合：tokio / axum / rusqlite(bundled) / serde / serde_json / sha2 / hex / thiserror
-# issue #4：+sync（Semaphore 排队许可）与 +time（排队/执行 deadline）供有界查询通道
+# 依赖集合统一在此声明版本并锁入 Cargo.lock：
+# +sync（Semaphore 排队许可）与 +time（排队/执行 deadline）供有界查询通道使用
 tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
-# issue #32：响应体预算守护需实现 http_body::Body（axum 已传递依赖同版本）
+# 响应体预算守护需实现 http_body::Body（axum 已传递依赖同版本）
 http-body = "1"
 axum = "0.8"
-# issue #4：+hooks（progress handler）供有界查询通道的取消/超时打断；
-# F03：+backup（SQLite Online Backup API，schema 升级前自动一致性备份）
+# +hooks（progress handler）供有界查询通道的取消/超时打断；
+# +backup（SQLite Online Backup API，schema 升级前自动一致性备份）
 rusqlite = { version = "0.42", features = ["bundled", "hooks", "backup"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.11"
 hex = "0.4"
 thiserror = "2.0"
-# guanlan-service 批次一（runtime/http）新增：
-# - fs2：同工作区 OS 级排他锁（try_lock_exclusive，方案 §7，:151），
+# runtime/http 依赖：
+# - fs2：同工作区 OS 级排他锁（try_lock_exclusive），
 #   Windows 走 LockFileEx、Unix 走 flock，进程退出/崩溃由操作系统自动释放
 # - tokio-util：PDF 快照流式响应（ReaderStream，不整读大文件，契约 §1.8）
-# - tower-http：dist 静态资源（ServeDir，dist 目录存在才挂载，方案 §7）
+# - tower-http：dist 静态资源（ServeDir，dist 目录存在才挂载）
 #   + cors：桌面壳跨源放行（WebView 源 tauri.localhost → 127.0.0.1 环回端口）
 fs2 = "0.4"
 tokio-util = { version = "0.7", features = ["io"] }

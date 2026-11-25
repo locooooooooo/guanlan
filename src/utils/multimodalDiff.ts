@@ -1,5 +1,5 @@
 /**
- * D03 · 面向人类的多模态 Diff 纯函数层（结论结构 Diff + SVG 叠影对比 + 表格数值 Diff）。
+ * 面向人类的多模态 Diff 纯函数层（结论结构 Diff + SVG 叠影对比 + 表格数值 Diff）。
  *
  * 契约边界（与 documentDiff.ts / decisionBlocks.ts 同纪律）：
  * - 不 import React / .css，node --test 直跑（SSR/单测同源）；
@@ -935,7 +935,7 @@ export function buildTableDiff(oldText: string, newText: string, delimiter: ',' 
 }
 
 // ============================================================
-// ⑤ XLSX 工作表 Diff（B03 office 端点 rows 按 row_num/col_idx 对齐）
+// ⑤ XLSX 工作表 Diff（office 端点 rows 按 row_num/col_idx 对齐）
 // ============================================================
 
 export interface XlsxSheetDiff {

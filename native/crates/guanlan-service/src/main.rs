@@ -1,5 +1,4 @@
-//! guanlan-service CLI 入口：`guanlan serve` / `scan` / `audit` / `capsule` / `storage` /
-//! `mcp`（方案 §2 main.rs、§7）。
+//! guanlan-service CLI 入口：`guanlan serve` / `scan` / `audit` / `capsule` / `storage` / `mcp`。
 //!
 //! 启动流程在库入口 [`guanlan_service::start_readonly_service`]（lib.rs，与桌面壳
 //! 进程内嵌共用同一实现）。本文件只做参数解析与终端输出约定：
@@ -7,12 +6,11 @@
 //!   随机端口），启动时向 stdout 打印一行 `GUANLAN_ENDPOINT=http://127.0.0.1:<port>`
 //!   供启动器解析；运行诊断信息只走 stderr，不污染 stdout 约定。
 //!   启动失败：向 stderr 输出一行统一错误包络 JSON（契约 §0.2 结构）后以非零码退出。
-//!   运行信息入库登记（实例身份/端点/接口版本，方案 §7）延后到批次二——批次一
-//!   对 index.db 零写入，登记口径只经 stderr 与 stdout 端点行承载（代码注释同义）。
-//! - `guanlan mcp`：MCP stdio 代理（契约 K）：手写 JSON-RPC 2.0 over stdio，
+//!   运行信息（实例身份/数据目录/接口版本）经 stderr 与 stdout 端点行承载，不在启动阶段写 index.db。
+//! - `guanlan mcp`：MCP stdio 代理（contract-query-api.md §2.2）：手写 JSON-RPC 2.0 over stdio，
 //!   六个工具的调用转发到 GUANLAN_ENDPOINT/`--endpoint` 指定的服务；端点缺失 → stderr
 //!   一行统一错误包络 + 退出码 1（不猜端口）。实现见 mcp/mod.rs。
-//! - `guanlan scan --root <目录>`：跑一轮整库对账（批次二写入侧）。用于命令行
+//! - `guanlan scan --root <目录>`：跑一轮整库对账。用于命令行
 //!   手动补扫，以及与旧 Node 管线的写入对拍脚本（两侧同一套语义）。
 
 use guanlan_core::error::GuanlanError;
@@ -37,7 +35,7 @@ async fn main() {
     }
 }
 
-/// F02：`guanlan storage <verify|export|diag> --root <目录> [--out <路径>] [--json]`
+/// `guanlan storage <verify|export|diag> --root <目录> [--out <路径>] [--json]`
 fn run_storage(args: &[String]) {
     let Some(sub) = args.first().map(String::as_str) else {
         eprintln!("storage 子命令需要 verify | export | diag\n{USAGE}");
@@ -160,7 +158,7 @@ fn run_storage(args: &[String]) {
     }
 }
 
-/// F01：`guanlan capsule inspect <胶囊目录> [--json]` —— 校验并打印离线事项资料胶囊摘要与完整性状态
+/// `guanlan capsule inspect <胶囊目录> [--json]` —— 校验并打印离线事项资料胶囊摘要与完整性状态
 fn run_capsule(args: &[String]) {
     if args.first().map(String::as_str) != Some("inspect") {
         eprintln!("capsule 子命令当前支持: inspect <胶囊目录> [--json]\n{USAGE}");
@@ -220,7 +218,7 @@ fn run_capsule(args: &[String]) {
     }
 }
 
-/// E05：只读安全与防篡改账本诊断命令 `guanlan audit --root <目录> [--json]`。
+/// 只读安全与防篡改账本诊断命令 `guanlan audit --root <目录> [--json]`。
 ///
 /// 零写库副作用（`ReadonlyStore::open`），同时核验：
 /// 1. `decision_ledger_chain` 关键决定防篡改哈希链（内容篡改、链节点删改、绕过伪造、链尾截断）；
@@ -314,12 +312,9 @@ fn run_audit(args: &[String]) {
 }
 
 /// 跑一轮整库对账：打开（或创建）持久库 → 采集 → 对账 → 写版本/事件/证据。
-///
-/// 输出口径对齐旧脚本 `scripts/v04-reconcile-once.ts`，便于逐项比对。
 fn run_scan(args: &[String]) {
     let mut root: Option<String> = None;
-    // 冻结契约 stateMachine 写入路径①：scan --initiative-dir <名>（可多次，
-    // 幂等追加 meta.initiative_dirs——建议1 闭合）
+    // 支持多次传入 --initiative-dir <名>，幂等追加到 meta.initiative_dirs
     let mut initiative_dirs: Vec<String> = Vec::new();
     let mut index = 0;
     while index < args.len() {
@@ -351,7 +346,7 @@ fn run_scan(args: &[String]) {
         Err(error) => fail_with_envelope(&error),
     };
     // 同工作区排他锁：手动扫描与服务实例不能同时写同一个库
-    // （方案 §7，:151——OS 级锁，进程退出由内核释放）
+    // （OS 级排他锁，进程退出由内核自动释放）
     let data_dir = match guanlan_core::storage::default_data_dir(&root) {
         Ok(dir) => dir,
         Err(error) => fail_with_envelope(&error),
@@ -360,7 +355,7 @@ fn run_scan(args: &[String]) {
         Ok(lock) => lock,
         Err(error) => fail_with_envelope(&error),
     };
-    // 写入路径①（冻结契约 stateMachine）：先登记专项目录（幂等覆盖），再对账
+    // 先登记专项目录（幂等覆盖 meta.initiative_dirs），再对账
     // ——新识别规则在本轮即生效
     if !initiative_dirs.is_empty() {
         let mut existing = writer.initiative_dirs().unwrap_or_default();
@@ -450,7 +445,7 @@ fn fail_with_envelope(err: &GuanlanError) -> ! {
 async fn run_serve(args: &[String]) {
     let mut root: Option<String> = None;
     let mut port: u16 = 0; // 缺省随机端口：绑定 0 由内核分配
-    let mut watch = false; // PRD v2.0 §3.4：显式开启后台增量索引
+    let mut watch = false; // 显式开启后台增量索引
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -499,10 +494,8 @@ async fn run_serve(args: &[String]) {
         Err(e) => fail_with_envelope(&e),
     };
 
-    // 运行信息登记（方案 §7：登记实例身份、端点与接口版本）走 stderr；
-    // stdout 只保留一行端点行，供 CLI/启动器逐行解析。
-    // 【批次二待办】把上述登记写入库/登记端点——批次一对 index.db 零写入
-    // （契约 contract-storage.md §4-1），此处仅注释留位。
+    // 运行信息（数据目录、实例身份与接口版本）走 stderr，启动阶段不写 index.db
+    // （契约 contract-storage.md §4-1）；stdout 只保留一行端点行，供 CLI/启动器逐行解析。
     eprintln!(
         "guanlan serve data_dir={} instance_id={} api_version=v1",
         service.data_dir.display(),

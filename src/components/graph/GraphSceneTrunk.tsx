@@ -1,21 +1,19 @@
 /**
- * D01-a 拆解 · Scene 层 · GraphSceneTrunk（从 GraphCanvasView.tsx 原样迁入的 四泳道主干 + 主干里程碑刻度（含 X-Ray 扫线宿主）+ 来源连线 + 主干→扇出连接线 + 泳道计数胶囊）。
- * 迁移纪律：JSX 与类名逐字一致（像素回归护栏）；数据一律来自 controller ctx；
- * d3 zoom/drag effect 仍在控制器（按 data-node-id / .d3-draggable-node 类选择器跨
- * 子组件查询，DOM 结构不变即行为不变）。
+ * Scene 主干层 · GraphSceneTrunk：
+ * 承载四泳道主干、主干里程碑刻度（含 X-Ray 扫线宿主）、来源连线、主干→扇出连接线与泳道计数胶囊。
+ * 数据一律来自 controller ctx；d3 zoom/drag effect 仍在控制器（按 data-node-id /
+ * .d3-draggable-node 类选择器跨子组件查询，保持稳定 DOM 结构）。
  */
 import React from 'react';
 import { ChronosMascotNode } from '../ChronosMascotNode';
 import PackageGroupFrame, { PACKAGE_GROUP_FRAME_H } from '../canvas/PackageGroupFrame';
 import RichDocPreviewCard from '../canvas/RichDocPreviewCard';
 import { cleanDisplayText } from '../../utils/displayText';
-// D01-b：Trunk 的两处连线消费点已升级为 computeBoundEdgeRoute（./edgeRouting）——
-// 遗留 computeDynamicEdgePath 不再被本文件直接调用（引擎内部经单一来源复用）
+// Trunk 的两处连线消费点统一走 computeBoundEdgeRoute（./edgeRouting）
 import { hasUnreadChanges, unreadStatusLabel } from '../../utils/guanlanEngine';
-// D01-b：升级连线入口——走廊无障碍逐字节保留遗留贝塞尔（像素基线零偏移），命中卡片本体
-// 才升级为「绑定锚点（呼吸间距）+ 正交圆角避障路由」
+// 绑定路由入口：走廊无障碍时保留贝塞尔曲线，命中卡片本体时切换为带呼吸间距的正交圆角避障路由
 import { computeBoundEdgeRoute } from './edgeRouting';
-// issue #27：视口裁剪纯函数（Scene 层消费挂载判定与连接线判定）
+// 视口裁剪纯函数（Scene 层消费挂载判定与连接线判定）
 import { shouldDrawGroupConnector } from '../../utils/canvasViewport';
 import {
   artifactStageBadgeText,
@@ -73,7 +71,7 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
     accumulationRibbonPath,
     activeTickY,
     isTimeFlowPlaying,
-    // D01-b：避障障碍清单（与渲染口径同源，见 controller graphObstacleRects）
+    // 避障障碍清单（与渲染口径同源，见 controller graphObstacleRects）
     graphObstacleRects,
     TRUNK_AXIS_TOP,
     TRUNK_AXIS_BOTTOM,
@@ -139,12 +137,11 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
           </g>
         )}
 
-        {/* 3. Central 4-Lane River Trunk（C4 泳道语义化：四根光束=四个文档分类泳道，
-            主干+泳道恒渲染——时间轴本体不随布局消失，详情框仍仅 xray）
-            泳道色 = 14-hex 白名单（暗档）×浅档：值=--cv-lane-* 令牌名，见 LANE_COLORS 注释；
-            stroke 走 style 形态（表现属性不吃 var()）；filter 硬属性不吃主题切换——
-            光束/传导/流星/光点统一类挂载 .cv-stream-glow（V7-D18，增补 §1.4），
-            浅档覆写为 d3-stream-glow-soft，暗档同滤镜引用零像素差，几何零改动 */}
+        {/* 3. Central 4-Lane River Trunk（四根光束对应四个文档分类泳道，
+            主干+泳道恒渲染——时间轴本体不随布局消失，详情框仅在 xray 下显示）。
+            泳道色取自 --cv-lane-* 令牌（见 LANE_COLORS）；stroke 走 style 形态
+            （SVG 表现属性不解析 var()）；光束/传导/流星/光点统一挂 .cv-stream-glow 类，
+            按暗档/浅档主题分别应用常规发光与柔光滤镜。 */}
         <g className="animate-river-pulse">
           <path
             d={d3RiverStrands.md}
@@ -237,12 +234,11 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
         </g>
 
         {/* 3.5 Trunk Milestones（全画布唯一日期刻度，画在泳道之上）
-            C1/C2：trunkTicks 降序（index 0 = 最新一天 = 轴顶，向下越旧），
+            trunkTicks 降序（index 0 = 最新一天 = 轴顶，向下越旧），
             逐刻度一枚发光里程碑节点贴日期文本；有事件日实心光点（大小∝事件数），
             空档日暗淡空心小点，「更早 N 天/周/月」截断在最底端虚线短横且不可点击。
-            层内同时承载：C4 泳道光点（某天某分类有更新即亮对应色光点）与 X-Ray 扫线宿主。
-            starfix2 T4：渲染序列 = trunkTicks（scene.ruler 过 dedupeTicksByDate）——
-            渲染入口产物同日期 ≤1，任何上游重复桶不再落到主干轴 */}
+            层内同时承载泳道光点（某天某分类有更新即亮对应色光点）与 X-Ray 扫线宿主。
+            渲染序列经 dedupeTicksByDate 去重，保证同日期在主干轴上至多出现一次。 */}
         <g data-testid="trunk-milestones">
           {scene.hasRealEvents &&
             (() => {
@@ -281,7 +277,7 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
                   .map(([kind, c]) => `${kind}×${c}`)
                   .join(' ');
 
-                // C4 泳道光点：该刻度 formats 计数>0 的每个分类在其泳道亮一枚光点；
+                // 泳道光点：该刻度 formats 计数>0 的每个分类在其泳道亮一枚光点；
                 // 三格式之和的余量（未判定事件：决策/读取问题等工作区级）落蓝泳道
                 const laneDots: Array<{ lane: LaneKey; count: number }> = [];
                 if (tick.hasEvents) {
@@ -327,7 +323,7 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
                   );
                 }
 
-                {/* T03：「更早 N 天/周/月」截断提示刻度——超出取数窗口的更早历史折叠于主干最底端并明示，
+                {/* 「更早 N 天/周/月」截断提示刻度——超出取数窗口的更早历史折叠于主干最底端并明示，
                     不可点击、不承载日期；切到更粗粒度可整段回看 */}
                 if (tick.isTruncation) {
                   return (
@@ -605,10 +601,9 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
           );
         })}
 
-        {/* 5. Single Trunk → Fan-Out Connector（C5 连线收敛：
-            逐卡 branch 曲线束与「卡片底→主干底部」合并虚线扇整体移除，
-            只剩一根主干轴顶→详情框左缘中点的连接线；
-            未选中=弱白线；选中日期刻度 / 事件卡 = 橙色定向电流脉冲（3.1）：
+        {/* 5. Single Trunk → Fan-Out Connector（单线收敛：
+            仅绘制一根自激活日主干刻度指向详情框左缘中点的连接线；
+            未选中=弱白线；选中日期刻度 / 事件卡 = 橙色定向电流脉冲：
             .anim-pulse-flow 跑 stroke-dashoffset 0→-24（dasharray 6 18 正好一轮 24），
             外加一层柔光 drop-shadow 呼吸（SMIL opacity，不新增 CSS keyframes） */}
         {(() => {
@@ -685,7 +680,7 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
               opacity="0.55"
               className="animate-sonar-ripple"
             />
-            {/* V09：「此刻 · 最新沉淀」上移留足 22px 呼吸间距，不贴压脊顶刻度与波纹 */}
+            {/* 「此刻 · 最新沉淀」上移留足 22px 呼吸间距，不贴压脊顶刻度与波纹 */}
             <text
               x={trunkX + 18}
               y={TRUNK_AXIS_TOP - 22}
@@ -708,7 +703,7 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
               opacity="0.45"
               className="animate-sonar-ripple"
             />
-            {/* V09：「时光起点」齐平锚点上移安全区（不再下垂 +16px 被底部浮坞压盖） */}
+            {/* 「时光起点」齐平锚点上移至安全区，避免被底部浮坞压盖 */}
             <text
               x={trunkX + 18}
               y={TRUNK_AXIS_BOTTOM - 2}

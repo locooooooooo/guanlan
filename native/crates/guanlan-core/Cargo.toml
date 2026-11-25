@@ -7,14 +7,12 @@ edition.workspace = true
 rusqlite = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-# 身份规则哈希（rootKey / file_id / event_id，契约 contract-storage.md §2）属批次二实现，
-# 本批先声明并锁定版本，避免批次二再动依赖图。
+# 身份规则哈希（rootKey / file_id / event_id，契约 contract-storage.md §2）
 sha2 = { workspace = true }
 hex = { workspace = true }
 thiserror = { workspace = true }
-# 批次二索引器：陈述/引用抽取与文档自述日期识别需与 TS 版同源的正则语义。
-# 版本已在 Cargo.lock 内（1.13.1，本地 cargo 缓存齐备），不引入新的依赖树。
+# 索引器正则：陈述/引用抽取与文档自述日期识别（与 TS 基线语义一致）
 regex = "1"
-# B03 Office (.docx / .xlsx) 派生解析：复用到既定 Cargo.lock 缓存内的 flate2 与 quick-xml。
+# Office (.docx / .xlsx) 派生解析：ZIP 解压与 XML 解析
 flate2 = "1"
 quick-xml = "0.42"

@@ -7,7 +7,7 @@ import {
   parseDecisionFormItems,
 } from '../src/components/ReaderView';
 
-/* 决策回执补完（回写/单选/指令标记）——starfix2 同代纯函数单测：
+/* 决策回执补完（回写/单选/指令标记）纯函数单测：
    全部走 ReaderView 导出的纯函数，不渲染组件。 */
 
 const parse = (content: string) => parseDecisionFormItems(content);

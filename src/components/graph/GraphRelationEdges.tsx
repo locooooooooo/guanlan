@@ -1,13 +1,12 @@
 /**
- * D01-b · 线上证据链连线层（任务卡 D01-b ③：跨事项引用与多文档证据链可视化）。
+ * 线上证据链连线层（跨事项引用与多文档证据链可视化）。
  *
  * 悬停/选中某张事件卡时，同屏渲染该文件与其他**在画布上**的文件卡之间的引用/因果边
  * （relations 单一来源：type 因果类型 + reason 证据理由 + locator 行级锚点）；
- * 连线全部走 D01-b 正交避障引擎（绕开卡片本体、呼吸间距出口），线上语义微标签
+ * 连线全部走正交避障路由引擎（绕开卡片本体、呼吸间距出口），线上语义微标签
  * 对文字包围盒做线体裁切（cutout 永不重叠），悬停放大、常态克制。
  *
- * 降噪纪律（D 批次目标）：无悬停/选中 → 本层渲染 null（零 DOM 零像素）——
- * D01-a 像素基线五镜头均为无交互静置态，本层结构性零偏移。
+ * 降噪策略：无悬停/选中时本层渲染 null（零 DOM 零像素），保持静置画面干净。
  * 实时跟随：端点/障碍全部派生自 nodePositions，拖拽/展开/收起经 rAF 合帧 setState
  * 后同帧重算（与既有连线同一派生链，无缓存态可脱钩）。
  */
@@ -43,8 +42,8 @@ const RELATION_TYPE_LABELS: Record<RelationType, string> = {
 };
 
 /** 关系边 → 线上微标签：因果类型词 + 行级锚点（locator）+ 悬停完整理由（reason）。
- *  kind 判定：带 locator=anchor（决定页码/单元格锚点语义）、带 reason=reason（C01
- *  理由胶囊语义）、裸类型=causality（因果关系语义）。 */
+ *  kind 判定：带 locator=anchor（决定页码/单元格锚点语义）、带 reason=reason（理由胶囊语义）、
+ *  裸类型=causality（因果关系语义）。 */
 export function relationEdgeMicroLabel(edge: RelationEdge): EdgeMicroLabel {
   const typeWord = RELATION_TYPE_LABELS[edge.type] ?? edge.type;
   const anchorSuffix = edge.locator ? ` · L${edge.locator.startLine}` : '';

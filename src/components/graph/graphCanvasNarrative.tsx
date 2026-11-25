@@ -1,7 +1,6 @@
 /**
- * D01-a 拆解 · 画布叙事抽屉内容装配（自 useGraphCanvasController.tsx 自包含块原样迁入，
- * 行数护栏；时间轴叙事分节：发生→变更章节→关联决策→引用依据）。
- * 输入为显式参数（与原 memo deps 逐一同源），返回 { narrative, narrativeCopyFileId }。
+ * 画布叙事抽屉内容装配（时间轴叙事分节：发生→变更章节→关联决策→引用依据）。
+ * 接收显式参数，返回 { narrative, narrativeCopyFileId }。
  */
 
 import React from 'react';
@@ -137,7 +136,7 @@ export function useGraphCanvasNarrative({
   activeFileRecord,
 }: GraphNarrativeInputs) {
 
-  // ═══ v0.8 R3：叙事抽屉内容（时间轴叙事分节：发生→变更章节→关联决策→引用依据）═══
+  // ═══ 叙事抽屉内容（时间轴叙事分节：发生→变更章节→关联决策→引用依据）═══
   const narrative = React.useMemo(() => {
     // ① 事件卡叙事：nodeId 命中事件卡 → 该事件为「发生」节
     if (narrativeTarget?.nodeId) {
@@ -389,7 +388,7 @@ export function useGraphCanvasNarrative({
         id: 'reading',
         label: '待阅',
         tone: 'change',
-        // D02 术语两态统一：未读 = 未读新件（首次收录）∪ 读后有更新（读后变更），绝不混同表述
+        // 未读两态统一表述：未读新件（首次收录）与读后有更新（读后变更）明确区分
         body: `${unreadCount} 份未读（未读新件 / 读后有更新）。`,
       },
     ];

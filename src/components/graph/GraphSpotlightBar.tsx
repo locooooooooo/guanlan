@@ -1,5 +1,5 @@
 /**
- * D02 · 增量聚光灯条（司辰旁导航条，任务卡 §5 D02 改动与产物②）。
+ * 增量聚光灯条（司辰旁导航条）。
  *
  * 一键开启「增量聚光灯」：开启后画布上「上次离开前已读且未变」的节点退为低对比度
  * 背景骨架（GraphSceneCards 按 spotlight.dimmedFileIds 注入降亮度样式），仅高亮
@@ -11,8 +11,8 @@
  *     J = 下一处、K = 上一处（循环），Enter/点击当前条 = 画布选中该节点（右栏联动）。
  *
  * 纪律：J/K 守卫（编辑面/浮层打开让路）走 readingSpotlight.shouldIgnoreSpotlightKeys
- * 纯函数（单测锁定）；排序与三类派生在宿主 store（readingSpotlight.ts 纯函数单一出口），
- * 本组件零造数。关闭态仅渲染开关钮（导航条 null），undefined = 宿主未接线渲染 null。
+ * 纯函数；排序与三类派生在宿主 store（readingSpotlight.ts 纯函数单一出口），
+ * 本组件不自行造数。关闭态仅渲染开关钮（导航条 null），undefined 时渲染 null。
  */
 
 import React, { useCallback, useEffect } from 'react';

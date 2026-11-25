@@ -1,10 +1,10 @@
 /**
- * F04 · 五大黄金用户任务实机对标盲测基准脚本（千级混合文件真实工程 + release guanlan.exe）
+ * 五大黄金用户任务实机对标盲测基准脚本（千级混合文件真实工程 + release guanlan.exe）
  *
  * 用法：
  *   node node_modules/tsx/dist/cli.mjs scripts/bench-f04-golden-tasks.ts [--exe native/target/release/guanlan.exe] [--port 0] [--keep-alive]
  *
- * 覆盖五大黄金用户任务（对标 v0.5 & 30 轮长任务卡 F04）：
+ * 覆盖五大黄金用户任务：
  *   T1 隔天回来恢复上次阅读版本与段落       （目标 < 10s）
  *   T2 找出离开后发生的全部实质变更         （目标 < 30s）
  *   T3 在陌生事项确认当前生效定稿及采用依据 （目标 < 60s）
@@ -170,7 +170,7 @@ async function main(): Promise<void> {
     fs.mkdirSync(wsRoot, { recursive: true });
     fs.mkdirSync(dataRoot, { recursive: true });
 
-    console.log('[F04] 1/4 生成 1,050 份十族混合格式工程夹具...');
+    console.log('[golden-tasks] 1/4 生成 1,050 份十族混合格式工程夹具...');
     execFileSync(
       process.execPath,
       [
@@ -233,7 +233,7 @@ async function main(): Promise<void> {
     );
     writeFileAt('02-风控引擎二期/03-风控链路图.svg', makeTopologySvg(true), day1Iso);
 
-    console.log('[F04] 2/4 执行 Day 1 基线入库扫描（1,056 份混合文件）...');
+    console.log('[golden-tasks] 2/4 执行 Day 1 基线入库扫描（1,056 份混合文件）...');
     day1ScanMs = runScan(env);
 
     // Day 2（隔夜实质变更波）：修改架构方案为 v2（拍板确认幂等键方案 + 新增熔断卡点）、升级 SVG v2、新增隔夜联调纪要
@@ -273,21 +273,21 @@ async function main(): Promise<void> {
       day2Iso
     );
 
-    console.log('[F04] 3/4 执行 Day 2 隔夜增量变更入库扫描...');
+    console.log('[golden-tasks] 3/4 执行 Day 2 隔夜增量变更入库扫描...');
     day2ScanMs = runScan(env);
   }
 
-  console.log('[F04] 4/4 启动 release guanlan.exe 服务并执行五大黄金任务实机计时...');
+  console.log('[golden-tasks] 4/4 启动 release guanlan.exe 服务并执行五大黄金任务实机计时...');
   const serveArgs = ['serve', '--root', wsRoot];
   if (requestedPort > 0) {
     serveArgs.push('--port', String(requestedPort));
   }
   const server = spawn(exePath, serveArgs, { env, stdio: ['ignore', 'pipe', 'pipe'] });
   const endpoint = await waitForEndpoint(server);
-  console.log(`[F04] 实时服务已就绪：${endpoint}`);
+  console.log(`[golden-tasks] 实时服务已就绪：${endpoint}`);
 
   try {
-    // 预建 C02 派生检索索引（确保 <50ms 检索就绪）
+    // 预建派生检索索引（确保 <50ms 检索就绪）
     const rebuildJob = await fetchJson<{ job_id: string }>(endpoint, '/api/v1/search/rebuild', {
       method: 'POST',
     });
@@ -515,7 +515,7 @@ async function main(): Promise<void> {
       ],
     };
 
-    console.log('\n========== F04 千级混合文件五大黄金任务引擎实测 ==========');
+    console.log('\n========== 千级混合文件五大黄金任务引擎实测 ==========');
     console.log(JSON.stringify(report, null, 2));
 
     if (staleVersionUsed !== 0 || report.tasks.some((t) => !t.pass)) {
@@ -523,7 +523,7 @@ async function main(): Promise<void> {
     }
 
     if (keepAlive) {
-      console.log(`\n[F04] --keep-alive 常驻中，请在浏览器打开：${endpoint}`);
+      console.log(`\n[golden-tasks] --keep-alive 常驻中，请在浏览器打开：${endpoint}`);
       await new Promise(() => {});
     }
   } finally {
@@ -534,6 +534,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error('[F04] 失败：', err);
+  console.error('[golden-tasks] 失败：', err);
   process.exit(1);
 });

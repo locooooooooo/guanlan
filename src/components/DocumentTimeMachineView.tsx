@@ -47,19 +47,19 @@ import { SvgComparePanel } from './timemachine/SvgComparePanel';
 import { TableDiffPanel } from './timemachine/TableDiffPanel';
 
 /**
- * vm_2/vm_3/vm_5 · 文档版本时光机（depth-1 MD 的单文档版本演化轴，方案A）。
+ * 文档版本时光机（depth-1 单文档版本演化轴）。
  *
  * - 主干：fetchFileHistory → buildVersionChain，按修订链（seq 降序）自上而下 v3→v2→v1（上新下旧）；
  *   轴头强制标注『按修订链』，文档自述日期与收录顺序矛盾时强制提示，绝不悄悄改回按日期排；
  * - 内容卡：选中版本相对上一版的章节级 Diff（computeSectionDiff），未改动章节不出现；
  *   v1 初始基线展示一张章节清单汇总卡；快照淘汰版本只出元数据卡，绝不以当前磁盘内容冒充旧版；
- * - 引用分支（wf_3 横三段）：左=上游依据（出链按 taskPackageOf 分组折叠，卡面只显
- *   【任务包名+核心文档名】，展开才见完整路径）；中=版本轴 + 选中版核心结论块（💡 摘
+ * - 引用分支（横三段）：左=上游依据（出链按 taskPackageOf 分组折叠，卡面只显
+ *   【任务包名+核心文档名】，展开才见完整路径）；中=版本轴 + 选中版核心结论块（摘
  *   『核心结论』/首节 summaryText，置于 Diff 卡区上方）；右=下游（入链 + 同任务包资料）
  *   按任务包 id 分组折叠，组标题=包名，包内展开见核心文件名；
- * - 三重复消灭：无事件目录、无章节 Z 字卡、无原文 <pre> 粘贴；引用全屏只出现分支卡一处；
+ * - 信息去重：无事件目录、无章节 Z 字卡、无原文 <pre> 粘贴；引用全屏只出现分支卡一处；
  * - 司辰：沿版本轴「点击切到下一版本」，caption 与选中高亮/Diff 卡/右栏摘要四处联动；
- * - D03 多模态扩展：SVG/CSV/TSV/XLSX 的 depth-1 下钻也进入时光机（KnowledgeGraph 路由），
+ * - 多模态扩展：SVG/CSV/TSV/XLSX 的 depth-1 下钻也进入时光机（KnowledgeGraph 路由），
  *   版本轴通用，右缘停靠「多模态对比面板」按格式分派（timemachine/ 四子组件 +
  *   utils/multimodalDiff 纯函数）：MD=人类可读视图（标题结构/决定待办/关键增删段，可切
  *   源码行 Diff）、SVG=叠影/擦除对比+改动图元框（data:URI 绝不 inline 注入）、
@@ -85,11 +85,11 @@ type SelectedView =
   | { state: 'prev-unavailable'; reason: 'evicted' | 'fetch-failed' }
   | { state: 'baseline'; sections: BaselineSection[] }
   | { state: 'diff'; changes: SectionChange[]; totalAdded: number; totalRemoved: number }
-  /** D03：多模态格式（SVG/CSV/TSV/XLSX）正文就绪——章节级 MD Diff 不适用，差异见对比面板 */
+  /** 多模态格式（SVG/CSV/TSV/XLSX）正文就绪——章节级 MD Diff 不适用，差异见对比面板 */
   | { state: 'ready' };
 
 /**
- * D03 · 多模态对比面板数据模型：按文件格式分派到对应人类可读视图。
+ * 多模态对比面板数据模型：按文件格式分派到对应人类可读视图。
  * hidden = 该选中态无可展示对比（尚未选版）；pending/unavailable/baseline 携带诚实文案。
  */
 type PaneModel =
@@ -103,16 +103,14 @@ type PaneModel =
   | { kind: 'table'; result: TableDiffResult }
   | { kind: 'xlsx'; result: XlsxDiffResult };
 
-/** 时光机状态色（v0.7 设计增补 §1.3 F 表）：值 = --cv-* 令牌字符串。
- *  暗档 = 14-hex 白名单原样（修改 #F76808 同 lane-md / 新增 #30A46C / 删除 #E5484D /
- *  SELECT #4C8DFF 同 lane-unknown / REF_OUT #26C0DB / REF_IN #8E8AE6 同 lane-svg /
- *  EVICT #F5D90A 同 lane-pdf / MUTED #9AA0A6=ink-meta / TRUNK #64646D——V7-D16 清偿
- *  （原 #232326/void 1.24 FAIL → 3.32 PASS，白名单扩档登记 V7-D15））；
- *  浅档 #C2410C/#1F7A45/#C53030/#2F5AA8/#0E7490/#5B4BC4/#8A621E/#8D8AA6 全表登记于
- *  index.css light 块（V7-D15；del ≠ --cv-unread：diff 语义 vs 未读点，浅档各自达标）。
- *  消费点硬边界：stroke=/fill= 表现属性不吃 var()，一律 style={{}} 形态（勘察 §5.2）；
- *  不采用按主题常量表路线（增补 §0.1-4：色值双源漂移 + 重渲整树）。
- *  export 供 test/canvas-theme.test.ts 值契约断言（v0.7 增补 §4-4，零视觉改动）。 */
+/** 时光机状态色：统一指向 --cv-* 画布语义令牌字符串。
+ *  暗档对应：修改 #F76808（lane-md）/ 新增 #30A46C / 删除 #E5484D /
+ *  SELECT #4C8DFF（lane-unknown）/ REF_OUT #26C0DB / REF_IN #8E8AE6（lane-svg）/
+ *  EVICT #F5D90A（lane-pdf）/ MUTED #9AA0A6（ink-meta）/ TRUNK #64646D（对比度 ≥ 3:1）；
+ *  浅档色值定义在 index.css 的 light 块中（del 与 --cv-unread 区分 diff 语义与未读点）。
+ *  SVG 的 stroke=/fill= 表现属性不解析 CSS var()，消费处须一律以 style={{}} 传入；
+ *  不采用按主题常量表，避免色值双源漂移与整树重渲染。
+ *  导出供 test/canvas-theme.test.ts 做值契约校验。 */
 export const KIND_COLOR: Record<SectionChange['kind'], string> = {
   修改: 'var(--cv-lane-md)',
   新增: 'var(--cv-add)',
@@ -133,7 +131,7 @@ const CARD_X = 352;
 const CARD_W = 250;
 const CARD_H = 78;
 const CARD_GAP = 10;
-/** wf_3 选中版核心结论块高度（渲染于 Diff 卡区上方；坐标常量不重排） */
+/** 选中版核心结论块高度（渲染于 Diff 卡区上方；坐标常量不重排） */
 const CONC_H = 76;
 const REF_X = 30;
 const REF_W = 146;
@@ -142,8 +140,8 @@ const REF_GAP = 58;
 const REF_TITLE_Y = 330;
 const REF_Y0 = 344;
 
-// ---- TL-02：版本轴几何可推导参数（导出供几何单测复用） ----
-/** 画布 viewBox 高（与 <svg viewBox="0 0 794 640"> :312 保持一致） */
+// ---- 版本轴几何可推导参数（导出供几何单测复用） ----
+/** 画布 viewBox 高（与 <svg viewBox="0 0 794 640"> 保持一致） */
 export const MACHINE_VIEW_H = 640;
 /** 尾节点 trunk 收束帽高度（trunkEnd = nodeY(len-1) + 26） */
 const TRUNK_END_MARGIN = 26;
@@ -153,8 +151,7 @@ const MACHINE_BOTTOM_PAD = 18;
 /**
  * 版本轴节点纵向间距（确定性、保证不溢出）：
  * 短链沿用原 96；一旦轴向可用高度装不下，就按「可用高度 / (len-1)」全局收束，
- * 确保任意链长下 trunkEnd ≤ MACHINE_VIEW_H。旧实现在 len=6 时（96）trunkEnd=676、
- * len=8 时（64）trunkEnd=644，均已冲出 640 高度溢出截断——此函数根治该缺陷。
+ * 确保任意链长下 trunkEnd ≤ MACHINE_VIEW_H，避免长版本链超出 640 高度被截断。
  * 可用 trunk 高度 = 视图高 − 顶部 NODE_Y0 − 尾帽 26 − 底部留白 18。
  */
 export function timeMachineSpacing(chainLen: number): number {
@@ -174,7 +171,7 @@ export function timeMachineTrunkEnd(chainLen: number): number {
   return chainLen ? timeMachineNodeY(chainLen - 1, chainLen) + TRUNK_END_MARGIN : 336;
 }
 
-// ---- U04 · 版本时光机「司辰琉璃化」纯函数（无 DOM 依赖；单测直引，禁把坐标计算堆进组件） ----
+// ---- 版本时光机几何与增量条纯函数（无 DOM 依赖，便于单测直接导入） ----
 
 /** 主干贝塞尔上端点纵坐标（与 <path d="M 260 100 Q 252 200 260 end"> 逐字同源） */
 const TRUNK_TOP_Y = 100;
@@ -246,7 +243,7 @@ export function computeVersionDeltaBar(added: number, removed: number): VersionD
   };
 }
 
-// ---- U04 · 浮层遮挡避让（Diff 面板压住版本轴）纯函数 ----
+// ---- 浮层遮挡避让（Diff 面板压住版本轴）纯函数 ----
 
 /** 画布 viewBox 宽（与 <svg viewBox="0 0 794 640"> 同源） */
 export const MACHINE_VIEW_W = 794;
@@ -261,7 +258,7 @@ export const DIFF_PANE_LEFT_EDGE = MACHINE_VIEW_W * (1 - DIFF_PANE_VIEW_SHARE);
 /**
  * 浮层遮挡避让量（viewBox 单位）：面板打开时，卡面右缘若越过面板左缘，
  * 就把越界量（含 3 单位呼吸）让出来——否则卡内文字被浮层硬切（无省略号兜底）、
- * 「当前/初始基线」角标与底部比例条右端被吞（门禁按 scrollWidth 口径判不出此类问题）。
+ * 「当前/初始基线」角标与底部比例条右端被吞（常规 scrollWidth 检测难以判出此类问题）。
  * 面板收起时恒 0（卡面完整，不留空）。
  */
 export function machinePaneReserve(rightEdge: number, paneOpen: boolean): number {
@@ -324,7 +321,7 @@ export function chronosFollowOffsetY(selectedY: number): number {
   return Math.max(0, Math.min(CHRONOS_FOLLOW_MAX, raw));
 }
 
-// ---- TA-01：版本轴排序口径角标（导出为纯函数，不依赖 DOM 渲染即可断言） ----
+// ---- 版本轴排序口径角标（导出为纯函数，不依赖 DOM 渲染即可断言） ----
 export const VERSION_AXIS_BADGE = '按修订链';
 export const VERSION_DATE_DISORDER_NOTICE = '文档自述日期与收录顺序不一致';
 
@@ -340,7 +337,7 @@ export function versionAxisNotice(chain: VersionNode[]): { badge: string; notice
 }
 
 /**
- * wf_3 选中版核心结论摘取：对版本快照 markdown 调 parseMarkdownOutline，
+ * 选中版核心结论摘取：对版本快照 markdown 调 parseMarkdownOutline，
  * 与 extractCoreSummary 同式——isExplicitCallout==='核心结论' 章节的 summaryText 优先，
  * 缺失回退首节 summaryText；无任何章节返回 ''。导出供结论块渲染与断言复用。
  */
@@ -351,13 +348,13 @@ export function coreConclusionOfMarkdown(markdown: string): string {
 }
 
 /**
- * U04 · 画布主题分段钮（纸面 / 夜航）——叶子自订阅 canvasThemeStore。
- * 主题值不入 React state（v0.7 §1.1 双主题活值层纪律）：一次翻转只重渲本叶子，
+ * 画布主题分段钮（纸面 / 夜航）——叶子自订阅 canvasThemeStore。
+ * 主题值不入 React state：一次翻转只重渲本叶子，
  * 舷窗 data-canvas-theme / theme-morphing 由宿主命令式直写 DOM（见 handleMachineThemeChange）。
  */
 export function MachineThemeSegmented({ onChange }: { onChange: (next: CanvasTheme) => void }) {
   // getServerSnapshot 同源（node/SSR 无 window 时 store 守卫回默认夜航）——
-  // 缺省会触发 React「Missing getServerSnapshot」告警（Console 0 Warning 红线）。
+  // 缺省会触发 React「Missing getServerSnapshot」告警。
   const theme = useSyncExternalStore(subscribeCanvasTheme, getCanvasTheme, getCanvasTheme);
   return (
     <div
@@ -394,7 +391,7 @@ export function DocumentTimeMachineView({
   const svgRef = useRef<SVGSVGElement>(null);
   const worldRef = useRef<SVGGElement>(null);
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-  // U04 · 舷窗宿主锚：时光机整体渲染在 .dark-porthole 内（KnowledgeGraph 常驻舷窗），
+  // 舷窗宿主锚：时光机整体渲染在 .dark-porthole 内（KnowledgeGraph 常驻舷窗），
   // 主题翻转据此命令式直写舷窗 DOM（与宿主 handleCanvasThemeChange 同款语义）。
   const hostRef = useRef<HTMLElement>(null);
   const [scale, setScale] = useState(1);
@@ -403,10 +400,10 @@ export function DocumentTimeMachineView({
   const position = (key: string, x: number, y: number) => positions[key] ?? { x, y };
 
   /**
-   * U04 · 画布主题翻转（纸面 / 夜航）：与宿主 useWorkspaceStore.handleCanvasThemeChange
+   * 画布主题翻转（纸面 / 夜航）：与宿主 useWorkspaceStore.handleCanvasThemeChange
    * 同款语义——命令式直写舷窗 DOM（theme-morphing 摘挂与 dataset 翻转落同一同步任务，
    * 浏览器不为整子树作废样式），再 applyCanvasTheme 更新活值 + 本机持久化 + 通知订阅叶子。
-   * 主题值不进 React state（v0.7 §1.1 双主题活值层纪律）。
+   * 主题值不进 React state，避免整树重渲染。
    */
   const handleMachineThemeChange = (next: CanvasTheme) => {
     if (next === getCanvasTheme()) return;
@@ -419,7 +416,7 @@ export function DocumentTimeMachineView({
     applyCanvasTheme(next);
   };
 
-  // ---- D03 多模态 Diff：格式分派（md 走既有章节级 Diff；svg/表格/工作簿/源码纯文本走对比面板）----
+  // ---- 多模态 Diff：格式分派（md 走既有章节级 Diff；svg/表格/工作簿/源码纯文本走对比面板）----
   const isMd = file.format === 'md';
   const isSvg = file.format === 'svg';
   const isXlsx = file.format === 'xlsx';
@@ -434,7 +431,7 @@ export function DocumentTimeMachineView({
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const [contents, setContents] = useState<Record<string, string>>({});
   const [fetchFailed, setFetchFailed] = useState<Record<string, boolean>>({});
-  // D03：XLSX 走 B03 office 端点（结构化 rows），不走正文文本通道（二进制无内联 text）
+  // XLSX 走 office 结构化端点（rows），不走正文文本通道（二进制无内联 text）
   const [officeByRev, setOfficeByRev] = useState<Record<string, OfficeContentResponse>>({});
   const [officeFailed, setOfficeFailed] = useState<Record<string, boolean>>({});
   // 统一右侧检查/对比面板：合并原悬浮 DiffSidePane 与右栏，消除四栏挤压与卡面截断；
@@ -442,9 +439,9 @@ export function DocumentTimeMachineView({
   const [paneOpen, setPaneOpen] = useState(true);
   const [inspectorTab, setInspectorTab] = useState<'diff' | 'context'>('diff');
   const [mdPaneMode, setMdPaneMode] = useState<MdDiffPanelMode>('human');
-  // wf_3 左栏上游依据折叠态：taskPackage id → 是否展开（展开态成员卡 title 才透出完整路径）
+  // 左栏上游依据折叠态：taskPackage id → 是否展开（展开态成员卡 title 才透出完整路径）
   const [expandedRefs, setExpandedRefs] = useState<Record<string, boolean>>({});
-  // wf_3 右栏下游分组折叠态（用户手改后持久；未记录时按「所属任务包 + 篇数 ≤6」默认展开）
+  // 右栏下游分组折叠态（用户手改后持久；未记录时按「所属任务包 + 篇数 ≤6」默认展开）
   const [openDownstream, setOpenDownstream] = useState<Record<string, boolean>>({});
 
   // 版本链按需读取：失败显示『读取文件历史失败』+ 重试
@@ -469,7 +466,7 @@ export function DocumentTimeMachineView({
   }, [active, file.file_id, historyNonce]);
 
   const chain = useMemo<VersionNode[]>(() => (history ? buildVersionChain(history) : []), [history]);
-  // TA-01：版本轴口径角标（固定『按修订链』；日期与收录顺序矛盾时强制提示）
+  // 版本轴口径角标（固定『按修订链』；日期与收录顺序矛盾时强制提示）
   const axisNotice = versionAxisNotice(chain);
   // 相对时间基准（同一渲染批次内固定，避免同帧标签漂移）
   const nowMs = useMemo(() => Date.now(), [chain, selectedId]);
@@ -483,16 +480,15 @@ export function DocumentTimeMachineView({
   }, [chain, frame.revisionId, selectedId]);
 
   const selectedNode = chain.find((node) => node.revisionId === selectedId) ?? null;
-  // TA-01：父版按修订链解析（prev_revision_id 命中；悬空时回退 seq 前驱），
-  // 不再取时间相邻节点，避免 Diff 对比错版、避免父版悬空时误判『初始基线』
+  // 父版按修订链解析（prev_revision_id 命中；悬空时回退 seq 前驱），
+  // 不按时间相邻节点取值，避免 Diff 对比错版或父版悬空时误判『初始基线』
   const prevNode = useMemo(
     () => resolvePrevNode(chain, selectedNode),
     [chain, selectedNode],
   );
 
-  // 语义 Diff 摘要卡（PRD 3.5 / 方案 F7）：星图下钻的版本行动作——选中版与其父版
-  // 走任务队列口径摘要（POST /diff 202 → result）。端点未落地时如实提示，
-  // 本地 computeSectionDiff 章节对比不受影响
+  // 语义 Diff 摘要卡：选中版与其父版走任务队列口径摘要（POST /diff 202 → result）。
+  // 端点未落地时如实提示，本地 computeSectionDiff 章节对比不受影响
   const [semanticDiff, setSemanticDiff] = useState<{
     loading: boolean;
     result: DiffResult | null;
@@ -530,7 +526,7 @@ export function DocumentTimeMachineView({
     if (selectedNode.prevRevisionId && prevNode?.snapshotAvailable) ids.push(prevNode.revisionId);
     return ids;
   }, [selectedNode, prevNode, isXlsx]);
-  // D03：XLSX 两版 office 结构化载荷按需拉取（status!==indexed 诚实标记失败，不伪造结构）
+  // XLSX 两版 office 结构化载荷按需拉取（status!==indexed 诚实标记失败，不伪造结构）
   useEffect(() => {
     if (!active || !isXlsx) return;
     const ids: string[] = [];
@@ -588,7 +584,7 @@ export function DocumentTimeMachineView({
 
   const selView = useMemo<SelectedView>(() => {
     if (!selectedNode) return { state: 'pending' };
-    // D03：多模态格式不走章节级 MD Diff——选中版可用即 ready（差异组装在 paneModel）
+    // 多模态格式不走章节级 MD Diff：选中版可用即 ready（差异组装在 paneModel）
     if (isMultimodal) {
       if (!selectedNode.snapshotAvailable) return { state: 'unavailable' };
       if (isXlsx) return officeFailed[selectedNode.revisionId] ? { state: 'unavailable' } : { state: 'ready' };
@@ -613,7 +609,7 @@ export function DocumentTimeMachineView({
     };
   }, [selectedNode, prevNode, selContent, selFailed, prevContent, prevFailed, isMultimodal, isXlsx, officeFailed]);
 
-  // ---- D03：多模态对比面板数据派发（全部纯函数、有界预算内，<100ms 停机口径）----
+  // ---- 多模态对比面板数据派发（纯函数有界预算计算，控制主线程耗时 <100ms）----
   const paneModel = useMemo<PaneModel>(() => {
     if (!selectedNode) return { kind: 'hidden' };
     if (isMd) {
@@ -681,10 +677,10 @@ export function DocumentTimeMachineView({
     return { kind: 'hidden' };
   }, [selectedNode, prevNode, selView, selContent, prevContent, prevFailed, isMd, isSvg, isTable, isTextSource, isXlsx, file.format, officeByRev, officeFailed]);
 
-  // ---- U04 · 版本增量口径（单一事实源）----
+  // ---- 版本增量口径（单一事实源）----
   // 版本节点卡的 +/- 行数必须与右侧 Diff 面板 / 检查器「相对上一版」同口径（MD 走章节级
   // computeSectionDiff 统计，纯文本/源码走 computeLineDiffRows 统计）——历史事件 payload 的
-  // added_lines 是另一套口径，两套数字同屏出现且未标注来源即构成误导（任务卡停机条件：诚实边界）。
+  // added_lines 是另一套口径，两套数字同屏出现且未标注来源即构成误导。
   // 故：只认右侧对比同源 diff 统计；选中版实时取、已访问版缓存（切版后仍留痕）。
   const [chapterDeltaByRev, setChapterDeltaByRev] = useState<Record<string, { added: number; removed: number }>>({});
   useEffect(() => {
@@ -726,7 +722,7 @@ export function DocumentTimeMachineView({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 以签名（选中版+面板态）驱动，避免每渲染重开
   }, [paneSignature]);
 
-  // ---- 引用分支（契约C）：出链解析选中版快照正文（Markdown 专属口径，非 md 走结构化 relations 边）----
+  // ---- 引用分支：出链解析选中版快照正文（Markdown 专属口径，非 md 走结构化 relations 边）----
   const byId = useMemo(() => new Map(files.map((item) => [item.file_id, item])), [files]);
   const readLinks = useMemo(() => documentLinks(files, root), [files, root]);
   const outbound = useMemo<RelationEdge[] | null>(() => {
@@ -739,7 +735,7 @@ export function DocumentTimeMachineView({
     () => relations.filter((edge) => edge.target_id === file.file_id && !edge.isInferred),
     [relations, file.file_id],
   );
-  // wf_3 左=上游依据：出链按 taskPackageOf(target).id 分组折叠（组内保留边序）
+  // 左=上游依据：出链按 taskPackageOf(target).id 分组折叠（组内保留边序）
   const outGroups = useMemo<{ pkgId: string; pkgName: string; edges: RelationEdge[] }[] | null>(() => {
     if (!outbound) return null;
     const groups = new Map<string, { pkgId: string; pkgName: string; edges: RelationEdge[] }>();
@@ -754,10 +750,10 @@ export function DocumentTimeMachineView({
     return [...groups.values()].sort((a, b) => (a.pkgId < b.pkgId ? -1 : a.pkgId > b.pkgId ? 1 : 0));
   }, [outbound, byId]);
 
-  // 所属任务包（DoD3：任何页面一眼看到所属专项任务）
+  // 所属任务包（让页面直接展示所属专项任务）
   const myPkg = useMemo(() => taskPackageOf(file.relative_path), [file.relative_path]);
 
-  // wf_3 右=下游：被引用（入链 source）+ 同任务包资料，按 taskPackageOf id 分组折叠；
+  // 右=下游：被引用（入链 source）+ 同任务包资料，按 taskPackageOf id 分组折叠；
   // 组内按阅读顺序（阶段序 蓝图→计划→决策→执行→交付→待分类，阶段内 basename 自然序）
   const downstreamGroups = useMemo(() => {
     const groups = new Map<string, { pkgId: string; pkgName: string; items: { file: FileRecord; referenced: boolean }[] }>();
@@ -800,14 +796,14 @@ export function DocumentTimeMachineView({
     if (target) onGo(target);
   };
 
-  // ---- 司辰（契约E）：点击沿版本轴自上而下推进一格，v1 后循环回轴顶 ----
+  // ---- 司辰：点击沿版本轴自上而下推进一格，v1 后循环回轴顶 ----
   const cycleToNext = () => {
     if (!chain.length) return;
     const index = chain.findIndex((node) => node.revisionId === selectedId);
     const next = chain[(index + 1) % chain.length] ?? chain[0];
     setSelectedId(next.revisionId);
   };
-  // U04 · 司辰 caption 动态播报当版演化摘要：版本号 + 章节级真实 +/- 行数（与面板/检查器同口径）
+  // 司辰 caption 动态播报当版演化摘要：版本号 + 章节级真实 +/- 行数（与面板/检查器同口径）
   const selectedDeltaStat = selectedNode ? chapterDeltaOf(selectedNode.revisionId) : undefined;
   const selectedDelta = selectedDeltaStat
     ? computeVersionDeltaBar(selectedDeltaStat.added, selectedDeltaStat.removed)
@@ -822,16 +818,16 @@ export function DocumentTimeMachineView({
     : `v${selectedNode.seq}${deltaTag} · 差异就绪`;
 
   // ---- 画布几何与交互（复刻 EventTimelineCanvas 模式：zoom/drag/curve/foreignObject）----
-  // TL-02：spacing/nodeY/trunkEnd 收束为可推导函数，保证任意链长 trunkEnd ≤ 640 不溢出
+  // spacing/nodeY/trunkEnd 收束为可推导函数，保证任意链长 trunkEnd ≤ 640 不溢出
   const nodeY = (index: number) => timeMachineNodeY(index, chain.length);
   const trunkEnd = timeMachineTrunkEnd(chain.length);
-  // 主干 path（几何逐字沿用旧实现：M 260 100 Q 252 200 260 trunkEnd；tl02 保绿）
+  // 主干 path（几何保持 M 260 100 Q 252 200 260 trunkEnd）
   const trunkPath = `M ${TRUNK_X} ${TRUNK_TOP_Y} Q ${TRUNK_X - 8} ${TRUNK_CTRL_Y} ${TRUNK_X} ${trunkEnd}`;
   const selIndex = selectedNode ? chain.findIndex((node) => node.revisionId === selectedNode.revisionId) : -1;
   const selY = selIndex >= 0 ? nodeY(selIndex) : NODE_Y0;
-  // U04 · 司辰随当前选中版本阻尼跟随（transform 过渡；不动版本节点本身——数据区禁飞）
+  // 司辰随当前选中版本阻尼跟随（transform 过渡；不动版本节点本身，避免干扰数据区）
   const chronosOffset = chronosFollowOffsetY(selY);
-  // wf_3 左栏槽位分配：每组占 1 槽，展开组追加成员数槽位（复用 REF_Y0/REF_GAP，坐标系不重排）
+  // 左栏槽位分配：每组占 1 槽，展开组追加成员数槽位（复用 REF_Y0/REF_GAP，坐标系不重排）
   const refSlotStart: number[] = [];
   {
     let slot = 0;
@@ -840,7 +836,7 @@ export function DocumentTimeMachineView({
       slot += 1 + (expandedRefs[g.pkgId] ? g.edges.length : 0);
     }
   }
-  // U04 · 引线自主干贝塞尔上的精确落点起笔（不再从 x=260 硬接，脊柱中段被控制点拉向 252）
+  // 引线自主干贝塞尔上的精确落点起笔（不再从 x=260 硬接，脊柱中段被控制点拉向 252）
   const curve = (y1: number, x2: number, y2: number) => {
     const start = timeMachineTrunkPointAtY(y1, trunkEnd);
     return `M ${start.x} ${start.y} C ${TRUNK_X + (x2 - TRUNK_X) * .48} ${y1}, ${x2 - (x2 - TRUNK_X) * .3} ${y2}, ${x2} ${y2}`;
@@ -890,7 +886,7 @@ export function DocumentTimeMachineView({
     if (svgRef.current && zoomRef.current) d3.select(svgRef.current).call(zoomRef.current.transform, d3.zoomIdentity);
   };
 
-  /** 左栏上游依据卡（wf_3）：出链按任务包分组折叠，卡面只显【任务包名+核心文档名】；
+  /** 左栏上游依据卡：出链按任务包分组折叠，卡面只显【任务包名+核心文档名】；
    *  多成员组点击展开（展开态成员卡 title 才透出完整路径），单成员组点击直达目标。 */
   const renderRefGroup = (group: { pkgId: string; pkgName: string; edges: RelationEdge[] }, slotY: number) => {
     const expanded = expandedRefs[group.pkgId] === true;
@@ -950,7 +946,7 @@ export function DocumentTimeMachineView({
           <span role="status" style={{ color: EVICT_COLOR }}> · {axisNotice.notice}</span>
         )}
       </span>
-      {/* U04 · 纸面 / 夜航双主题分段钮（与星图同源 canvasThemeStore；主题值不入 React state） */}
+      {/* 纸面 / 夜航双主题分段钮（与星图同源 canvasThemeStore；主题值不入 React state） */}
       <MachineThemeSegmented onChange={handleMachineThemeChange} />
     </div>
     <div className={`event-stage event-stage-machine${paneOpen ? '' : ' is-inspector-collapsed'}`}>
@@ -964,9 +960,8 @@ export function DocumentTimeMachineView({
             aria-label="文档版本时光机画布"
           >
             <g ref={worldRef}>
-              {/* U04 · 发光渐变版本轴：几何 path 与旧实现逐字一致（tl02 保绿），视觉升级为
-                  「宽而淡的光晕层 + 渐变主轴」——渐变起于选中色 --cv-lane-unknown、
-                  收于 --cv-trunk，两端在夜航/纸面双档均 ≥3:1（图形级 AA）。
+              {/* 发光渐变版本轴：几何 path 保持不变，视觉采用「宽而淡的光晕层 + 渐变主轴」——
+                  渐变起于选中色 --cv-lane-unknown、收于 --cv-trunk，两端在夜航/纸面双档均 ≥3:1（图形级 AA）。
                   渐变 stop 用 style.stopColor（SVG 表现属性不吃 var()，须挂样式）。 */}
               <defs>
                 <linearGradient id="machine-trunk-axis" gradientUnits="userSpaceOnUse"
@@ -1002,11 +997,9 @@ export function DocumentTimeMachineView({
                 </foreignObject>}
 
               {/* 版本轴节点：自上而下 v3→v2→v1（上新下旧）
-                  v0.8 R8 卡面升级：头部升版本胶囊 + 💡核心结论 clamp-1 行（coreConclusionOfMarkdown
-                  既有导出；正文按需拉取，未拉取/无结论回退日期行）——NODE_W×NODE_H 卡尺寸与
-                  timeMachine* 轴几何一字不动（tl02 保绿），只换信息排布；timeBasis 迁 title
-                  U04 司辰琉璃化：卡面重组为玻璃圆角卡——vN 徽标 + 相对时间 + 微型增删比例条
-                  （+add/-del，走服务端真实行数；无数据留空槽不伪造）+ 基线/当前角标 */}
+                  玻璃圆角卡面排布：头部版本徽标 + 相对时间 + 核心结论 clamp-1 行（coreConclusionOfMarkdown
+                  按需从已拉取正文摘取，未拉取/无结论回退日期行）+ 微型增删比例条（+add/-del，走同源真实行数；
+                  无数据留空槽不伪造）+ 基线/当前角标；NODE_W×NODE_H 尺寸与 timeMachine* 轴几何保持不变，timeBasis 迁 title */}
               {chain.map((node, index) => {
                 const key = 'rev-' + node.revisionId;
                 const p = position(key, TRUNK_X - NODE_W / 2, nodeY(index) - NODE_H / 2);
@@ -1061,7 +1054,7 @@ export function DocumentTimeMachineView({
                 </g>;
               })}
 
-              {/* wf_3 选中版核心结论块：摘『核心结论』/首节 summaryText，置于 Diff 卡区上方（MD 专属；多模态格式由对比面板承载） */}
+              {/* 选中版核心结论块：摘『核心结论』/首节 summaryText，置于 Diff 卡区上方（MD 专属；多模态格式由对比面板承载） */}
               {selectedNode && isMd && selContent !== undefined && (() => {
                 const conclusion = coreConclusionOfMarkdown(selContent);
                 if (!conclusion) return null;
@@ -1070,7 +1063,7 @@ export function DocumentTimeMachineView({
                 const p = position(key, CARD_X, y);
                 return <g key={key}>
                   <path d={curve(selY, p.x, p.y + CONC_H / 2)} style={{ stroke: SELECT_COLOR }} opacity=".5" fill="none"/>
-                  {/* U04 · 柔和贝塞尔流光引线：细亮段沿引线扫过一遍（key 随选中版本变化 → 切版即重播；
+                  {/* 柔和贝塞尔流光引线：细亮段沿引线扫过一遍（key 随选中版本变化 → 切版即重播；
                       纯装饰层，reduce 下整层隐藏，基线引线恒在） */}
                   <path key={`flow-${selectedNode.revisionId}-${key}`} d={curve(selY, p.x, p.y + CONC_H / 2)}
                     className="glx-machine-lead-flow" style={{ stroke: SELECT_COLOR }} fill="none"/>
@@ -1091,7 +1084,7 @@ export function DocumentTimeMachineView({
                 const p = position(key, CARD_X, selY - 16 + i * (CARD_H + CARD_GAP));
                 return <g key={key}>
                   <path d={curve(selY, p.x, p.y + CARD_H / 2)} style={{ stroke: SELECT_COLOR }} opacity=".5" fill="none"/>
-                  {/* U04 · 流光引线（切版重播；纯装饰层，reduce 下隐藏） */}
+                  {/* 流光引线（切版重播；纯装饰层，reduce 下隐藏） */}
                   <path key={`flow-${selectedNode.revisionId}-${key}`} d={curve(selY, p.x, p.y + CARD_H / 2)}
                     className="glx-machine-lead-flow" style={{ stroke: SELECT_COLOR }} fill="none"/>
                   <g data-plot-node={key} transform={`translate(${p.x} ${p.y})`}>
@@ -1172,8 +1165,8 @@ export function DocumentTimeMachineView({
               {outbound === null &&
                 <text x={REF_X} y={REF_TITLE_Y} style={{ fill: MUTED_COLOR }} fontSize={11} fontFamily="var(--font-mono)">引用解析需先读取选中版正文…</text>}
 
-              {/* 司辰·时间之神：点击切到下一版本；U04 起随当前选中版本阻尼跟随
-                  （位移走 transform 过渡，版本节点本身零位移——数据区禁飞） */}
+              {/* 司辰·时间之神：点击切到下一版本；随当前选中版本阻尼跟随
+                  （位移走 transform 过渡，版本节点本身零位移，避免干扰数据区） */}
               <text x={57} y={306} style={{ fill: MUTED_COLOR }} fontSize={9.5} fontFamily="var(--font-mono)">点击切到下一版本</text>
               <g transform={`translate(55 ${CHRONOS_BASE_Y})`}>
                 <g className="glx-axis-follow"
@@ -1444,7 +1437,7 @@ export function DocumentTimeMachineView({
   </section>;
 }
 
-/** D03：多模态格式司辰一句话摘要（与对比面板计数同源；模块层纯函数便于复用/断言） */
+/** 多模态格式司辰一句话摘要（与对比面板计数同源；模块层纯函数便于复用/断言） */
 function multimodalCaption(model: PaneModel, seq: number): string {
   switch (model.kind) {
     case 'md':

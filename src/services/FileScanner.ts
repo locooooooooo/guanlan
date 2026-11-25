@@ -1,5 +1,5 @@
 /**
- * 观澜 Guanlan 工作区文件采集器 (v0.4)
+ * 观澜 Guanlan 工作区文件采集器（Node 对拍基线）
  *
  * 核心职责:
  * - 授权根目录枚举（仅指定目录）
@@ -7,7 +7,7 @@
  * - 计算 SHA-256 字节哈希并做稳定读取校验
  * - 产出纯采集结果 CollectedFile，版本与事件由服务端比对持久库后分配
  *
- * 运行环境: Node.js（由 Vite 中间件或独立服务进程调用）
+ * 运行环境: Node.js（供测试与 Rust 写入对拍基准调用）
  */
 
 import * as fs from 'fs';
@@ -45,8 +45,8 @@ function looksLikePdf(filePath: string): boolean {
 }
 
 /**
- * v0.4 第一轮 —— 纯采集结果：只产出路径、字节哈希、mtime 和内容获取器。
- * 版本与事件由服务端比对持久库后分配（方案 §5 改动表）。
+ * 纯采集结果：只产出路径、字节哈希、mtime 和内容获取器。
+ * 版本与事件由服务端比对持久库后分配。
  */
 export interface CollectedFile {
   relativePath: string;
@@ -71,7 +71,7 @@ export interface CollectOptions {
 
 export interface CollectResult {
   files: CollectedFile[];
-  /** 采集期间读不到的路径：不登记缺失，只报告问题（方案 §4 监听与对账） */
+  /** 采集期间读不到的路径：不登记缺失，只报告问题 */
   readErrors: Array<{ relativePath: string; message: string }>;
   /** 采集是否覆盖了指定范围的完整遍历；不完整时不得据此判定缺失 */
   complete: boolean;

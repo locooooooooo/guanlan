@@ -1,5 +1,5 @@
 /**
- * E03 · 证道阁上下文脱敏护栏（纯函数层，与 Rust `application::context::sanitize_context_text` 同源）。
+ * 上下文脱敏护栏（纯函数层，与 Rust `application::context::sanitize_context_text` 同源）。
  *
  * 停机红线护栏：严禁把本机密钥或环境变量混入上下文包。
  * 本模块仅做确定性文本/路径检测与替换，绝不读取 `process.env` 或任何宿主环境变量。

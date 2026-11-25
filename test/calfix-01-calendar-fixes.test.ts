@@ -15,26 +15,21 @@ import { CalendarSidePanels, latestActiveMonth } from '../src/components/Calenda
 import type { FileRecord, TimelineEvent } from '../src/types/guanlan';
 
 /**
- * CALFIX-01：日历页三处走查修复（T1 表头压行 / T2 格子重叠 / T3 迷你月历默认定位）。
+ * 日历页三处走查修复（表头压行 / 格子重叠 / 迷你月历默认定位）。
  *
- * T1 表头压行：sticky 日期表头高度原先由右列 h-8 隐式撑出（「高度计算」无单一出处），
- *   行无 scroll-margin-top——锚点滚动（浏览器查找/焦点/未来跳日期）会把目标行压进
- *   表头 Chrome 之下（行 48px、被压一半 = 走查口径）。修复：表头显式 height
- *   （CALENDAR_STICKY_HEADER_H=32）+ 行 scroll-margin-top（CALENDAR_ROW_SCROLL_MARGIN=33，
- *   表头 32 + border-bottom 1），经 data-cal-sticky-header / data-cal-row 锚点断言。
+ * 1) 表头压行：sticky 日期表头高度显式钉在常量（CALENDAR_STICKY_HEADER_H=32），
+ *    行 scroll-margin-top（CALENDAR_ROW_SCROLL_MARGIN=33，表头 32 + border-bottom 1），
+ *    经 data-cal-sticky-header / data-cal-row 锚点断言。
  *
- * T2 格子重叠：① 组件默认窗口档 90→30（CALENDAR_WINDOW_SHORT），每日列宽 ≈3 倍，
- *   同槽元素有落位空间；默认档断言在 tl-cal-02（升级裁决 A 改写）与本文件 T2a 各有一份。
- *   ② 90 天宽窗档不再渲染「+152/+274」长文字芯片（~34px 宽 > 单日列宽 <10px，逐槽重叠），
- *   改实心热力点（slotHeatDotTier：--accent-iris 混色深浅 + 直径映射份数），具体数字
- *   收进 hover Tooltip（title）与 aria-label；30 天档芯片原样（tl-cal-01 写死口径不动）。
+ * 2) 格子重叠：① 组件默认窗口档为近 30 天（CALENDAR_WINDOW_SHORT），每日列宽充足；
+ *    ② 90 天宽窗档不再渲染长文字芯片，改实心热力点（slotHeatDotTier：--accent-iris 混色深浅
+ *    + 直径映射份数），具体数字收进 hover Tooltip（title）与 aria-label；30 天档芯片原样。
  *
- * T3 迷你月历默认定位：渲染序改「新→旧」，默认定位并高亮最新活跃月份
- *   （latestActiveMonth = 活跃日期集合的最大月份，如 2026-11），2013-10 历史脏月沉底。
+ * 3) 迷你月历默认定位：渲染序「新→旧」，默认定位并高亮最新活跃月份
+ *    （latestActiveMonth = 活跃日期集合的最大月份，如 2026-11），早期历史月沉底。
  *
- * 证据声明：本文件断言基于静态实读 + react-dom/server SSR（node:test 无 DOM——
- * 点击/滚动不可模拟，接线由代码审查保证）；未运行 npm test/lint/build（并行施工期纪律，
- * 总装后统一门禁实测裁决）。日期算术（周线数/窗口首日）经独立 node 实算复核。
+ * 说明：本文件断言基于静态实读 + react-dom/server SSR（node:test 无 DOM），
+ * 日期算术（周线数/窗口首日）与渲染锚点一并验证。
  */
 
 // ---------- 夹具：最小 FileRecord / TimelineEvent（同 tl-cal-01/02 口径） ----------
@@ -83,7 +78,7 @@ function dayRange(start: string, end: string): string[] {
 
 // ---------- T1：sticky 表头高度单源 + 行 scroll-margin-top（data-* 锚点核对） ----------
 
-test('CALFIX-T1 渲染：表头显式 32px 且带锚点，行 scroll-margin-top=33 让出整条表头', () => {
+test('表头压行渲染：表头显式 32px 且带锚点，行 scroll-margin-top=33 让出整条表头', () => {
   const files = [file('2026-11-10'), file('2026-11-11')];
   const html = renderToString(
     createElement(CalendarBoardView, { files, events: [], onOpenDocument: () => {} })
@@ -116,7 +111,7 @@ test('CALFIX-T1 渲染：表头显式 32px 且带锚点，行 scroll-margin-top=
 
 // ---------- T2a：默认窗口档 90 → 30 ----------
 
-test('CALFIX-T2a 渲染：默认选中「近 30 天」档，90 天降为可切换档', () => {
+test('窗口默认档渲染：默认选中「近 30 天」档，90 天降为可切换档', () => {
   const html = renderToString(
     createElement(CalendarBoardView, { files: [file('2026-11-10')], events: [], onOpenDocument: () => {} })
   );
@@ -144,7 +139,7 @@ test('CALFIX-T2a 渲染：默认选中「近 30 天」档，90 天降为可切�
 
 // ---------- T2b：90 天宽窗档「+N」长文字芯片 → 实心热力点 ----------
 
-test('CALFIX-T2b 纯函数：slotHeatDotTier 分档边界（颜色深浅与直径映射份数）', () => {
+test('热力点纯函数：slotHeatDotTier 分档边界（颜色深浅与直径映射份数）', () => {
   // 芯片起点 = 4 份（SLOT_PILL_LIMIT=3 之外），走查口径极端值 +152/+274 一并锁定
   assert.deepEqual(slotHeatDotTier(4), { mixPct: 25, size: 8 }, '芯片起点 4 份 = 最低档');
   assert.deepEqual(slotHeatDotTier(9), { mixPct: 25, size: 8 });
@@ -158,7 +153,7 @@ test('CALFIX-T2b 纯函数：slotHeatDotTier 分档边界（颜色深浅与直�
   assert.deepEqual(slotHeatDotTier(496), { mixPct: 100, size: 14 }, '走查口径单日最多 496 份封顶档');
 });
 
-test('CALFIX-T2b 渲染：90 天档热力点替长文字芯片（数字进 Tooltip/aria），30 天档芯片原样', () => {
+test('宽窗渲染：90 天档热力点替长文字芯片（数字进 Tooltip/aria），30 天档芯片原样', () => {
   const SLOT_A = '2026-11-01';
   const SLOT_B = '2026-11-05';
   const files = [
@@ -211,7 +206,7 @@ test('CALFIX-T2b 渲染：90 天档热力点替长文字芯片（数字进 Toolt
 
 // ---------- T3：迷你月历默认定位最新活跃月份 ----------
 
-test('CALFIX-T3 纯函数：latestActiveMonth 取活跃日期集合的最大月份（严禁 2013-10 脏月）', () => {
+test('迷你月历纯函数：latestActiveMonth 取活跃日期集合的最大月份（严禁 2013-10 脏月）', () => {
   // 走查口径：2013-10 脏数据月与 2026-11 活跃月并存 → 默认必须是 2026-11
   assert.equal(
     latestActiveMonth(['2013-10-15', '2013-10-15', '2026-11-06', '2026-11-07']),
@@ -224,7 +219,7 @@ test('CALFIX-T3 纯函数：latestActiveMonth 取活跃日期集合的最大月�
   assert.equal(latestActiveMonth(['2013-10-16']), '2013-10', '只有脏月时如实返回（月历本身仍按有事件月渲染）');
 });
 
-test('CALFIX-T3 渲染：迷你月历降序渲染，默认定位并高亮最新活跃月，2013-10 沉底', () => {
+test('迷你月历渲染：降序渲染，默认定位并高亮最新活跃月，2013-10 沉底', () => {
   const events = [
     ev('2013-10-16'),
     ev('2013-10-16'),
@@ -259,7 +254,7 @@ test('CALFIX-T3 渲染：迷你月历降序渲染，默认定位并高亮最新�
   assert.equal((html.match(/>最新</g) ?? []).length, 1, '「最新」徽标只出现一次');
 });
 
-test('CALFIX-T3 折叠口径：>24 个有事件月时常驻最近 24 个，头部仍是最新活跃月', () => {
+test('迷你月历折叠口径：>24 个有事件月时常驻最近 24 个，头部仍是最新活跃月', () => {
   // 30 个连续有事件月：2024-06 .. 2026-11（每月 5 日 1 条事件）
   const events: TimelineEvent[] = [];
   let y = 2024;

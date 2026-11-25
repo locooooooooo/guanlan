@@ -1,15 +1,15 @@
 /**
- * D05 · 星图画布 Alt+方向键 空间漫游——画布侧接线 Hook（挂载于 useGraphCanvasController）。
+ * 星图画布 Alt+方向键空间漫游——画布侧接线 Hook（挂载于 useGraphCanvasController）。
  *
- * 任务卡 D05 改动与产物③：沿引用/因果连线空间漫游（与线性时间轴 J/K 遍历互补）。
- * 几何判定全在纯函数 utils/canvasSpatialNav（邻接 + 方向锥选邻，单测锁定）；本 Hook 只做：
+ * 沿引用/因果连线进行空间漫游（与线性时间轴 J/K 遍历互补）。
+ * 几何判定全在纯函数 utils/canvasSpatialNav（邻接 + 方向锥选邻）；本 Hook 负责：
  *  - window keydown 监听 Alt+方向键（Ctrl/Meta 组合不认；编辑面/浮层让路同全局护栏）；
  *  - 候选节点 = 事件卡（subAgentCards）+ 左侧来源卡 + 任务包富卡（packageGroupLayouts
- *    内渲染槽位），全部自带 zoom 层世界中心坐标——与渲染几何同源，绝不把富卡压成 (0,0)；
+ *    内渲染槽位），全部自带 zoom 层世界中心坐标——与渲染几何同源，不把富卡压成 (0,0)；
  *  - 跳转 = 同步选中态（事件卡/富卡各自落对应 state + onSelectFile 右栏联动）+
  *    applyProgrammaticZoom 居中（遵循 prefers-reduced-motion 动态静默降级 durationMs=0）。
  *
- * 无选中卡 / 无连线邻居 / 方向锥内无候选时静默（诚实无路可走，绝不随机跳无关卡）。
+ * 无选中卡 / 无连线邻居 / 方向锥内无候选时静默（无路可走时不随机跳转无关卡）。
  */
 import { useEffect, useRef } from 'react';
 import {

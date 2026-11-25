@@ -36,15 +36,15 @@ import {
   ToolbarGroup,
   ToolbarSeparator,
 } from './ui';
-// R3：未读角标措辞走 GL-01 unreadStatusLabel 单一出口（UnreadReason 类型同源）
+// 未读角标措辞走 unreadStatusLabel 单一出口（UnreadReason 类型同源）
 import { hasUnreadChanges, unreadStatusLabel } from '../utils/guanlanEngine';
 import type { UnreadReason } from '../utils/guanlanEngine';
 // SVG 预览编码走 per-file 缓存单一出口（原组件内全量重编码实现已收敛进缓存层）
 import { getFilePreviewEntry } from '../utils/filePreviewCache';
 import { cleanDisplayText } from '../utils/displayText';
-// TA-03：卡片日期按本地日历日展示（含时刻 ISO 不再直切 UTC）
+// 卡片日期按本地日历日展示（含时刻 ISO 不再直切 UTC）
 import { localDay } from '../utils/timeFormat';
-// wf_4→v0.8：语义聚合层纯函数（任务包 / 五阶段 / 核心结论）——橱窗数据全部来自这里，组件内零造数
+// 语义聚合层纯函数（任务包 / 五阶段 / 核心结论）——橱窗数据全部来自这里，组件内零造数
 import {
   enrichPackagesWithEvents,
   groupFilesIntoPackages,
@@ -52,9 +52,9 @@ import {
   STAGE_SLOT_ORDER,
 } from '../utils/taskPackages';
 import type { StageRole, TaskPackage } from '../utils/taskPackages';
-// C2 组件契约（跨票只读复用，本票不改 Gallery 源文件）：任务包橱窗（首页工匠新建文件）。
-// 签名冻结为 TaskPackageGalleryProps；filter/onFilterChange 双缺省时组件内自持——概览不受控；
-// onOpenDoc 只回传 fileId，当前版本解析在本组件 openGalleryDoc 内做（R1 口径）。
+// 任务包橱窗复用 TaskPackageGallery（本文件不改 Gallery 源文件）。
+// 签名为 TaskPackageGalleryProps；filter/onFilterChange 双缺省时组件内自持——概览不受控；
+// onOpenDoc 只回传 fileId，当前版本解析在本组件 openGalleryDoc 内做。
 import TaskPackageGallery from './TaskPackageGallery';
 
 interface AtlasViewProps {
@@ -63,13 +63,13 @@ interface AtlasViewProps {
   onOpenFile: (fileId: string, revisionId: string) => void;
   onQuickPreview?: (fileId: string, revisionId?: string) => void;
   activeFileId: string;
-  /** fullbleed=顶层独占全幅（默认，行为与旧版逐字节等价）；embedded=知识资产库概览态（契约⑪）：
-   *  塞进三栏中栏——隐藏自带顶部说明条（v0.8 橱窗工票 T5 起缩放工具条亦退役：网格列表
+  /** fullbleed=顶层独占全幅（默认，行为与旧版逐字节等价）；embedded=知识资产库概览态：
+   *  塞进三栏中栏——隐藏自带顶部说明条（缩放工具条已退役：网格列表
    *  不需要画布缩放器，仅拆 UI 不拆 d3.zoom 几何——拖拽平移/滚轮缩放仍是该轨道唯一的
-   *  视口控制手段；fullbleed 工具条保留）（v0.8 橱窗化：看板 WorkflowBoard →
-   *  TaskPackageGallery 只读复用，R1） */
+   *  视口控制手段；fullbleed 工具条保留）（看板 WorkflowBoard →
+   *  TaskPackageGallery 只读复用） */
   variant?: 'fullbleed' | 'embedded';
-  /** pm_2：概览态是否处于筛选结果中——只决定顶部筛选条与空态文案；
+  /** 概览态是否处于筛选结果中——只决定顶部筛选条与空态文案；
    *  过滤本身在 App 完成（收到的 files 已是 filteredFiles），这里不做二次过滤 */
   filterActive?: boolean;
   /** 当前筛选条件摘要，如「未读 · design」 */
@@ -77,12 +77,12 @@ interface AtlasViewProps {
   /** 筛选结果份数；缺省取收到的 files 长度 */
   filteredCount?: number;
   onClearFilters?: () => void;
-  /** wf_4：时间线事件流——回填任务包 eventCount/lastActivity（enrichPackagesWithEvents）；
-   *  未传时任务卡状态标签不含事件计数/最近活动（0/'' 不渲染，不造数）。 */
+  /** 时间线事件流——回填任务包 eventCount/lastActivity（enrichPackagesWithEvents）；
+   *  未传时状态标签不含事件计数/最近活动（0/'' 不渲染，不造数）。 */
   events?: TimelineEvent[];
-  /** F1（AC-01）：App 级 /state-overview 唯一数据源，透传任务包橱窗渲染六态徽标 */
+  /** App 级 /state-overview 唯一数据源，透传任务包橱窗渲染六态徽标 */
   stateOverview?: StateOverviewResponse | null;
-  /** A04：文件卡片右键菜单、资源管理器定位与默认程序打开 */
+  /** 文件卡片右键菜单、资源管理器定位与默认程序打开 */
   systemActions?: DesktopFileActionCallbacks;
   /** 卡片 / 目录组 1-click 已读/未读切换回调 */
   onMarkFileRead?: (fileId: string, revisionId: string) => void;
@@ -98,16 +98,16 @@ interface AtlasCardItem {
   sizeBytes: number;
   observedAt: string;
   unread: boolean;
-  /** R3：未读角标悬浮文案用 GL-01 三态原文（unreadStatusLabel 的入参），不再各处自造词 */
+  /** 未读角标悬浮文案用三态原文（unreadStatusLabel 的入参），不在各处自造词 */
   unreadReason: UnreadReason;
   dataUri?: string;
   preview?: string;
 }
 
-/** V09 · 资产库概览视图模式（画布导览：自由拖拽缩放 / 紧凑网格：原生滚轮垂直阅读） */
+/** 资产库概览视图模式（画布导览：自由拖拽缩放 / 紧凑网格：原生滚轮垂直阅读） */
 export type AtlasViewMode = 'canvas' | 'grid';
 
-/** V09 · 超大目录默认折叠代表件上限（超过此数量默认收起，点击按需展开，护航 5,500+ 文件 60fps） */
+/** 超大目录默认折叠代表件上限（超过此数量默认收起，点击按需展开，护航 5,500+ 文件 60fps） */
 export const ATLAS_LARGE_FOLDER_CAP = 12;
 
 export interface AtlasFolderSliceResult<T> {
@@ -117,7 +117,7 @@ export interface AtlasFolderSliceResult<T> {
 }
 
 /**
- * V09 · 超大目录代表件挑选与折叠纯函数（可单测锁定）：
+ * 超大目录代表件挑选与折叠纯函数：
  * 优先保留未读文件，其次按最近观察时间降序挑选代表件；expanded=true 时全量返回。
  */
 export function sliceAtlasFolderItems<T extends { unread: boolean; observedAt: string }>(
@@ -141,7 +141,7 @@ export function sliceAtlasFolderItems<T extends { unread: boolean; observedAt: s
   };
 }
 
-/** V09 · 目录格式构成指纹段（用于 CardFrame 顶部微彩带，严格 MECE 守恒） */
+/** 目录格式构成指纹段（用于 CardFrame 顶部微彩带，严格 MECE 守恒） */
 function buildFolderFormatRibbon(items: readonly AtlasCardItem[]) {
   const counts = { md: 0, svg: 0, pdf: 0, code: 0, other: 0 };
   for (const it of items) {
@@ -210,8 +210,8 @@ function formatComposition(items: AtlasCardItem[]): string {
   return top.join(' · ');
 }
 
-/** 卡片基类（GraphCanvasView.tsx:2986-2989 同款几何）：200×130、rounded-xl、p-2.5；几何零改动（R4 注释口径）。
- *  v0.8 去框感（R3/R4）：1px 边框退役——层级改由白底色阶 + 弥散阴影承担；rounded-xl 与
+/** 卡片基类（与 GraphCanvasView 同款几何）：200×130、rounded-xl、p-2.5；几何零改动。
+ *  去框感：1px 边框退役——层级改由白底色阶 + 弥散阴影承担；rounded-xl 与
  *  --depth-2-radius 同为 12px，卡面走 .depth-2-card 工具类，hover 浮起走 .depth-2-card-hover
  *  唯一合法形态（translateY(-2px) + 阴影加深，--dur-1 --ease-spring，index.css:433-440）。 */
 const CARD_BASE =
@@ -320,7 +320,7 @@ const FileCard = React.memo(function FileCard({
     ) : (
       <span
         data-card-unread-reason="never_read"
-        /* R3：措辞走 GL-01 单一出口（未读（尚未建立阅读基线）/ 自上次读有更新），不再写死「未读变化」 */
+        /* 措辞走 unreadStatusLabel 单一出口（未读（尚未建立阅读基线）/ 自上次读有更新），不再写死「未读变化」 */
         title={unreadStatusLabel(item.unreadReason)}
         className="w-1.5 h-1.5 rounded-full bg-[color:var(--accent-wave)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--accent-wave)_18%,transparent)] shrink-0 mt-1"
       />
@@ -549,8 +549,7 @@ const FolderPeekPaper: React.FC<{ item: AtlasCardItem; index: number }> = ({ ite
           className="flex h-full w-full flex-col justify-between p-1"
           style={{ background: 'linear-gradient(180deg,#FAF9F5 0%,#EFEAF7 100%)' }}
         >
-          {/* 评审第 1 轮 #9③：7px 微字升 micro 11px；font-bold→font-medium（字重纪律：
-              sans/mono 700 仅存 serif display 档，§3.2） */}
+          {/* 格式微标采用 micro 11px 与 font-medium 字重，保持界面可读性与字重层级 */}
           <span
             className="text-[length:var(--text-micro)] leading-none font-mono font-medium"
             style={{ color: formatInk }}
@@ -565,9 +564,9 @@ const FolderPeekPaper: React.FC<{ item: AtlasCardItem; index: number }> = ({ ite
   );
 };
 
-/** 文件夹卡：舌 tab + 彩色渐变背板 + 文档纸片探出 + depth-2 白底前板（v0.8 去框感，R3）。
+/** 文件夹卡：舌 tab + 彩色渐变背板 + 文档纸片探出 + depth-2 白底前板（去框感）。
  *  fullbleed 卡阵中作纯装饰分组头；概览（embedded）资料抽屉中带 onOpenLatest，
- *  点击打开该文件夹最近更新的文档（role=button div + Enter/空格，键盘约定不回退，R5）。 */
+ *  点击打开该文件夹最近更新的文档（role=button div + Enter/空格，键盘约定不回退）。 */
 const FolderCard: React.FC<{
   row: AtlasRow;
   onOpenLatest?: () => void;
@@ -586,7 +585,7 @@ const FolderCard: React.FC<{
   );
   const unreadCount = row.items.reduce((sum, it) => sum + (it.unread ? 1 : 0), 0);
   const interactive = typeof onOpenLatest === 'function';
-  // v0.8 R3：hover 浮起对齐 depth 唯一合法形态（depth-2-card-hover：-2px + 阴影加深，
+  // hover 浮起对齐 depth 唯一合法形态（depth-2-card-hover：-2px + 阴影加深，
   // --dur-1 --ease-spring），替换旧 transition-transform duration-200 hover:-translate-y-1
   return (
     <div
@@ -642,7 +641,7 @@ const FolderCard: React.FC<{
           <FolderPeekPaper key={p.file.file_id} item={p} index={i} />
         ))}
       </div>
-      {/* 前板：v0.8 去框感（R3）——glass-panel 1px 玻璃框退役，改 depth-2 白底 + 弥散阴影；
+      {/* 前板：去框感——glass-panel 1px 玻璃框退役，改 depth-2 白底 + 弥散阴影；
           保留 rounded-2xl 16px 与背板/舌 tab 同档（.depth-2-card 类内置 12px 会与 16px 背板错档，
           故用 depth 令牌组合而非整类替换）。艺术层白发丝边随 FOLDER_ARTWORK 豁免口径保留。 */}
       <div className="absolute inset-x-0 bottom-0 flex h-[74px] flex-col justify-end overflow-hidden rounded-2xl bg-[var(--depth-2-bg)] shadow-[var(--depth-2-shadow)] px-4 pb-3">
@@ -691,7 +690,7 @@ const FolderCard: React.FC<{
   );
 };
 
-/** 概览资料抽屉：按收量取前 12 组文件夹的玻璃文件夹卡（DOM 常量级，DoD1 降噪口径不破坏——
+/** 概览资料抽屉：按收量取前 12 组文件夹的玻璃文件夹卡（DOM 常量级——
  *  这里只挂 12 张装饰卡，不平铺文档卡阵；点击打开该文件夹最近更新文档）。 */
 const FOLDER_WALL_CAP = 12;
 
@@ -706,8 +705,7 @@ const FolderWall: React.FC<{
   );
   const shown = ranked.slice(0, FOLDER_WALL_CAP);
   if (shown.length === 0) return null;
-  // R3 L1 落点：外层 section 套 depth-1-group-soft 作分组容器（可选条款采纳）——12 张装饰卡
-  // 常量级 DOM 与收量排序逻辑零改动（DoD1 收口成果不推翻），内部 FolderCard 保持 L2 卡层级
+  // 外层 Frame 作为资料抽屉分组容器，按收量取前 FOLDER_WALL_CAP 组，内部 FolderCard 保持卡片层级
   return (
     <Frame aria-label="资料抽屉" className="border border-border/75">
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
@@ -761,11 +759,11 @@ export const AtlasView: React.FC<AtlasViewProps> = ({
   onMarkFolderRead,
   onMarkFolderUnread,
 }) => {
-  // V09：支持「画布导览 / 紧凑网格」一键切换；embedded 默认紧凑网格原生顺滑滚动，fullbleed 默认画布导览
+  // 支持「画布导览 / 紧凑网格」一键切换；embedded 默认紧凑网格原生顺滑滚动，fullbleed 默认画布导览
   const [viewMode, setViewMode] = useState<AtlasViewMode>(
     variant === 'embedded' ? 'grid' : 'canvas'
   );
-  // V09：超大目录（> ATLAS_LARGE_FOLDER_CAP 份）默认折叠代表件保护 60fps，用户可按目录逐个展开
+  // 超大目录（> ATLAS_LARGE_FOLDER_CAP 份）默认折叠代表件保护 60fps，用户可按目录逐个展开
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [showAllFolderSections, setShowAllFolderSections] = useState(false);
   const toggleFolderExpand = (folder: string) => {
@@ -902,17 +900,17 @@ export const AtlasView: React.FC<AtlasViewProps> = ({
     }));
   }, [cardItems]);
 
-  // wf_4：任务包数据——全部来自 taskPackages 纯函数导出（组件内零造数）。
+  // 任务包数据——全部来自 taskPackages 纯函数导出（组件内零造数）。
   // events 可选：缺省（App 当前调用未传）时 eventCount/lastActivity 保持 0/'' 占位，不渲染。
   const packages = useMemo<TaskPackage[]>(() => {
     const base = groupFilesIntoPackages(files);
     return events && events.length > 0 ? enrichPackagesWithEvents(base, events) : base;
   }, [files, events]);
 
-  // wf_4→v0.8：file_id → FileRecord（Gallery onOpenDoc 回传 fileId 后在此解析当前版本走既有 onOpenFile）
+  // file_id → FileRecord（Gallery onOpenDoc 回传 fileId 后在此解析当前版本走既有 onOpenFile）
   const fileById = useMemo(() => new Map(files.map((f) => [f.file_id, f])), [files]);
 
-  // R1：Gallery 打开文档——onOpenDoc 只回传 fileId，当前版本在此解析（currentRevisionOf 与
+  // Gallery 打开文档——onOpenDoc 只回传 fileId，当前版本在此解析（currentRevisionOf 与
   // cardItems 同口径），等价原 WorkflowBoard.openDoc（current_revision_id 指向最新版）
   const openGalleryDoc = (fileId: string) => {
     const rec = fileById.get(fileId);
@@ -921,7 +919,7 @@ export const AtlasView: React.FC<AtlasViewProps> = ({
     onOpenFile(fileId, rev?.revision_id ?? rec.current_revision_id);
   };
 
-  // R2：五阶段聚合（原 WorkflowBoard 导读横幅的同源统计——包数按主导阶段计，含待分类；
+  // 五阶段聚合（原 WorkflowBoard 导读横幅的同源统计——包数按主导阶段计，含待分类；
   // 徽标行只展示 STAGE_SLOT_ORDER 五阶段，待分类不外显，与原横幅口径一致）
   const stageCounts = useMemo(() => {
     const counts: Record<StageRole, number> = {
@@ -1040,7 +1038,7 @@ export const AtlasView: React.FC<AtlasViewProps> = ({
             )}
           </div>
         </div>
-        {/* V09：目录格式构成数据指纹彩带 */}
+        {/* 目录格式构成数据指纹彩带 */}
         {ribbon.length > 0 && (
           <div
             data-atlas-format-ribbon=""
@@ -1078,7 +1076,7 @@ export const AtlasView: React.FC<AtlasViewProps> = ({
 
   const renderEmbeddedOverviewSections = () => (
     <>
-      {/* V09：coss Frame 阶段分布导读条 */}
+      {/* coss Frame 阶段分布导读条 */}
       <Frame className="border border-border/75">
         <div className="flex flex-wrap items-center gap-2 px-3.5 py-2 font-mono text-[length:var(--text-micro)] tabular-nums text-muted-foreground">
           <span className="font-sans font-semibold text-[12px] text-foreground pr-2 border-r border-border/80">
@@ -1126,7 +1124,7 @@ export const AtlasView: React.FC<AtlasViewProps> = ({
       data-atlas-view-mode={viewMode}
       className="glass-page relative flex-1 flex flex-col min-h-0 overflow-hidden select-none"
     >
-      {/* V09：统一 coss Toolbar 顶栏（画布导览 / 紧凑网格切换 + 缩放控制器 + 筛选胶囊 + 资产统计） */}
+      {/* 统一 coss Toolbar 顶栏（画布导览 / 紧凑网格切换 + 缩放控制器 + 筛选胶囊 + 资产统计） */}
       <div className="relative z-20 mx-4 mt-2.5 shrink-0">
         <Toolbar
           aria-label="资产库概览工具栏"

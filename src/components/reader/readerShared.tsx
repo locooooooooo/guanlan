@@ -1,8 +1,8 @@
 /**
- * D01-a 拆解 · 阅读器共享类型与轻组件。
+ * 阅读器共享类型与轻组件。
  *
- * ReaderSubMode / ReturnBreadcrumb 类型 + CopyIdButton（契约⑧③长 ID 行内复制钮）。
- * 独立成文件避免「ReaderView ↔ 分节渲染层」循环 import（分节层与 ReaderView 都消费）。
+ * 包含 ReaderSubMode / ReturnBreadcrumb 类型以及长 ID 行内复制按钮 CopyIdButton。
+ * 独立成文件避免 ReaderView 与分节渲染层之间产生循环 import。
  */
 
 import React, { useState } from 'react';
@@ -20,8 +20,8 @@ export interface ReturnBreadcrumb {
 }
 
 /**
- * 契约⑧③：长 ID（file_id / revision_id / decision_id）行内展示统一按钮。
- * 📋 小图标（w-4 h-4），title=完整 ID，点击写剪贴板并 ✓ 反馈 800ms。
+ * 长 ID（file_id / revision_id / decision_id）行内展示统一复制按钮。
+ * 悬停 title 显示完整 ID，点击写入剪贴板并展示勾选反馈 800ms。
  */
 export const CopyIdButton: React.FC<{ id: string; className?: string }> = ({
   id,

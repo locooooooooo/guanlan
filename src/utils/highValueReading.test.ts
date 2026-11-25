@@ -83,15 +83,15 @@ function state(baselineOf?: string): ReadingState {
 
 // ---------- isToolNoisePath：按路径形态拦工具脚本产物 ----------
 
-test('A1 isToolNoisePath：draw 形态段全拦，drawing-guide 与 output/ 正常文档不误拦', () => {
-  // draw 后跟 _ . - 数字或结尾 → 拦（工票四例 + 根级 + 下划线变体）
+test('isToolNoisePath：draw 形态段全拦，drawing-guide 与 output/ 正常文档不误拦', () => {
+  // draw 后跟 _ . - 数字或结尾 → 拦（典型四例 + 根级 + 下划线变体）
   assert.equal(isToolNoisePath('output/demo/draw_edge.md'), true);
   assert.equal(isToolNoisePath('output/demo/draw_ms.md'), true);
   assert.equal(isToolNoisePath('01-方案文档/draw.md'), true);
   assert.equal(isToolNoisePath('tools/draw_2.md'), true);
   assert.equal(isToolNoisePath('draw.md'), true, '根级裸 draw 同拦');
   assert.equal(isToolNoisePath('output/demo/draw_edge_验收.md'), true, '即便带交付关键词也拦：先噪音后分类');
-  // `_` 前缀目录段 → 拦（A2 同族口径）
+  // `_` 前缀目录段 → 拦（系统目录同族口径）
   assert.equal(isToolNoisePath('_tools/xxx.md'), true);
   assert.equal(isToolNoisePath('_qa/冒烟记录.md'), true);
   // 正常词不误拦：draw 后跟字母不算；output/ 不整体过滤
@@ -100,7 +100,7 @@ test('A1 isToolNoisePath：draw 形态段全拦，drawing-guide 与 output/ 正�
   assert.equal(isToolNoisePath('01-方案文档/项目计划与需求/路线图.md'), false);
 });
 
-test('A1 聚合：四例 draw 噪音全不入 entries/pendingCount，drawing-guide 计划文档正常入列', () => {
+test('聚合：四例 draw 噪音全不入 entries/pendingCount，drawing-guide 计划文档正常入列', () => {
   const noise = [
     file('output/demo/draw_edge.md'),
     file('output/demo/draw_ms.md'),

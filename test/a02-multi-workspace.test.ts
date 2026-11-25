@@ -73,7 +73,7 @@ function makeReading(fileId: string, pct: number, note?: string): ReadingState {
   };
 }
 
-describe('A02 多工作区独立状态与桌面桥接', () => {
+describe('多工作区独立状态与桌面桥接', () => {
   const originalWindow = (globalThis as { window?: unknown }).window;
 
   beforeEach(() => {

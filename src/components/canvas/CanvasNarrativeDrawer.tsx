@@ -1,22 +1,21 @@
 /**
- * v0.8 任务空间桌面 · 画布叙事抽屉（R3 / 组件契约 C7）。
+ * 画布叙事抽屉：
  *
  * 取代 334px 常驻右侧检视器：双击节点 / 顶栏「详情」时右侧滑出的流式时间叙事面板
  * （w≈340px，translateX+opacity --dur-3 --ease-spring，见 canvasWidgets.css）。
  * 内容为时间轴叙事分节（发生→变更章节→关联决策→引用依据，竖向点线轴非分割表单）；
- * 「打开原文」是 footer 首位钮（画布票 R3：双击语义变更后原文入口的唯一去处）。
+ * 「打开原文」作为 footer 首位按钮，承接双击打开详情后的原文跳转。
  *
- * Esc 先关本抽屉：capture 监听 + stopImmediatePropagation（KnowledgeGraph.tsx:43-53
- * 先例同款），并带 [role="dialog"] 守卫——阅读器/决策弹层开着时不抢 Esc；
- * 可见浮层开着（data-esc-layer="open"）时同样让位，浮层先收口。
+ * Esc 先关本抽屉：capture 监听 + stopImmediatePropagation（与 KnowledgeGraph 同款），
+ * 并带 [role="dialog"] 守卫——阅读器/决策弹层开着时不抢 Esc；
+ * 可见浮层开着（data-esc-layer="open"）时同样让位，浮层先关闭。
  * 锚点：data-cv-narrative-drawer（根）、data-cv-narrative-section={id}（每节）。
  * 舷窗纪律：样式全走 .cvw-*，零内联色值。
  */
 
 import React, { useEffect } from 'react';
 import { ArrowLeft, X } from 'lucide-react';
-// css 装载上移 App.tsx（总装，指挥授权）：node --test/tsx 测试链加载不了 .css 扩展名，
-// 组件内 import 会让 gc-12/wf2/canvas-theme 文件级失败；由 App 常驻装载兜底，零视觉变化
+// 样式文件统一由 App.tsx 装载：Node 测试链不解析 .css 导入，由 App 常驻装载兜底
 
 export interface CanvasNarrativeSection {
   id: string;
@@ -31,13 +30,13 @@ export interface CanvasNarrativeSection {
 export interface CanvasNarrativeDrawerProps {
   open: boolean;
   title: string;
-  /** 标题下 mono 小字行（「已选中 · 层级 N」逐字迁移自旧检视器，R9） */
+  /** 标题下 mono 小字行（如「已选中 · 层级 N」） */
   metaLine?: string;
   sections: CanvasNarrativeSection[];
   onClose: () => void;
   /** footer 首位=「打开原文」钮由宿主传入（复用 openFileReader 链路） */
   footer?: React.ReactNode;
-  /** 可选返回主轴钮（自旧检视器 :4029-4038 迁入；动作不丢失） */
+  /** 可选返回主轴钮 */
   backButton?: { label: string; onClick: () => void };
 }
 

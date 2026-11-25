@@ -1,19 +1,17 @@
 /**
- * 观澜 Guanlan v0.5 - /api/v1 查询客户端（批次一：bootstrap + 分页取数）
+ * 观澜 Guanlan - /api/v1 查询与写操作客户端
  *
- * 契约：native/docs/contract-query-api.md（§1 批次一端点、§3 前端取数路径）；
- * 类型镜像：src/services/apiTypes.ts（本文件只引用其既有类型，不删改）。
+ * 接口文档：native/docs/contract-query-api.md；
+ * 类型镜像：src/services/apiTypes.ts。
  *
- * 批次一取数纪律（方案 §5 三项调整）：
+ * 取数纪律：
  * - 初始化一次 GET /api/v1/bootstrap（短读快照；不含正文、完整版本链、全量关系、历史 SVG 原文）；
  * - files 按分页游标逐页拉取摘要，按 file_id 合并入调用方缓存（侧栏「全部文件」计数与
  *   facets 来自服务，不再假设浏览器持有全量）；
  * - events 窗口分页：游标绑定 snapshot_max_seq 与筛选指纹；CURSOR_STALE / INDEX_STALE 时
- *   以 stale 标记返回，调用方保留已显示数据并重新取当前窗口首页（契约 §0.2/§6）；
+ *   以 stale 标记返回，调用方保留已显示数据并重新取当前窗口首页；
  * - 版本链分页（/files/{id}/revisions，seq_asc）+ 按需版本正文（/revisions/{id}/content，
- *   md/svg 文本、pdf raw 流）；
- * - 不再调用 /api/workspace/scan（全量对账扫描）与 /api/workspace/file（任意路径直读），
- *   两者随旧插件一并移除（契约 §4 切换边界）。
+ *   md/svg 文本、pdf raw 流）。
  */
 
 import type {
@@ -93,7 +91,7 @@ import type {
   FileRecord,
   Revision,
 } from '../types/guanlan';
-// issue #29：批量正文拉取的请求协调与字节预算统一走 revisionContentStore
+// 批量正文拉取的请求协调与字节预算统一走 revisionContentStore
 import { requestRevisionContentsBatch } from '../utils/revisionContentStore';
 
 // 与既有消费方（graphEvents/taskPackages/GraphCanvasView/TimelineView 等）的导入面保持不变：
@@ -195,7 +193,7 @@ export function resolveApiUrl(path: string): string {
   return apiBase ? `${apiBase}${path.startsWith('/') ? '' : '/'}${path}` : path;
 }
 
-/** 统一错误包络（契约 §0.2：{ ok:false, code, error, detail?, index_generation? }） */
+/** 统一错误包络（{ ok:false, code, error, detail?, index_generation? }） */
 export interface ErrorEnvelopeBody {
   ok: false;
   code?: string;
@@ -240,8 +238,8 @@ async function requestJson(path: string, signal?: AbortSignal): Promise<RawRespo
   }
 }
 
-/** 网络层失败的提示文案（status 0 = fetch 抛错，多为服务未启动）。
- * P0-2 提示文本治理：状态码作中性数据保留（可报障定位），「HTTP」协议框架词删除。 */
+/** 网络层失败的提示文案（status 0 = fetch 抛错，多为服务未启动；
+ * 保留状态码供排障定位，不向用户暴露底层协议框架词）。 */
 function networkErrorText(raw: RawResponse): string {
   return raw.status === 0
     ? '无法连接观澜读服务（/api/v1）'
@@ -251,8 +249,7 @@ function networkErrorText(raw: RawResponse): string {
 /** POST 请求（与 requestJson 同形：不抛异常，status 0 = 网络层失败）。
  *
  * 全部前端写操作（索引任务、文件与文件夹操作、拍板回写、草案、checkpoint、挂载……）
- * 共用的 POST 入口。契约 §2 要求「立即 202 + job_id」，
- * 因此成功判定仍是 2xx 且包络 ok:true。
+ * 共用的 POST 入口。异步写操作返回 202 + job_id，因此成功判定为 2xx 且包络 ok:true。
  */
 async function requestJsonPost(path: string, body: unknown): Promise<RawResponse> {
   try {
@@ -302,7 +299,7 @@ async function requestJsonPatch(path: string, body: unknown): Promise<RawRespons
   }
 }
 
-/** DELETE 请求（C05 卸载挂载用；与 requestJson 同形：不抛异常，status 0 = 网络层失败） */
+/** DELETE 请求（卸载挂载等用；与 requestJson 同形：不抛异常，status 0 = 网络层失败） */
 async function requestJsonDelete(path: string): Promise<RawResponse> {
   try {
     const res = await fetch(`${apiBase}${path}`, {
@@ -366,7 +363,7 @@ function toResult<T>(raw: RawResponse): ApiResult<T> {
 }
 
 // ============================================================
-// bootstrap（契约 §1.1）：一次初始化，短读快照
+// bootstrap：一次初始化，短读快照
 // ============================================================
 
 export interface BootstrapQuery {
@@ -396,7 +393,7 @@ export async function fetchBootstrap(
 }
 
 // ============================================================
-// files 文件摘要分页（契约 §1.3）：relative_path ASC + 游标
+// files 文件摘要分页：relative_path ASC + 游标
 // ============================================================
 
 export interface FileSummariesQuery {
@@ -442,7 +439,7 @@ export interface AllFileSummariesResult {
 
 /**
  * 遍历拉取全部分页文件摘要（后台续载用：bootstrap 只带首批）。
- * 游标失效（CURSOR_STALE）时保留已取回页并从头重走（可变列表游标语义，契约 §1.3）；
+ * 游标失效（CURSOR_STALE）时保留已取回页并从头重走（可变列表游标语义）；
  * onPage 在每页到达时回调，供调用方增量合并缓存。
  */
 export async function fetchAllFileSummaries(
@@ -504,7 +501,7 @@ export async function fetchAllFileSummaries(
 }
 
 // ============================================================
-// events 窗口分页（契约 §1.4）：snapshot_max_seq 绑定
+// events 窗口分页：snapshot_max_seq 绑定
 // ============================================================
 
 export interface EventPageQuery {
@@ -580,7 +577,7 @@ export async function fetchEventDays(query: EventDaysQuery = {}): Promise<EventD
 }
 
 // ============================================================
-// 版本链分页（契约 §1.7）与按需版本正文（契约 §1.8）
+// 版本链分页与按需版本正文
 // ============================================================
 
 export interface FileHistoryRevision {
@@ -651,8 +648,8 @@ export interface FileHistory {
 export interface FileRevisionsPageQuery {
   /** seq_asc | seq_desc（默认 seq_desc；旧 /history wire 为 seq_asc，遍历合并时用 asc） */
   order?: 'seq_asc' | 'seq_desc';
-  /** 逗号分隔：events,statements,edges,aliases——文件级完整集合，仅首页携带（issue #24：
-   *  服务端只在无游标时返回，续页不再重复查询/传输整文件关联集合） */
+  /** 逗号分隔：events,statements,edges,aliases——文件级完整集合，仅首页携带
+   *  （服务端只在无游标时返回，续页不再重复查询/传输整文件关联集合） */
   include?: Array<'events' | 'statements' | 'edges' | 'aliases'>;
   limit?: number;
   cursor?: string | null;
@@ -675,9 +672,8 @@ export async function fetchFileRevisionsPage(
 }
 
 /**
- * 单文件版本链整链读取：内部遍历分页（单文件版本数有限，seq_asc 对齐旧 /history wire 顺序），
- * include 三类仅在首页请求（契约 §1.7：文件级集合一次带回，revisions 分页；
- * issue #24 起服务端续页不再返回附集合，此处也不再发送）。
+ * 单文件版本链整链读取：内部遍历分页（单文件版本数有限，seq_asc 保持按版本序排列），
+ * include 附集合仅在首页请求（文件级集合一次带回，revisions 分页；续页不再发送）。
  * 返回 null 表示读取失败（含 NOT_FOUND / 服务未启动）。
  */
 export async function fetchFileHistory(fileId: string): Promise<FileHistory | null> {
@@ -700,7 +696,7 @@ export async function fetchFileHistory(fileId: string): Promise<FileHistory | nu
     for (let pageGuard = 0; pageGuard < 1000; pageGuard++) {
       const page = await fetchFileRevisionsPage(fileId, {
         order: 'seq_asc',
-        // issue #24：文件级附集合只在首页请求；续页服务端本就不返回，不再空发参数
+        // 文件级附集合只在首页请求；续页服务端不返回，不再空发参数
         include: cursor ? undefined : ['events', 'statements', 'edges', 'aliases'],
         limit: 200,
         cursor,
@@ -769,11 +765,10 @@ export interface RevisionContentResult {
 }
 
 /**
- * 按版本读取正文（契约 §1.8）；PDF 默认返回可按版本打开的 raw_url，
- * md/svg 返回 utf-8 文本。快照过保留期返回 SNAPSHOT_UNAVAILABLE（v1 改名，
- * 旧名 REVISION_UNAVAILABLE 不再由服务端下发），绝不拿当前内容冒充旧版本。
+ * 按版本读取正文；PDF 默认返回可按版本打开的 raw_url，md/svg 返回 utf-8 文本。
+ * 快照过保留期返回 SNAPSHOT_UNAVAILABLE，绝不拿当前内容冒充旧版本。
  */
-/** 按版本读取正文的错误码说明（issue #32）：
+/** 按版本读取正文的错误码说明：
  *  - `SNAPSHOT_UNAVAILABLE`：快照已过保留期（换仍保留快照的版本阅读）；
  *  - `UNSUPPORTED_CONTENT`：正文超过服务端内联上限（改用 `raw=1` 流式地址）；
  *  - `INDEX_BUSY`：服务端响应预算饱和（可重试）。 */
@@ -792,12 +787,12 @@ export async function fetchRevisionContent(revisionId: string): Promise<Revision
   return { ok: false, code: result.code, error: result.error };
 }
 
-/** 按版本的 PDF / 资源原始地址（不用当前工作区路径，避免版本漂移；契约 §1.8 raw=1；自动绑定当前 apiBase 以兼容 Tauri WebView） */
+/** 按版本的 PDF / 资源原始地址（不用当前工作区路径，避免版本漂移；raw=1，自动绑定当前 apiBase 以兼容 Tauri WebView） */
 export function revisionRawUrl(revisionId: string): string {
   return resolveApiUrl(`/api/v1/revisions/${encodeURIComponent(revisionId)}/content?raw=1`);
 }
 
-/** B02：QuickLook 图像/矢量流式缩略地址（自动绑定当前工作区 apiBase，兼容 Tauri WebView） */
+/** QuickLook 图像/矢量流式缩略地址（自动绑定当前工作区 apiBase，兼容 Tauri WebView） */
 export function revisionThumbnailUrl(revisionId: string): string {
   return resolveApiUrl(`/api/v1/revisions/${encodeURIComponent(revisionId)}/thumbnail`);
 }
@@ -808,7 +803,7 @@ export interface RevisionPreviewFetchOptions {
   signal?: AbortSignal;
 }
 
-/** B02：QuickLook L1 轻预览查询（默认仅读 64KiB 分片/头部元数据，支持 AbortSignal 防竞态） */
+/** QuickLook L1 轻预览查询（默认仅读 64KiB 分片/头部元数据，支持 AbortSignal 防竞态） */
 export async function fetchRevisionPreview(
   revisionId: string,
   opts: RevisionPreviewFetchOptions = {}
@@ -827,7 +822,7 @@ export async function fetchRevisionPreview(
   return toResult<RevisionPreviewResponse>(await requestJson(path, opts.signal));
 }
 
-/** B03：Office（.docx/.xlsx）L2 结构化内容查询 */
+/** Office（.docx/.xlsx）L2 结构化内容查询 */
 export async function fetchRevisionOffice(
   revisionId: string,
   signal?: AbortSignal
@@ -837,7 +832,7 @@ export async function fetchRevisionOffice(
   );
 }
 
-/** C01：候选事项列表（多信号编织，含理由胶囊） */
+/** 候选事项列表（多信号编织，含理由胶囊） */
 export async function fetchInitiativeCandidates(
   signal?: AbortSignal
 ): Promise<ApiResult<import('./apiTypes').InitiativeCandidatesResponse>> {
@@ -846,7 +841,7 @@ export async function fetchInitiativeCandidates(
   );
 }
 
-/** C01：候选采纳（202 + JobAccepted；建/并入正式事项并固化归属） */
+/** 候选采纳（202 + JobAccepted；建/并入正式事项并固化归属） */
 export async function adoptInitiativeCandidate(
   candidateId: string
 ): Promise<ApiResult<{ ok: boolean; job_id: string }>> {
@@ -855,7 +850,7 @@ export async function adoptInitiativeCandidate(
   );
 }
 
-/** C01：候选整簇否决（202；信号对排除，重扫不反弹） */
+/** 候选整簇否决（202；信号对排除，重扫不反弹） */
 export async function dismissInitiativeCandidate(
   candidateId: string
 ): Promise<ApiResult<{ ok: boolean; job_id: string }>> {
@@ -864,7 +859,7 @@ export async function dismissInitiativeCandidate(
   );
 }
 
-/** C01：候选单成员剔除（202；与簇内成员两两排除，<2 人簇失效） */
+/** 候选单成员剔除（202；与簇内成员两两排除，<2 人簇失效） */
 export async function excludeInitiativeCandidateMember(
   candidateId: string,
   fileId: string
@@ -877,7 +872,7 @@ export async function excludeInitiativeCandidateMember(
   );
 }
 
-/** B04：PDF 页级正文查询（页码证据直达） */
+/** PDF 页级正文查询（页码证据直达） */
 export async function fetchRevisionPdf(
   revisionId: string,
   signal?: AbortSignal
@@ -888,11 +883,10 @@ export async function fetchRevisionPdf(
 }
 
 /**
- * 批量按需拉取版本正文（过渡通道：批次一仅限「当前文件版本链范围」调用，
- * 如阅读器版次对比的两版正文；全库批量补正文旧链路已随 /scan 移除，契约 §3.2 调整②）。
+ * 批量按需拉取版本正文（仅限当前文件版本链范围调用，如阅读器版次对比的两版正文）。
  * existing 中已有的 revision_id 跳过；SNAPSHOT_UNAVAILABLE 等失败项写入 failed，不污染正文缓存。
- * issue #29：请求协调与字节预算统一走 revisionContentStore——同版本并发读取
- * 合并为一次底层请求，ready 条目直接回填，失败不永久锁死。
+ * 请求协调与字节预算统一走 revisionContentStore——同版本并发读取合并为一次底层请求，
+ * ready 条目直接回填，失败不永久锁死。
  */
 export async function fetchRevisionContentsBatch(
   revisionIds: string[],
@@ -906,10 +900,10 @@ export async function fetchRevisionContentsBatch(
 }
 
 // ============================================================
-// relations（契约 §1.10 批次一过渡全量）
+// relations（全量文件引用边）
 // ============================================================
 
-/** 全量可落文件引用边（批次一过渡；批次三换 /api/v1/graph 局部关系） */
+/** 全量文件引用边 */
 export async function fetchRelations(): Promise<ApiResult<RelationsResponse>> {
   return toResult<RelationsResponse>(await requestJson('/api/v1/relations'));
 }
@@ -945,7 +939,7 @@ export function folderOfRelativePath(relativePath: string): string {
 
 /** 文件摘要 → 资产库 FileRecord（镜像 project.ts:189-206 的 active 投影） */
 export function fileSummaryToFileRecord(item: FileSummary): FileRecord {
-  // 当前版占位版本行：分页摘要不带 revisions[]（契约 §1.1 约束），阅读器/未读提示等
+  // 当前版占位版本行：分页摘要不带 revisions[]，阅读器/未读提示等
   // 消费方按 current_revision_id 找版本，先给一条可判定的占位（详情到达后整链替换）
   const placeholder: Revision | null = item.current_revision_id
     ? {
@@ -955,7 +949,7 @@ export function fileSummaryToFileRecord(item: FileSummary): FileRecord {
         content_sha256: '',
         observed_at: item.last_observed_at,
         // 日历「最近 7 天」取 revisions[0].source_time（=最早版本发生时间），
-        // 摘要的 first_source_time 恰是该字段（契约 §1.3/§5 风险 1）
+        // 摘要的 first_source_time 恰是该字段
         source_time: item.first_source_time || undefined,
         sizeBytes: 0,
         snapshotAvailable: item.snapshot_available,
@@ -1043,7 +1037,7 @@ export function revisionsFromHistory(
 
 
 // ============================================================
-// v0.4 以来保留的消费面：工作区摘要形状与 SSE 通知类型
+// 工作区摘要形状与 SSE 通知类型
 // ============================================================
 
 /** 首屏摘要（App 由 bootstrap 的 counts/baseline/time_range 组装；HomeView 消费） */
@@ -1072,23 +1066,23 @@ export type WorkspaceSource = 'real' | 'error';
 export interface WorkspaceChangeNotice {
   type: 'hello' | 'workspace-change';
   generation?: number;
-  /** 索引代（契约 J workspace-change 载荷） */
+  /** 索引代（workspace-change 载荷） */
   index_generation?: number;
   newEvents?: number;
   newRevisions?: number;
-  /** 后端 snake_case 兼容字段（契约 J） */
+  /** 后端 snake_case 兼容字段 */
   new_events?: number;
   new_revisions?: number;
   at?: string;
   watching?: boolean;
   paths?: string[];
-  /** 变更类别（契约 J：watcher/decision_writeback/proposal/l4a/state/task）；
-   *  kinds 含 'proposal' → 证道阁回写通知条（F6 ProposalToast） */
+  /** 变更类别（watcher/decision_writeback/proposal/l4a/state/task）；
+   *  kinds 含 'proposal' → 草案回写通知条（ProposalToast） */
   kinds?: string[];
 }
 
 /**
- * 订阅工作区变化（契约 J：/api/v1/stream 发送具名 SSE 事件 `hello` / `workspace-change`）。
+ * 订阅工作区变化（/api/v1/stream 发送具名 SSE 事件 `hello` / `workspace-change`）。
  * EventSource.onmessage 仅接收未命名事件，因此必须显式注册 `workspace-change` / `hello` 监听器。
  */
 export function subscribeWorkspaceStream(
@@ -1133,16 +1127,16 @@ export function subscribeWorkspaceStream(
 }
 
 // ============================================================
-// 索引任务与运行状态（契约 §2：批次二）
+// 索引任务与运行状态
 // ============================================================
 
-/** 索引任务类型（契约 G v1.2：外部可提四类）。
+/** 索引任务类型（外部可提四类）。
  *
- * - `verify_all`：整库核验（单飞合并，既有语义）；
+ * - `verify_all`：整库核验（单飞合并）；
  * - `changed_paths`：增量对账（paths 必填 ≤2000 条，同类 active 任务合并去重）；
  * - `l4a_summary`：L4A 沉淀（paths 指定文件）；
  * - `set_initiative_dirs`：专项目录设置（dirs 必填 ≤64 条，写入 meta.initiative_dirs，
- *   幂等覆盖——建议 1：工作区无 `\d{2}-` 目录时的识别补救写入路径）。
+ *   幂等覆盖——供工作区无 `\d{2}-` 目录时手动指定专项目录）。
  *
  * 内部 kind（decision_writeback / propose_revision / adopt_draft / archive_initiative /
  * reopen_initiative / diff / checkpoint_commit）外部直提一律 400『未知任务类型』；
@@ -1156,7 +1150,7 @@ export interface StartIndexJobPayload {
   dirs?: string[];
 }
 
-/** 提交索引任务：立即 202 + job_id（契约 G per-kind 合并语义在服务端，
+/** 提交索引任务：立即 202 + job_id（per-kind 合并语义在服务端，
  *  受理响应沿用 IndexJobAccepted.merged 回显是否并入已有任务） */
 export async function startIndexJob(
   kind: IndexJobKind = 'verify_all',
@@ -1168,7 +1162,7 @@ export async function startIndexJob(
 }
 
 // ============================================================
-// A05：身份保真文件操作（重命名 / 跨目录移动 / 移入回收站）
+// 身份保真文件操作（重命名 / 跨目录移动 / 移入回收站）
 // ============================================================
 
 export async function postRenameFile(
@@ -1205,13 +1199,13 @@ export async function postTrashFile(
   );
 }
 
-/** 专项目录设置（契约 G/建议 1）：POST /index-jobs kind=set_initiative_dirs 幂等覆盖 */
+/** 专项目录设置：POST /index-jobs kind=set_initiative_dirs 幂等覆盖 */
 export async function postSetInitiativeDirs(dirs: string[]): Promise<ApiResult<IndexJobAccepted>> {
   return startIndexJob('set_initiative_dirs', { dirs });
 }
 
 // ============================================================
-// B01：本地快照占用统计与工作区三档快照配额策略
+// 本地快照占用统计与工作区三档快照配额策略
 // ============================================================
 
 export async function fetchStorageStats(): Promise<ApiResult<StorageStatsResponse>> {
@@ -1231,10 +1225,10 @@ export async function updateStoragePolicy(
 }
 
 // ============================================================
-// 统一状态机投影（契约 A：GET /api/v1/state-overview）
+// 统一状态机投影（GET /api/v1/state-overview）
 // ============================================================
 
-/** 四视图唯一数据源（专项卡片 / 专项详情下拉 / 星图节点 / 文档顶栏，AC-01）；
+/** 四视图唯一数据源（专项卡片 / 专项详情下拉 / 星图节点 / 文档顶栏）；
  *  initiative_id 缺省 = 全量专项。 */
 export async function fetchStateOverview(
   initiativeId?: string
@@ -1248,23 +1242,22 @@ export async function fetchStateOverview(
 }
 
 // ============================================================
-// 证道阁上下文包（契约 B：POST /api/v1/context）
+// 智能体上下文包（POST /api/v1/context）
 // ============================================================
 
-/** 结构化上下文 + Markdown 导出同源生成（替换 v0.x formatContextForAgent 的
- *  本地拼装口径；items 缺省/空 = 服务端按 PRD 4.1 三入口表组装默认包） */
+/** 结构化上下文 + Markdown 导出同源生成（items 缺省/空时由服务端按三入口默认包组装） */
 export async function postContext(body: ContextRequest): Promise<ApiResult<ContextResponse>> {
   return toResult<ContextResponse>(await requestJsonPost('/api/v1/context', body));
 }
 
-/** E03：主流宿主（ZCode / Claude Code / Cursor）.mcp.json 安全预览/原子合并写入 */
+/** 主流宿主（ZCode / Claude Code / Cursor）.mcp.json 安全预览/原子合并写入 */
 export async function postMcpHostConfig(
   body: McpHostConfigRequest
 ): Promise<ApiResult<McpHostConfigResponse>> {
   return toResult<McpHostConfigResponse>(await requestJsonPost('/api/v1/mcp/host-config', body));
 }
 
-/** E04：拉取批阅看板（五态精简版 + 失联/无回执 unknown 诚实诊断） */
+/** 拉取批阅看板（五态精简版 + 失联/无回执 unknown 诚实诊断） */
 export async function fetchReviewBoard(params: {
   stallThresholdSecs?: number;
 } = {}): Promise<ApiResult<ReviewBoardResponse>> {
@@ -1276,7 +1269,7 @@ export async function fetchReviewBoard(params: {
   return toResult<ReviewBoardResponse>(await requestJson(`/api/v1/review-board${suffix}`));
 }
 
-/** E04：提交失联/孤儿节点人工修复任务（仅允许 reset_to_dispatchable / mark_suspended_hitl） */
+/** 提交失联/孤儿节点人工修复任务（仅允许 reset_to_dispatchable / mark_suspended_hitl） */
 export async function postRepairOrphan(
   initiativeId: string,
   body: OrphanRepairRequest
@@ -1289,7 +1282,7 @@ export async function postRepairOrphan(
   );
 }
 
-/** 返回当前本地回环服务端点（用于宿主 .mcp.json 零冷启动写入；无回环时回退 PRD 默认值） */
+/** 返回当前本地回环服务端点（用于宿主 .mcp.json 零冷启动写入；无回环时回退默认端口） */
 export function getActiveLoopbackEndpoint(): string {
   const base = getApiBaseUrl().trim().replace(/\/+$/, '');
   if (/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(base)) return base;
@@ -1301,10 +1294,10 @@ export function getActiveLoopbackEndpoint(): string {
 }
 
 // ============================================================
-// 陈述与拍板（契约 C：GET /statements + POST /decisions/{id}/resolve）
+// 陈述与拍板（GET /statements + POST /decisions/{id}/resolve）
 // ============================================================
 
-/** 决策列表（契约 §1.9）：SSE decision_writeback 后取最新决策（不限状态），
+/** 决策列表：SSE decision_writeback 后取最新决策（不限状态），
  *  生成《最新已拍板决策变更单》；status 传库内词（如「已确认」）时精确过滤。 */
 export async function fetchDecisions(query: {
   status?: string;
@@ -1341,7 +1334,7 @@ export async function fetchStatements(query: {
   );
 }
 
-/** 拍板回写（契约 C：恒 202，端点永不 409）——轮询 /jobs/{job_id} 至终态，
+/** 拍板回写（恒 202，端点永不 409）——轮询 /jobs/{job_id} 至终态，
  *  report.writeback.cas_ok=false 表示文件已被外部修改、拍板已存为草案 */
 export async function postDecisionResolve(
   statementId: string,
@@ -1356,7 +1349,7 @@ export async function postDecisionResolve(
 }
 
 // ============================================================
-// 修订草案（契约 D：/api/v1/revision-proposals 全链）
+// 修订草案（/api/v1/revision-proposals 全链）
 // ============================================================
 
 /** 草案列表（分页） */
@@ -1375,7 +1368,7 @@ export async function fetchRevisionProposals(query: {
   );
 }
 
-/** 外部智能体修订草案提交（契约 D：恒 202；conflict=受理初判预览，
+/** 外部智能体修订草案提交（恒 202；conflict=受理初判预览，
  *  权威结果在 job report.proposal） */
 export async function postRevisionProposal(
   body: RevisionProposalRequest
@@ -1385,7 +1378,7 @@ export async function postRevisionProposal(
   );
 }
 
-/** 采纳草案（契约 D：202；report.adopt.cas_ok=false=CAS 冲突不落版） */
+/** 采纳草案（202；report.adopt.cas_ok=false=CAS 冲突不落版） */
 export async function postRevisionProposalAdopt(draftId: string): Promise<ApiResult<JobAccepted>> {
   return toResult<JobAccepted>(
     await requestJsonPost(
@@ -1395,7 +1388,7 @@ export async function postRevisionProposalAdopt(draftId: string): Promise<ApiRes
   );
 }
 
-/** E02：获取单条草案的多模态 Diff 审阅载荷（基准版/磁盘现态/草案快照，只读绝不写盘） */
+/** 获取单条草案的多模态 Diff 审阅载荷（基准版/磁盘现态/草案快照，只读绝不写盘） */
 export async function fetchRevisionProposalContent(
   draftId: string
 ): Promise<ApiResult<RevisionProposalContentResponse>> {
@@ -1404,7 +1397,7 @@ export async function fetchRevisionProposalContent(
   );
 }
 
-/** 驳回草案 / 退回重做（契约 D / E02：202，可选 reason） */
+/** 驳回草案 / 退回重做（202，可选 reason） */
 export async function postRevisionProposalDismiss(
   draftId: string,
   reason?: string
@@ -1419,10 +1412,10 @@ export async function postRevisionProposalDismiss(
 }
 
 // ============================================================
-// 长任务 DAG 与 Checkpoint（契约 E：/initiatives/{id}/tasks + /checkpoints）
+// 长任务 DAG 与 Checkpoint（/initiatives/{id}/tasks + /checkpoints）
 // ============================================================
 
-/** 五槽位任务节点（F3 专项详情下拉的数据源；suspended_on_hitl 高亮） */
+/** 五槽位任务节点（专项详情下拉的数据源；suspended_on_hitl 高亮） */
 export async function fetchInitiativeTasks(
   initiativeId: string
 ): Promise<ApiResult<InitiativeTasksResponse>> {
@@ -1431,7 +1424,7 @@ export async function fetchInitiativeTasks(
   );
 }
 
-/** Checkpoint 同步受理（契约 E/阻塞 2）：201 成功返回 {checkpoint_id, node_state}；
+/** Checkpoint 同步受理：201 成功返回 {checkpoint_id, node_state}；
  *  校验失败 404 NOT_FOUND（不落库不推进，调用方直接重试/修正）；
  *  写线程积压 → 503 INDEX_BUSY。无 job_id。 */
 export async function postCheckpoint(
@@ -1461,7 +1454,7 @@ export async function fetchCheckpoints(query: {
 }
 
 // ============================================================
-// 归档与重开（契约 F）
+// 归档与重开
 // ============================================================
 
 /** 专项归档（202；非 Delivered 态归档在 report.warn='当前非已交付态'） */
@@ -1484,10 +1477,10 @@ export async function postInitiativeReopen(
 }
 
 // ============================================================
-// 任务取消与结果（契约 G：/jobs/{id}/cancel + /jobs/{id}/result）
+// 任务取消与结果（/jobs/{id}/cancel + /jobs/{id}/result）
 // ============================================================
 
-/** 取消任务（契约 G：queued 立即；running 协作式——写线程阶段间隙检查，
+/** 取消任务（queued 立即；running 协作式——写线程阶段间隙检查，
  *  事务提交点不可中断；已结束任务 409 CONFLICT） */
 export async function postJobCancel(jobId: string): Promise<ApiResult<JobCancelResult>> {
   return toResult<JobCancelResult>(
@@ -1506,7 +1499,7 @@ export async function fetchJobResult<R = unknown>(
 }
 
 // ============================================================
-// 语义 Diff（契约 H：POST /api/v1/diff 走任务队列——大计算异步入队，
+// 语义 Diff（POST /api/v1/diff 走任务队列——大计算异步入队，
 //  202 受理后轮询 /jobs/{id}，result 为 DiffResult）
 // ============================================================
 
@@ -1515,7 +1508,7 @@ export async function postDiffJob(body: DiffJobRequest): Promise<ApiResult<JobAc
 }
 
 /**
- * 语义 Diff 全链（PRD 3.5 / 方案 F7）：POST /diff 202 受理 → 轮询至终态 →
+ * 语义 Diff 全链：POST /diff 202 受理 → 轮询至终态 →
  * /jobs/{id}/result 取 DiffResult。任务 failed/无结果时 ok:false 如实返回
  * （DIFF_JOB_FAILED / DIFF_RESULT_EMPTY）——调用方诚实降级，不拿本地 diff 冒充语义摘要。
  */
@@ -1549,10 +1542,10 @@ export async function fetchDiffSummaryViaJob(
 }
 
 // ============================================================
-// L4A 摘要（契约 I：GET /summary/{file_id}）
+// L4A 摘要（GET /summary/{file_id}）
 // ============================================================
 
-/** 单文件 L4A 摘要（v1=确定性本地摘要；summary=null 且 queued=true = 已入队未完成） */
+/** 单文件 L4A 摘要（确定性本地摘要；summary=null 且 queued=true 表示已入队未完成） */
 export async function fetchFileSummaryDetail(
   fileId: string
 ): Promise<ApiResult<FileSummaryDetailResponse>> {
@@ -1579,7 +1572,7 @@ export interface JobPollOptions {
 
 /**
  * 轮询任务至终态（completed/failed）。拍板/采纳/归档等 202 受理端点的标配后续
- * （契约 C/D/F：受理即 202，权威结果在 job report）。
+ * （受理即返回 202，权威结果在 job report）。
  * 传输/服务错误与终态都返回 ApiResult：ok=false 时带 code（含 JOB_POLL_TIMEOUT）；
  * state==='failed' 时仍返回 ok=true 的终态快照（调用方读 error 字段区分业务失败）。
  */
@@ -1610,7 +1603,7 @@ export async function pollJobUntilSettled(
 /**
  * 从完成的任务状态中提取具名业务载荷分支（如 `writeback` / `adopt`）。
  *
- * 后端 Rust 服务（契约 G/C/D）将载荷放在 `job.result[branch]`；
+ * 后端 Rust 服务将载荷放在 `job.result[branch]`；
  * 兼容测试桩直接将字段平铺在 `job.report` 或 `job.result` 的历史形状。
  */
 export function extractJobBranch<T extends object>(
@@ -1638,7 +1631,7 @@ export async function fetchWorkspaceStatus(): Promise<ApiResult<WorkspaceStatusR
 }
 
 /**
- * C02 有界检索（契约 §2.4）：GET /api/v1/search。
+ * 有界检索：GET /api/v1/search。
  * CommandPalette 的全文通道（本地文件名命中即时刷新，服务端结果防抖后并入）。
  * q 为必填非空关键词（服务端 400）；format/dir 可选；limit 默认 30（clamp 1..100）。
  */
@@ -1657,7 +1650,7 @@ export async function fetchSearch(
 }
 
 /**
- * C05 跨项目联合检索（契约 §2.5）：GET /api/v1/search/cross。
+ * 跨项目联合检索：GET /api/v1/search/cross。
  * 主区 + 全部在线挂载参考工作区一次查完；挂载区命中带 source_workspace 来源标注，
  * 离线挂载在 mounts[] 中诚实降级（online=false + 最后已知摘要）。
  */
@@ -1675,12 +1668,12 @@ export async function fetchCrossSearch(
   );
 }
 
-/** C05：GET /api/v1/mounts —— 挂载列表（在线现读摘要；离线给最后已知摘要 + error） */
+/** GET /api/v1/mounts —— 挂载列表（在线现读摘要；离线给最后已知摘要 + error） */
 export async function fetchMounts(): Promise<ApiResult<MountListResponseDto>> {
   return toResult<MountListResponseDto>(await requestJson('/api/v1/mounts'));
 }
 
-/** C05：POST /api/v1/mounts —— 只读挂载参考工作区（父子互斥/重复挂载服务端确定性拒绝） */
+/** POST /api/v1/mounts —— 只读挂载参考工作区（父子互斥/重复挂载服务端确定性拒绝） */
 export async function mountWorkspace(
   rootPath: string
 ): Promise<ApiResult<MountAcceptedDto>> {
@@ -1689,7 +1682,7 @@ export async function mountWorkspace(
   );
 }
 
-/** C05：DELETE /api/v1/mounts/{mount_id} —— 卸载（只断开只读连接，绝不动参考区磁盘） */
+/** DELETE /api/v1/mounts/{mount_id} —— 卸载（只断开只读连接，绝不动参考区磁盘） */
 export async function unmountWorkspace(
   mountId: string
 ): Promise<ApiResult<{ ok: boolean; mount_id: string }>> {
@@ -1698,9 +1691,9 @@ export async function unmountWorkspace(
   );
 }
 
-// ===== F01：事项资料胶囊（Context Capsule）两阶段预览/脱敏导出/秒开核验 =====
+// ===== 事项资料胶囊（Context Capsule）两阶段预览/脱敏导出/秒开核验 =====
 
-/** F01 阶段一：POST /api/v1/capsules/preview —— 零副作用预览体积、敏感排除与 confirm token */
+/** 阶段一：POST /api/v1/capsules/preview —— 零副作用预览体积、敏感排除与 confirm token */
 export async function previewCapsule(
   req: import('./apiTypes').CapsulePreviewRequest
 ): Promise<ApiResult<import('./apiTypes').CapsulePreviewResponse>> {
@@ -1709,7 +1702,7 @@ export async function previewCapsule(
   );
 }
 
-/** F01 阶段二：POST /api/v1/capsules/export —— 必须携带有效 preview_token + confirmed_preview=true */
+/** 阶段二：POST /api/v1/capsules/export —— 必须携带有效 preview_token + confirmed_preview=true */
 export async function exportCapsule(
   req: import('./apiTypes').CapsuleExportRequest
 ): Promise<ApiResult<import('./apiTypes').CapsuleExportResponse>> {
@@ -1718,7 +1711,7 @@ export async function exportCapsule(
   );
 }
 
-/** F01：POST /api/v1/capsules/inspect —— 秒开校验任意本地开放胶囊目录（识别 capsule-manifest.json） */
+/** POST /api/v1/capsules/inspect —— 秒开校验任意本地开放胶囊目录（识别 capsule-manifest.json） */
 export async function inspectCapsuleDir(
   capsuleDir: string
 ): Promise<ApiResult<import('./apiTypes').CapsuleInspectResponse>> {
@@ -1727,7 +1720,7 @@ export async function inspectCapsuleDir(
   );
 }
 
-/** F01：POST /api/v1/capsules/file —— 沙箱读取胶囊内附带快照原文（支持决定行号证据跳转） */
+/** POST /api/v1/capsules/file —— 沙箱读取胶囊内附带快照原文（支持决定行号证据跳转） */
 export async function readCapsuleFile(
   capsuleDir: string,
   bundledRelPath: string
@@ -1740,9 +1733,9 @@ export async function readCapsuleFile(
   );
 }
 
-// ===== F02：全量开放导出、决定证据铁律保护存储瘦身（GC）、SHA-256 核验与脱敏诊断包 ZIP =====
+// ===== 全量开放导出、决定证据保护存储瘦身（GC）、SHA-256 核验与脱敏诊断包 ZIP =====
 
-/** F02：GET /api/v1/storage/integrity —— 校验全部活跃快照 SHA-256 并诚实报告受损影响范围 */
+/** GET /api/v1/storage/integrity —— 校验全部活跃快照 SHA-256 并诚实报告受损影响范围 */
 export async function verifyStorageIntegrity(): Promise<
   ApiResult<import('./apiTypes').BlobIntegrityReport>
 > {
@@ -1751,7 +1744,7 @@ export async function verifyStorageIntegrity(): Promise<
   );
 }
 
-/** F02：POST /api/v1/storage/gc —— 存储瘦身预演或执行（铁律保护决定/因果边证据快照） */
+/** POST /api/v1/storage/gc —— 存储瘦身预演或执行（保护决定/因果边证据快照） */
 export async function runStorageGc(
   req: import('./apiTypes').StorageGcRequest
 ): Promise<ApiResult<import('./apiTypes').StorageGcResponse>> {
@@ -1760,7 +1753,7 @@ export async function runStorageGc(
   );
 }
 
-/** F02：POST /api/v1/export/workspace —— 零锁定工作区全量开放导出 */
+/** POST /api/v1/export/workspace —— 零锁定工作区全量开放导出 */
 export async function exportWorkspaceOpenArchive(
   req: import('./apiTypes').WorkspaceOpenExportRequest
 ): Promise<ApiResult<import('./apiTypes').WorkspaceOpenExportResponse>> {
@@ -1769,7 +1762,7 @@ export async function exportWorkspaceOpenArchive(
   );
 }
 
-/** F02：POST /api/v1/storage/diagnostic-zip —— 落盘生成脱敏运行诊断包 ZIP */
+/** POST /api/v1/storage/diagnostic-zip —— 落盘生成脱敏运行诊断包 ZIP */
 export async function exportDiagnosticZip(
   outputPath?: string | null
 ): Promise<ApiResult<import('./apiTypes').DiagnosticZipResponse>> {
@@ -1780,7 +1773,7 @@ export async function exportDiagnosticZip(
   );
 }
 
-/** F02：一键下载脱敏诊断包 ZIP 地址（浏览器/WebView 直下 `guanlan-diagnostic.zip`） */
+/** 一键下载脱敏诊断包 ZIP 地址（浏览器/WebView 直下 `guanlan-diagnostic.zip`） */
 export function diagnosticZipDownloadUrl(): string {
   return resolveApiUrl('/api/v1/storage/diagnostic-zip');
 }
@@ -2053,7 +2046,7 @@ export async function postMoveFileInProject(
   );
 }
 
-// ===== V04 · 服务端已读基线查询与批量确立/撤销 =====
+// ===== 服务端已读基线查询与批量确立/撤销 =====
 
 export async function fetchServerReadingStates(): Promise<
   ApiResult<import('./apiTypes').ReadingStateListResponseDto>

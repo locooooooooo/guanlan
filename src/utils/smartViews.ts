@@ -3,21 +3,21 @@ import type { ArtifactStateView } from '../services/apiTypes';
 import { hasUnreadChanges } from './guanlanEngine';
 
 /**
- * C04 · 五类虚拟智能视图（Smart Views）纯函数派生（§5 C04）。
+ * 五类虚拟智能视图（Smart Views）纯函数派生。
  *
  * 零维护成本的动态视图——成员与计数全部由同一份输入即时派生，绝无手工维护清单。
- * 守恒契约（量化验收口径）：任一智能视图的「列表计数 = 顶部徽标数 = 画布/列表过滤
+ * 守恒契约：任一智能视图的「列表计数 = 顶部徽标数 = 画布/列表过滤
  * 节点数」三处共用本模块同一函数的同一输出（App.filteredFiles 与 LeftSidebar 徽标
  * 都消费 computeSmartViewFiles 的结果），误差恒 = 0。
  *
  * 数据源（全部已在 App 内存中，零新增 IO）：
- * - 读后有更新：hasUnreadChanges 的 updated_since_last_read 态（GL-01 引擎单一出口，
+ * - 读后有更新：hasUnreadChanges 的 updated_since_last_read 态（引擎单一出口，
  *   有阅读基线且当前版更新；从未读过 never_read 不算「读后有更新」）；
  * - 等我拍板（P0/P1）：/api/v1/state-overview 的 ArtifactStateView.pending_p0+pending_p1>0
- *   （与 C03 命令面板 `status:待拍板` 语法同一口径）；
+ *   （与命令面板 `status:待拍板` 语法同一口径）；
  * - 近 7 天活跃产物：artifact.last_activity_at（服务端状态机活动时间）落在
  *   [now-7d, now] 窗口（时间解析失败诚实不算，不伪造活跃）；
- * - Agent 待审草案：契约 D revision_drafts 待审清单（source=mcp|agent）的 file_id 集；
+ * - Agent 待审草案：revision_drafts 待审清单（source=mcp|agent）的 file_id 集；
  * - 游离未归属资料：artifact.initiative_id === null（服务端状态机未归属；
  *   artifact 行缺失＝服务端尚未投影，诚实不归入，不冒充「游离」）。
  */
@@ -43,7 +43,7 @@ export const SMART_VIEWS: readonly SmartViewDef[] = [
   {
     id: 'updated_after_read',
     label: '读后有更新',
-    title: '已建立阅读基线且当前版本有更新（阅读口径 GL-01 单一出口）',
+    title: '已建立阅读基线且当前版本有更新',
   },
   {
     id: 'awaiting_decision',
@@ -58,7 +58,7 @@ export const SMART_VIEWS: readonly SmartViewDef[] = [
   {
     id: 'agent_drafts',
     label: 'Agent 待审草案',
-    title: '经 MCP/Agent 提交、等待人工审阅的修订草案（契约 D，CAS 绝不静默覆盖）',
+    title: '经 MCP/Agent 提交、等待人工审阅的修订草案（乐观并发保护，绝不静默覆盖原稿）',
   },
   {
     id: 'unassigned',
@@ -79,7 +79,7 @@ export interface SmartViewMembershipInput {
   readingStates: Readonly<Record<string, ReadingState>>;
   /** /api/v1/state-overview 的 artifact 行索引（file_id → 行）；null/空＝投影未就绪。 */
   artifactsByFileId: ReadonlyMap<string, ArtifactStateView> | null;
-  /** 契约 D 待审草案的 file_id 集合；null＝草案数据未就绪。 */
+  /** 待审草案的 file_id 集合；null＝草案数据未就绪。 */
   agentDraftFileIds: ReadonlySet<string> | null;
   /** 活跃窗口判定基准时刻（单测可注入固定值保证确定性）。 */
   nowMs: number;

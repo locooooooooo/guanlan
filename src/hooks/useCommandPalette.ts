@@ -1,11 +1,11 @@
 /**
- * C03 · Ctrl+K 命令面板——状态 Hook（双层刷新与键盘/热键接线）。
+ * Ctrl+K 命令面板——状态 Hook（双层刷新与键盘/热键接线）。
  *
- * 性能口径（任务卡 C03）：
+ * 性能设计：
  * - 呼出 <16ms：open() 只置布尔位；空态数据（最近浏览/动作）由 files + readingStates
  *   内存即时组装（assemblePaletteResults 纯函数，微秒级），无任何 IO；
  * - 每敲击 <50ms：**本地层（路径/标题子串 + 语法过滤）同步即时刷新**；全文层
- *   （C02 GET /api/v1/search，服务端 p95 18ms + HTTP）经 130ms 防抖异步并入——
+ *   （GET /api/v1/search）经 130ms 防抖异步并入——
  *   列表先出本地命中，全文命中随后按 score 并入（<50ms 的「刷新」由本地层兑现）。
  *
  * 键盘接线：
@@ -48,7 +48,7 @@ export interface UseCommandPaletteOptions {
   initiatives: InitiativeStateView[];
   artifacts: ArtifactStateView[];
   recentWorkspaces: string[];
-  /** C05：挂载参考工作区（有在线挂载时全文层同时发 /api/v1/search/cross 跨库层） */
+  /** 挂载参考工作区（有在线挂载时全文层同时发 /api/v1/search/cross 跨库检索） */
   mountedWorkspaces?: MountedWorkspaceDto[];
   /** 多项目并存：受管项目数 > 1 时并发 /api/v1/projects/search 覆盖全部其他项目 */
   multiProjectCount?: number;
@@ -118,7 +118,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
     }
     setSearching(true);
     const seq = ++fetchSeqRef.current;
-    // C05 + 多项目并存：在线挂载区或多项目数 > 1 时并发跨项目检索
+    // 在线挂载区或多项目数 > 1 时并发跨项目检索
     const wantCross = shouldFetchCrossSearch(mountedWorkspaces ?? []);
     const wantMultiProject = multiProjectCount > 1;
     debounceRef.current = setTimeout(() => {

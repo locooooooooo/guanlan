@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 
 /**
- * D03 · 文档版本时光机「多模态对比」停靠侧面板外壳。
+ * 文档版本时光机「多模态对比」停靠侧面板外壳。
  *
  * - 停靠在 .event-plot（position:relative 既有锚）右缘的普通 HTML 层——不是浮层弹窗，
  *   不入 App Esc 阶梯、不挂 data-esc-layer（不遮挡全屏，仅覆盖画布右侧空白卡区）；
@@ -52,7 +52,7 @@ export function DiffSidePane({ badge, subtitle, title, open, onToggle, children 
       aria-label={`${badge}版本对比 · ${subtitle}`}
       className="absolute inset-y-0 right-0 z-10 flex min-w-0 flex-col overflow-hidden border-l"
       style={{
-        // V09：左侧版本链恒保留 ≥360px 可视宽度，彻底消除 v2/v1 卡片右缘截断
+        // 左侧版本链恒保留 ≥360px 可视宽度，避免旧版卡片右缘被侧面板截断
         width: 'min(560px, max(280px, calc(100% - 360px)))',
         background: 'color-mix(in srgb, var(--cv-panel) 88%, transparent)',
         borderColor: 'color-mix(in srgb, var(--cv-hairline-ink) 16%, transparent)',

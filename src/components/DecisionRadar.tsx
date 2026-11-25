@@ -3,8 +3,8 @@ import { ChevronDown, Scale } from 'lucide-react';
 import type { DecisionAssertion, DecisionSourceEvidence } from '../types/guanlan';
 import { formatOfficeAnchorLabel, pickPrimaryOfficeEvidence } from '../utils/officeAnchor';
 import { formatPdfAnchorLabel, pickPrimaryPdfEvidence } from '../utils/pdfAnchor';
-// 统一状态机 SSOT（方案 F2）：决策状态词表与未决口径单一出口——
-// DECIDED_STATUSES 与 HomeView 卡 A 的双份过滤实现收敛（AC-01 四视图同词）
+// 统一状态机 SSOT：决策状态词表与未决口径单一出口——
+// DECIDED_STATUSES 与 HomeView 卡 A 的过滤实现保持同源一致
 import {
   DECIDED_DECISION_STATUSES,
   DECISION_STATUS_CONFIRMED,
@@ -18,7 +18,7 @@ import {
 import { cleanDisplayText } from '../utils/displayText';
 
 /**
- * pm_4：未决决策雷达（全程只读）。
+ * 未决决策雷达（全程只读）。
  *
  * - 只读：DecisionAssertion 没有审批动作字段，服务端也没有写决策的路径；
  *   这里只有「展开 / 跳到证据原文」两种交互，不提供确认/否决/搁置/签批。
@@ -29,17 +29,17 @@ import { cleanDisplayText } from '../utils/displayText';
  */
 interface DecisionRadarProps {
   decisions: DecisionAssertion[];
-  /** V03 SSOT：服务端全库未决待拍板真实总数（缺省时回退本地计算，兼容单测） */
+  /** 服务端全库未决待拍板真实总数（缺省时回退本地计算，兼容单测） */
   unresolvedTotal?: number | null;
   onOpenDecision: (decisionId: string, targetEvidence?: DecisionSourceEvidence) => void;
-  /** v0.8 R5 受控展开信号：App 侧递增计数（如左栏主导航「未决决策」命中）经 TopHeader
-   *  转发进来；>0 即展开面板。收起仍归本地状态（Esc/外点/再点按钮），信号不反向收起 */
+  /** 受控展开信号：App 侧递增计数经 TopHeader 转发进来；
+   *  >0 即展开面板。收起仍归本地状态（Esc/外点/再点按钮），信号不反向收起 */
   openSignal?: number;
 }
 
 // 状态字色 → stage-ink -text 深档（玻璃 ≥4.5 AA；同步胶囊三态同款映射：
 // 待确认=decision、来源不一致=anomaly、已确认=deliver；未定局状态一律 --ink-soft）。
-// 方案 F2：键取 stateProjection 决策词表常量，状态词不再就地硬编码
+// 键取 stateProjection 决策词表常量，状态词不就地硬编码
 const STATUS_TEXT_COLORS: Record<string, string> = {
   [DECISION_STATUS_PENDING]: 'text-[color:var(--stage-ink-decision-text)]',
   [DECISION_STATUS_CONFLICT]: 'text-[color:var(--stage-ink-anomaly-text)]',
@@ -92,7 +92,7 @@ export const DecisionRadar: React.FC<DecisionRadarProps> = ({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  // v0.8 R5 受控展开：信号变化且 >0 时展开（仅单向触发，不与本地关闭逻辑打架）
+  // 受控展开：信号变化且 >0 时展开（仅单向触发，不与本地关闭逻辑打架）
   useEffect(() => {
     if (openSignal !== undefined && openSignal > 0) setOpen(true);
   }, [openSignal]);
@@ -150,8 +150,8 @@ export const DecisionRadar: React.FC<DecisionRadarProps> = ({
         .sort(byBlocked),
     [considered]
   );
-  // 未决计数单一出口（V03 SSOT：优先消费服务端全库未决总数，消除 288 vs 100 分页分裂；
-  // 缺省时回退本地 stateProjection.unresolvedDecisionCount，单测与旧后端零破坏）
+  // 未决计数单一出口：优先消费服务端全库未决总数，避免分页加载造成统计偏差；
+  // 缺省时回退本地 stateProjection.unresolvedDecisionCount，兼容单测与缺省场景
   const loadedUnresolvedCount = unresolvedDecisionCount(considered);
   const unresolvedCount =
     typeof unresolvedTotal === 'number' && unresolvedTotal >= 0

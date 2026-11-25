@@ -1,5 +1,5 @@
 /**
- * issue #29 —— 统一正文仓库验收测试：
+ * 统一正文仓库单测：
  * - 同版本并发读取合并为一次底层请求；in-flight 完成后删除；
  * - 失败不永久锁死（可重试）；错误码保留供 UI 分型；
  * - 字节 LRU 预算（按字节非条数），pin 当前阅读版本不被逐出；
@@ -29,7 +29,7 @@ function okFetch(text: string): (id: string) => Promise<ContentFetchResult> {
   return Object.assign(fn, { seen });
 }
 
-test('#29 同版本并发读取合并为一次底层请求；ready 命中不再发请求', async () => {
+test('同版本并发读取合并为一次底层请求；ready 命中不再发请求', async () => {
   clearRevisionContentStoreForTest();
   let calls = 0;
   const fetch = async () => {
@@ -53,7 +53,7 @@ test('#29 同版本并发读取合并为一次底层请求；ready 命中不再�
   assert.equal(stats.ready, 1);
 });
 
-test('#29 失败不永久锁死：failed 后再次请求重新拉取；wire 错误码保留', async () => {
+test('失败不永久锁死：failed 后再次请求重新拉取；wire 错误码保留', async () => {
   clearRevisionContentStoreForTest();
   let calls = 0;
   const fetch = async () => {
@@ -76,7 +76,7 @@ test('#29 失败不永久锁死：failed 后再次请求重新拉取；wire 错�
   assert.equal(getRevisionContent('rev_y')?.state, 'ready');
 });
 
-test('#29 字节 LRU：按字节预算逐最旧；pin 的当前阅读版本不被逐出', async () => {
+test('字节 LRU：按字节预算逐最旧；pin 的当前阅读版本不被逐出', async () => {
   clearRevisionContentStoreForTest();
   setByteBudgetForTest(100);
   const fetch = okFetch('x'.repeat(60));
@@ -100,7 +100,7 @@ test('#29 字节 LRU：按字节预算逐最旧；pin 的当前阅读版本不�
   setByteBudgetForTest(0);
 });
 
-test('#29 晚到 detail 合并：既有已加载正文不丢；store ready 条目兜底回填', async () => {
+test('晚到 detail 合并：既有已加载正文不丢；store ready 条目兜底回填', async () => {
   clearRevisionContentStoreForTest();
   interface RevLike {
     revision_id: string;
@@ -136,7 +136,7 @@ test('#29 晚到 detail 合并：既有已加载正文不丢；store ready 条�
   assert.equal(merged[2].markdownContent, 'store 里的第三版正文');
 });
 
-test('#29 晚到 detail 合并（svg）：store 补源重算抽取文本；detail 自带字段优先', async () => {
+test('晚到 detail 合并（svg）：store 补源重算抽取文本；detail 自带字段优先', async () => {
   clearRevisionContentStoreForTest();
   interface RevLike {
     revision_id: string;
@@ -173,7 +173,7 @@ test('#29 晚到 detail 合并（svg）：store 补源重算抽取文本；detai
   assert.equal(mergedNoStore[0].svgSource, '<svg>旧</svg>');
 });
 
-test('#29 批量通道：existing 跳过、ready 回填、失败写入 failed', async () => {
+test('批量通道：existing 跳过、ready 回填、失败写入 failed', async () => {
   clearRevisionContentStoreForTest();
   let calls = 0;
   const fetch = async (id: string) => {

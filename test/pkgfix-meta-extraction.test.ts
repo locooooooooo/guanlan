@@ -1,5 +1,5 @@
 /**
- * pkgfix · 任务包内容提取与元信息数据层单测（工票 T1~T5）。
+ * 任务包内容提取与元信息数据层单测。
  *
  * 守住五件事：
  *  T1 摘要多级回退链：extractCoreSummary 显式核心结论 → 逐章节（跳目录/编号规则等元话语节）
@@ -103,8 +103,8 @@ function event(
 
 // ---------- T4 · taskPackageOf 命名子专项锚定 ----------
 
-test('taskPackageOf：顶层资产桶下的命名子专项段锚定子专项（pkgfix T4）', () => {
-  // 正例：任务码前缀子段（工票原例「MECH-WIN-001 机械设计工具独立交付」）
+test('taskPackageOf：顶层资产桶下的命名子专项段锚定子专项', () => {
+  // 正例：任务码前缀子段（如「MECH-WIN-001 机械设计工具独立交付」）
   assert.deepEqual(
     taskPackageOf('04-智能体代码/MECH-WIN-001 机械设计工具独立交付/README.md'),
     {
@@ -144,7 +144,7 @@ test('taskPackageOf：顶层资产桶下的命名子专项段锚定子专项（p
   assert.equal(taskPackageOf('04-智能体代码/MECH-WIN-001 机械设计工具独立交付/a/b/c.md').kind, 'fallback');
 });
 
-test('taskPackageOf 下游同源：画廊分组与画布 buildCanvasPackageGroups 同步锚定粒度（pkgfix T4 影响面）', () => {
+test('taskPackageOf 下游同源：画廊分组与画布 buildCanvasPackageGroups 同步锚定粒度', () => {
   const files = [
     file({ file_id: 'm1', relative_path: '04-智能体代码/MECH-WIN-001 机械设计工具独立交付/README.md' }),
     file({
@@ -185,8 +185,8 @@ test('taskPackageOf 下游同源：画廊分组与画布 buildCanvasPackageGroup
 
 // ---------- T5 · stageOfPath basename 决策强信号 ----------
 
-test('stageOfPath：basename 决策强信号先于关键词顺序表（pkgfix T5 正例）', () => {
-  // 工票原例形态：决策回执（请勾选后回传）——混入执行族词「修改」时旧顺序会高亮到执行
+test('stageOfPath：basename 决策强信号先于关键词顺序表（正例）', () => {
+  // 典型形态：决策回执（请勾选后回传）——混入执行族词「修改」时旧顺序会高亮到执行
   assert.equal(stageOfPath('01-方案文档/长任务与执行记录/长任务_2026-11-02/修改说明_决策回执（请勾选后回传）.md'), '决策');
   assert.equal(stageOfPath('output/pdm-long006/run-20261109T0928/决策回执（请勾选后回传）.md'), '决策');
   // 交付族词（handoff/验收）同样被强信号压过
@@ -194,11 +194,11 @@ test('stageOfPath：basename 决策强信号先于关键词顺序表（pkgfix T5
   assert.equal(stageOfPath('01-方案文档/发布包/某包_2026-11-01/验收单_待确认.md'), '决策');
   // 强信号压过容器默认（发布包容器默认交付）
   assert.equal(stageOfPath('01-方案文档/发布包/某包_2026-11-01/评审签到表.md'), '决策');
-  // 词表锁定（工票逐字口径）
+  // 词表锁定
   assert.deepEqual(DECISION_BASENAME_KEYWORDS, ['决策', '待确认', '回执', '评审']);
 });
 
-test('stageOfPath：强信号只认 basename；无强信号时既有顺序与容器兜底全不变（pkgfix T5 反例）', () => {
+test('stageOfPath：强信号只认 basename；无强信号时既有顺序与容器兜底全不变（反例）', () => {
   // 反例：目录段含「评审」不代表文件是决策纸——basename 未命中 → 走既有链 → 待分类
   assert.equal(stageOfPath('评审归档区/notes.txt'), '待分类');
   // 反例：目录段含「决策」不触发——output 容器兜底「执行」仍生效
@@ -212,7 +212,7 @@ test('stageOfPath：强信号只认 basename；无强信号时既有顺序与容
 
 // ---------- T1 · extractCoreSummary 多级回退链 ----------
 
-test('extractCoreSummary：无标题文档回退原文首段，frontmatter/表格/元话语/目录链接/代码块全跳（pkgfix T1）', () => {
+test('extractCoreSummary：无标题文档回退原文首段，frontmatter/表格/元话语/目录链接/代码块全跳', () => {
   const f = file({
     file_id: 'pf1',
     relative_path: '04-智能体代码/MECH-WIN-001 机械设计工具独立交付/README.md',
@@ -256,7 +256,7 @@ test('extractCoreSummary：无标题文档回退原文首段，frontmatter/表�
   );
 });
 
-test('extractCoreSummary：首段 2~3 行截断，第 4 行与第二段不入摘要（pkgfix T1）', () => {
+test('extractCoreSummary：首段 2~3 行截断，第 4 行与第二段不入摘要', () => {
   const f = file({
     file_id: 'pf2',
     relative_path: '每日开发计划/无标题笔记.md',
@@ -314,7 +314,7 @@ test('extractCoreSummary：全文无真实正文（全 frontmatter/表格/元话
   assert.equal(extractCoreSummary(f), '', '全部层扫完无真实正文 → 诚实空串');
 });
 
-test('extractCoreSummary：「## 目录」章节不再抢位；有显式核心结论仍最高优先（pkgfix T1）', () => {
+test('extractCoreSummary：「## 目录」章节不再抢位；有显式核心结论仍最高优先', () => {
   const common = ['## 目录', '- [01-需求单](01-需求单.md)', '- [02-交付图纸](02-交付图纸.svg)'];
   // ① 无核心结论章节：逐章节回退跳过目录节 → 首个真实业务章节
   const f1 = file({
@@ -386,7 +386,7 @@ function chainFile(
   });
 }
 
-test('包摘要优先链：总览 → PLAN → 需求单 → 首篇 md → 首篇有结论文档；全空才空串（pkgfix T1）', () => {
+test('包摘要优先链：总览 → PLAN → 需求单 → 首篇 md → 首篇有结论文档；全空才空串', () => {
   const base = '01-方案文档/产品需求与任务包/优先链验证_2026-11-10';
   // ① 00-阅读与派发总览最高优先（尽管其余文档更新）
   const withOverview = groupFilesIntoPackages([
@@ -433,7 +433,7 @@ test('包摘要优先链：总览 → PLAN → 需求单 → 首篇 md → 首�
   assert.equal(allEmpty[0]!.latestConclusion, '');
 });
 
-test('enrichPackagesWithEvents：事件最新写入文档的结论仍优先，缺结论回退优先链（pkgfix T1 组合语义）', () => {
+test('enrichPackagesWithEvents：事件最新写入文档的结论仍优先，缺结论回退优先链', () => {
   const packages = groupFilesIntoPackages([
     chainFile('a', '00-阅读与派发总览.md', '总览结论。'),
     chainFile('b', '04-执行记录.md', '笔记结论。'),
@@ -460,13 +460,13 @@ test('enrichPackagesWithEvents：事件最新写入文档的结论仍优先，�
 
 // ---------- T2 · formatPackageMetaLine ----------
 
-test('formatPackageMetaLine：近 7 天相对日+时刻 / 更早归档日期 / 无时间刚收录（pkgfix T2）', () => {
+test('formatPackageMetaLine：近 7 天相对日+时刻 / 更早归档日期 / 无时间刚收录', () => {
   // now 用本地分量构造（任意时区下 localDay/formatLocalClock 断言均成立）；now 仅测试注入
   const now = new Date(2026, 10, 15, 14, 0, 0); // 本地 2026-11-15 14:00
   const iso = (d: Date) => d.toISOString();
   const docs = [doc('执行'), doc('交付'), doc('蓝图')];
 
-  // 工票原例逐字：今天 14:20 更新 · 20 份资料
+  // 示例：今天 14:20 更新 · 20 份资料
   const todayPkg = pkg({
     docs: Array.from({ length: 20 }, () => doc('执行')),
     stage: '执行',
@@ -490,7 +490,7 @@ test('formatPackageMetaLine：近 7 天相对日+时刻 / 更早归档日期 / �
     '3 天前 22:10 更新 · 3 份资料'
   );
 
-  // 更早 → 最近活动日期（工票原例逐字：11-04 归档 · 20 份资料）
+  // 更早 → 最近活动日期（示例：11-04 归档 · 20 份资料）
   const archived = pkg({
     docs: Array.from({ length: 20 }, () => doc('交付')),
     stage: '交付',
@@ -522,8 +522,8 @@ test('formatPackageMetaLine：近 7 天相对日+时刻 / 更早归档日期 / �
 
 // ---------- T3 · packageBadgeLine ----------
 
-test('packageBadgeLine：版本+阶段短语真实派生；无版本数据不造数（pkgfix T3）', () => {
-  // 工票原例：交付阶段 + 包内最大版本 v8 →「v8 · 待用户验收」
+test('packageBadgeLine：版本+阶段短语真实派生；无版本数据不造数', () => {
+  // 交付阶段 + 包内最大版本 v8 →「v8 · 待用户验收」
   const delivered = pkg({
     docs: [doc('执行', 'a', '', 3), doc('交付', 'b', '', 8), doc('执行', 'c', '', 5)],
     stage: '交付',
@@ -531,7 +531,7 @@ test('packageBadgeLine：版本+阶段短语真实派生；无版本数据不造
   assert.equal(dominantStage(delivered.docs), '交付', 'fixture 阶段与 dominantStage 语义一致');
   assert.equal(packageBadgeLine(delivered), 'v8 · 待用户验收');
 
-  // 执行阶段 →「v5 · 执行中」（工票例「执行中 · v5」同一信息，正序统一为 版本 · 短语）
+  // 执行阶段 →「v5 · 执行中」（正序统一为 版本 · 短语）
   const executing = pkg({
     docs: [doc('执行', 'a', '', 5)],
     stage: '执行',
@@ -551,7 +551,7 @@ test('packageBadgeLine：版本+阶段短语真实派生；无版本数据不造
   );
 });
 
-test('packageBadgeLine：真实分组链派生——docs 当前版最大 versionNumber + dominantStage（pkgfix T3）', () => {
+test('packageBadgeLine：真实分组链派生——docs 当前版最大 versionNumber + dominantStage', () => {
   const packages = groupFilesIntoPackages([
     file({
       file_id: 'v1',

@@ -1,6 +1,6 @@
-//! F03 · SQLite Schema 平滑迁移、升级前自动一致性备份（SQLite Backup API，保留最近 5 份）与高版本只读门禁。
+//! SQLite Schema 平滑迁移、升级前自动一致性备份（SQLite Backup API，保留最近 5 份）与高版本只读门禁。
 //!
-//! 停机红线（30 轮长任务卡 F03）：
+//! 停机红线：
 //! 1. **高版本门禁拒绝盲写**：打开任意 `PRAGMA user_version > CURRENT_SCHEMA_VERSION` 的库时，
 //!    在写入任何字节或执行任何 PRAGMA/DDL 之前立即以 `SCHEMA_TOO_NEW` 拒绝；
 //! 2. **升级前强制一致性备份**：对已有历史表的旧版库执行 schema 升级前，必须通过
@@ -25,7 +25,7 @@ use crate::storage::internal_sql;
 /// 本版本观澜支持的最高 SQLite Schema 版本（与 `PRAGMA user_version` 对齐）
 pub const CURRENT_SCHEMA_VERSION: i64 = 2;
 
-/// 升级前一致性备份默认最大保留份数（F03 要求保留最近 5 份）
+/// 升级前一致性备份默认最大保留份数（保留最近 5 份）
 pub const MAX_MIGRATION_BACKUPS: usize = 5;
 
 /// 单份自动一致性备份条目
@@ -489,7 +489,7 @@ mod tests {
         .unwrap();
     }
 
-    /// F03 停机红线①：旧版遇高版本 schema 门禁拒绝盲写（零字节改动，清晰报 SCHEMA_TOO_NEW）
+    /// 停机红线①：旧版遇高版本 schema 门禁拒绝盲写（零字节改动，清晰报 SCHEMA_TOO_NEW）
     #[test]
     fn f03_high_schema_version_gate_rejects_blind_write_and_readonly_open() {
         let tmp = TempMigDir::new("high-ver");
@@ -527,7 +527,7 @@ mod tests {
         assert_eq!(ev_cnt, 3);
     }
 
-    /// F03 停机红线②：迁移前自动一致性备份（SQLite Backup API）+ 最多保留最近 5 份 + 既有历史事件 100% 保留
+    /// 停机红线②：迁移前自动一致性备份（SQLite Backup API）+ 最多保留最近 5 份 + 既有历史事件 100% 保留
     #[test]
     fn f03_auto_backup_before_upgrade_retains_latest_five_and_preserves_history() {
         let tmp = TempMigDir::new("backup-5");
@@ -586,7 +586,7 @@ mod tests {
         );
     }
 
-    /// F03 量化验收：人为注入迁移失败时，原库 100% 完好可无损回退，且自动备份文件可独立还原
+    /// 迁移失败回滚验证：人为注入迁移失败时，原库 100% 完好可无损回退，且自动备份文件可独立还原
     #[test]
     fn f03_injected_migration_failure_rolls_back_losslessly_and_backup_restores_cleanly() {
         let tmp = TempMigDir::new("rollback");

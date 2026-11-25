@@ -1,8 +1,7 @@
 /**
- * 观澜 Guanlan v0.4 第一轮 —— 工作区持久层（node:sqlite，零第三方依赖）
+ * 观澜 Node 对拍基线 —— 工作区持久层（node:sqlite，零第三方依赖）
  *
- * 对应方案 §4「一份历史记录，同时服务三个视图」与 §5 改动表：
- *   扫描器只产出路径、字节哈希、mtime 和内容；服务端比对持久库后分配版本和事件。
+ * 扫描器只产出路径、字节哈希、mtime 和内容；服务端比对持久库后分配版本和事件。
  *
  * 表设计要点：
  * - revisions 记录「版本出现」，A → B → A 是三次出现、两份内容（哈希相同的共享快照）
@@ -127,7 +126,7 @@ export interface EdgeRow {
   reason: string;
 }
 
-/** 抽取规则版本：规则升级时重建派生索引并记录（方案 §4 末） */
+/** 抽取规则版本：规则升级时重建派生索引并记录 */
 export const EXTRACT_RULE_VERSION = 'v0.4.3';
 
 const SCHEMA = `
@@ -186,9 +185,9 @@ CREATE TABLE IF NOT EXISTS revisions (
   UNIQUE (file_id, seq)
 );
 
-/** issue #39：旧库曾有与 UNIQUE(file_id, seq) 同列的冗余索引 idx_rev_file。
+/** 清理与 UNIQUE(file_id, seq) 同列的冗余索引 idx_rev_file：
  *  唯一约束自带同序 B-tree，重复索引只增存储与写入维护成本——在写入侧幂等迁移中
- *  删除（只读服务启动不改库，契约 §4-1 边界不变）。 */
+ *  删除（只读服务启动不改库）。 */
 CREATE INDEX IF NOT EXISTS idx_rev_hash ON revisions(content_hash);
 DROP INDEX IF EXISTS idx_rev_file;
 
@@ -224,7 +223,7 @@ CREATE INDEX IF NOT EXISTS idx_events_kind ON events(workspace_id, kind);
 CREATE INDEX IF NOT EXISTS idx_events_ws_occurred_sort
   ON events(workspace_id, COALESCE(occurred_at, ''), seq);
 CREATE INDEX IF NOT EXISTS idx_events_ws_observed_sort ON events(workspace_id, observed_at, seq);
--- issue #26：文件事件关联四路各自的匹配访问结构（UNION 各分支可走索引，
+-- 文件事件关联四路各自的匹配访问结构（UNION 各分支可走索引，
 -- 不再对整个工作区逐条求值四路 OR）
 CREATE INDEX IF NOT EXISTS idx_events_ws_subject_seq
   ON events(workspace_id, subject_id, seq);
@@ -323,7 +322,7 @@ export class WorkspaceStore {
     this.db.close();
   }
 
-  /** 事务包装：数据库内条目一起提交（方案 §4 写入顺序） */
+  /** 事务包装：数据库内条目一起提交 */
   transaction<T>(fn: () => T): T {
     this.db.exec('BEGIN IMMEDIATE');
     try {
@@ -464,7 +463,7 @@ export class WorkspaceStore {
     return wrote;
   }
 
-  /** 回收未被任何版本引用的快照（外部文件单独校验和回收，方案 §4 末） */
+  /** 回收未被任何版本引用的快照（外部文件单独校验和回收） */
   evictUnreferencedSnapshots(): number {
     const orphaned = this.db
       .prepare(

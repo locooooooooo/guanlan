@@ -1,5 +1,5 @@
 /**
- * diff-summary-01：语义 Diff 摘要卡（PRD 3.5 / 方案 F7，任务队列口径）。
+ * diff-summary-01：语义 Diff 摘要卡（任务队列口径）。
  *
  * - 适配层：DiffResult → 摘要卡视图模型（三指标透传/空值兜底/格式化文案/Checkpoint）；
  * - 全链（本地 http 桩）：POST /api/v1/diff 202 → /jobs/{id} 轮询 → /jobs/{id}/result

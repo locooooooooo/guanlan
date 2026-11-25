@@ -1,17 +1,17 @@
 /**
- * D04 · 阅读器锚点批注层（独立组件文件，§4.2 防膨胀纪律）。
+ * 阅读器锚点批注层。
  *
  * 组成：
  * · ReaderAnnotationComposer —— 批注撰写卡（保存批注 / 一键转 [P1 - 待确认] 决定项）。
  *   MD 转决定项走桌面壳 save_workspace_file CAS 桥（显式点击，冲突诚实拒绝）；
- *   SVG/PDF 转决定项只落本地证据表（停机条款：绝不改用户原始 SVG/PDF 字节）。
- * · ReaderAnnotationDrawer —— 当前版本批注清单（定位=跳转+闪烁；删除；已转徽标）。
+ *   SVG/PDF 转决定项只落本地证据表（停机红线：绝不改用户原始 SVG/PDF 字节）。
+ * · ReaderAnnotationDrawer —— 当前版本的批注清单（定位=跳转+闪烁；删除；已转徽标）。
  * · SvgAnnotationOverlay —— SVG 图像容器上的框选叠加层（保存区域恒百分比定位，
  *   与缩放无关；拖拽区域在容器坐标内计算，pointer capture；绝不触碰 SVG 源字节）。
- * · PdfPageAnnotations —— 页级文本批注 chips（当前页）。
+ * · PdfPageAnnotations —— 页级文字批注 chips（当前页）。
  *
- * SSR 纪律：纯受控组件，全部状态经 props 注入；pointer 交互仅客户端 effect；
- * 关闭态零 DOM（D01-a 像素基线结构性零扰动）。
+ * SSR 纪律：纯受控组件，全部状态经 props 注入；pointer 交互仅客户端触发；
+ * 关闭态零 DOM 输出，不扰动正常阅读态布局。
  */
 
 import React, { useRef, useState } from 'react';

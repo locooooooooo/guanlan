@@ -13,13 +13,13 @@ import {
   TimelineEvent,
   WorkspaceConfig,
 } from '../types/guanlan';
-// TA-03：引擎侧的时刻/日期文本统一按本地时区生成
+// 引擎侧的时刻/日期文本统一按本地时区生成
 import { formatLocalClock, formatLocalStamp } from './timeFormat';
 
 /**
- * 1. 中文双字切分 (Bigram) 候选与短语回源校验 (§9.3, §13.1)
+ * 1. 中文双字切分 (Bigram) 候选与短语回源校验
  * SQLite FTS5 trigram 对少于 3 个字符的中文词（如“决策”“验收”）无法直接 MATCH，
- * 因此首版采用双字切分候选 + 原文连续短语核验，编号走精确匹配，单字走有界回退。
+ * 因此采用双字切分候选 + 原文连续短语核验，编号走精确匹配，单字走有界回退。
  */
 export function generateChineseBigrams(text: string): string[] {
   const normalized = text.replace(/\s+/g, '');
@@ -34,7 +34,7 @@ export function generateChineseBigrams(text: string): string[] {
 }
 
 /**
- * p3：MD 正文行数组与小写行按 revision_id 缓存（模块级）。
+ * MD 正文行数组与小写行按 revision_id 缓存（模块级）。
  * revision_id 绑定内容 sha256，正文对键不可变，故无需失效逻辑；
  * 容量上限用 Map 插入序做 LRU（命中即续期、超限淘汰最旧），防止无界增长。
  */
@@ -292,7 +292,7 @@ export function searchWorkspace(
 }
 
 /**
- * 2. Markdown 章节大纲与显式提要段落识别 (§4.1)
+ * 2. Markdown 章节大纲与显式提要段落识别
  * 跳过代码块内的 # 注释（避免把模板示例当作真实章节或决策）。
  */
 export function parseMarkdownOutline(markdown: string): MarkdownSection[] {
@@ -361,7 +361,7 @@ export function parseMarkdownOutline(markdown: string): MarkdownSection[] {
 }
 
 /**
- * 3. 版本身份（A -> B -> A 恢复检测）与行级文本差异 (§5.2, §5.4)
+ * 3. 版本身份（A -> B -> A 恢复检测）与行级文本差异
  */
 export function detectRollbackRevision(revisions: Revision[], targetRevisionId: string): {
   isRollback: boolean;
@@ -408,14 +408,14 @@ export interface DiffResult {
 }
 
 /**
- * 差异预算（issue #18）：普通徽章/计数不再进入本函数；真正进入 diff 视图时，
+ * 差异预算：普通徽章/计数不再进入本函数；真正进入 diff 视图时，
  * 行数与 DP 单元数设硬上限，超限明确拒绝（DIFF_TOO_LARGE），不用空 diff 冒充成功。
  * 上限内的 DP 行数组用 Int32Array（值域 ≤ 行数），内存 16MB 封顶，不再无界分配。
  */
 export const DIFF_MAX_LINES_PER_SIDE = 20_000;
 export const DIFF_MAX_DP_CELLS = 4_000_000;
 
-/** 单侧正文取源链（T01：/scan 去 MD 内联后按 revision_id 回退缓存，再退 svgSource）。
+/** 单侧正文取源链（/scan 去 MD 内联后按 revision_id 回退缓存，再退 svgSource）。
  *  返回 null 表示「正文尚未取回」（所有来源都缺）——与「确认为空文档」严格区分。 */
 function revisionTextOf(
   rev: Revision,
@@ -435,8 +435,7 @@ function isConfirmedEmptyContent(rev: Revision): boolean {
 }
 
 /** 同内容/同版本的快捷结果：全部行按 i===j 配对（行号稳定），不分配 DP 表。
- *  相同字符串逐字相等即命中；满足 #18 验收「相同版本 ID 或已就绪的相同内容
- *  直接返回无变化，不分配二维 DP；保留展示需要的行信息」。 */
+ *  相同版本 ID 或已就绪的相同内容直接返回无变化，不分配二维 DP，保留展示需要的行信息。 */
 function unchangedDiffResult(
   fromRev: Revision,
   toRev: Revision,
@@ -486,7 +485,7 @@ export function computeMarkdownDiff(
     };
   }
 
-  // §10 & §11: 快照已过保留期限时返回 REVISION_UNAVAILABLE，不悄悄展示当前内容冒充旧内容
+  // 快照已过保留期限时返回 REVISION_UNAVAILABLE，不悄悄展示当前内容冒充旧内容
   if (!fromRev.snapshotAvailable || !toRev.snapshotAvailable) {
     return {
       ok: false,
@@ -501,7 +500,7 @@ export function computeMarkdownDiff(
     };
   }
 
-  // issue #18：正文未加载 ≠ 空文档。任一侧尚未取回正文时明确返回 CONTENT_NOT_LOADED，
+  // 正文未加载 ≠ 空文档。任一侧尚未取回正文时明确返回 CONTENT_NOT_LOADED，
   // 绝不拿空串参与对比（那会把整份文档误报成「全新增」）。
   const oldText = revisionTextOf(fromRev, contentCache);
   const newText = revisionTextOf(toRev, contentCache);
@@ -546,7 +545,7 @@ export function computeMarkdownDiff(
   const oldLines = oldContent.split('\n');
   const newLines = newContent.split('\n');
 
-  // issue #18：行数与 DP 单元数硬预算——超限明确拒绝，不静默截断、不用空 diff 冒充成功
+  // 行数与 DP 单元数硬预算——超限明确拒绝，不静默截断、不用空 diff 冒充成功
   const m = oldLines.length;
   const n = newLines.length;
   if (m > DIFF_MAX_LINES_PER_SIDE || n > DIFF_MAX_LINES_PER_SIDE) {
@@ -679,7 +678,7 @@ export function computeMarkdownDiff(
 }
 
 /**
- * 4. 决策命名空间隔离与状态边界核验 (§7, §13.1)
+ * 4. 决策命名空间隔离与状态边界核验
  * - 编号必须按项目与决策集命名空间区分，不能将两份材料中的 Q03 自动合并。
  * - “推荐采用”不等于“已经确认”；“不代表验收通过”不能被识别成已验收。
  * - “疑似决策”进入候选列表，不能直接增加“待你确认”的真实计数。
@@ -737,7 +736,7 @@ export function evaluateDecisionPhraseSemantics(rawLine: string, inCodeBlock = f
 }
 
 /**
- * 5. 局部关系图构建器（默认 1 跳，支持用户展开 2 跳，上限 80 节点，超限聚合） (§3.2, §6, §13.1)
+ * 5. 局部关系图构建器（默认 1 跳，支持用户展开 2 跳，上限 80 节点，超限聚合）
  */
 export interface GraphNode {
   id: string;
@@ -765,7 +764,7 @@ export function buildLocalRelationGraph(
   allEdges: RelationEdge[],
   maxNodes = 80
 ): LocalGraphResult {
-  // issue #28：ID Map / 邻接表 / 边引用单遍建表——节点解析 O(1)、邻居查询只看
+  // ID Map / 邻接表 / 边引用单遍建表——节点解析 O(1)、邻居查询只看
   // 邻接表，不再对全部边反复线性扫描；回滚标记单遍历史索引（内容哈希 → 首见序），
   // 保持 A→B→A 及相邻相同哈希的现行语义；节点/版本节点在物化过程中受 maxNodes
   // 预算限制（早停不先构造全图），被预算跳过的节点独立计数，不因早停虚报。
@@ -941,7 +940,7 @@ export function buildLocalRelationGraph(
 }
 
 /**
- * 6. 访问与内容安全边界 (§4.2, §12, §13.1)
+ * 6. 访问与内容安全边界
  * - 只访问显式根目录，拦截越界路径 (.., 跨盘符, UNC, 绝对路径越界)
  * - 清洗 SVG 内容，移除 <script>、onload/onclick 事件属性与外部资源加载
  */
@@ -1007,7 +1006,7 @@ export function sanitizeSvgForPreview(rawSvg: string): {
 }
 
 /**
- * 7. MCP 8 个标准工具契约执行器 (§10)
+ * 7. MCP 8 个标准工具契约执行器
  * 统一从同一套索引和版本体系返回，绑定 index_generation 与标准错误码。
  */
 export interface McpToolRequest {
@@ -1366,7 +1365,7 @@ export function executeMcpTool(
 }
 
 /**
- * 8. 生成复制给智能体的带版本与行号定位的上下文清单 (§2.2, §10)
+ * 8. 生成复制给智能体的带版本与行号定位的上下文清单
  */
 export function formatContextForAgent(
   pointers: EvidencePointer[],
@@ -1399,10 +1398,10 @@ export function formatContextForAgent(
     return [
       `### [${idx + 1}] \`${p.relative_path}\` (${locText})`,
       `- **定位凭证**：\`file_id=${p.file_id}\` · \`revision_id=${p.revision_id}\` · \`index_generation=${p.index_generation}\``,
-      // GU-CC-02：sha256 输出完整 64 位——凭证必须可核对，截断 16 位让校验形同虚设
+      // sha256 输出完整 64 位——凭证必须可核对，截断 16 位让校验形同虚设
       `- **内容哈希**：\`sha256:${p.content_sha256}\` · **观察时间**：\`${p.observed_at}\` · **覆盖度**：\`${p.coverage}\``,
       p.note ? `- **阅读备注**：${p.note}` : '',
-      // GU-CC-02：摘录逐字不截断（完整性优先，折叠/上限策略延后）；无可用正文时不输出空引用行，
+      // 摘录逐字不截断（完整性优先）；无可用正文时不输出空引用行，
       // 不虚构占位文本——「无摘录」本身是诚实状态
       p.excerpt ? `> ${p.excerpt.replace(/\n/g, '\n> ')}` : '',
       '',
@@ -1415,11 +1414,11 @@ export function formatContextForAgent(
 }
 
 /**
- * GL-01：未读三态文案的唯一出口（右栏 / 悬停预览 / 列表共用同一套措辞）。
+ * 未读三态文案的唯一出口（右栏 / 悬停预览 / 列表共用同一套措辞）。
  * never_read 绝不能写成『自上次读…』——从未建立的基线不存在“上次读”。
- * D02 术语两态统一：全应用未读术语收敛为「未读新件」（首次收录、从未读过）
+ * 术语两态统一：全应用未读术语收敛为「未读新件」（首次收录、从未读过）
  * 与「读后有更新」（有阅读基线且当前版更新）两态——首次收录与读后变更
- * 绝不混同（D02 停机条件），up_to_date 已读最新不属未读态。
+ * 绝不混同，up_to_date 已读最新不属未读态。
  */
 export type UnreadReason = 'never_read' | 'updated_since_last_read' | 'up_to_date';
 
@@ -1430,14 +1429,13 @@ export function unreadStatusLabel(reason: UnreadReason): string {
 }
 
 /**
- * 计算文件是否存在“自上次阅读后的未读变化” (§4.4)
+ * 计算文件是否存在“自上次阅读后的未读变化”
  */
 /**
- * GL-01 未读三态判定（issue #18 拆分后）：
+ * 未读三态判定：
  * 只比较版本身份（last_read_revision_id vs current_revision_id），O(1)，
  * 不再触发二维 LCS。全库未读徽章/计数/过滤（App、LeftSidebar、GraphCanvasView、
- * AtlasView、HomeView）都走本函数——之前基线落后的文件每次统计都跑全文对比，
- * 2200 份文件就是 2200 次 Θ(m×n)。
+ * AtlasView、HomeView）都走本函数——避免基线落后的文件每次统计都跑全文对比。
  *
  * 变更章节不再是本函数的产出（始终 []）：需要章节级细节的展示位（阅读器大纲高亮）
  * 请用 [`computeChangedSectionsSinceRead`] 按需计算。
@@ -1448,7 +1446,7 @@ export function hasUnreadChanges(
 ): {
   isUnread: boolean;
   reason: UnreadReason;
-  /** 恒为 []：章节级变更按需经 computeChangedSectionsSinceRead 获取（issue #18） */
+  /** 恒为 []：章节级变更按需经 computeChangedSectionsSinceRead 获取 */
   changedSectionsSinceRead: string[];
 } {
   if (!readingState || !readingState.last_read_revision_id) {
@@ -1498,7 +1496,7 @@ function sectionFingerprintOf(text: string): Map<string, string> {
 }
 
 /**
- * 「上次已读基线 → 当前版本」的章节级变更清单（issue #18 按需计算入口）：
+ * 「上次已读基线 → 当前版本」的章节级变更清单（按需计算入口）：
  * 与 computeMarkdownDiff 的二维 LCS 不同，本函数用章节内容指纹比较，
  * O(m+n)、零 DP 分配，供阅读器大纲「自上次读变更」高亮等展示位使用。
  *
@@ -1508,7 +1506,7 @@ function sectionFingerprintOf(text: string): Map<string, string> {
 export function computeChangedSectionsSinceRead(
   file: FileRecord,
   readingState?: ReadingState,
-  /** T01：MD 正文不再内联时，差异章节回退 contentCache（revision_id → 正文） */
+  /** MD 正文不再内联时，差异章节回退 contentCache（revision_id → 正文） */
   contentCache?: Record<string, string>
 ): string[] {
   if (!readingState || !readingState.last_read_revision_id) return [];
@@ -1593,7 +1591,7 @@ export function buildNodeHoverPreviewData(
       rev.summaryNote;
   }
 
-  // GL-01：三态文案由 unreadStatusLabel 统一给出，不再在此另拼一套（右栏同源）
+  // 三态文案由 unreadStatusLabel 统一给出，不再在此另拼一套（右栏同源）
   const statusLabel = unreadStatusLabel(unreadInfo.reason);
 
   // 无 agent_turn_hint 时直接展示版本号与观察时间，不虚构演示轮次

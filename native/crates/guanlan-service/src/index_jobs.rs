@@ -1,24 +1,23 @@
-//! 索引任务：唯一写入线程与任务状态机（契约 §2 index-jobs / jobs；冻结契约
-//! G/E/F/C/D/H/I 的写线程执行体）。
+//! 索引任务：唯一写入线程与任务状态机（contract-query-api.md §2.1 / §2.2
+//! 写入与长任务端点的写线程执行体）。
 //!
-//! 方案 §0「唯一写入线程」：rusqlite 写连接只属于这一条线程，线程消费任务、
-//! 核对基准版本、分配版本号与事件序号，并用短事务分批提交。读侧仍走独立的
-//! 只读连接池，两侧靠 WAL 并行。
+//! 唯一写入线程（contract-storage.md §4.2）：rusqlite 写连接只属于这一条线程，
+//! 线程消费任务、核对基准版本、分配版本号与事件序号，并用短事务分批提交。读侧仍走
+//! 独立的只读连接池，两侧靠 WAL 并行。
 //!
-//! 任务语义（冻结契约 G）：
+//! 任务语义：
 //! - 外部可提 `verify_all | changed_paths | l4a_summary | set_initiative_dirs`；
 //!   内部 kind（decision_writeback/propose_revision/adopt_draft/archive_initiative/
 //!   reopen_initiative/diff）直提 400；checkpoint_commit 走同步命令通道不占 job；
-//! - **per-kind 合并（评审约束6 权威规则）**：跨 kind 永不合并（新任务入队串行
-//!   执行）；verify_all 单飞与 changed_paths 合并仅在**同类 active 任务**间生效；
-//!   set_initiative_dirs 幂等覆盖；其余不合并；
-//! - JobState 四态不变（阻塞3：挂起语义只存在于 task_nodes 层，job 是瞬时执行
-//!   载体）；取消按「已取消」落到 failed+error 口径（见 `cancel` 注释）；
-//! - `JobCommand::{Run, CheckpointCommit}`——checkpoint 是同步受理命令通道
-//!   （阻塞2），唤醒=recompute 同步函数调用，无 Resume、无 job 载体；
-//! - job_runs 持久化：每次状态迁移 UPSERT；重启后 queued/running 重入队
-//!   （建议3），启动 verify_all 收尾 recompute 对全部 suspended/running 节点
-//!   幂等重判（重启孤儿闭合）。
+//! - **按 kind 合并**：跨 kind 永不合并（新任务入队串行执行）；verify_all 单飞与
+//!   changed_paths 合并仅在**同类 active 任务**间生效；set_initiative_dirs 幂等覆盖；
+//!   其余不合并；
+//! - JobState 四态不变（挂起语义只存在于 task_nodes 层，job 是瞬时执行载体）；
+//!   取消按「已取消」落到 failed+error 口径（见 `cancel` 注释）；
+//! - `JobCommand::{Run, CheckpointCommit}`——checkpoint 走同事务同步受理命令通道，
+//!   唤醒=recompute 同步函数调用，无 Resume、无 job 载体；
+//! - job_runs 持久化：每次状态迁移 UPSERT；重启后 queued/running 重入队，启动
+//!   verify_all 收尾 recompute 对全部 suspended/running 节点幂等重判（重启孤儿闭合）。
 
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -42,7 +41,7 @@ use guanlan_core::index::{
     reconcile, reconcile_paths, CheckpointInput, ReconcileOptions, WritebackInput, Writer,
 };
 
-/// SSE 通知（写线程经桥回传；runtime 模块广播给订阅者，冻结契约 J）
+/// SSE 通知（写线程经桥回传；runtime 模块广播给订阅者）
 #[derive(Debug, Clone)]
 pub struct SseNotice {
     pub index_generation: Option<u64>,
@@ -54,7 +53,7 @@ pub struct SseNotice {
     pub kinds: Vec<String>,
 }
 
-/// 任务类型（冻结契约 G；payload 内聚在变体里）
+/// 任务类型（payload 内聚在变体里）
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobKind {
     /// 整库核验：全量扫描并与持久库对账
@@ -63,7 +62,7 @@ pub enum JobKind {
     ChangedPaths(Vec<String>),
     /// L4A 后台沉淀：出队 summary_jobs ≤3/轮 + 交错让位
     L4ASummary,
-    /// 专项目录登记：幂等覆盖 meta.initiative_dirs（建议1）
+    /// 专项目录登记：幂等覆盖 meta.initiative_dirs
     SetInitiativeDirs(Vec<String>),
     /// 决策拍板回写（内部 kind，由 resolve 端点投递）
     DecisionWriteback {
@@ -97,11 +96,11 @@ pub enum JobKind {
         draft_id: String,
         reason: Option<String>,
     },
-    /// C01 候选事项采纳（内部 kind；建正式 initiative + 归属固化）
+    /// 候选事项采纳（内部 kind；建正式 initiative + 归属固化）
     AdoptCandidate { candidate_id: String },
-    /// C01 候选整簇否决（内部 kind；置 dismissed + 簇键排除）
+    /// 候选整簇否决（内部 kind；置 dismissed + 簇键排除）
     DismissCandidate { candidate_id: String },
-    /// C01 候选单成员剔除（内部 kind；簇键排除 + 成员收缩，<2 则 dismissed）
+    /// 候选单成员剔除（内部 kind；簇键排除 + 成员收缩，<2 则 dismissed）
     ExcludeCandidateMember {
         candidate_id: String,
         file_id: String,
@@ -113,9 +112,9 @@ pub enum JobKind {
     },
     /// 专项重开（内部 kind）
     ReopenInitiative { initiative_id: String },
-    /// C02 派生检索索引一键重建（内部 kind；可随时丢弃重建，损坏自愈）
+    /// 派生检索索引一键重建（内部 kind；可随时丢弃重建，损坏自愈）
     RebuildSearchIndex,
-    /// E04 批阅看板失联/孤儿节点人工修复（内部 kind；严禁跳过审阅直接完结）
+    /// 批阅看板失联/孤儿节点人工修复（内部 kind；严禁跳过审阅直接完结）
     RepairOrphan {
         initiative_id: String,
         node_id: Option<String>,
@@ -125,7 +124,7 @@ pub enum JobKind {
 }
 
 impl JobKind {
-    /// 外部 wire 类型解析（冻结契约 G：未知 kind → None，HTTP 层给 400）。
+    /// 外部 wire 类型解析（未知 kind → None，HTTP 层给 400）。
     /// 内部 kind 直提一律拒绝。
     pub fn parse(raw: &str) -> Option<Self> {
         match raw.trim() {
@@ -170,7 +169,7 @@ impl JobKind {
         )
     }
 
-    /// 合并键：同类 active 任务间可合并的 kind 返回 Some(tag)（约束6）
+    /// 合并键：同类 active 任务间可合并的 kind 返回 Some(tag)
     fn merge_tag(&self) -> Option<&'static str> {
         match self {
             JobKind::VerifyAll => Some("verify_all"),
@@ -340,7 +339,7 @@ impl JobKind {
     }
 }
 
-/// 任务状态（冻结契约/阻塞3：四态不变；挂起语义只在 task_nodes 层）
+/// 任务状态（四态不变；挂起语义只在 task_nodes 层）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobState {
     Queued,
@@ -379,7 +378,7 @@ pub struct IndexJob {
     pub index_generation: Option<u64>,
     pub last_scan_at: Option<String>,
     pub report: Option<IndexJobReport>,
-    /// 各 kind 的结果分支（writeback/proposal/adopt/diff/l4a/initiative；冻结契约 G）
+    /// 各 kind 的结果分支（writeback/proposal/adopt/diff/l4a/initiative）
     pub result: Option<serde_json::Value>,
     /// 已取消标记（四态模型下的取消口径：终态 failed + error=已取消；
     /// 活跃期 wire state 报 cancelled，见 `to_response`）
@@ -411,7 +410,7 @@ impl IndexJob {
 
     /// 转 wire 响应
     pub fn to_response(&self) -> IndexJobStatusResponse {
-        // 取消口径（冻结契约 G）：活跃期被取消 → wire state 报 cancelled（任务
+        // 取消口径：活跃期被取消 → wire state 报 cancelled（任务
         // 不再会执行）；已到终态的取消任务按其终态呈现（error 说明取消原因）
         let state = if self.cancelled && self.state.is_active() {
             "cancelled".to_owned()
@@ -436,7 +435,7 @@ impl IndexJob {
     }
 }
 
-/// A05 同步文件操作命令（经唯一写入线程串行执行：磁盘操作 + 单事务更新）
+/// 同步文件操作命令（经唯一写入线程串行执行：磁盘操作 + 单事务更新）
 #[derive(Debug, Clone)]
 pub enum FileOpCommand {
     Rename(RenameFileInput),
@@ -460,7 +459,7 @@ pub enum BatchFileOpCommand {
     Trash(BatchTrashFilesInput),
 }
 
-/// 写线程收到的命令（冻结契约 G：Run + CheckpointCommit + FileOp/FolderOp/CreateDoc/BatchFileOp）
+/// 写线程收到的命令（Run + CheckpointCommit + FileOp/FolderOp/CreateDoc/BatchFileOp 等）
 enum JobCommand {
     Run {
         job_id: String,
@@ -487,18 +486,18 @@ enum JobCommand {
         op: Box<BatchFileOpCommand>,
         reply: Sender<Result<BatchFileMutationResponse, GuanlanError>>,
     },
-    /// B01：更新工作区三档快照配额阈值（写 meta 表）
+    /// 更新工作区三档快照配额阈值（写 meta 表）
     UpdateStoragePolicy {
         text_max_mib: u64,
         binary_max_mib: u64,
         reply: Sender<Result<UpdateStoragePolicyResponse, GuanlanError>>,
     },
-    /// F02：存储瘦身 GC（严格保护决定/因果边证据快照，仅在唯一写线程执行）
+    /// 存储瘦身 GC（严格保护决定/因果边证据快照，仅在唯一写线程执行）
     StorageGc {
         request: guanlan_core::storage::maintenance::StorageGcRequest,
         reply: Sender<Result<guanlan_core::storage::maintenance::StorageGcResponse, GuanlanError>>,
     },
-    /// V04：存量工作区批量确立已读基线 / 撤销还原（仅在唯一写线程单事务执行）
+    /// 存量工作区批量确立已读基线 / 撤销还原（仅在唯一写线程单事务执行）
     BatchReadingState {
         request: guanlan_core::dto::ReadingStateBatchRequest,
         reply: Sender<Result<guanlan_core::dto::ReadingStateBatchResponse, GuanlanError>>,
@@ -511,7 +510,7 @@ enum JobCommand {
 pub struct IndexJobManager {
     sender: Sender<JobCommand>,
     jobs: Arc<Mutex<HashMap<String, IndexJob>>>,
-    /// 单执行槽（一次只有一个 job 在跑）+ 待执行队列（约束6：跨 kind 入队串行）
+    /// 单执行槽（一次只有一个 job 在跑）+ 待执行队列（跨 kind 入队串行执行）
     running: Arc<Mutex<Option<String>>>,
     queued: Arc<Mutex<Vec<String>>>,
     shutting_down: Arc<std::sync::atomic::AtomicBool>,
@@ -540,12 +539,12 @@ impl IndexJobManager {
         Self::start_with_bridge(writer, None)
     }
 
-    /// 同 [`start`]，但带 SSE 桥（冻结契约 J：写线程处理函数经桥回传通知）
+    /// 同 [`start`]，但带 SSE 桥（写线程处理函数经桥回传通知）
     pub fn start_with_bridge(writer: Writer, notices: Option<Sender<SseNotice>>) -> Self {
         Self::start_with_options(writer, notices, false)
     }
 
-    /// V03：可配置启动时是否自动排空存量 L4A 摘要队列（`background_index=true` 时开启，
+    /// 可配置启动时是否自动排空存量 L4A 摘要队列（`background_index=true` 时开启，
     /// 只读/无监听模式默认关闭，严守零启动写入契约；扫描显式入队的新摘要仍自动排空）。
     pub fn start_with_options(
         writer: Writer,
@@ -651,7 +650,7 @@ impl IndexJobManager {
         Ok(self.submit_kind(kind))
     }
 
-    /// 提交任务（冻结契约 G per-kind 合并；约束6：跨 kind 永不合并）。
+    /// 提交任务（同类 active 任务按 kind 合并；跨 kind 永不合并）。
     ///
     /// - `verify_all`：同类 active（running/queued）单飞合并；
     /// - `changed_paths`：同类 active 任务**合并去重路径**（≤2000 条）；
@@ -664,7 +663,7 @@ impl IndexJobManager {
 
         if let Some(tag) = kind.merge_tag() {
             // 同类 active 任务合并：先看执行槽，再看队列头。
-            // 关键（A03）：ChangedPaths 若已经在 Running，run_job 已克隆旧路径切片开始核验，
+            // 关键：ChangedPaths 若已经在 Running，run_job 已克隆旧路径切片开始核验，
             // 若强行并入 Running 任务而不新建 Queued 项，正在发生的二次保存会被静默丢弃；
             // 因此 ChangedPaths 只允许并入尚在 Queued、且总路径数不超 2000 上限的待执行任务。
             let mut candidates: Vec<String> = Vec::new();
@@ -684,7 +683,7 @@ impl IndexJobManager {
                 if matches!(kind, JobKind::ChangedPaths(_)) && job.state != JobState::Queued {
                     continue;
                 }
-                // 合并语义（约束6：仅在同类 active 任务间生效）
+                // 合并语义（仅在同类 active 任务间生效）
                 match &mut job.kind {
                     JobKind::ChangedPaths(existing) => {
                         if let JobKind::ChangedPaths(incoming) = &kind {
@@ -701,7 +700,7 @@ impl IndexJobManager {
                         }
                     }
                     JobKind::SetInitiativeDirs(existing) => {
-                        // 幂等覆盖（建议1）
+                        // 幂等覆盖
                         if let JobKind::SetInitiativeDirs(incoming) = &kind {
                             *existing = incoming.clone();
                         }
@@ -736,7 +735,7 @@ impl IndexJobManager {
         (job_id, false, None)
     }
 
-    /// checkpoint 同步受理命令（阻塞2）：发送 CheckpointCommit 命令并取回执通道；
+    /// checkpoint 同步受理命令：发送 CheckpointCommit 命令并取回执通道；
     /// HTTP handler 在 spawn_blocking 内 recv_timeout(5s)（超时 → 503 INDEX_BUSY）。
     /// 校验失败（404）经回执原样回传——受理与校验原子，checkpoint 不落库、无 job_id。
     pub fn commit_checkpoint(
@@ -758,7 +757,7 @@ impl IndexJobManager {
         Ok(reply_rx)
     }
 
-    /// A05：投递身份保真文件操作（重命名 / 移动 / 回收站移除）至唯一写线程
+    /// 投递身份保真文件操作（重命名 / 移动 / 回收站移除）至唯一写线程
     pub fn execute_file_op(
         &self,
         op: FileOpCommand,
@@ -818,7 +817,7 @@ impl IndexJobManager {
         Ok(reply_rx)
     }
 
-    /// B01：投递工作区快照配额阈值更新至唯一写线程
+    /// 投递工作区快照配额阈值更新至唯一写线程
     pub fn update_storage_policy(
         &self,
         text_max_mib: u64,
@@ -835,7 +834,7 @@ impl IndexJobManager {
         Ok(reply_rx)
     }
 
-    /// F02：投递存储瘦身 GC 至唯一写线程（执行阶段先提交 SQLite 再删无引用物理 blob）
+    /// 投递存储瘦身 GC 至唯一写线程（执行阶段先提交 SQLite 再删无引用物理 blob）
     pub fn run_storage_gc(
         &self,
         request: guanlan_core::storage::maintenance::StorageGcRequest,
@@ -853,7 +852,7 @@ impl IndexJobManager {
         Ok(reply_rx)
     }
 
-    /// V04：投递批量确立已读基线 / 撤销还原至唯一写线程
+    /// 投递批量确立已读基线 / 撤销还原至唯一写线程
     pub fn batch_reading_state(
         &self,
         request: guanlan_core::dto::ReadingStateBatchRequest,
@@ -893,12 +892,12 @@ impl IndexJobManager {
         !self.active_jobs().is_empty()
     }
 
-    /// 协作式取消（冻结契约 G）：queued 立即生效（不再执行）；running 在写线程
+    /// 协作式取消：queued 立即生效（不再执行）；running 在写线程
     /// 阶段间隙生效（事务提交点不可中断）；已结束 → CONFLICT。
     ///
     /// 四态模型下的取消口径：任务终态落到 `failed`（error=已取消），wire 在活跃
     /// 期报 `cancelled`（见 [`IndexJob::to_response`]）——不引入第五个 JobState
-    /// 变体（阻塞3：job 是瞬时执行载体）。
+    /// 变体（job 是瞬时执行载体）。
     pub fn cancel(&self, job_id: &str) -> Result<String, GuanlanError> {
         let mut jobs = self.jobs.lock().expect("任务表锁");
         let mut queued = self.queued.lock().expect("队列锁");
@@ -938,7 +937,7 @@ impl IndexJobManager {
         }
     }
 
-    /// 启动恢复（建议3）：扫 job_runs（queued/running 重入队）。由装配层在
+    /// 启动恢复：扫 job_runs（queued/running 重入队）。由装配层在
     /// 拿到持久库工作区 id 后调用——重入队走 submit_kind（不合并）。
     pub fn recover_from_job_runs(&self, writer: &mut Writer, workspace_id: &str) -> usize {
         let rows = match writer.list_active_job_runs(workspace_id) {
@@ -972,9 +971,9 @@ impl IndexJobManager {
 
 /// 写线程主循环
 #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
-/// V03：L4A 空闲自动排空让位等待间隔（队列空闲 40ms 后处理 1 小批 ≤3 篇，任何交互写命令立抢占）
+/// L4A 空闲自动排空让位等待间隔（队列空闲 40ms 后处理 1 小批 ≤3 篇，任何交互写命令立抢占）
 const L4A_IDLE_DRAIN_MS: u64 = 40;
-/// V03：单条摘要任务最大重试次数（超限标 failed，根治缺失快照/频繁改写拖死 0% 队列）
+/// 单条摘要任务最大重试次数（超限标 failed，根治缺失快照/频繁改写拖死 0% 队列）
 const L4A_MAX_ATTEMPTS: i64 = 3;
 
 fn has_pending_l4a(writer: &mut Writer) -> bool {
@@ -1098,7 +1097,7 @@ fn writer_loop(
                     )));
                     continue;
                 }
-                // 阻塞2：同事务受理（校验→插行→事件→推进→recompute→回传）
+                // 同事务受理（校验→插行→事件→推进→recompute→回传）
                 let outcome = writer.transaction(|writer| {
                     guanlan_core::index::state_engine::commit_checkpoint(writer, &payload)
                 });
@@ -1371,7 +1370,7 @@ fn run_job(
     finish_slot(running, queued, job_id);
 }
 
-/// 执行槽推进：当前任务完成 → 队列头补位（约束6 串行执行）
+/// 执行槽推进：当前任务完成 → 队列头补位（串行执行）
 fn finish_slot(
     running: &Arc<Mutex<Option<String>>>,
     queued: &Arc<Mutex<Vec<String>>>,
@@ -1394,7 +1393,7 @@ fn is_cancelled(jobs: &Arc<Mutex<HashMap<String, IndexJob>>>, job_id: &str) -> b
         .unwrap_or(false)
 }
 
-/// C01 · 候选事项重扫编织：库内收集 → 多信号纯函数聚类 → 排除表过滤 → 落库。
+/// 候选事项重扫编织：库内收集 → 多信号纯函数聚类 → 排除表过滤 → 落库。
 /// 在 VerifyAll / ChangedPaths 对账完成后调用；幂等（同簇键同 id），排除表保证
 /// "误聚项剔除后重扫不反弹"。
 fn reweave_candidate_clusters(
@@ -1455,7 +1454,7 @@ fn reweave_candidate_clusters(
     Ok(rows.len())
 }
 
-/// C01 · 候选采纳：建/并入正式 initiative → 候选置 adopted → 事件 → 收尾重算
+/// 候选采纳：建/并入正式 initiative → 候选置 adopted → 事件 → 收尾重算
 /// （成员归属经 `adopted_candidate_map` 在状态机固化，路径规则让位）
 fn execute_candidate_adopt(
     writer: &mut Writer,
@@ -1549,7 +1548,7 @@ fn execute_candidate_adopt(
     }))
 }
 
-/// C01 · 候选整簇否决：置 dismissed + 簇内两两信号对排除（重扫不反弹）
+/// 候选整簇否决：置 dismissed + 簇内两两信号对排除（重扫不反弹）
 fn execute_candidate_dismiss(
     writer: &mut Writer,
     candidate_id: &str,
@@ -1611,7 +1610,7 @@ fn execute_candidate_dismiss(
     }))
 }
 
-/// C01 · 候选单成员剔除：与簇内其余成员两两排除 + 成员收缩（不足 2 人则簇失效）
+/// 候选单成员剔除：与簇内其余成员两两排除 + 成员收缩（不足 2 人则簇失效）
 fn execute_candidate_exclude(
     writer: &mut Writer,
     candidate_id: &str,
@@ -1821,7 +1820,7 @@ fn execute_job(
                 note: note.clone(),
             };
             let outcome = apply_decision_writeback(writer, &input)?;
-            // 冻结契约 C：CAS 失败同样是 completed（『处理拍板请求』已成功），
+            // CAS 失败同样是 completed（『处理拍板请求』已成功），
             // error/failed_items 恒空
             let result = serde_json::json!({
                 "writeback": {
@@ -1877,7 +1876,7 @@ fn execute_job(
         }
         JobKind::AdoptDraft { draft_id } => {
             let result = execute_adopt(writer, draft_id)?;
-            // proposal=草案状态变化；state=落版状态机重算；task=AC-05 自动检查点
+            // proposal=草案状态变化；state=落版状态机重算；task=采纳后自动检查点
             // 可能推进执行槽（checkpoint_committed / task_node_moved 消费方）
             let mut kinds = vec!["proposal".to_owned()];
             kinds.push("state".to_owned());
@@ -1908,7 +1907,7 @@ fn execute_job(
             ))
         }
         JobKind::RebuildSearchIndex => {
-            // C02：派生检索索引一键重建（可随时丢弃重建；派生变化不推代际）
+            // 派生检索索引一键重建（可随时丢弃重建；派生变化不推代际）
             let ws_id = writer.workspace()?.workspace_id;
             let outcome = guanlan_core::index::search_index::rebuild_all(writer, &ws_id)?;
             let result = serde_json::json!({
@@ -2023,8 +2022,8 @@ fn enqueue_l4a(writer: &mut Writer, file_ids: &[String]) -> Result<(), GuanlanEr
     })
 }
 
-/// L4A 批处理：出队 ≤3/轮 + 交错让位（单写线程内退化为批量≤3，冻结契约 I 风险
-/// 登记：吞吐受限正确性优先）；确定性本地摘要（generated_by='local_deterministic'）
+/// L4A 批处理：出队 ≤3/轮 + 交错让位（单写线程内限批 ≤3，吞吐受限但正确性优先）；
+/// 确定性本地摘要（generated_by='local_deterministic'）
 fn process_l4a_batch(writer: &mut Writer) -> Result<serde_json::Value, GuanlanError> {
     let workspace_id = writer.workspace()?.workspace_id;
     let pending_rows = writer.list_pending_summary_jobs(&workspace_id, 3)?;
@@ -2116,7 +2115,7 @@ fn process_l4a_batch(writer: &mut Writer) -> Result<serde_json::Value, GuanlanEr
     }))
 }
 
-/// diff 执行体（冻结契约 H）：两版快照（8MiB 上限）→ LCS → 语义摘要卡
+/// diff 执行体：两版快照（8MiB 上限）→ LCS → 语义摘要卡
 fn execute_diff(
     writer: &mut Writer,
     file_id: &str,
@@ -2165,7 +2164,7 @@ fn execute_diff(
         &baseline_statements,
         &target_statements,
     );
-    // checkpoint_id：该文件所属专项最近一次 SUCCESS（PRD 3.5 版本生成溯源）
+    // checkpoint_id：该文件所属专项最近一次 SUCCESS（版本生成溯源）
     let checkpoint_id = writer
         .get_artifact_state(file_id)?
         .and_then(|artifact| artifact.initiative_id)
@@ -2223,7 +2222,7 @@ fn execute_diff(
     }))
 }
 
-/// Agent 草案受理（冻结契约 D + E02）：CAS 初判 + 独立草案分支 `v(N+1)-agent-draft`
+/// Agent 草案受理：CAS 初判 + 独立草案分支 `v(N+1)-agent-draft`
 /// 落库 + proposal_raised 事件，**绝不直接写入工作区磁盘原稿**。
 /// conflict=true（cas_ok=false）= agent-draft 冲突分支，revision_drafts.conflict=1。
 fn execute_propose(
@@ -2239,7 +2238,7 @@ fn execute_propose(
         draft_version_label, evaluate_proposal_cas, normalize_context_hashes,
         normalize_receipt_summary, serialize_context_hashes,
     };
-    // archived 主体守卫（冻结契约 F）
+    // archived 主体守卫
     guanlan_core::index::writeback::ensure_not_archived(writer, file_id)?;
     let workspace = writer.workspace()?;
     let file = writer
@@ -2397,12 +2396,12 @@ fn execute_propose(
     }))
 }
 
-/// 采纳草案（冻结契约 D + E02）：
+/// 采纳草案：
 /// 1. 严格 CAS（磁盘哈希 == 草案基准哈希；偏离即标 `conflict=1` 并中止，绝不覆盖人工编辑）；
 /// 2. 写盘前把磁盘原稿字节留档至 `blobs/`（受控备份护栏，随时可无损回滚）；
 /// 3. 草案内容原子写入工作区 → 单路径对账推进正式版本号（`v(N+1)`）与状态机重算；
 /// 4. 按 `input_context_hashes`（及基准版兜底）在 `edges` 写入 `derived_from_context` 因果边；
-/// 5. 标记 `draft.status = adopted` 并提交 AC-05 自动检查点。
+/// 5. 标记 `draft.status = adopted` 并提交执行槽自动检查点。
 fn execute_adopt(writer: &mut Writer, draft_id: &str) -> Result<serde_json::Value, GuanlanError> {
     use guanlan_core::application::proposals::{
         build_derived_context_edges, evaluate_proposal_cas, parse_context_hashes_json,
@@ -2424,7 +2423,7 @@ fn execute_adopt(writer: &mut Writer, draft_id: &str) -> Result<serde_json::Valu
     let file = writer
         .get_file(&draft.file_id)?
         .ok_or_else(|| GuanlanError::NotFound(format!("未找到文件 {}", draft.file_id)))?;
-    // archived 主体守卫（冻结契约 F）+ E05 沙箱越界守卫（严禁写入授权工作区外部）
+    // archived 主体守卫 + 路径沙箱越界守卫（严禁写入授权工作区外部）
     guanlan_core::index::writeback::ensure_not_archived(writer, &draft.file_id)?;
     let disk_path = guanlan_core::storage::sandbox::resolve_workspace_file_in_jail(
         &workspace.root_path,
@@ -2494,7 +2493,7 @@ fn execute_adopt(writer: &mut Writer, draft_id: &str) -> Result<serde_json::Valu
         .filter(|row| row.content_hash == proposed_hash)
         .map(|row| row.revision_id);
 
-    // E02：采纳后将输入上下文哈希清单解析为 `edges(kind = 'derived_from_context')` 因果边
+    // 采纳后将输入上下文哈希清单解析为 `edges(kind = 'derived_from_context')` 因果边
     let context_hashes = parse_context_hashes_json(&draft.input_context_hashes_json);
     let mut derived_edges_written: usize = 0;
     if let Some(new_rev_id) = new_revision_id.as_deref() {
@@ -2576,8 +2575,8 @@ fn execute_adopt(writer: &mut Writer, draft_id: &str) -> Result<serde_json::Valu
     }
 
     mark_draft(writer, draft_id, "adopted", None)?;
-    // AC-05「外部 Agent 调用 MCP 回写后 5s 内自动生成新版本 Checkpoint 与 Diff 提示」：
-    // 采纳落版后同写线程顺序自动提交执行槽 SUCCESS checkpoint（同轮询窗口内可见）。
+    // 采纳落版后同写线程顺序自动提交执行槽 SUCCESS checkpoint（同轮询窗口内可见），
+    // 以满足外部 Agent 经 MCP 回写后快速生成新版本 Checkpoint 与 Diff 提示的要求。
     // checkpoint 为采纳的副作用产物：提交失败不回滚采纳结果，错误如实落报告。
     let checkpoint_context_hash = context_hashes
         .first()
@@ -2602,9 +2601,9 @@ fn execute_adopt(writer: &mut Writer, draft_id: &str) -> Result<serde_json::Valu
     }))
 }
 
-/// AC-05 自动检查点：文件属专项目录时按 (initiative, 执行槽) 提交 SUCCESS
+/// 采纳后自动检查点：文件属专项目录时按 (initiative, 执行槽) 提交 SUCCESS
 /// checkpoint（基准哈希为 input_context_hash，落版 id 为 output_revision_id；
-/// node_id 缺省由服务端反查槽位推进——契约 E 约束1）。非专项目录文件 → null
+/// node_id 缺省由服务端按 (initiative_id, stage) 反查槽位推进）。非专项目录文件 → null
 /// （诚实缺省）；提交失败 → {error}（受理侧 404/400 文案透传，不静默）。
 fn auto_checkpoint_after_adopt(
     writer: &mut Writer,
@@ -2628,10 +2627,10 @@ fn auto_checkpoint_after_adopt(
         output_revision_id: output_revision_id.map(str::to_owned),
         token_usage: None,
         elapsed_ms: None,
-        note: Some("采纳修订草案自动落检查点（AC-05）".to_owned()),
+        note: Some("采纳修订草案自动落检查点".to_owned()),
         created_at: guanlan_core::index::clock::now_iso(),
     };
-    // commit_checkpoint 契约（阻塞2）：同事务受理。adopt 主流程不在事务内，
+    // commit_checkpoint 要求同事务受理。adopt 主流程不在事务内，
     // 这里自开一事务——失败只影响 checkpoint 产物本身，不回滚已落版结果。
     match writer.transaction(|tx| guanlan_core::index::state_engine::commit_checkpoint(tx, &input))
     {
@@ -2643,7 +2642,7 @@ fn auto_checkpoint_after_adopt(
     }
 }
 
-/// 草案退回重做（E02：绝不触碰磁盘原稿，记录退回理由并写 `proposal_dismissed` 审计事件）
+/// 草案退回重做（绝不触碰磁盘原稿，记录退回理由并写 `proposal_dismissed` 审计事件）
 fn execute_dismiss(
     writer: &mut Writer,
     draft_id: &str,
@@ -2808,7 +2807,7 @@ fn write_workspace_file(
     })
 }
 
-/// 专项归档（冻结契约 F）：显式写 archived + 事件 + recompute；
+/// 专项归档：显式写 archived + 事件 + recompute；
 /// 非 Delivered 态 report.warn='当前非已交付态'
 fn execute_archive(
     writer: &mut Writer,
@@ -2825,7 +2824,7 @@ fn execute_archive(
     let workspace_id = workspace.workspace_id.clone();
     let mut artifact_ids: Vec<String> = Vec::new();
     writer.transaction(|writer| {
-        // 显式写（user_accepted 唯一来源=archive 写线程置位，冻结契约 stateMachine）
+        // 显式写（user_accepted 唯一来源=archive 写线程置位）
         writer.upsert_initiative(&guanlan_core::storage::InitiativeRow {
             state: "archived".to_owned(),
             updated_at: now.clone(),
@@ -2897,7 +2896,7 @@ fn execute_archive(
     Ok(result)
 }
 
-/// 专项重开（冻结契约 F）：archived → 显式回退 draft（按 StateSignals 的重算由
+/// 专项重开：archived → 显式回退 draft（按 StateSignals 的重算由
 /// recompute 完成）+ initiative_reopened 事件
 fn execute_reopen(
     writer: &mut Writer,
@@ -3009,7 +3008,7 @@ fn persist_job_run(
     });
 }
 
-/// SSE 桥回传（冻结契约 J）
+/// SSE 桥回传
 fn publish_notice(
     notices: &Option<Sender<SseNotice>>,
     jobs: &Arc<Mutex<HashMap<String, IndexJob>>>,
@@ -3166,7 +3165,7 @@ mod tests {
 
     #[test]
     fn merge_tags_only_for_verified_kinds() {
-        // 约束6：跨 kind 永不合并——只有三类可合并
+        // 跨 kind 永不合并——只有三类可合并
         assert!(JobKind::VerifyAll.merge_tag().is_some());
         assert!(JobKind::ChangedPaths(vec![]).merge_tag().is_some());
         assert!(JobKind::SetInitiativeDirs(vec![]).merge_tag().is_some());

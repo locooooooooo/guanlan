@@ -15,23 +15,23 @@ import { formatRelativeObservedAt } from '../utils/timeFormat';
 import { Badge, CommandFooter, CommandPanel, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, Kbd, ScrollArea } from './ui';
 
 /**
- * C03 · Ctrl+K 时空命令面板（Omnibox）——U07 双栏检索台与可点击语法胶囊。
+ * Ctrl+K 时空命令面板（Omnibox）——双栏检索台与可点击语法胶囊。
  *
- * 交互闭环（任务卡 C03 验收 + U07 升级）：
+ * 交互闭环：
  *   ↑/↓ 循环选择 · Enter 打开 · Ctrl+Enter 定位所在目录 · Tab 加入上下文（证据）篮 ·
  *   Esc 关闭（根节点挂 data-esc-layer="open"，App Esc 阶梯顶部统一兜底）。
- * U07 交付（长任务卡 §4 U07，commandPaletteGrammar/commandPaletteResults 既定口径不变）：
+ * 面板能力（commandPaletteGrammar/commandPaletteResults 既定口径不变）：
  *   - 弹窗入场 `glx-popover-in` 柔和缩放淡入（遮罩 `glx-backdrop-in`；均为既有已登记类）；
  *   - 输入框右侧「语法 Token 彩色微标签」：parsePaletteTokens 纯函数拆解当前查询的
  *     语法意图 token（date/type/status/in），点 `×` 一键移除（removePaletteTokenAt）；
- *     语法未收录的 @词 / status 值诚实标注「未识别」（冻结口径：回退为关键词检索）；
+ *     语法未收录的 @词 / status 值诚实标注「未识别」（回退为关键词检索）；
  *   - 输入栏下方常驻单行「快捷语法胶囊」：@今天 / @近7天 / status:待拍板 / type:md /
  *     type:svg，点击即补全查询（togglePaletteSuggestion 只改 query 字符串并走
  *     onQueryChange → setQuery 正常防抖与过期响应丢弃纪律，不绕过任何取数状态）；
  *   - 桌面宽屏（lg ≥1024px）双栏：左结果列表 60% + 右实时预览窗 40%——完整路径、
  *     版本短码徽标、待拍板徽标、命中正文高亮段落、SVG 微缩图（懒加载 URL 直拼，
  *     键盘游走零 fetch / 零 IO 竞态）与快捷动作提示；窄屏保持原单列体验。
- * 渲染细节（吸收 quiet-md search.rs）：
+ * 渲染细节（参考 quiet-md search.rs）：
  *   - 空查询直出「最近浏览」Top 20（由 Hook 组装，本组件不关心数据源）；
  *   - 命中摘要：首个命中词前 16 字起窗口、≤2 行、窗口内命中词**全量**高亮
  *     （buildSnippet 纯函数分段，SSR 安全）；
@@ -50,7 +50,7 @@ export interface CommandPaletteProps {
   onClose: () => void;
   /** Enter：打开文件（阅读器） */
   onOpenFile: (item: PaletteItem) => void;
-  /** Shift+Enter（V08）：打开文件版本时光机 */
+  /** Shift+Enter：打开文件版本时光机 */
   onOpenTimeMachine?: (item: PaletteItem) => void;
   /** Ctrl+Enter：定位所在目录（资源管理器高亮） */
   onLocate: (item: PaletteItem) => void;
@@ -58,13 +58,13 @@ export interface CommandPaletteProps {
   onAddToBasket: (item: PaletteItem) => void;
   /** kind=action 条目执行（跳今天 / 证据篮 / 切换工作区 / 定位根目录） */
   onRunAction: (item: PaletteItem) => void;
-  /** V08：内存文件全量索引（零 IO 同步派生版本号 vN·最新 / L4A 摘要 / 大纲 / 更新时刻，彻底消除 f_ 裸哈希） */
+  /** 内存文件全量索引（零 IO 同步派生版本号 vN·最新 / L4A 摘要 / 大纲 / 更新时刻，避免裸哈希） */
   files?: FileRecord[];
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   U07 · 纯函数层（无 DOM 依赖，node:test 直测；按任务卡 §2.1.4 巨石防膨胀纪律，
-   语法胶囊解析与右预览派生一律抽纯函数、测试直接 import 组件模块导出面）
+   纯函数层（无 DOM 依赖，node:test 直测；语法胶囊解析与右预览派生抽为纯函数，
+   便于单元测试直接导入组件模块导出面）
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /** 语法 token 意图分类（keyword = 普通检索词） */
@@ -77,7 +77,7 @@ export interface PaletteToken {
   text: string;
   /** 在原始查询字符串中的起始偏移（一键移除的定位依据） */
   start: number;
-  /** 是否被现行冻结语法口径接受（未收录的 @词 / status 值为 false，诚实回退关键词） */
+  /** 是否被现行语法口径接受（未收录的 @词 / status 值为 false，诚实回退关键词） */
   parsed: boolean;
   /** 解析值：date=YYYY-MM-DD / type=小写格式 / status=待拍板 / in=事项名 / keyword=原文 */
   value?: string;
@@ -251,14 +251,14 @@ export function shortRevisionId(revisionId: string): string {
   return revisionId.length > 12 ? `${revisionId.slice(0, 12)}…` : revisionId;
 }
 
-/** V08：识别内部裸哈希标识（如 f_0114325c93... / rev_0114325c93...），杜绝直接裸露到用户界面 */
+/** 识别内部裸哈希标识（如 f_0114325c93... / rev_0114325c93...），杜绝直接裸露到用户界面 */
 export function isOpaqueInternalHash(raw: string | null | undefined): boolean {
   if (!raw) return false;
   const trimmed = raw.trim();
   return /^(?:f|rev|doc|file)_[0-9a-f]{8,}$/i.test(trimmed) || /^[0-9a-f]{16,}$/i.test(trimmed);
 }
 
-/** V08：剥离裸内部哈希标签（用户可读标题/副标题净化） */
+/** 剥离裸内部哈希标签（用户可读标题/副标题净化） */
 export function sanitizePaletteDisplayText(
   raw: string | null | undefined,
   fallback = ''
@@ -269,7 +269,7 @@ export function sanitizePaletteDisplayText(
   return trimmed.replace(/\b(?:f|rev|doc)_[0-9a-f]{8,}\b/gi, '').replace(/\s{2,}/g, ' ').trim() || fallback;
 }
 
-/** V08：为文件条目派生人类可读版本号标签（vN · 最新 / vN / 优雅回退，绝不泄露 f_ 裸哈希） */
+/** 为文件条目派生人类可读版本号标签（vN · 最新 / vN / 优雅回退，绝不泄露 f_ 裸哈希） */
 export function formatPaletteVersionBadge(
   item: PaletteItem,
   file?: FileRecord
@@ -312,17 +312,17 @@ export interface PalettePreviewModel {
   /** 完整路径（relativePath 优先，subtitle 兜底，净除 f_ 裸哈希） */
   path: string | null;
   formatBadge: string;
-  /** 当前版本短码（U07 兼容字段：revisionId 截断展示） */
+  /** 当前版本短码（兼容字段：revisionId 截断展示） */
   revisionShort: string | null;
-  /** V08：人类可读版本徽标（如「v4 · 最新」，彻底隐藏 f_/rev_ 裸哈希） */
+  /** 人类可读版本徽标（如「v4 · 最新」，隐藏 f_/rev_ 裸哈希） */
   humanVersionLabel: string | null;
-  /** V08：所属专项名（taskPackageOf 真实派生） */
+  /** 所属专项名（taskPackageOf 真实派生） */
   packageName: string | null;
-  /** V08：更新相对时刻（observed_at 真实派生） */
+  /** 更新相对时刻（observed_at 真实派生） */
   updatedLabel: string | null;
-  /** V08：已排空的 L4A 摘要或核心结论首句（无则 null 优雅回退） */
+  /** 已排空的 L4A 摘要或核心结论首句（无则 null 优雅回退） */
   l4aSummary: string | null;
-  /** V08：文档大纲条目（最多 4 项，来自正文 Markdown 标题） */
+  /** 文档大纲条目（最多 4 项，来自正文 Markdown 标题） */
   outlineHeadings: string[];
   pendingDecisions: number;
   /** SVG 微缩图地址（仅 svg 格式且有 revisionId；懒加载 URL 直拼，选中变化零 fetch） */
@@ -338,7 +338,7 @@ export interface PalettePreviewModel {
   hints: string[];
 }
 
-/** 选中条目 → 右预览窗模型（纯派生，SSR 安全；传入可选 FileRecord 启用 V08 L4A 富预览与版本号） */
+/** 选中条目 → 右预览窗模型（纯派生，SSR 安全；传入可选 FileRecord 启用 L4A 富预览与版本号） */
 export function palettePreviewModel(
   item: PaletteItem,
   query: string,
@@ -494,7 +494,7 @@ function TokenChip({
   );
 }
 
-/** V08 右实时富预览窗（lg ≥1024px 双栏 40% 列）：版本号 / 专项 / 更新时刻 / L4A 摘要 / 大纲 / 缩略图 / 一键快捷动作 */
+/** 右实时富预览窗（lg ≥1024px 双栏 40% 列）：版本号 / 专项 / 更新时刻 / L4A 摘要 / 大纲 / 缩略图 / 一键快捷动作 */
 function PreviewPane({
   model,
   item,
@@ -551,7 +551,7 @@ function PreviewPane({
         ) : null}
       </div>
 
-      {/* V08：所属专项与最近更新时刻元信息条 */}
+      {/* 所属专项与最近更新时刻元信息条 */}
       {(model.packageName || model.updatedLabel) && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
           {model.packageName ? (
@@ -583,7 +583,7 @@ function PreviewPane({
         />
       ) : null}
 
-      {/* V08：已排空的 L4A 摘要卡（无摘要时优雅回退，不造数） */}
+      {/* 已排空的文档摘要卡（无摘要时优雅回退，不造数） */}
       {model.l4aSummary ? (
         <div
           data-command-palette-l4a-summary="true"
@@ -599,7 +599,7 @@ function PreviewPane({
         </div>
       ) : null}
 
-      {/* V08：文档大纲条目（最多 4 项） */}
+      {/* 文档大纲条目（最多 4 项） */}
       {model.outlineHeadings.length > 0 ? (
         <div data-command-palette-outline="true" className="space-y-1">
           <div className="text-[10px] font-medium tracking-wider text-muted-foreground">文档大纲</div>
@@ -650,7 +650,7 @@ function PreviewPane({
         </div>
       ) : null}
 
-      {/* V08：一键快捷动作按钮 + 键位提示 */}
+      {/* 一键快捷动作按钮 + 键位提示 */}
       <div
         data-command-palette-preview-hints="true"
         className="mt-auto space-y-2 border-t border-border/75 pt-2.5"
@@ -732,7 +732,7 @@ export function CommandPalette(props: CommandPaletteProps): React.ReactElement |
     el?.scrollIntoView({ block: 'nearest' });
   }, [selectedIndex, isOpen]);
 
-  // U07 + V08：输入框右侧语法 token 微标签 + 右预览窗 L4A 富预览模型（纯内存同步派生，零 IO）
+  // 输入框右侧语法 token 微标签 + 右预览窗 L4A 富预览模型（纯内存同步派生，零 IO）
   const syntaxTokens = useMemo(
     () => (isOpen ? parsePaletteTokens(query).filter((t) => t.kind !== 'keyword') : []),
     [isOpen, query]
@@ -814,7 +814,7 @@ export function CommandPalette(props: CommandPaletteProps): React.ReactElement |
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* V08：coss Command 外灰槽 + 内亮板 CommandPanel 双栏富预览台 */}
+      {/* coss Command 外灰槽 + 内亮板 CommandPanel 双栏富预览台 */}
       <div className="glass-pop glx-popover-in flex w-[min(680px,92vw)] flex-col overflow-hidden rounded-2xl border border-border bg-muted/90 dark:bg-popover/95 p-1.5 shadow-2xl lg:w-[min(1040px,92vw)]">
         {/* 外灰槽顶部：搜索框 + Token 微标签 + 常驻语法胶囊行 */}
         <div className="px-3 pb-2.5 pt-2">
@@ -847,7 +847,7 @@ export function CommandPalette(props: CommandPaletteProps): React.ReactElement |
               </div>
             ) : null}
           </div>
-          {/* U07：快捷语法胶囊（常驻单行；点击即补全 → 再点即移除，走 onQueryChange 正常纪律） */}
+          {/* 快捷语法胶囊（常驻单行；点击即补全 → 再点即移除，走 onQueryChange 正常纪律） */}
           <div
             className="mt-2 flex flex-wrap items-center gap-1.5"
             data-command-palette-grammar="true"
@@ -885,7 +885,7 @@ export function CommandPalette(props: CommandPaletteProps): React.ReactElement |
           </div>
         </div>
 
-        {/* V08 内亮板 CommandPanel：lg ≥1024px 左结果列表 60%（ScrollArea） + 右实时富预览 40% */}
+        {/* 内亮板 CommandPanel：lg ≥1024px 左结果列表 60%（ScrollArea） + 右实时富预览 40% */}
         <CommandPanel className="flex flex-col overflow-hidden lg:flex-row">
           <ScrollArea scrollFade className="max-h-[52vh] w-full lg:w-[60%] lg:shrink-0">
             <div
@@ -990,7 +990,7 @@ export function CommandPalette(props: CommandPaletteProps): React.ReactElement |
             </div>
           </ScrollArea>
 
-          {/* V08 右实时富预览窗：随选中实时展示版本/专项/更新时刻/L4A摘要/大纲/缩略图/快捷动作 */}
+          {/* 右实时富预览窗：随选中实时展示版本/专项/更新时刻/L4A摘要/大纲/缩略图/快捷动作 */}
           <aside
             data-command-palette-preview="true"
             aria-label="命中预览"

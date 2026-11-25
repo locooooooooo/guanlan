@@ -1,5 +1,5 @@
 /**
- * D05 · 时间轴导航分组 / 画布空间漫游投影 / ? 快捷键速查浮层与 TimelineView SSR 冒烟测试。
+ * 时间轴导航分组 / 画布空间漫游投影 / ? 快捷键速查浮层与 TimelineView SSR 冒烟测试。
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -151,7 +151,7 @@ test('useCanvasSpatialNav：构建事件卡 + 富预览卡真实世界中心坐�
   assert.equal(activeRich?.kind, 'rich');
 });
 
-test('TopHeader ? 快捷键速查浮层 SSR：关闭态零 DOM，展开态含完整 D05 键位与来源栈说明', () => {
+test('TopHeader ? 快捷键速查浮层 SSR：关闭态零 DOM，展开态含完整键位与来源栈说明', () => {
   const baseProps = {
     activeTab: 'panorama' as const,
     onSelectTab: () => {},
@@ -185,7 +185,7 @@ test('TopHeader ? 快捷键速查浮层 SSR：关闭态零 DOM，展开态含完
     onOpenContextDrawer: () => {},
   };
 
-  // 关闭态零 DOM（D01-a 像素基线零扰动）
+  // 关闭态零 DOM（像素基线零扰动）
   const closedHtml = renderToStaticMarkup(
     React.createElement(TopHeader, { ...baseProps, helpOpen: false })
   );

@@ -14,12 +14,12 @@ import {
   type FileHistory,
   type FileHistoryRevision,
 } from '../services/workspaceClient';
-// TA-03：版本锚点统一按本地时区展示（纯日期不换算）；时间依据三值标注与
-// documentDiff 同源（utils/timeFormat.ts 单一事实源，私有双定义退役）
+// 版本锚点统一按本地时区展示（纯日期不换算）；时间依据三值标注与
+// documentDiff 同源（utils/timeFormat.ts 单一事实源）
 import { formatLocalDateTime, timeBasisLabel } from '../utils/timeFormat';
 import { isPreviewableHtmlFormat } from '../utils/formatMeta';
 import { buildHtmlSandboxDocument } from '../utils/htmlPreview';
-// B2 组件化：版本动作钮走 §4.1 映射表归宿（「阅读器打开」紫实心→primary sm）
+// 版本动作钮使用统一原语组件（「阅读器打开」使用 primary sm）
 import { Button } from './ui/primitives';
 import {
   Empty,
@@ -29,29 +29,22 @@ import {
   EmptyTitle,
   ScrollArea,
 } from './ui';
-// U11 实机核验收编：版本链拉取 / 版本正文预览两处裸旋转升级琉璃骨架（文案与
-// 错误态分支原样保留；骨架条随容器文字色 tint，reduce 下流光层隐藏＝静态终态）
+// 版本链拉取与版本正文预览使用琉璃骨架占位（骨架条随容器文字色 tint，reduce 下静态终态）
 import { GlassSkeleton } from './ui/GlassSkeleton';
 
 /**
- * T04：以文件为中心的时间线抽屉。
+ * 以文件为中心的时间线抽屉。
  *
- * 消费 /api/v1/files/{id}/revisions 分页版本链（fetchFileHistory，批次一）：
+ * 消费 /api/v1/files/{id}/revisions 分页版本链（fetchFileHistory）：
  * - 版本节点按 occurred_at（无则 observed_at）排列；
  * - 事件按 seq 挂到对应版本下（决策事件 file_id 只在 payload_json、读取异常以 path: 为主体，
  *   由服务端 history SQL 补齐后一并在链路中呈现）；
  * - snapshot_available=false 的版本显示「已过保留期」并禁用点开；
- * - 正文按需经 fetchRevisionContent / revisionRawUrl 读取，绝不拿当前文件内容冒充历史版本。
- *
- * U06（长任务卡 v1.1 §4）：
- * - 抽屉入场统一接入 `.glx-t-panel` 弹簧抽屉双轨（transform→spring、opacity→fade）：
- *   现役 `glx-drawer-in` 是一次性 keyframes（动的也是 transform+opacity），若与本类
- *   叠挂即「两套入场」——本抽屉已改挂 glx-t-panel + 两段式入场（首帧偏移态 → rAF
- *   翻转终态触发过渡），glx-drawer-in 不再出现在本文件（reduce 降级沿用 motion.css
- *   既有的 .glx-t-panel → transition:none 登记，瞬时落位、终态可见）。
- * - 精简冗余技术字段：size_bytes KB 不再逐节点平铺在卡面头行（收进版本徽标 hover
- *   与正文预览头），occurred 精度标注保留（TA-03 时间语义诚实标注）；
- *   「时间轴序 ≠ 修订链序」由 hover-only 提示升级为常显文案。
+ * - 正文按需经 fetchRevisionContent / revisionRawUrl 读取，绝不拿当前文件内容冒充历史版本；
+ * - 抽屉入场接入 `.glx-t-panel` 弹簧双轨（transform→spring、opacity→fade），通过首帧偏移态 → rAF
+ *   翻转终态触发过渡，避免与一次性 keyframes 叠挂（reduce 降级走 motion.css transition:none）；
+ * - size_bytes KB 收进版本徽标 hover 与正文预览头，避免逐节点平铺卡面；
+ *   occurred 精度标注保留，「时间轴序 ≠ 修订链序」常显提示。
  */
 interface FileTimelineDrawerProps {
   isOpen: boolean;
@@ -127,7 +120,7 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
   const [previewText, setPreviewText] = useState<string>('');
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string>('');
-  // U06 弹簧抽屉两段式入场：首帧偏移态（translateX+opacity:0）→ rAF 翻转终态，
+  // 弹簧抽屉两段式入场：首帧偏移态（translateX+opacity:0）→ rAF 翻转终态，
   // 过渡由 .glx-t-panel 双轨承担（transform→spring / opacity→fade，只动这两属性）。
   // reduce 用户走 motion.css 既有 .glx-t-panel → transition:none，第二帧瞬时落位。
   const [entered, setEntered] = useState(false);
@@ -164,7 +157,7 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
     };
   }, [isOpen, fileId]);
 
-  // pm_5：Esc 只关闭本抽屉（App 的全局 Esc 在 historyFileId 非空时已让位），
+  // Esc 只关闭本抽屉（App 的全局 Esc 在 historyFileId 非空时已让位），
   // 不切页签、不清搜索、不关其他浮层
   useEffect(() => {
     if (!isOpen) return;
@@ -294,7 +287,7 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* V08：coss Sheet (variant="inset") 悬浮抽屉材质 */}
+      {/* coss Sheet (variant="inset") 悬浮抽屉材质 */}
       <div
         data-timeline-panel=""
         data-sheet-variant="inset"
@@ -386,7 +379,7 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
                 </div>
                 <div className="flex items-center justify-between px-1 font-mono text-[11px] text-[color:var(--ink-soft)]">
                   <span>格式 · {history.file.format.toUpperCase()}</span>
-                  {/* U06：时间轴序 ≠ 修订链序升级为常显文案（原为 hover-only title） */}
+                  {/* 时间轴序 ≠ 修订链序常显提示 */}
                   <span title="版本与事件按发生/采集时间混排（时间轴序·自新到旧），与版本时光机的修订链序（seq 降序）是两套口径">
                     排序 · 时间轴自新到旧（非修订链）
                   </span>
@@ -413,7 +406,7 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
                 </Empty>
               )}
 
-              {/* 版本链 + 挂载事件：左侧垂直时间脊柱 + 发光节点圆点（U06：节点带可测锚点） */}
+              {/* 版本链 + 挂载事件：左侧垂直时间脊柱 + 发光节点圆点（节点带可测锚点） */}
               <div className="relative pl-6 space-y-3" data-timeline-nodes="">
                 <span
                   aria-hidden="true"
@@ -452,7 +445,7 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
                             : ''
                         }`}
                       >
-                      {/* 版本节点头（U06 精简：size KB 不再逐节点平铺卡面，收进徽标 hover 与预览头） */}
+                      {/* 版本节点头（size KB 收进徽标 hover 与预览头，不在卡面逐节点平铺） */}
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
                           {rev ? (
@@ -546,7 +539,7 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
                         </div>
                       )}
 
-                      {/* 正文预览（U06：预览头补一行版本元数据，承接从卡面精简掉的 size 字段） */}
+                      {/* 正文预览（预览头补充版本元数据，展示 size 字段） */}
                       {rev && available && isActivePreview && (
                         <div className="mt-2.5 pt-2.5 border-t border-[#26243D]/10">
                           <div

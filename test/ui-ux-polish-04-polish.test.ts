@@ -36,7 +36,7 @@ import type { FileRecord, ReadingState, WorkspaceConfig } from '../src/types/gua
 import { computeReadingIslandStats } from '../src/utils/readingIslandStats';
 
 /**
- * U10 · 今日观澜首页「司辰今日徽记」与事件走势柱图交互直跳（ui-ux-polish-04-polish）。
+ * 今日观澜首页「司辰今日徽记」与事件走势柱图交互直跳。
  *
  * ① 柱模型纯函数：'' 日期待考桶恒排除、升序取最近 24 桶、只有 day 粒度 + 精确
  *    YYYY-MM-DD 桶可作直跳载荷（week/month 聚合桶诚实禁跳）、count 负值/NaN 钳 0；
@@ -58,7 +58,7 @@ import { computeReadingIslandStats } from '../src/utils/readingIslandStats';
  *    --accent-iris 裸值零入）；五段轨底轨收编 --glass-hairline；零 will-change；
  *    首页数据区禁飞类零引用；
  * ⑨ 橱窗微光：MiniDecisionCard 接入既有 glx-sheen-card 与箭头 hover 点亮；
- *    C1 冻结签名与 data-feature-card/count 既有锚点零回退。
+ *    既有签名与 data-feature-card/count 既有锚点零回退。
  */
 
 /** 读 src/ 下源文件（相对 test/ 目录，须带 ../src/ 前缀） */
@@ -128,7 +128,7 @@ function renderHome(
 
 // ───────────────────────── ① 柱模型纯函数 ─────────────────────────
 
-test('U10 柱模型纯函数：日期待考桶排除、升序取最近 24 桶、day 粒度才可直跳、count 钳 0', () => {
+test('柱模型纯函数：日期待考桶排除、升序取最近 24 桶、day 粒度才可直跳、count 钳 0', () => {
   // 25 个历史 day 桶（-25..-1）+ 今日峰值桶 = 26 组 → 只留最近 24 桶
   const groups: EventDayGroup[] = [];
   for (let i = 0; i < 25; i += 1) groups.push(dayGroup(localDayStr(i - 25), i + 1));
@@ -166,7 +166,7 @@ test('U10 柱模型纯函数：日期待考桶排除、升序取最近 24 桶、
   assert.deepEqual(buildHomeTrendBars(daysResult('day', [])), []);
 });
 
-test('U10 精确日校验纯函数：伪日期/未补零/空串拒绝，闰年真实历法放行', () => {
+test('精确日校验纯函数：伪日期/未补零/空串拒绝，闰年真实历法放行', () => {
   assert.equal(isExactDayDate('2026-11-23'), true);
   assert.equal(isExactDayDate('2024-02-29'), true, '闰日放行');
   assert.equal(isExactDayDate('2026-02-29'), false, '平年伪日期拒绝');
@@ -183,7 +183,7 @@ test('U10 精确日校验纯函数：伪日期/未补零/空串拒绝，闰年�
 
 // ───────────────────── ② 司辰徽记纯函数 ─────────────────────
 
-test('U10 徽记摘要纯函数：新增/演进真实拆分（与时光沉淀引擎同分类）、未命中诚实降级、口径透传', () => {
+test('徽记摘要纯函数：新增/演进真实拆分（与时光沉淀引擎同分类）、未命中诚实降级、口径透传', () => {
   // appeared2 + discovered1 + workspace_baseline1 = 新增 4；revision_updated3 = 演进 3
   const found = buildChronosTodaySummary(
     daysResult(
@@ -240,7 +240,7 @@ test('U10 徽记摘要纯函数：新增/演进真实拆分（与时光沉淀引
   assert.equal(chronosOrderLabel(null), '');
 });
 
-test('U10 日历次级落点纯函数：最近一个有事件的直跳日；聚合桶/全零/空集诚实回 null', () => {
+test('日历次级落点纯函数：最近一个有事件的直跳日；聚合桶/全零/空集诚实回 null', () => {
   const bars = [
     { date: '2026-11-01', count: 3, jumpable: true },
     { date: '2026-11-02', count: 0, jumpable: true },
@@ -262,7 +262,7 @@ test('U10 日历次级落点纯函数：最近一个有事件的直跳日；聚�
 
 // ───────────────── ③ SSR：司辰今日徽记 ─────────────────
 
-test('U10 SSR 徽记：真实派生摘要 + 口径显式声明 + 直跳目的地；缺今日桶诚实降级；绝不复读 meta 统计', () => {
+test('SSR 徽记：真实派生摘要 + 口径显式声明 + 直跳目的地；缺今日桶诚实降级；绝不复读 meta 统计', () => {
   const html = renderHome(
     daysResult('day', [dayGroup(TODAY, 3, { appeared: 2, revision_updated: 1 })], 'occurred')
   );
@@ -291,7 +291,7 @@ test('U10 SSR 徽记：真实派生摘要 + 口径显式声明 + 直跳目的地
 
 // ───────────────── ④ SSR：柱图可点击时光入口 ─────────────────
 
-test('U10 SSR 柱图：day 粒度全柱 button 化（精确 YYYY-MM-DD 载荷）、点击前往该日、近 24 桶、日历次级入口', () => {
+test('SSR 柱图：day 粒度全柱 button 化（精确 YYYY-MM-DD 载荷）、点击前往该日、近 24 桶、日历次级入口', () => {
   const groups: EventDayGroup[] = [];
   for (let i = 0; i < 25; i += 1) groups.push(dayGroup(localDayStr(i - 25), i + 1));
   groups.push(dayGroup(TODAY, 30, { appeared: 5 }));
@@ -333,7 +333,7 @@ test('U10 SSR 柱图：day 粒度全柱 button 化（精确 YYYY-MM-DD 载荷）
   assert.ok(html.includes('峰值 30 条/日'), '峰值口径不变');
 });
 
-test('U10 SSR 柱图诚实禁跳：week/month 聚合桶零按钮、零「点击前往该日」、零日历直跳入口', () => {
+test('SSR 柱图诚实禁跳：week/month 聚合桶零按钮、零「点击前往该日」、零日历直跳入口', () => {
   const weekHtml = renderHome(
     daysResult('week', [dayGroup('2026-11-16', 4), dayGroup('2026-11-23', 9)])
   );
@@ -352,7 +352,7 @@ test('U10 SSR 柱图诚实禁跳：week/month 聚合桶零按钮、零「点击�
   assert.ok(!monthHtml.includes('data-home-trend-jumpable="true"'), 'month 桶同样禁跳');
 });
 
-test('U10 SSR 柱图零数据：诚实空态与「等待数据」胶囊不变，零柱零入口', () => {
+test('SSR 柱图零数据：诚实空态与「等待数据」胶囊不变，零柱零入口', () => {
   const empty = renderHome(daysResult('day', [dayGroup('', 99)]));
   assert.ok(empty.includes('暂无按日聚合的事件数据'), '全待考桶 = 诚实空态');
   assert.ok(!empty.includes('data-home-trend-bar='), '零柱');
@@ -363,7 +363,7 @@ test('U10 SSR 柱图零数据：诚实空态与「等待数据」胶囊不变，
 
 // ───────────────── ⑤ 接线（源码级，SSR 无法模拟点击） ─────────────────
 
-test('U10 接线（源码级）：柱图/徽记/日历入口精确透传 YYYY-MM-DD；AppMainViews 锁定语义 ≠ toggle', () => {
+test('接线（源码级）：柱图/徽记/日历入口精确透传 YYYY-MM-DD；AppMainViews 锁定语义 ≠ toggle', () => {
   const homeSrc = readSrc('components/HomeView.tsx');
   assert.ok(
     homeSrc.includes('onOpenPanoramaAt ? onOpenPanoramaAt(g.date) : onOpenPanorama()'),
@@ -410,7 +410,7 @@ test('U10 接线（源码级）：柱图/徽记/日历入口精确透传 YYYY-MM
 
 // ───────────────── ⑥ 交错入场节奏 ─────────────────
 
-test('U10 交错入场节奏：首页区块 --glx-stagger 唯一递进（0,2,3,4,5，消灭并列重叠拍）', () => {
+test('交错入场节奏：首页区块 --glx-stagger 唯一递进（0,2,3,4,5，消灭并列重叠拍）', () => {
   const html = renderHome(null);
   const staggers = [...html.matchAll(/--glx-stagger:(\d+)/g)].map((m) => Number(m[1]));
   assert.deepEqual(
@@ -423,7 +423,7 @@ test('U10 交错入场节奏：首页区块 --glx-stagger 唯一递进（0,2,3,4
 
 // ───────────────── ⑦ 动效契约（声明 + reduce 双登记） ─────────────────
 
-test('U10 动效契约：两文件引用的 glx-* 类全部「声明 + reduce 降级」双登记；本轮零新增动效类欠账', () => {
+test('动效契约：两文件引用的 glx-* 类全部「声明 + reduce 降级」双登记；零新增动效类欠账', () => {
   const motionCss = readFileSync(
     fileURLToPath(new URL('../src/styles/motion.css', import.meta.url)),
     'utf8'
@@ -446,7 +446,7 @@ test('U10 动效契约：两文件引用的 glx-* 类全部「声明 + reduce �
       assert.ok(reduceSection.includes(`.${cls}`), `prefers-reduced-motion 应降级 .${cls}`);
     }
   }
-  // U10 零新增动效类：motion.css 不因本轮引入司辰徽记私类（轻摇走组件侧 motion-safe 变换）
+  // 零新增动效类：motion.css 不引入司辰徽记私类（轻摇走组件侧 motion-safe 变换）
   assert.ok(!motionCss.includes('chronos'), 'motion.css 零 chronos 私类');
   const homeSrc = readSrc('components/HomeView.tsx');
   assert.ok(
@@ -457,7 +457,7 @@ test('U10 动效契约：两文件引用的 glx-* 类全部「声明 + reduce �
   assert.ok(!homeSrc.includes('animation:'), 'HomeView 零内联 animation（复用共享层预设）');
 });
 
-test('U10 柱生长动效：只有既有 glx-bar-rise 的 scaleY（纯 transform），柱高保持 inline 视觉量非动画量', () => {
+test('柱生长动效：只有既有 glx-bar-rise 的 scaleY（纯 transform），柱高保持 inline 视觉量非动画量', () => {
   const motionCss = readFileSync(
     fileURLToPath(new URL('../src/styles/motion.css', import.meta.url)),
     'utf8'
@@ -480,7 +480,7 @@ test('U10 柱生长动效：只有既有 glx-bar-rise 的 scaleY（纯 transform
 
 // ───────────────── ⑧ 令牌与对比度纪律 ─────────────────
 
-test('U10 令牌纪律：徽记文字 AA 深档、iris 裸值与 --ink-faint 零入徽记；底轨收编 --glass-hairline；零 will-change', () => {
+test('令牌纪律：徽记文字 AA 深档、iris 裸值与 --ink-faint 零入徽记；底轨收编 --glass-hairline；零 will-change', () => {
   const homeSrc = readSrc('components/HomeView.tsx');
   const badgeChunk = homeSrc.slice(
     homeSrc.indexOf('data-chronos-badge'),
@@ -511,9 +511,9 @@ test('U10 令牌纪律：徽记文字 AA 深档、iris 裸值与 --ink-faint 零
   );
 });
 
-// ───────────────── ⑨ 橱窗微光与 C1 冻结契约 ─────────────────
+// ───────────────── ⑨ 橱窗微光与既有契约 ─────────────────
 
-test('U10 橱窗微光：MiniDecisionCard 接入既有 glx-sheen-card 扫光与箭头 hover 点亮；C1 冻结签名与既有锚点零回退', () => {
+test('橱窗微光：MiniDecisionCard 接入既有 glx-sheen-card 扫光与箭头 hover 点亮；既有签名与既有锚点零回退', () => {
   const decisionItems: FeaturedDecisionItem[] = [
     { decisionId: 'd1', question: '是否采用新比例带？', status: '待确认' },
   ];
@@ -571,13 +571,13 @@ test('U10 橱窗微光：MiniDecisionCard 接入既有 glx-sheen-card 扫光与�
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// U11 · 全局顶栏减负分组 / 阅读岛动效激活 / 琉璃骨架屏体系
+// 全局顶栏减负分组 / 阅读岛动效激活 / 琉璃骨架屏体系
 //
 // ① 骨架行宽纯函数（GlassSkeleton.skeletonLineWidths）：首行满宽逐行收窄、
 //    56% 下限、0/负/NaN/∞ 单行兜底；
 // ② GlassSkeleton / ChronosEmptyState SSR：琉璃条 + glx-skeleton 流光载体 +
 //    aria-hidden 纯视觉占位（诚实播报归调用方 role="status"）；
-// ③ 动效契约：U11 四文件引用的 glx-* 类「声明 + reduce 降级」双登记；
+// ③ 动效契约：四文件引用的 glx-* 类「声明 + reduce 降级」双登记；
 //    glx-skeleton-sweep 关键帧只动 transform（禁 background-position 流光、
 //    禁布局属性、禁写死 ms、零 will-change）；reduce 下流光层 display:none；
 // ④ 阅读岛：环生长纯函数 offset=100-percent 双端钳位（与 glx-ring-draw 目标
@@ -589,9 +589,9 @@ test('U10 橱窗微光：MiniDecisionCard 接入既有 glx-sheen-card 扫光与�
 //    dataError 错误态零骨架（骨架不吞真实错误态）。
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ───────────────── U11 ① 骨架行宽纯函数 ─────────────────
+// ───────────────── ① 骨架行宽纯函数 ─────────────────
 
-test('U11 骨架行宽纯函数：首行满宽逐行收窄（56% 下限），0/负数/NaN/∞ 单行兜底', () => {
+test('骨架行宽纯函数：首行满宽逐行收窄（56% 下限），0/负数/NaN/∞ 单行兜底', () => {
   assert.deepEqual(skeletonLineWidths(3), ['100%', '89%', '78%'], '首行满宽、步长 11% 递减');
   assert.deepEqual(skeletonLineWidths(1), ['100%']);
 
@@ -612,9 +612,9 @@ test('U11 骨架行宽纯函数：首行满宽逐行收窄（56% 下限），0/�
   assert.deepEqual(skeletonLineWidths(Number.POSITIVE_INFINITY), ['100%'], '∞ 单行兜底不炸');
 });
 
-// ───────────────── U11 ② GlassSkeleton / 线稿空态 SSR ─────────────────
+// ───────────────── ② GlassSkeleton / 线稿空态 SSR ─────────────────
 
-test('U11 GlassSkeleton SSR：琉璃条 + glx-skeleton 流光载体 + aria-hidden 纯视觉占位；头像位变体', () => {
+test('GlassSkeleton SSR：琉璃条 + glx-skeleton 流光载体 + aria-hidden 纯视觉占位；头像位变体', () => {
   const html = renderToStaticMarkup(createElement(GlassSkeleton, { lines: 3 }));
   assert.ok(html.includes('data-glass-skeleton=""'), '骨架容器锚点');
   assert.ok(html.includes('aria-hidden="true"'), '纯视觉占位（诚实播报归调用方 role=status）');
@@ -642,13 +642,13 @@ test('U11 GlassSkeleton SSR：琉璃条 + glx-skeleton 流光载体 + aria-hidde
   assert.ok(!codeOnly.includes('var(--ink-faint)'), '空态文字禁 --ink-faint（<24px 红线）');
 });
 
-test('U11 司辰线稿空态 SSR：单点双圈涟漪线稿（澜青桥色）+ 诚实句双层文字，纯静态零动画', () => {
+test('司辰线稿空态 SSR：单点双圈涟漪线稿（澜青桥色）+ 诚实句双层文字，纯静态零动画', () => {
   const html = renderToStaticMarkup(
     createElement(ChronosEmptyState, { title: '暂无沉淀', hint: '首个版本入库后点亮' })
   );
   assert.ok(html.includes('data-chronos-empty=""'), '空态容器锚点');
   assert.ok(html.includes('data-chronos-lineart=""'), '线稿锚点');
-  assert.ok(html.includes('var(--canvas-bridge)'), '线稿走澜青桥色（v0.6 §6 空态语法）');
+  assert.ok(html.includes('var(--canvas-bridge)'), '线稿走澜青桥色（空态语法）');
   assert.ok(html.includes('opacity="0.31"') && html.includes('opacity="0.59"'), '双圈衰减 α .59/.31');
   assert.ok(html.includes('暂无沉淀') && html.includes('首个版本入库后点亮'), '诚实句透传');
   assert.ok(html.includes('var(--ink-strong)') && html.includes('var(--ink-soft)'), '文字双层 AA 档');
@@ -656,9 +656,9 @@ test('U11 司辰线稿空态 SSR：单点双圈涟漪线稿（澜青桥色）+ �
   assert.ok(!lineArt.includes('animate'), '线稿纯静态（呼吸语法只属未读/新变化提示）');
 });
 
-// ───────────────── U11 ③ 动效契约（声明 + reduce 双登记） ─────────────────
+// ───────────────── ③ 动效契约（声明 + reduce 双登记） ─────────────────
 
-test('U11 动效契约：四文件引用的 glx-* 类「声明 + reduce 降级」双登记；骨架流光只动 transform、零写死 ms', () => {
+test('动效契约：四文件引用的 glx-* 类「声明 + reduce 降级」双登记；骨架流光只动 transform、零写死 ms', () => {
   const motionCss = readFileSync(
     fileURLToPath(new URL('../src/styles/motion.css', import.meta.url)),
     'utf8'
@@ -708,9 +708,9 @@ test('U11 动效契约：四文件引用的 glx-* 类「声明 + reduce 降级�
   assert.ok(reduceSkeletonBlock.includes('display: none'), 'reduce 下流光层整层隐藏');
 });
 
-// ───────────────── U11 ④ 阅读岛：环生长 + 悬停微亮 + 面板弹簧滑出 ─────────────────
+// ───────────────── ④ 阅读岛：环生长 + 悬停微亮 + 面板弹簧滑出 ─────────────────
 
-test('U11 环生长纯函数：周长 100 口径 offset=100-percent 双端钳位（与 glx-ring-draw 目标同源）', () => {
+test('环生长纯函数：周长 100 口径 offset=100-percent 双端钳位（与 glx-ring-draw 目标同源）', () => {
   assert.equal(islandRingDashOffset(33), 67, '33% → offset 67（周长 100 ≠ 日历侧 82，不同源）');
   assert.equal(islandRingDashOffset(100), 0, '满环 offset 0');
   assert.equal(islandRingDashOffset(0), 100);
@@ -719,7 +719,7 @@ test('U11 环生长纯函数：周长 100 口径 offset=100-percent 双端钳位
   assert.equal(islandRingDashOffset(Number.NaN), 100, 'NaN 钳零弧（不炸不画负）');
 });
 
-test('U11 三环描边生长 SSR：glx-ring-draw + --glx-ring-offset 与 attribute 同源；0% 环零弧；悬停微亮接线', () => {
+test('三环描边生长 SSR：glx-ring-draw + --glx-ring-offset 与 attribute 同源；0% 环零弧；悬停微亮接线', () => {
   const ring = renderToStaticMarkup(
     createElement(IslandRing, {
       label: '已读',
@@ -811,7 +811,7 @@ function islandStates(): { files: FileRecord[]; states: Record<string, ReadingSt
   };
 }
 
-test('U11 岛收起态 SSR：inline 态三环描边生长，header 态走极简静默图标，收起态零面板', () => {
+test('岛收起态 SSR：inline 态三环描边生长，header 态走极简静默图标，收起态零面板', () => {
   const { files, states } = islandStates();
   const inlineHtml = renderToStaticMarkup(
     createElement(ReadingIsland, {
@@ -841,7 +841,7 @@ test('U11 岛收起态 SSR：inline 态三环描边生长，header 态走极简�
   assert.equal(headerHtml.split('data-island-ring').length - 1, 0, '顶栏精简为静默单图标，不再堆砌三环');
 });
 
-test('U11 展开面板 SSR：glx-t-panel 两段式弹簧滑出（anim-spring-pop 退役）；琉璃材质与既有锚点不回退', () => {
+test('展开面板 SSR：glx-t-panel 两段式弹簧滑出（anim-spring-pop 退役）；琉璃材质与既有锚点不回退', () => {
   const { files, states } = islandStates();
   const stats = computeReadingIslandStats(files, states);
   const html = renderToStaticMarkup(
@@ -864,7 +864,7 @@ test('U11 展开面板 SSR：glx-t-panel 两段式弹簧滑出（anim-spring-pop
   assert.ok(html.includes('data-island-section="已读"') && html.includes('data-island-section="未读"'));
 });
 
-// ───────────────── U11 ⑤ 顶栏减负分组 ─────────────────
+// ───────────────── ⑤ 顶栏减负分组 ─────────────────
 
 function headerBaseProps() {
   return {
@@ -900,7 +900,7 @@ function headerBaseProps() {
   };
 }
 
-test('U11 顶栏减负分组 SSR：核心行动组（检索·未决决策·批阅）/ 静默工具组（同步·证据篮·?·设置）+ 右区唯一发丝隔线', () => {
+test('顶栏减负分组 SSR：核心行动组（检索·未决决策·批阅）/ 静默工具组（同步·证据篮·?·设置）+ 右区唯一发丝隔线', () => {
   const html = renderToStaticMarkup(
     createElement(TopHeader, {
       ...headerBaseProps(),
@@ -943,7 +943,7 @@ test('U11 顶栏减负分组 SSR：核心行动组（检索·未决决策·批�
   assert.ok(!primaryChunk.includes('证据篮'), '证据篮绝不落核心组');
 });
 
-test('U11 顶栏分组源码契约：library 筛选随检索同簇；遥测胶囊整块搬迁不拆；U09 徽标脉冲接线原样', () => {
+test('顶栏分组源码契约：library 筛选随检索同簇；遥测胶囊整块搬迁不拆；徽标脉冲接线原样', () => {
   const headerSrc = readSrc('components/TopHeader.tsx');
   const idxPrimary = headerSrc.indexOf('data-header-cluster="primary"');
   const idxDivider = headerSrc.indexOf('data-header-divider');
@@ -957,12 +957,12 @@ test('U11 顶栏分组源码契约：library 筛选随检索同簇；遥测胶�
   const radarIdx = headerSrc.indexOf('<DecisionRadar');
   assert.ok(radarIdx > idxPrimary && radarIdx < idxDivider, '决策雷达入核心行动组');
 
-  // U09 徽标脉冲接线原样保留（证据篮搬簇不搬语义）
+  // 徽标脉冲接线原样保留（证据篮搬簇不搬语义）
   assert.ok(headerSrc.includes("basketPulseSeq > 0 ? 'glx-badge-pop'"));
   assert.ok(headerSrc.includes('data-context-basket-badge'));
 });
 
-// ───────────────── U11 ⑥ 冷启动首扫琉璃骨架 ─────────────────
+// ───────────────── ⑥ 冷启动首扫琉璃骨架 ─────────────────
 
 function bannerCtx(overrides: Record<string, unknown> = {}): WorkspaceStoreCtx {
   return {
@@ -982,14 +982,14 @@ function bannerCtx(overrides: Record<string, unknown> = {}): WorkspaceStoreCtx {
     files: [],
     dataError: null,
     activeTab: 'home',
-    // U11 挂载点消费：阅读岛（files>0 时渲染）直连 store 真实 readingStates 与 config.quota
+    // 挂载点消费：阅读岛（files>0 时渲染）直连 store 真实 readingStates 与 config.quota
     config: EMPTY_WORKSPACE_CONFIG,
     readingStates: {},
     ...overrides,
   } as unknown as WorkspaceStoreCtx;
 }
 
-test('U11 冷启动首扫 SSR：裸旋转图标升级琉璃骨架 + 司辰线稿；role=status 与诚实文案逐字保留', () => {
+test('冷启动首扫 SSR：裸旋转图标升级琉璃骨架 + 司辰线稿；role=status 与诚实文案逐字保留', () => {
   const html = renderToStaticMarkup(createElement(AppBanners, { ctx: bannerCtx() }));
   assert.ok(html.includes('role="status"'), '诚实加载语义容器保留');
   assert.ok(html.includes('正在读取工作区快照…'), '主文案逐字保留');
@@ -1016,8 +1016,8 @@ test('U11 冷启动首扫 SSR：裸旋转图标升级琉璃骨架 + 司辰线稿
   assert.ok(!libHtml.includes('data-glass-skeleton'));
 });
 
-test('U11/V02 阅读岛挂载：收编入 TopHeader 静默工具组零遮挡（AppBanners 退役右缘 fixed 压盖）+ 续读复用 openDocResumeReading', () => {
-  // V02 升级：原 AppBanners 右缘 fixed 亮白悬浮条压盖日历侧栏/时光机右栏，已收编为 TopHeader 横向紧凑微胶囊 + coss Sheet inset
+test('阅读岛挂载：收编入 TopHeader 静默工具组零遮挡（AppBanners 退役右缘 fixed 压盖）+ 续读复用 openDocResumeReading', () => {
+  // 原 AppBanners 右缘 fixed 亮白悬浮条压盖日历侧栏/时光机右栏，已收编为 TopHeader 横向紧凑微胶囊 + coss Sheet inset
   const bannersSrc = readSrc('components/app/AppBanners.tsx');
   assert.ok(!bannersSrc.includes('<ReadingIsland'), 'AppBanners 不再挂右缘 fixed 压盖岛');
   const headerSrc = readSrc('components/TopHeader.tsx');
@@ -1059,7 +1059,7 @@ test('U11/V02 阅读岛挂载：收编入 TopHeader 静默工具组零遮挡（A
   assert.ok(readyHeaderHtml.includes('aria-expanded="false"'), '默认收起态');
 });
 
-test('U11 三处裸旋转替换收编（实机核验口径 1/3 → 3/3）：阅读器冷加载与文件历史两处琉璃骨架，诚实语义零删减', () => {
+test('三处裸旋转替换收编：阅读器冷加载与文件历史两处琉璃骨架，诚实语义零删减', () => {
   // ② 阅读器冷加载（readerMarkdownSection.tsx bodyPhase==='loading' 块）
   const readerSrc = readSrc('components/reader/readerMarkdownSection.tsx');
   const loadingIdx = readerSrc.indexOf("bodyPhase === 'loading'");
@@ -1075,7 +1075,7 @@ test('U11 三处裸旋转替换收编（实机核验口径 1/3 → 3/3）：阅�
   ]) {
     assert.ok(loadingBlock.includes(copy), `诚实文案/可诊断信息保留：${copy}`);
   }
-  // 决策回执「保存中…」按钮 spinner 属功能流保留（v0.6 §6：animate-spin 功能流范畴）
+  // 决策回执「保存中…」按钮 spinner 属功能流保留（animate-spin 功能流范畴）
   assert.ok(readerSrc.includes('Loader2'), '按钮内操作反馈 spinner 不在本轮收编范围');
 
   // ③ 文件历史抽屉（版本链拉取 + 版本正文预览两处）

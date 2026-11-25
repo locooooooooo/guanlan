@@ -1,7 +1,7 @@
 /**
- * 证道阁 · 路由上下文自动感知组装器（PRD 4.1 / 方案 F4，纯函数层）。
+ * 智能体上下文 · 路由上下文自动感知组装器（纯函数层）。
  *
- * 三入口默认包（PRD 4.1 表格逐字语义）：
+ * 三入口默认包：
  *  - 文档正文页（intent='document'）：当前文档完整正文（全文）+ 所属专项 README/
  *    核心定位（摘要）+ 当前文档关联的 P0/P1 未决事项（仅决策与契约）；
  *  - 专项详情/筛选视图（intent='initiative'）：该专项下各阶段最新定版文档摘要 +
@@ -9,25 +9,24 @@
  *  - 首页总览（intent='global'）：最近活跃的 Top-3 专项核心摘要 + 全局最高优先级
  *    （P0/P1）待确认事项汇总。
  *
- * 预置任务意图模板（PRD 4.1 第三列逐字）与「推荐挂载（基于星图血缘与代码引用）」
- * 折叠区候选（reason ∈ 本文引用/同专项引用/命名关联，排序确定性）同在本层。
+ * 预置任务意图模板与「推荐挂载（基于星图血缘与代码引用）」折叠区候选
+ * （reason ∈ 本文引用/同专项引用/命名关联，排序确定性）同在本层。
  *
- * 纪律：纯函数（node --test 直跑，禁 .css/React）；不读服务——服务端 POST /context
- * （契约 B）落地后将替代本地组装为默认包来源，本模块的输入形状与 ContextRequest
+ * 纪律：纯函数（node --test 直跑，禁 .css/React）；不读服务——在线时优先采用服务端
+ * POST /api/v1/context 组装结果，本模块的输入形状与 ContextRequest
  * items/granularity 词表逐字对齐（'full'|'summary'|'decisions_only'）。
- * AC-04：默认包保证已选 ≥2（单文档且无未决的退化工作区如实 meetsAc04=false，
- * 不造假条目）。
+ * 默认包保证已选 ≥2（单文档且无未决的退化工作区如实 meetsAc04=false，不造假条目）。
  */
 
 import type { ContextGranularity } from '../services/apiTypes';
 import type { StageRole } from './taskPackages';
 
-export type ZhendaogeIntent = 'document' | 'initiative' | 'global';
+export type AgentContextIntent = 'document' | 'initiative' | 'global';
 
 /** 注入粒度词表（与 apiTypes.ContextGranularity 同词） */
 export type PresetGranularity = ContextGranularity;
 
-/** 推荐挂载 reason（契约 B 词表；排序 本文引用 > 同专项引用 > 命名关联） */
+/** 推荐挂载 reason（排序 本文引用 > 同专项引用 > 命名关联） */
 export type RecommendedReason = '本文引用' | '同专项引用' | '命名关联';
 
 export interface ContextCandidate {
@@ -62,7 +61,7 @@ export interface PresetUnresolvedDecision {
   fileId: string;
   code?: string;
   question?: string;
-  /** P0/P1 阻塞性（PRD 4.1 第三行「全局最高优先级（P0/P1）」过滤键） */
+  /** P0/P1 阻塞性（全局最高优先级过滤键） */
   isBlocking: boolean;
 }
 
@@ -72,7 +71,7 @@ export interface PresetRelationRef {
   targetFileId: string;
 }
 
-export interface ZhendaogePresetInput {
+export interface AgentContextPresetInput {
   /** 当前阅读文件（文档正文页入口锚点） */
   activeFileId?: string | null;
   /** 当前所属专项（阅读器 activePackage 或概览聚焦包；缺省=无专项焦点） */
@@ -82,15 +81,15 @@ export interface ZhendaogePresetInput {
   relations?: readonly PresetRelationRef[];
 }
 
-export interface ZhendaogePreset {
-  intent: ZhendaogeIntent;
-  /** 预置任务意图模板（PRD 4.1 第三列） */
+export interface AgentContextPreset {
+  intent: AgentContextIntent;
+  /** 预置任务意图模板 */
   intentTemplate: string;
-  /** 默认勾选清单（AC-04：典型工作区 ≥2 项） */
+  /** 默认勾选清单（典型工作区 ≥2 项） */
   items: ContextCandidate[];
   /** 推荐挂载（已排除默认勾选；去重；≤6） */
   recommended: RecommendedCandidate[];
-  /** AC-04 达标标注（退化工作区如实 false，不造假条目） */
+  /** 默认包达标标注（退化工作区如实 false，不造假条目） */
   meetsAc04: boolean;
 }
 
@@ -98,17 +97,17 @@ const RECOMMENDED_CAP = 6;
 
 /**
  * 路由意图推导：有阅读文件 → 文档正文页；无阅读文件但有专项焦点 → 专项详情；
- * 两者皆无 → 首页总览（PRD 4.1 三行入口）。
+ * 两者皆无 → 首页总览。
  */
-export function deriveZhendaogeIntent(input: ZhendaogePresetInput): ZhendaogeIntent {
+export function deriveAgentContextIntent(input: AgentContextPresetInput): AgentContextIntent {
   if (input.activeFileId) return 'document';
   if (input.activePackage) return 'initiative';
   return 'global';
 }
 
-/** 预置任务意图模板（PRD 4.1 第三列逐字） */
+/** 预置任务意图模板 */
 export function buildIntentTemplate(
-  intent: ZhendaogeIntent,
+  intent: AgentContextIntent,
   packageName?: string | null
 ): string {
   switch (intent) {
@@ -152,7 +151,7 @@ const REASON_RANK: Record<RecommendedReason, number> = {
 };
 
 /** 推荐挂载（星图血缘）：引用当前文档者最优先；同包引用次之；其余命名关联 */
-export function buildRecommendedMounts(input: ZhendaogePresetInput): RecommendedCandidate[] {
+export function buildRecommendedMounts(input: AgentContextPresetInput): RecommendedCandidate[] {
   const relations = input.relations ?? [];
   if (relations.length === 0) return [];
   const focusId = input.activeFileId ?? null;
@@ -194,11 +193,11 @@ function topActivePackages(packages: readonly PresetPackageInfo[], n: number): P
 }
 
 /**
- * 三入口默认包组装（PRD 4.1 表格）。无未决决策引用时以同包其他文档摘要补位到
- * ≥2（AC-04），单文档退化工作区如实不达标（meetsAc04=false）。
+ * 三入口默认包组装。无未决决策引用时以同包其他文档摘要补位到
+ * ≥2，单文档退化工作区如实不达标（meetsAc04=false）。
  */
-export function buildZhendaogePreset(input: ZhendaogePresetInput): ZhendaogePreset {
-  const intent = deriveZhendaogeIntent(input);
+export function buildAgentContextPreset(input: AgentContextPresetInput): AgentContextPreset {
+  const intent = deriveAgentContextIntent(input);
   const items: ContextCandidate[] = [];
 
   const unresolvedFor = (fileIds: ReadonlySet<string>): ContextCandidate[] => {
@@ -225,7 +224,7 @@ export function buildZhendaogePreset(input: ZhendaogePresetInput): ZhendaogePres
     // 3. 当前文档关联的 P0/P1 未决事项（包域 + 当前文件）
     const scope = new Set<string>([...(pkg?.docIds ?? []), input.activeFileId]);
     items.push(...unresolvedFor(scope));
-    // AC-04 补位：仍 <2 时按阅读顺序追加包内其余文档（摘要档）
+    // 补位：仍 <2 时按阅读顺序追加包内其余文档（摘要档）
     if (pkg) {
       for (const id of pkg.docIds) {
         if (items.length >= 2) break;

@@ -89,14 +89,14 @@ pub struct KeyCursor {
     pub k: String,
     pub s: String,
     pub fp: String,
-    /// 精确总数（issue #24：版本链首页 COUNT 一次后随游标携带，续页不再重复
-    /// COUNT 整条版本链；旧版游标无此字段，serde default 解码为 None →
-    /// 续页回退现算，行为正确只是不省）。files/decisions 不使用，序列化时省略。
+    /// 精确总数：版本链首页 COUNT 一次后随游标携带，续页不再重复
+    /// COUNT 整条版本链；不含此字段的旧游标经 serde default 解码为 None，
+    /// 续页回退现算。files/decisions 不使用，序列化时省略。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total: Option<u64>,
 }
 
-/// 事件游标解码。失败 → `CURSOR_STALE`（契约 §0.2：现状静默回首页，v1 显式 409）。
+/// 事件游标解码。失败时显式返回 `CURSOR_STALE`（409，见契约 §0.2，不静默回首页）。
 pub fn decode_event_cursor(raw: &str) -> Result<EventCursor, GuanlanError> {
     let bytes = b64url_decode(raw).ok_or_else(cursor_stale_decode)?;
     let text = String::from_utf8(bytes).map_err(|_| cursor_stale_decode())?;
@@ -126,7 +126,7 @@ pub fn encode_key_cursor(c: &KeyCursor) -> String {
     )
 }
 
-/// 偏移键游标（长任务批次只读列表：created_at 倒序定长页的 OFFSET 载体）。
+/// 偏移键游标（只读列表 `created_at` 倒序定长页的 OFFSET 载体）。
 /// JSON {"o": offset} 的 base64url——结构简单且无代际语义（列表只追加，偏移安全）。
 pub fn encode_key_cursor_offset(offset: u64) -> Option<String> {
     Some(b64url_encode(
@@ -278,7 +278,7 @@ pub(crate) fn clamp_limit(raw: Option<u32>, default: u32, max: u32) -> u32 {
     raw.unwrap_or(default).clamp(1, max)
 }
 
-/// TA-03 本地日历日表达式（queries.ts:129-131 逐字保留）：
+/// 本地日历日表达式（与 `queries.ts:129-131` 逐字对齐）：
 /// 长度 ≤ 10 视为纯日期原样返回（不参与时区换算）；含时刻的 ISO 交
 /// SQLite `date(..., 'localtime')` 取服务端本地日历日。
 pub(crate) fn local_day_expr(column: &str) -> String {
@@ -299,7 +299,7 @@ pub(crate) fn safe_json(raw: &str) -> serde_json::Value {
 mod tests {
     use super::*;
 
-    /// base64url 往返 + Node 兼容性抽查（本会话用 node v24.19.0 实测比对）：
+    /// base64url 往返 + Node 兼容性抽查（与 Node `Buffer.toString('base64url')` 实测比对）：
     /// `Buffer.from('hello 观澜').toString('base64url')` = "aGVsbG8g6KeC5r6c"
     #[test]
     fn b64url_matches_node_base64url() {
@@ -338,7 +338,7 @@ mod tests {
         }
     }
 
-    /// 事件指纹与 Node 实测一致（本会话 node v24.19.0 计算并比对）：
+    /// 事件指纹与 Node 实测一致：
     /// `kinds 排序后 JSON.stringify({from:null,to:null,kinds:["appeared","modified"],format:"md",
     ///  order:"occurred",undated:false,q:null})` 的 sha256 前 16 位 = "5b9571ad5ea150d4"
     #[test]

@@ -396,7 +396,7 @@ export function subscribeNativeDragDrop(
 }
 
 
-/** C03：桌面壳全局热键事件（guanlan-desktop tauri-plugin-global-shortcut 原生转发；
+/** 桌面壳全局热键事件（guanlan-desktop tauri-plugin-global-shortcut 原生转发；
  *  payload 携带命中的热键串，如 "alt+k"；浏览器/非桌面环境静默无订阅）。 */
 export interface GlobalShortcutEvent {
   hotkey: string;

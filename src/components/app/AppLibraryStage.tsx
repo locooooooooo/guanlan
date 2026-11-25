@@ -1,5 +1,5 @@
 /**
- * D01-a 拆解 · App 知识资产库三栏分节（原 App.tsx 3765-4038 逐字迁入）：
+ * App 知识资产库三栏分节：
  * 窄视口抽屉条 + LeftSidebar + ReaderView（hidden 保活）/ AtlasView + RightInspector。
  * 数据一律来自 useWorkspaceStore ctx。
  */
@@ -67,7 +67,7 @@ export function AppLibraryStage({ ctx }: { ctx: WorkspaceStoreCtx }) {
     return { total, unread };
   }, [files, readingStates, sidebarFilters.folder]);
 
-  // ── U05 · 专注纸面（Zen）：本层是唯一同时握有「左栏折叠」与「右栏显隐」两把钥匙的层 ──
+  // ── 专注纸面（Zen）：本层是唯一同时握有「左栏折叠」与「右栏显隐」两把钥匙的层 ──
   // 进入 Zen：收起左侧目录栏 + 收起右侧溯源检查器 → 阅读纸居中（黄金行宽由 .reader-measure 锁定）；
   // 退出 Zen：恢复进入前的左栏折叠态（不覆盖用户既有偏好）。
   const zenSidebarRestoreRef = useRef<boolean | null>(null);
@@ -86,7 +86,7 @@ export function AppLibraryStage({ ctx }: { ctx: WorkspaceStoreCtx }) {
     if (restore !== null) dirShell.setSidebarCollapsed(restore);
   };
 
-  // U05 · 迷你版本轴「进入版本时光机 →」：只做视图跳转（与「查看关联」同一路径范式），
+  // 迷你版本轴「进入版本时光机 →」：只做视图跳转（与「查看关联」同一路径范式），
   // 不改 pinnedRevisionId / 未读基线 / 只读语义。
   const handleOpenTimeMachine = () => {
     setEventTrail((prev) =>
@@ -132,7 +132,7 @@ export function AppLibraryStage({ ctx }: { ctx: WorkspaceStoreCtx }) {
       <main className="flex-1 flex overflow-hidden relative min-h-0">
         {/* Center Main Viewport：目录面包屑栏 + 阅读器常驻 / AtlasView 概览 */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          {/* Quiet.md 目录面包屑工作栏：仅概览态呈现目录路径与快捷新建/已读入口，阅读态不再与正文双层叠压 */}
+          {/* 目录面包屑工作栏：仅概览态呈现目录路径与快捷新建/已读入口，阅读态不再与正文双层叠压 */}
           {libraryMode === 'overview' && sidebarFilters.folder !== 'all' && (
             <div
               data-folder-breadcrumb-bar=""
@@ -256,7 +256,7 @@ export function AppLibraryStage({ ctx }: { ctx: WorkspaceStoreCtx }) {
               </div>
             </div>
           )}
-          {/* pm_2：切概览/改筛选时不卸载阅读器——纸面/行号/版次对比/PDF 页码与滚动位置原样保留 */}
+          {/* 切概览/改筛选时不卸载阅读器——纸面/行号/版次对比/PDF 页码与滚动位置原样保留 */}
           <div
             ref={readerPaneRef}
             className={
@@ -335,24 +335,24 @@ export function AppLibraryStage({ ctx }: { ctx: WorkspaceStoreCtx }) {
                 handleAddEvidencePointer(p);
                 openContextDrawer();
               }}
-              // 决策回执 T3：与「加入证据篮」同层动作——装配入篮并弹抽屉让用户
+              // 决策回执：与「加入证据篮」同层动作——装配入篮并弹抽屉让用户
               // 当场核对条目（onAddEvidencePointer 同款交互语义）
               onAddDecisionToBasket={(p) => {
                 handleAddDecisionReceiptToBasket(p);
                 openContextDrawer();
               }}
-              // Inline 拍板闭环（PRD 3.3 / F5）：回写成功 → 未决计数实时 -1
-              //（decisions 本地置已确认，共用口径）；阻塞清零 → 长任务恢复横幅（AC-03）
+              // Inline 拍板闭环：回写成功 → 未决计数实时 -1
+              //（decisions 本地置已确认，共用口径）；阻塞清零 → 长任务恢复横幅
               onDecisionResolved={handleDecisionResolved}
               onBlockingCleared={handleBlockingCleared}
-              // v0.8 总装-3：右上角 ⓘ「溯源与关联」开合线程——显隐 state 归 App 级
+              // 右上角 ⓘ「溯源与关联」开合线程——显隐 state 归 App 级
               // （阅读态默认收起，见 RightInspector 容器合并条件）；溯源明细与
-              // 「阅读顺序」上下游跳转由 RightInspector 承载（总装-5）
+              // 「阅读顺序」上下游跳转由 RightInspector 承载
               inspectorOpen={libraryInspectorOpen}
               onToggleInspector={() => setLibraryInspectorOpen((v) => !v)}
-              // U05 · 专注纸面（Zen）：阅读器状态变化 → 壳层收起/恢复左右侧栏
+              // 专注纸面（Zen）：阅读器状态变化 → 壳层收起/恢复左右侧栏
               onZenModeChange={handleZenModeChange}
-              // U05 · 迷你版本轴「进入版本时光机 →」：只做视图跳转
+              // 迷你版本轴「进入版本时光机 →」：只做视图跳转
               onOpenTimeMachine={handleOpenTimeMachine}
               readingNotice={ctx.changeNotice}
               onSilentMergeNotice={() => {
@@ -397,9 +397,9 @@ export function AppLibraryStage({ ctx }: { ctx: WorkspaceStoreCtx }) {
           )}
         </div>
 
-        {/* Right Inspector——v0.8 总装-2 显隐合并条件：移动端抽屉态（isMobileRightOpen，
-            :306 state 由「打开右侧详情」钮驱动）必须原样保留在最前；概览态维持 xl+ 常驻；
-            阅读态默认收起、ⓘ「溯源与关联」点开才现（libraryInspectorOpen，总装-3） */}
+        {/* Right Inspector 显隐合并条件：移动端抽屉态（isMobileRightOpen，
+            由「打开右侧详情」钮驱动）优先保留在最前；概览态维持 xl+ 常驻；
+            阅读态默认收起、点开 ⓘ「溯源与关联」后展开（libraryInspectorOpen） */}
         <div
           className={`${
             isMobileRightOpen
@@ -431,7 +431,7 @@ export function AppLibraryStage({ ctx }: { ctx: WorkspaceStoreCtx }) {
               }
             }}
             onOpenDecision={handleOpenDecisionReference}
-            // T04：文件时间线抽屉入口
+            // 文件时间线抽屉入口
             onOpenFileTimeline={handleOpenFileTimeline}
             onViewRelationsGraph={() => {
               setEventTrail(prev => enterEventFrame(prev, activeFile, undefined, activeFile.title, pinnedRevisionId));
@@ -439,9 +439,9 @@ export function AppLibraryStage({ ctx }: { ctx: WorkspaceStoreCtx }) {
               setPanoramaMode('canvas');
               setIsMobileRightOpen(false);
             }}
-            // GU-CC-02：入口行为与文案对齐——点击即把统一导出器输出写入剪贴板，
+            // 入口行为与文案对齐：点击即把统一导出器输出写入剪贴板，
             // 返回写入结果供 RightInspector 决定是否进入「已复制」态；
-            // 写入失败返回 false（C4 同款：不谎报成功），清单加入与抽屉打开照常发生
+            // 写入失败返回 false（不谎报成功），清单加入与抽屉打开照常发生
             onCopyObjectToAgent={async (pointer) => {
               handleAddEvidencePointer(pointer);
               openContextDrawer();

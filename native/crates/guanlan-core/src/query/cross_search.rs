@@ -1,12 +1,12 @@
-//! C05 跨项目联合检索的合并纯函数（契约 contract-query-api.md §2.5）。
+//! 跨项目联合检索的合并纯函数（契约 contract-query-api.md §2.5）。
 //!
-//! 输入：主区 [`SearchResponse`]（既有 C02 `query::search` 输出，原样）+
+//! 输入：主区 [`SearchResponse`]（单库 `query::search` 输出，原样）+
 //! 各挂载区 `{info, response}` 结果对（离线挂载 response=None）。
-//! 输出：[`CrossSearchResponse`]——主区命中不带来源标注（逐字节兼容 C02 wire 形状），
+//! 输出：[`CrossSearchResponse`]——主区命中不带来源标注（逐字节兼容单库检索 wire 形状），
 //! 挂载区命中逐条携带 `source_workspace`（来源工作区名 + 身份哈希）。
 //!
 //! 合并口径（纯数据、零 IO、确定性）：
-//! - 排序 score 降序，同分 file_id 升序、locator 次序兜底（与 C02 单库排序同源）；
+//! - 排序 score 降序，同分 file_id 升序、locator 次序兜底（与单库检索排序同源）；
 //! - **file_id 全局去重，主区优先**——跨工作区 file_id 理论上不可能撞（root_key
 //!   不同 ⇒ file_id 不同），同 id 视为数据异常，保主区诚实口径；
 //! - `total_matched` = 各来源命中文件数**之和**（跨库不去重计数，诚实口径）；
@@ -195,7 +195,7 @@ pub fn merge_cross_search(
         }
     }
 
-    // 排序：score 降序 → file_id 升序 → locator 次序（与 C02 单库排序同源）
+    // 排序：score 降序 → file_id 升序 → locator 次序（与单库检索排序同源）
     all.sort_by(|a, b| {
         b.score
             .cmp(&a.score)

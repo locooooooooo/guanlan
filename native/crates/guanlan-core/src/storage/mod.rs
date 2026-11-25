@@ -1,17 +1,16 @@
 //! SQLite 只读存储（契约 native/docs/contract-storage.md §1/§3/§4）。
 //!
-//! 批次一边界（契约 §4.1）：
+//! 只读侧边界（契约 §4.1）：
 //! 1. 不写库：不 `exec(SCHEMA)`、不 `ALTER TABLE`、不写 `meta`、不 bump generation、不 `markScan`；
 //! 2. 不生成第二套历史：身份读取直接以库内行为准；
 //! 3. 打开已有数据零扫描：打开后立即开放读取，不在读路径里做目录枚举或内容哈希。
 //!
-//! 批次二起，写入侧另起一路：[`crate::index::writer::Writer`] 持库里唯一一条
-//! 可写连接（由服务层专用写线程独占）。本模块仍是**只读**的：读侧连接池继续
-//! 以 `SQLITE_OPEN_READONLY` 打开，两侧靠 WAL 并行（契约 §4.2）。
+//! 写入侧另起一路：[`crate::index::writer::Writer`] 持库里唯一一条可写连接
+//! （由服务层专用写线程独占）。本模块保持**只读**：读侧连接池以
+//! `SQLITE_OPEN_READONLY` 打开，两侧靠 WAL 并行（契约 §4.2）。
 //!
-//! 只读连接取舍（契约 §8-7 待决项的批次一决定）：按 `SQLITE_OPEN_READONLY` 打开。
-//! 依据：读服务只做读取，WAL 库在 Windows 上对 `-shm`/`-wal` 的可写性要求
-//! 由「读连接首次读时创建/附加 shm」满足；服务级排他锁（方案 §7，:151）属
+//! 只读连接按 `SQLITE_OPEN_READONLY` 打开：读服务只做读取，WAL 库在 Windows 上
+//! 对 `-shm`/`-wal` 的可写性要求由「读连接首次读时创建/附加 shm」满足；服务级排他锁属
 //! guanlan-service 装配层职责，core 不重复实现。若部署环境连 `-shm` 都不可写，
 //! 打开会直接失败（fail fast），不会退化为可写连接。
 //!
@@ -21,7 +20,7 @@
 //!
 //! 目录布局（契约 §3.2）：`<dataDir>/index.db`（WAL，含 `-wal`/`-shm`）+
 //! `<dataDir>/blobs/<hash 前 2 位>/<完整 hash>`；数据目录解析顺序见契约 §3.1。
-//! 批次一打开时不做 `mkdirSync(blobsDir)`（契约 §3.2 明令批次一不得做）。
+//! 只读打开时不做 `mkdirSync(blobsDir)`（契约 §3.2）。
 
 pub mod ledger;
 pub mod maintenance;
@@ -135,7 +134,7 @@ pub struct EdgeRow {
 
 // ---------- schema v2 新表行结构（contract-storage.md §4.3） ----------
 
-/// initiatives 行（PRD v2.0 §2.1 专项；阶段/状态 wire 词见
+/// initiatives 行（专项；阶段/状态 wire 词见
 /// `crate::index::state_machine`）
 #[derive(Debug, Clone)]
 pub struct InitiativeRow {
@@ -171,7 +170,7 @@ pub struct ArtifactStateRow {
     pub updated_at: String,
 }
 
-/// task_nodes 行（PRD 3.1 长任务 DAG 五槽位；state 由 recompute 声明式重算跨轮维持）
+/// task_nodes 行（长任务 DAG 五槽位；state 由 recompute 声明式重算跨轮维持）
 #[derive(Debug, Clone)]
 pub struct TaskNodeRow {
     pub node_id: String,
@@ -189,7 +188,7 @@ pub struct TaskNodeRow {
     pub updated_at: String,
 }
 
-/// checkpoints 行（PRD 3.2 断点续跑快照）
+/// checkpoints 行（断点续跑快照）
 #[derive(Debug, Clone)]
 pub struct CheckpointRow {
     pub checkpoint_id: String,
@@ -207,7 +206,7 @@ pub struct CheckpointRow {
     pub created_at: String,
 }
 
-/// revision_drafts 行（PRD 5.1 / E02 Agent 草案分支）
+/// revision_drafts 行（Agent 草案分支）
 #[derive(Debug, Clone)]
 pub struct RevisionDraftRow {
     pub draft_id: String,
@@ -223,17 +222,17 @@ pub struct RevisionDraftRow {
     pub status: String,
     pub conflict: i64,
     pub note: Option<String>,
-    /// E02：独立草案分支版本标签（如 `v3-agent-draft`）
+    /// 独立草案分支版本标签（如 `v3-agent-draft`）
     pub draft_version_label: String,
-    /// E02：提交本次草案所依赖的输入上下文哈希清单（JSON 数组串）
+    /// 提交本次草案所依赖的输入上下文哈希清单（JSON 数组串）
     pub input_context_hashes_json: String,
-    /// E02：Agent 回执摘要（一句话说明修改意图/验证结论）
+    /// Agent 回执摘要（一句话说明修改意图/验证结论）
     pub receipt_summary: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
 
-/// summary_jobs 行（PRD 3.4 L4A 后台沉淀队列；v1 = local_deterministic）
+/// summary_jobs 行（L4A 后台沉淀队列；generated_by 恒为 local_deterministic）
 #[derive(Debug, Clone)]
 pub struct SummaryJobRow {
     pub job_id: String,
@@ -249,13 +248,13 @@ pub struct SummaryJobRow {
     pub updated_at: String,
 }
 
-/// job_runs 行（长任务批次的任务持久化：重启后 queued/running 重入队）
+/// job_runs 行（长任务持久化：重启后 queued/running 重入队）
 #[derive(Debug, Clone)]
 pub struct JobRunRow {
     pub job_id: String,
     pub workspace_id: String,
     pub kind: String,
-    /// queued | running | completed | failed（四态，阻塞3 裁定不扩）
+    /// queued | running | completed | failed（四态）
     pub state: String,
     pub phase: String,
     pub request_json: String,
@@ -503,7 +502,7 @@ pub(crate) fn job_run_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JobRunRow
     })
 }
 
-/// 只读存储句柄。批次一不提供任何写方法。
+/// 只读存储句柄，不提供任何写方法。
 #[derive(Debug)]
 pub struct ReadonlyStore {
     conn: Connection,
@@ -511,21 +510,20 @@ pub struct ReadonlyStore {
     blobs_dir: PathBuf,
     /// 认领到的 workspace_id（行内容每次请求现读，见 [`Self::workspace`]）
     workspace: Option<String>,
-    /// 认领时的 root_path 原始串（issue #36：panic 后重建连接需重新认领工作区）
+    /// 认领时的 root_path 原始串（panic 后重建连接需重新认领工作区）
     root_path: Option<String>,
 }
 
 impl ReadonlyStore {
     /// 可接受的 schema 版本：
-    /// - `0`：现行 Node 库从未写入版本标记，`PRAGMA user_version` 恒为 0
-    ///   （契约 §1.3：全仓 grep 无 schema 版本，唯一「迁移」是幂等 SCHEMA）
-    /// - `1`：写入侧接管批次约定的首个版本值（契约 §1.2 status 的 schema_version）
-    /// - `2`：PRD v2.0 长任务批次（7 张新表：initiatives/artifact_states/task_nodes/
+    /// - `0`：旧 Node 库从未写入版本标记，`PRAGMA user_version` 恒为 0
+    ///   （契约 §1.3：唯一迁移方式是幂等 SCHEMA）
+    /// - `1`：写入侧接管后的首个版本值（契约 §1.2 status 的 schema_version）
+    /// - `2`：长任务扩展 schema（7 张新表：initiatives/artifact_states/task_nodes/
     ///   checkpoints/revision_drafts/summary_jobs/job_runs；contract-storage.md §4.3）
     ///
     /// 其他值直接报错拒绝打开：不迁移、不写入（契约 §4-1）。
-    /// 注意：旧批次 Rust 二进制（白名单仍 [0,1]）打开已升版库会拒绝——写侧升级
-    /// 与读侧同包发布（契约 §4.3 登记）。
+    /// 注意：低版本二进制打开已升版库会被版本门禁拒绝，读写侧需同包升级（契约 §4.3）。
     pub const SUPPORTED_SCHEMA_VERSIONS: [i64; 3] = [0, 1, 2];
 
     /// 以只读方式打开 `index.db` 并做 schema 版本校验。
@@ -578,7 +576,7 @@ impl ReadonlyStore {
     ///
     /// 查找顺序：先按 `root_key`（与 ensureWorkspace 写入的 root_key 同源，
     /// WorkspaceStore.ts:336-338）精确匹配；未命中且全表恰有一行时按该唯一行认领
-    /// （显式 dataDir 指向旧库的场景）。库内无任何可认领行 → NotFound（批次一
+    /// （显式 dataDir 指向既有库的场景）。库内无任何可认领行 → NotFound（只读连接
     /// 不写库，无法补建工作区行；契约 §4-1）。
     pub fn claim_workspace(&mut self, root_path: &str) -> Result<WorkspaceRecord, GuanlanError> {
         let resolved = domain::resolve_root(root_path)?;
@@ -599,12 +597,12 @@ impl ReadonlyStore {
             Some(row) => {
                 // 只缓存认领到的 workspace_id；行内容每次请求现读（见 workspace()）
                 self.workspace = Some(row.workspace_id.clone());
-                // issue #36：留下 root_path 供 reopen 重新认领
+                // 留下 root_path 供 reopen 重新认领
                 self.root_path = Some(root_path.to_owned());
                 Ok(row)
             }
             None => Err(GuanlanError::NotFound(format!(
-                "未找到工作区（root_key={root_key}；数据目录中无可认领的工作区行，批次一不写库不新建）"
+                "未找到工作区（root_key={root_key}；数据目录中无可认领的工作区行，只读连接不写库不新建）"
             ))),
         }
     }
@@ -664,7 +662,7 @@ impl ReadonlyStore {
         Self::read_schema_version(&self.conn)
     }
 
-    /// schema 版本门禁（方案 §8 + F03 高版本只读门禁：旧实现若不能理解新结构，禁止盲写或错误解析）
+    /// schema 版本门禁（高版本只读门禁：旧实现若不能理解新结构，禁止盲写或错误解析）
     fn validate_schema_version(conn: &Connection) -> Result<(), GuanlanError> {
         let version = Self::read_schema_version(conn)?;
         if version > migration::CURRENT_SCHEMA_VERSION {
@@ -702,9 +700,9 @@ impl ReadonlyStore {
     /// 快照两级路径（契约 §3.2；WorkspaceStore.ts:383-385）：
     /// `<blobsDir>/<hash 前 2 位>/<完整 hash>`
     ///
-    /// issue #36：先校验 hash 形态（64 位小写/大写十六进制）再切分——此前直接按字节
-    /// 取前两位，导入/损坏库里以非 ASCII 多字节字符开头的 hash 会落在 UTF-8 边界上
-    /// 直接 panic。异常数据返回明确错误，不让进程崩在路径拼接上。
+    /// 先校验 hash 形态（64 位小写/大写十六进制）再切分——直接按字节
+    /// 取前两位时，导入/损坏库里以非 ASCII 多字节字符开头的 hash 会落在 UTF-8 边界上
+    /// 导致 panic。异常数据返回明确错误，不让进程崩在路径拼接上。
     pub fn blob_path_for(&self, hash: &str) -> Result<PathBuf, GuanlanError> {
         if !is_valid_content_hash(hash) {
             return Err(GuanlanError::Internal(format!(
@@ -757,7 +755,7 @@ impl ReadonlyStore {
         &self.conn
     }
 
-    // ---------- 查询执行通道支持（issue #4：有界查询通道，隔离读连接并传递取消） ----------
+    // ---------- 查询执行通道支持（有界查询通道，隔离读连接并传递取消） ----------
 
     /// 安装查询取消守护：SQLite progress handler 每条 VM 指令回调一次 `check`，
     /// 返回 `true` 即打断当前语句执行（执行层在请求断开/执行超时时置位）。
@@ -776,7 +774,7 @@ impl ReadonlyStore {
             .map_err(|e| GuanlanError::Internal(format!("安装查询取消守护失败: {e}")))
     }
 
-    /// 归池前清理（issue #4 验收「连接归池前清除 interrupt/progress」）：
+    /// 归池前清理（清除 interrupt 标志与 progress handler）：
     /// 移除 progress handler；再执行平凡语句消费挂起的 interrupt 标志
     /// （SQLite 的中断标志可能残留到下一个语句，重试直到不再报 Interrupted），
     /// 避免上一请求的取消误伤复用连接的新请求。
@@ -930,7 +928,7 @@ impl ReadonlyStore {
         })
     }
 
-    /// 批次一唯一的事务形态：短读事务（BEGIN DEFERRED … COMMIT/ROLLBACK）。
+    /// 只读侧事务形态：短读事务（BEGIN DEFERRED … COMMIT/ROLLBACK）。
     ///
     /// 契约 §1.1 要求 bootstrap「在一个短读快照内生成」：DEFERRED 读事务把多条
     /// SELECT 固定在同一一致性视图上，防止并发写入者穿插提交。只读连接上的
@@ -940,9 +938,9 @@ impl ReadonlyStore {
         &self,
         f: impl FnOnce(&Connection) -> Result<T, GuanlanError>,
     ) -> Result<T, GuanlanError> {
-        // issue #36：RAII 事务——守卫在 Drop 时若仍未提交则 ROLLBACK，
-        // 覆盖「正常返回 / Err 返回 / panic unwind」三条路径（此前 panic 时
-        // BEGIN 已开、事务永不结束，后续查询被钉在旧快照上，且有写者时阻碍 checkpoint）
+        // RAII 事务——守卫在 Drop 时若仍未提交则 ROLLBACK，
+        // 覆盖「正常返回 / Err 返回 / panic unwind」三条路径（防止 panic 时
+        // BEGIN 已开、事务永不结束，导致后续查询被钉在旧快照上或阻碍 checkpoint）
         let mut guard = ReadTxnGuard::begin(&self.conn)?;
         let value = f(&self.conn)?;
         guard.commit()?;
@@ -991,7 +989,7 @@ impl ReadonlyStore {
             .sum()
     }
 
-    /// 重建连接（issue #36）：panic 或事务清理失败后，旧连接不再复用——
+    /// 重建连接：panic 或事务清理失败后，旧连接不再复用——
     /// 关闭后按原 data_dir 重新打开并重新认领工作区（root_path 由 claim 时记下）。
     /// 重建失败返回错误，由调用方把该连接移出池（池逐步缩容，不复用脏连接）。
     pub fn reopen(&self) -> Result<Self, GuanlanError> {
@@ -1003,7 +1001,7 @@ impl ReadonlyStore {
     }
 }
 
-/// RAII 读事务守卫（issue #36）。
+/// RAII 读事务守卫。
 ///
 /// 只有显式 `commit()` 成功后才置 `done`；Err 返回、panic unwind、提前 drop 都会
 /// 走到 `Drop` 的 ROLLBACK。回滚失败无法从 Drop 里抛错，因此记入 [`TXN_POISONED`]，
@@ -1080,7 +1078,7 @@ pub fn take_txn_poisoned() -> bool {
     TXN_POISONED.swap(false, std::sync::atomic::Ordering::SeqCst)
 }
 
-/// content_hash 形态校验（issue #36）：64 位 ASCII 十六进制（大小写均收）。
+/// content_hash 形态校验：64 位 ASCII 十六进制（大小写均收）。
 /// 只做形态校验，不做内容摘要复核——快照本身的可读性由读取路径的门禁判定。
 pub(crate) fn is_valid_content_hash(hash: &str) -> bool {
     hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit())
@@ -1173,7 +1171,7 @@ mod tests {
     }
 
     /// schema 门禁（契约 §1.3/§4-1）：未知版本拒绝打开，不迁移不写入。
-    /// v2 已随 PRD v2.0 长任务批次放行（§4.3），未知版本用 3 验证。
+    /// 当前最高支持版本为 v2（§4.3），未知版本用 3 验证。
     #[test]
     fn readonly_open_rejects_unknown_schema_version() {
         let fixture = FixtureDb::new("schema-gate");
@@ -1190,8 +1188,8 @@ mod tests {
         cleanup(&fixture.dir);
     }
 
-    /// 现行库 user_version 恒为 0（契约 §1.3），版本 1 为写入侧批次约定值，
-    /// 版本 2 为 PRD v2.0 长任务批次（§4.3）：三者都放行
+    /// 旧 Node 库 user_version 恒为 0（契约 §1.3），版本 1 与版本 2（§4.3）为
+    /// Rust 写入侧支持的版本：三者都放行
     #[test]
     fn readonly_open_accepts_versions_0_and_1_and_2() {
         let fixture = FixtureDb::new("schema-accept");
@@ -1223,7 +1221,7 @@ mod tests {
         cleanup(&fixture2.dir);
     }
 
-    /// 缺库文件直接失败（批次一打开已有数据，不建库）
+    /// 缺库文件直接失败（只读打开已有数据，不建库）
     #[test]
     fn open_missing_db_fails() {
         let dir = std::env::temp_dir().join(format!("guanlan-core-missing-{}", std::process::id()));

@@ -1,5 +1,5 @@
 /**
- * 画布视口裁剪与卡片描述（issue #27）
+ * 画布视口裁剪与卡片描述
  *
  * 为什么抽成纯函数：GraphCanvasView 是 4800 行的巨型组件，视口裁剪与卡片物化
  * 一旦内联就只能在浏览器里「看效果」验证。这里是纯数据变换——输入布局/视口/索引，
@@ -42,12 +42,12 @@ export interface CullOptions {
 
 export const DEFAULT_CULL_MARGIN_X = 480;
 
-/* ═══ D01-a：全图元 AABB 视口裁剪 + 四分之一倍频程（quarter-octave）缩放分桶 LOD ═══
- * 任务卡 D01-a ④：把 issue #27 的「任务包横向裁剪」推广为「任意世界矩形对视口」
+/* ═══ 全图元 AABB 视口裁剪 + 四分之一倍频程（quarter-octave）缩放分桶 LOD ═══
+ * 把「任务包横向裁剪」推广为「任意世界矩形对视口」
  * 的通用 AABB 裁剪，并给缩小鸟瞰加缩放分桶 LOD——桶距取 quarter-octave（log2(k)×4
  * 向下取整，每档 ≈1.19×），LOD 档位只在跨档时翻转（连续缩放不抖动），缩小到
  * 鸟瞰档自动退化为轻骨架（收流星/激光/富卡正文等重排大户，规避 foreignObject 重绘）。
- * 裁剪纪律与 issue #27 一致：只决定「这一帧挂不挂 DOM」，世界坐标照常由完整序列算出。 */
+ * 裁剪纪律保持一致：只决定「这一帧挂不挂 DOM」，世界坐标照常由完整序列算出。 */
 
 /** 通用世界矩形（x/y 左上角 + 尺寸） */
 export interface WorldRect {
@@ -193,7 +193,7 @@ export function lodGatesForTier(tier: CanvasLodTier): CanvasLodGates {
 /**
  * 返回该挂载的包 id 集合。
  * 判定：包矩形与「视口 + margin」横向相交；焦点包始终保留。
- * D01-a：横向特化判定改由通用 AABB 出口 isRectIntersectingViewport 承担——
+ * 横向特化判定改由通用 AABB 出口 isRectIntersectingViewport 承担——
  * 包容器纵向是整条桌面带（y 无界矩形），AABB 纵向恒相交，答案与旧横向判定逐一同源。
  */
 export function visiblePackageGroupIds(
@@ -256,7 +256,7 @@ export interface CardDescriptor {
 
 /**
  * 按包 id 物化卡片描述。
- * 依赖纪律（issue #27 验收 3）：只看「包文档内容」，不看节点位置——拖动单节点
+ * 依赖纪律：只看「包文档内容」，不看节点位置——拖动单节点
  * 只改 nodePositions，本函数结果被复用，逐帧不重做卡片构造。
  */
 export function buildCardDescriptors<

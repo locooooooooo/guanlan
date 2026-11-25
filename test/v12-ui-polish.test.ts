@@ -5,7 +5,7 @@
  *  2. AppLibraryStage：目录面包屑栏与提示横幅清零硬编码 bg-white，暗夜模式不再刺眼发白；
  *  3. NonLegacyFilePreviewPanel + formatMeta：暗夜态快照徽标与全 13 类格式徽标双态高对比、
  *     版本与观测日期不被长 revision_id 截断、图片加载失败提供重试入口；
- *  4. WorkspaceSettingsModal + StorageUsageSection：清零内部代号（B01/F02/表名）、
+ *  4. WorkspaceSettingsModal + StorageUsageSection：清零内部代号与表名、
  *     清零硬编码 bg-white、实时配额口径与下方存储面板一致、全站弹层暗夜遮罩统一。
  */
 

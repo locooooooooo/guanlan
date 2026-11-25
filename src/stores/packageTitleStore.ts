@@ -1,11 +1,11 @@
 /**
- * D01-a ③ · 任务包标题显示名固化 store（PackageGroupFrame 标题升 Overlay 配套）。
+ * 任务包标题显示名固化 store（与 PackageGroupFrame 标题 Overlay 配套）。
  *
  * 「双击原位改名」的持久层：按任务包 id（taskPackageOf 派生的稳定 pkgId）固化
- * 用户改定的显示名。与 C01 的联动口径（诚实边界）：
- *  - 固化的是「画布显示名」——重 derivation（taskPackageOf 路径规则 / C01 候选簇
+ * 用户改定的显示名。边界说明：
+ *  - 固化的是「画布显示名」——重新派生（taskPackageOf 路径规则或候选簇
  *    归属固化 adopted_candidate_map）不会把它回退成目录名；
- *  - 不改动磁盘目录名（目录级改名走 A05 身份保真移动，另行触发）——hover title
+ *  - 不改动磁盘目录名（目录级改名走身份保真移动接口，另行触发）——hover title
  *    恒显真实目录名，绝不冒充文件系统已改名。
  * 模式：canvasThemeStore 同款（localStorage + 内存活值 + 订阅通知；读写全 try/catch
  * 静默降级，node 无 window 环境按空表处理，单测链直接 import 不炸）。

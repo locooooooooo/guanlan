@@ -1,14 +1,14 @@
 /**
- * C03 · Ctrl+K 命令面板（Omnibox）——查询语法解析与命中摘要构建（纯函数，零 React 依赖）。
+ * Ctrl+K 命令面板（Omnibox）——查询语法解析与命中摘要构建（纯函数，零 React 依赖）。
  *
- * 语法口径（任务卡 C03，吸收 quiet-md search.rs 细节）：
+ * 语法口径：
  *   @今天 / @昨天 / @N天前 / @2026-11-20 —— 相对/绝对日期过滤（文件 last_observed_at 的本地日归属）
  *   type:pdf / type:md / type:svg / …     —— 格式过滤（可多个，交集语义）
  *   status:待拍板                          —— 阻塞拍板过滤（artifact pending_p0+p1 > 0）
  *   in:事项名                              —— 事项归属过滤（事项名子串匹配）
  *   其余文本 token 合并为关键词（大小写不敏感；语法前缀不区分大小写）
  *
- * 摘要口径（quiet-md「首个命中词前 16 字起上下文、精确控行 ≤2、全量高亮」）：
+ * 摘要口径（首个命中词前 16 字起上下文、精确控行 ≤2、全量高亮）：
  *   - 窗口从首个命中词前 BEFORE_CHARS 个字符处开始（不跨行回退到行首时也不超过）；
  *   - 窗口内的换行保留为行分隔（最多 2 行），超出裁断并标记 clippedTail；
  *   - 窗口内所有命中词出现处（大小写不敏感，多词全部）标记 hit，供 UI 高亮；
@@ -134,7 +134,7 @@ export function parsePaletteQuery(rawQuery: string, now: Date = new Date()): Pal
 }
 
 /**
- * 摘要窗口截取（quiet-md 口径）：从首个命中词前 BEFORE_CHARS 字符起，≤2 行、
+ * 摘要窗口截取：从首个命中词前 BEFORE_CHARS 字符起，≤2 行、
  * ≤MAX_WINDOW_CHARS 字符（char 边界安全）。无命中词时从头截取（clippedHead=false）。
  */
 export function buildSnippet(text: string, queryLower: string): SnippetResult {

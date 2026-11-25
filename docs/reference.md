@@ -177,7 +177,7 @@ guanlan-desktop --unregister-context-menu
 
 ### 一键写入
 
-`POST /api/v1/mcp/host-config` 会把上面这个条目合并写进宿主配置：`zcode` 与 `claude_code` 写工作区根的 `.mcp.json`，`cursor` 写 `.cursor/mcp.json`。请求体是 `{ host, endpoint?, dry_run, confirm }`：`dry_run` 为真只返回合并结果；落盘必须带 `confirm: true`。端点只接受 `127.0.0.1` 或 `localhost`。界面里的入口在「证道阁」上下文抽屉。
+`POST /api/v1/mcp/host-config` 会把上面这个条目合并写进宿主配置：`zcode` 与 `claude_code` 写工作区根的 `.mcp.json`，`cursor` 写 `.cursor/mcp.json`。请求体是 `{ host, endpoint?, dry_run, confirm }`：`dry_run` 为真只返回合并结果；落盘必须带 `confirm: true`。端点只接受 `127.0.0.1` 或 `localhost`。界面里的入口在「给智能体的上下文清单」抽屉。
 
 **桌面应用里一键写入的配置不会一直有效。** 桌面壳每次启动都把内嵌服务绑在随机端口上，写进配置的 `GUANLAN_ENDPOINT` 在应用下次启动后就过期；配置里的 `command` 又是不带路径的 `guanlan`，而安装包不修改 PATH。命令行方式用固定端口并自己配好 PATH，不受影响。
 

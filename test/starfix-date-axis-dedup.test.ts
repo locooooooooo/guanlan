@@ -1,5 +1,5 @@
 /**
- * starfix T5/T6 · 日期轴源头去重 + 事件卡变更摘要派生 单测。
+ * 日期轴源头去重 + 事件卡变更摘要派生单测。
  *
  * 守住两件事：
  *  ① 日期轴铁律：同一桶键（YYYY-MM-DD / 周一 / YYYY-MM / '' 待考）在画布场景
@@ -10,7 +10,7 @@
  *     changedSections/diff 链派生（章节描述 + 服务端 detail 定式回收 +/- 行数），
  *     派生不出就返回空——绝不伪造行数、绝不渲染空洞占位。
  *
- * 与 gc-12-date-rail / wf2-same-day-merge 同款形制：纯函数断言，不渲染 SVG。
+ * 纯函数断言，不渲染 SVG。
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';

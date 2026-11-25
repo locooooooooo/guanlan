@@ -46,7 +46,7 @@
 | `guanlan.get_context_bundle` | `POST /context` | Token 预算感知的上下文包，与观澜界面里预览、复制的内容同源。 |
 | `guanlan.search_workspace` | `GET /search` | 全文、路径、符号与决定编号检索；`limit` 夹在 1 到 50，默认 20。 |
 
-`TOOL_NAMES` 的前四个是 PRD 规定的顺序，后两个是 E03 与 E05 加的。顺序是契约的一部分，测试按它逐字断言。
+`TOOL_NAMES` 的顺序是公开契约的一部分（四个基础工件与检查点工具在前，上下文包与检索工具在后），测试按它逐字断言。
 
 ## 约束与失败行为
 

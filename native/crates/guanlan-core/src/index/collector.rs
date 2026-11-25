@@ -5,14 +5,13 @@
 //!
 //! 两处有意的实现差异（不影响事实口径）：
 //! - **不整批驻留内容**：TS 把每个文件的字节留在内存里等写快照时复用；Rust 版
-//!   采集阶段只流式算哈希，快照阶段按需重读（方案 §165「没有…全文件内容批量
-//!   驻留」）。代价是变更文件读两遍，换来的是恒定内存占用。
+//!   采集阶段只流式算哈希，快照阶段按需重读，避免整批文件内容同时驻留内存。
+//!   代价是变更文件读两遍，换来的是恒定内存占用。
 //! - **目录项按名排序**：TS 用 OS 目录序（不可复现）；Rust 按名排序后深度优先，
 //!   保证同一工作区每次扫描的采集顺序一致（事件 seq 的分配因此可复现）。
 //!
-//! **B01 变更（采集白名单放开）**：旧实现只认 `md / svg / pdf` 三种扩展名，其余
-//! 文件在观澜里「隐身」。现在**任何常规文件都入库**（`files.format` 记真实扩展名
-//! token），只有两类东西被排除：
+//! **全文件类型采集**：所有常规文件均入库（`files.format` 记真实扩展名 token），
+//! 只有两类内容被排除：
 //!
 //! 1. **系统/依赖目录黑名单**（[`DEFAULT_EXCLUDED`]）：`node_modules` / `.git` /
 //!    `target` / `__pycache__` 等构建产物与依赖缓存。
@@ -38,9 +37,8 @@ pub use crate::index::file_format::{
 /// 默认排除目录（系统/依赖黑名单）。
 ///
 /// 口径：**只排构建产物、依赖缓存与系统目录**，绝不排用户可能放资料的目录名。
-/// 沿用旧管线的 8 项（`node_modules` / `.git` / `.venv` / `_软件安装包` /
-/// `_spike` / `dist` / `runtime` / `backups` / `tmp`），并补齐 B01 放开白名单
-/// 后新出现的依赖与系统目录。
+/// 保留旧管线的既有排除项（`node_modules` / `.git` / `.venv` / `_软件安装包` /
+/// `_spike` / `dist` / `runtime` / `backups` / `tmp`），并补齐常见语言工具链依赖与系统目录。
 pub const DEFAULT_EXCLUDED: &[&str] = &[
     // —— 依赖与包管理 ——
     "node_modules",
@@ -97,10 +95,9 @@ pub const DEFAULT_EXCLUDED: &[&str] = &[
     "tmp",
 ];
 
-/// 默认文件数上限（B01 起从 5000 放开到 20 万——「可见文件覆盖率 = 100%」
-/// 要求工作区规模不再被静默截断；触顶仍按「范围不完整」记账，绝不判缺失）。
+/// 默认文件数上限（20 万，避免常规工作区被静默截断；触顶仍按「范围不完整」记账，绝不判缺失）。
 pub const DEFAULT_MAX_FILES: usize = 200_000;
-/// 默认目录深度上限（B01 起从 14 放开到 32）。
+/// 默认目录深度上限。
 pub const DEFAULT_MAX_DEPTH: usize = 32;
 
 /// 采集到的文件（纯事实：路径、哈希、mtime、是否稳定读取）
@@ -338,7 +335,7 @@ fn walk_folders(
 }
 
 /// 只采集给定相对路径（单路径对账通道：决策回写/草案采纳后的定向核验，
-/// 冻结契约 C『单路径 changed_paths 对账』；性能口径 <200ms——不整树哈希）。
+/// 避免整树重算哈希，目标延迟 <200ms）。
 ///
 /// `complete` 恒为 false：范围不完整，调用方不得据此判定任何文件缺失
 /// （契约 §5.4）。路径按正斜杠归一化比对；不存在/不可读的路径进 read_errors
@@ -485,9 +482,9 @@ fn gitignore_cache() -> &'static std::sync::Mutex<GitignoreCache> {
 
 /// 读取某目录下的 `.gitignore`（不存在则返回 `None`）。
 ///
-/// B05：整树扫描逐层加载 × 万级定向通道逐路径加载都会重复读盘 + 重解析同一份
-/// `.gitignore`——改为进程级缓存（mtime 校验失效），命中时 clone 规则向量返回
-/// （规则数少，代价可忽略），`read_gitignore` 对外签名与语义保持不变。
+/// 整树扫描逐层加载与大批量定向路径采集都会重复读盘并重解析同一份 `.gitignore`，
+/// 因此使用进程级缓存（按 mtime 校验失效），命中时克隆规则向量返回（规则数通常很少，
+/// 代价可忽略），`read_gitignore` 对外签名与语义保持不变。
 fn read_gitignore(dir: &Path, base: &str) -> Option<Gitignore> {
     let path = dir.join(".gitignore");
     let mtime = fs::metadata(&path)
@@ -756,7 +753,7 @@ const KNOWN_EXTENSIONLESS: &[(&str, &str)] = &[
     (".babelrc", "babelrc"),
 ];
 
-/// 扩展名判定 + 无扩展名文件识别（B01：白名单放开后**任何**文件都返回格式）。
+/// 扩展名判定 + 无扩展名文件识别（所有常规文件均映射为具体格式）。
 ///
 /// - 有扩展名 → token = 小写扩展名（未知扩展名仍是真实 token，族归 `binary`）。
 /// - 无扩展名 → 查常见文件名表；仍未知则 `bin`。
@@ -810,7 +807,7 @@ pub struct HashedFile {
 /// 第二次仍不稳定时 `stable` 仍为 false —— 调用方按读取问题处理，本轮不落版本
 /// （与 TS `hashFileStable` 同口径）。
 ///
-/// **内存口径（B01）**：全程只持有一个 64KiB 缓冲，2GB 视频的流式哈希内存峰值
+/// **恒定内存占用**：全程只持有一个 64KiB 缓冲，大文件（如 2GB 视频）的流式哈希内存峰值
 /// 恒定在 64KB 量级——绝不整读大文件。
 pub fn hash_file_stable(path: &Path) -> std::io::Result<HashedFile> {
     hash_file_stable_cancellable(path, None)
@@ -1109,7 +1106,7 @@ mod tests {
 
     #[test]
     fn large_binary_stream_hash_keeps_memory_flat() {
-        // 2GB 文件的哈希必须流式完成：只用一个 64KiB 缓冲（口径见 B01 验收）
+        // 大文件哈希必须流式完成：全程只用一个 64KiB 缓冲
         let dir = tmp_dir("big");
         fs::create_dir_all(&dir).expect("建目录");
         let path = dir.join("big.bin");

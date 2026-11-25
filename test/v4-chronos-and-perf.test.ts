@@ -1,5 +1,5 @@
 /**
- * V4 批次（V10–V11）· 司辰时光步进回放、今日/本周沉淀手记、全站键盘流与 5,500 份虚拟化护栏单测集。
+ * 司辰时光步进回放、今日/本周沉淀手记、全站键盘流与 5,500 份虚拟化护栏单测集。
  */
 
 import test from 'node:test';
@@ -101,9 +101,9 @@ function makeEvent(
   };
 }
 
-// ===== V10 · 司辰时光步进回放纯函数 =====
+// ===== 司辰时光步进回放纯函数 =====
 
-test('V10 · stepChronosReplayIndex 与 chronosReplayIntervalMs：日/周步进与倍速护栏', () => {
+test('stepChronosReplayIndex 与 chronosReplayIntervalMs：日/周步进与倍速护栏', () => {
   // 空/单日边界
   assert.equal(stepChronosReplayIndex([], 0, 1, 'day'), -1);
   assert.equal(stepChronosReplayIndex(['2026-11-23'], 0, 1, 'day'), 0);
@@ -139,9 +139,9 @@ test('V10 · stepChronosReplayIndex 与 chronosReplayIntervalMs：日/周步进�
   assert.ok(chronosReplayIntervalMs(2, true) >= 1400, 'reduced-motion 下 2x 需保底放缓避免频闪');
 });
 
-// ===== V10 · 司辰沉淀手记纯函数（空窗 / 单日 / 近 7 日高密 + Markdown 零造数） =====
+// ===== 司辰沉淀手记纯函数（空窗 / 单日 / 近 7 日高密 + Markdown 零造数） =====
 
-test('V10 · buildChronosDigest：空窗口、今日与近 7 日高密窗口汇总及标准 Markdown 可溯源导出', () => {
+test('buildChronosDigest：空窗口、今日与近 7 日高密窗口汇总及标准 Markdown 可溯源导出', () => {
   // 1. 空窗口：零造数、诚实空态
   const emptyDigest = buildChronosDigest([], [], [], 'today', '2026-11-23');
   assert.equal(emptyDigest.totalEvents, 0);
@@ -274,9 +274,9 @@ test('V10 · buildChronosDigest：空窗口、今日与近 7 日高密窗口汇�
   assert.ok(!weekDigest.markdown.includes('C-99'), '候选决策不得泄露进手记导出');
 });
 
-// ===== V10 · ChronosDigestDrawer SSR & 星图回放微轨接线验收 =====
+// ===== ChronosDigestDrawer SSR & 星图回放微轨接线验收 =====
 
-test('V10 · ChronosDigestDrawer (Sheet inset) 与 HomeView / 星图回放微轨接线', () => {
+test('ChronosDigestDrawer (Sheet inset) 与 HomeView / 星图回放微轨接线', () => {
   const f1 = makeFile('f1', '01-方案文档/架构/核心设计.md', 'md', '司辰手记摘要验证', 2);
   const ev1 = makeEvent('e1', 'f1', 'modified', '2026-11-23', '更新章节');
 
@@ -330,7 +330,7 @@ test('V10 · ChronosDigestDrawer (Sheet inset) 与 HomeView / 星图回放微轨
   assert.ok(chromeSrc.includes('data-open-chronos-digest=""'));
 });
 
-// ===== V11 · 全站键盘流（1/2/3 · G S/C/L · [/]）与输入态/浮层静默保护 =====
+// ===== 全站键盘流（1/2/3 · G S/C/L · [/]）与输入态/浮层静默保护 =====
 
 function rawKey(
   k: string,
@@ -346,7 +346,7 @@ function rawKey(
   };
 }
 
-test('V11 · 全站快捷键（1/2/3、G S/C/L、[/]）解析与输入态/浮层/组字静默保护', () => {
+test('全站快捷键（1/2/3、G S/C/L、[/]）解析与输入态/浮层/组字静默保护', () => {
   const openCtx = { editableTarget: false, overlayOpen: false };
   const editCtx = { editableTarget: true, overlayOpen: false };
   const overlayCtx = { editableTarget: false, overlayOpen: true };
@@ -393,9 +393,9 @@ test('V11 · 全站快捷键（1/2/3、G S/C/L、[/]）解析与输入态/浮层
   assert.equal(resolveShortcutChord('g', rawKey('c', { metaKey: true }), openCtx), null);
 });
 
-// ===== V11 · ShortcutsCheatSheetModal (coss Dialog + Frame + Kbd) SSR =====
+// ===== ShortcutsCheatSheetModal (coss Dialog + Frame + Kbd) SSR =====
 
-test('V11 · ShortcutsCheatSheetModal 渲染完整 Frame 分组、Kbd 徽章与工作区快照', () => {
+test('ShortcutsCheatSheetModal 渲染完整 Frame 分组、Kbd 徽章与工作区快照', () => {
   const closed = renderToStaticMarkup(
     React.createElement(ShortcutsCheatSheetModal, {
       isOpen: false,
@@ -426,13 +426,13 @@ test('V11 · ShortcutsCheatSheetModal 渲染完整 Frame 分组、Kbd 徽章与�
     assert.ok(html.includes(`data-shortcut-group="${group.id}"`), `缺少分组 ${group.id}`);
   }
   for (const expectedKey of ['1 / 2 / 3', 'G S', 'G C', 'G L', '[ / ]', 'Z']) {
-    assert.ok(html.includes(`data-shortcut-item="${expectedKey}"`), `缺少 V11 键位 ${expectedKey}`);
+    assert.ok(html.includes(`data-shortcut-item="${expectedKey}"`), `缺少全局快捷键 ${expectedKey}`);
   }
 });
 
-// ===== V11 · 无痛增量事件并入（保留分页与滚动位）与 AppBanners 双选项 =====
+// ===== 无痛增量事件并入（保留分页与滚动位）与 AppBanners 双选项 =====
 
-test('V11 · mergeIncrementalEventPage 与 AppBanners「静默并入（保持当前位置）」双按钮契约', () => {
+test('mergeIncrementalEventPage 与 AppBanners「静默并入（保持当前位置）」双按钮契约', () => {
   const baseWindow = {
     order: 'occurred' as const,
     from: null,
@@ -593,9 +593,9 @@ test('V11 · mergeIncrementalEventPage 与 AppBanners「静默并入（保持当
   assert.ok(!libraryBannerHtml.includes('data-silent-merge-events=""'), '阅读文档时不弹出事件分页通栏横幅');
 });
 
-// ===== V11 · 5,500 份虚拟窗口切片索引边界、渲染预算与日历多目录行护栏 =====
+// ===== 5,500 份虚拟窗口切片索引边界、渲染预算与日历多目录行护栏 =====
 
-test('V11 · computeVirtualWindowSlice / VirtualFileSlice / CalendarBoardView：5,500 份渲染预算与边界护栏', () => {
+test('computeVirtualWindowSlice / VirtualFileSlice / CalendarBoardView：5,500 份渲染预算与边界护栏', () => {
   // 1. 低于等于 150 条不虚拟化（零 DOM 变化）
   const small = computeVirtualWindowSlice({
     totalCount: SIDEBAR_FILE_SLICE_THRESHOLD,

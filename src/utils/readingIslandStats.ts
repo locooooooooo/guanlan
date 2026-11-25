@@ -1,15 +1,15 @@
 import type { FileFormat, FileRecord, WorkspaceConfig } from '../types/guanlan';
 import { hasUnreadChanges, type UnreadReason } from './guanlanEngine';
-// 右缘悬浮岛聚合口径：已读/未读复用 GL-01 三态判定，落盘复用快照可用性，
-// 区分前缀复用 R1 身份工具——本文件只做聚合与排序，不改写任何判定本身。
+// 右缘悬浮岛聚合口径：已读/未读复用未读三态判定，落盘复用快照可用性，
+// 区分前缀复用文档身份工具——本文件只做聚合与排序，不改写任何判定本身。
 import { minimalDirPrefix } from './documentIdentity';
 import { readingRecency, type ReadingStateMap } from './readingStateStore';
 
 /**
- * 右缘悬浮岛三环用色（评审第 1 轮 #2 收编：不再直写 hex）。
- * 白底口径重校（v0.7 壳层翻白连带，评审 #1）：岛面翻到浅底后，旧暗底三值文字级
- * 跌破 AA（2026-11-15 附录 B 同款公式实跑，白 #FFFFFF：sage #788C5D 3.68、
- * wave-bright #ED8A50 2.51、lavender #9B8AFB 2.83），三值全换浅底重校令牌：
+ * 右缘悬浮岛三环用色（统一引用样式令牌，不再直写 hex）。
+ * 浅底对比度校准：岛面使用浅底后，旧暗底三值文字级对比度不足 AA（白 #FFFFFF 下：
+ * sage #788C5D 3.68、wave-bright #ED8A50 2.51、lavender #9B8AFB 2.83），
+ * 故三值均改用浅底校准令牌：
  * - read → --stage-ink-deliver-text(#56643A)：白上 6.40（paper #FAF9F5 上 6.08），
  *   环/点与 11px 组标文字双过 AA；
  * - unread → --accent-wave(#A84A1A)：白上 5.74（5.45）；

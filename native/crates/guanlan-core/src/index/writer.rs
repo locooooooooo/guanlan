@@ -4,9 +4,8 @@
 //! §3（快照落盘）、§4（写入顺序）。SQL 与 `server/WorkspaceStore.ts` 逐字一致，
 //! 改动前先对 TS 源。
 //!
-//! **唯一写入者**：本结构持有库里唯一的一条可写连接，由服务层的写线程独占
-//! （方案 §0「唯一写入线程：rusqlite 写连接只属于这一线程」）。读侧仍走
-//! `storage::ReadonlyStore` 的只读连接池，两侧靠 WAL 并行。
+//! **唯一写入者**：本结构持有库里唯一的一条可写连接，由服务层的唯一写线程独占。
+//! 读侧仍走 `storage::ReadonlyStore` 的只读连接池，两侧靠 WAL 并行。
 
 use std::fs;
 use std::io::Read;
@@ -40,7 +39,7 @@ pub struct CachedOfficeRow {
     pub plain_text: String,
 }
 
-/// C01 · 候选成员行
+/// 候选事项成员行
 #[derive(Debug, Clone)]
 pub struct CandidateMemberRow {
     pub file_id: String,
@@ -49,7 +48,7 @@ pub struct CandidateMemberRow {
     pub signals_json: String,
 }
 
-/// C01 · 候选行
+/// 候选事项行
 #[derive(Debug, Clone)]
 pub struct CandidateRow {
     pub candidate_id: String,
@@ -66,14 +65,14 @@ pub struct CandidateRow {
     pub updated_at: String,
 }
 
-/// C01 · 候选整包（行 + 成员，wire 组装用）
+/// 候选事项整包（行 + 成员，wire 组装用）
 #[derive(Debug, Clone)]
 pub struct CandidateFull {
     pub row: CandidateRow,
     pub members: Vec<CandidateMemberRow>,
 }
 
-/// `pdf_extracts` 缓存命中行（B04）
+/// `pdf_extracts` 缓存命中行
 #[derive(Debug, Clone)]
 pub struct CachedPdfRow {
     pub status: String,
@@ -235,11 +234,11 @@ CREATE TABLE IF NOT EXISTS meta (
   value TEXT NOT NULL
 );
 
--- ===== schema v2：PRD v2.0 长任务引擎与证道阁上下文基座新增（contract-storage.md §4.3） =====
--- 全部幂等 IF NOT EXISTS：对既有库（Node 管线建的 v0/v1 库）是空操作，
--- 不迁移、不重建任何既有表/列。冻结契约 storageChanges 的 7 张新表。
+-- ===== schema v2：长任务引擎与上下文基座新增（contract-storage.md §4.3） =====
+-- 全部幂等 IF NOT EXISTS：对既有库（v0/v1 库）是空操作，
+-- 不迁移、不重建任何既有表/列。共 7 张长任务相关表。
 
--- ① 专项（PRD 2.1）：跨天长任务的一级容器。UNIQUE(workspace_id, root_dir)
+-- ① 专项：跨天长任务的一级容器。UNIQUE(workspace_id, root_dir)
 --    保证同一工作区同一根目录只有一行。
 CREATE TABLE IF NOT EXISTS initiatives (
   initiative_id    TEXT PRIMARY KEY,
@@ -258,7 +257,7 @@ CREATE TABLE IF NOT EXISTS initiatives (
 );
 CREATE INDEX IF NOT EXISTS idx_initiatives_ws ON initiatives(workspace_id);
 
--- ② 文档级状态投影（PRD 2.2 统一状态机 SSOT 存储层）。file_id 复用 files 主键
+-- ② 文档级状态投影（统一状态机 SSOT 存储层）。file_id 复用 files 主键
 --    ——禁止第二套文件身份。
 CREATE TABLE IF NOT EXISTS artifact_states (
   file_id               TEXT PRIMARY KEY,
@@ -278,8 +277,8 @@ CREATE TABLE IF NOT EXISTS artifact_states (
 CREATE INDEX IF NOT EXISTS idx_astates_ws_state ON artifact_states(workspace_id, state);
 CREATE INDEX IF NOT EXISTS idx_astates_initiative ON artifact_states(initiative_id);
 
--- ③ 子任务节点（PRD 3.1 五槽位 DAG）。state 是声明式跨轮持久态，每轮
---    reconcile 由 state_engine::recompute 幂等重算维持（阻塞1 修复）。
+-- ③ 子任务节点（五槽位 DAG）。state 是声明式跨轮持久态，每轮
+--    reconcile 由 state_engine::recompute 幂等重算维持。
 CREATE TABLE IF NOT EXISTS task_nodes (
   node_id               TEXT PRIMARY KEY,
   workspace_id          TEXT NOT NULL,
@@ -297,8 +296,8 @@ CREATE TABLE IF NOT EXISTS task_nodes (
 );
 CREATE INDEX IF NOT EXISTS idx_nodes_init ON task_nodes(initiative_id, stage, state);
 
--- ④ 执行快照（PRD 3.2 断点续跑）。checkpoint_id 主键的 seq 由库内既有行数派生
---    （约束2：重启安全）；恢复 = 取节点/initiative+stage 最近一次 SUCCESS。
+-- ④ 执行快照（断点续跑）。checkpoint_id 主键的 seq 由库内既有行数派生
+--    （重启安全）；恢复 = 取节点/initiative+stage 最近一次 SUCCESS。
 CREATE TABLE IF NOT EXISTS checkpoints (
   checkpoint_id        TEXT PRIMARY KEY,
   node_id              TEXT,
@@ -316,7 +315,7 @@ CREATE TABLE IF NOT EXISTS checkpoints (
 CREATE INDEX IF NOT EXISTS idx_ckpt_init ON checkpoints(initiative_id, stage, created_at);
 CREATE INDEX IF NOT EXISTS idx_ckpt_node ON checkpoints(node_id);
 
--- ⑤ 修订草案（PRD 5.1 人机并发冲突：Agent 写入存为草案分支，绝不静默覆盖）
+-- ⑤ 修订草案（人机并发冲突：Agent 写入存为草案分支，绝不静默覆盖）
 CREATE TABLE IF NOT EXISTS revision_drafts (
   draft_id                   TEXT PRIMARY KEY,
   workspace_id               TEXT NOT NULL,
@@ -337,7 +336,7 @@ CREATE TABLE IF NOT EXISTS revision_drafts (
 );
 CREATE INDEX IF NOT EXISTS idx_drafts_file ON revision_drafts(file_id, status);
 
--- ⑥ L4A 后台沉淀队列（PRD 3.4；v1 = local_deterministic，登记偏差）
+-- ⑥ L4A 后台沉淀队列（默认使用 local_deterministic 确定性摘要）
 CREATE TABLE IF NOT EXISTS summary_jobs (
   job_id         TEXT PRIMARY KEY,
   workspace_id   TEXT NOT NULL,
@@ -352,7 +351,7 @@ CREATE TABLE IF NOT EXISTS summary_jobs (
 );
 CREATE INDEX IF NOT EXISTS idx_sjobs_state ON summary_jobs(workspace_id, priority, state);
 
--- ⑦ 任务持久化（重启后 queued/running 重入队；四态，阻塞3 裁定不扩）
+-- ⑦ 任务持久化（重启后 queued/running 重入队；固定四态，不承载挂起语义）
 CREATE TABLE IF NOT EXISTS job_runs (
   job_id         TEXT PRIMARY KEY,
   workspace_id   TEXT NOT NULL,
@@ -391,7 +390,7 @@ CREATE TABLE IF NOT EXISTS pdf_extracts (
 );
 CREATE INDEX IF NOT EXISTS idx_pdf_status ON pdf_extracts(status);
 
--- ④ C01 · 候选事项（多信号编织产物；采纳后才建正式 initiative 行）
+-- ④ 候选事项（多信号编织产物；采纳后才建正式 initiative 行）
 CREATE TABLE IF NOT EXISTS initiative_candidates (
   candidate_id    TEXT PRIMARY KEY,
   workspace_id    TEXT NOT NULL,
@@ -424,7 +423,7 @@ CREATE TABLE IF NOT EXISTS initiative_candidate_exclusions (
   PRIMARY KEY (workspace_id, file_a, file_b)
 );
 
--- ⑤ E05 · 关键决定账本防篡改哈希链（只追加、单向链接，供 audit 诊断秒级检出篡改）
+-- ⑤ 关键决定账本防篡改哈希链（只追加、单向链接，供 audit 诊断秒级检出篡改）
 CREATE TABLE IF NOT EXISTS decision_ledger_chain (
   chain_seq     INTEGER PRIMARY KEY AUTOINCREMENT,
   workspace_id  TEXT NOT NULL,
@@ -440,7 +439,7 @@ CREATE TABLE IF NOT EXISTS decision_ledger_chain (
 );
 CREATE INDEX IF NOT EXISTS idx_ledger_chain_ws ON decision_ledger_chain(workspace_id, chain_seq);
 
--- ⑥ V04 · 存量工作区已读基线持久化（只落已读版本与时刻，绝不伪造 scrollPercent）
+-- ⑥ 存量工作区已读基线持久化（只落已读版本与时刻，绝不伪造 scrollPercent）
 CREATE TABLE IF NOT EXISTS reading_states (
   workspace_id          TEXT NOT NULL,
   file_id               TEXT NOT NULL,
@@ -451,12 +450,11 @@ CREATE TABLE IF NOT EXISTS reading_states (
 CREATE INDEX IF NOT EXISTS idx_reading_states_ws ON reading_states(workspace_id);
 "#;
 
-/// checkpoint 状态枚举（PRD 3.2）
+/// checkpoint 状态枚举
 pub const CHECKPOINT_STATUSES: [&str; 3] = ["SUCCESS", "FAILED_RETRYABLE", "SUSPENDED_HITL"];
 
-/// checkpoint 插入载荷（PRD 3.2 Checkpoint 数据结构 + 冻结契约 E 提交载荷）。
-/// `node_id` 可缺省：缺省时由 state_engine 按 (initiative_id, stage) 反查槽位
-/// 推进（冻结约束1）。
+/// checkpoint 插入载荷。
+/// `node_id` 可缺省：缺省时由 `state_engine` 按 `(initiative_id, stage)` 反查槽位推进。
 #[derive(Debug, Clone)]
 pub struct CheckpointInput {
     pub node_id: Option<String>,
@@ -556,7 +554,7 @@ impl Writer {
         })?;
         conn.busy_timeout(Duration::from_millis(5000))
             .map_err(|e| GuanlanError::Internal(format!("设置 busy_timeout 失败：{e}")))?;
-        // F03 高版本只读门禁：在任何写操作（含 WAL PRAGMA / DDL）前先验 PRAGMA user_version，
+        // 高版本只读门禁：在任何写操作（含 WAL PRAGMA / DDL）前先验 PRAGMA user_version，
         // 遇到更高版本库立即以 SCHEMA_TOO_NEW 拒绝盲写！
         crate::storage::migration::check_schema_version_writable(&conn)?;
         // journal_mode 必须用字面量赋值：绑定参数在部分 SQLite 版本上不生效
@@ -666,12 +664,12 @@ impl Writer {
         Ok(rows)
     }
 
-    /// 幂等建表 + 增量列迁移（F03：升级前经 SQLite Backup API 自动一致性备份，保留最近 5 份，事务原子回滚）
+    /// 幂等建表 + 增量列迁移（升级前经 SQLite Backup API 自动一致性备份，保留最近 5 份，事务原子回滚）
     fn ensure_schema(&self) -> Result<(), GuanlanError> {
         crate::storage::migration::run_safe_schema_migration(&self.conn, &self.data_dir, |conn| {
             conn.execute_batch(SCHEMA)
                 .map_err(|e| GuanlanError::Internal(format!("按契约 DDL 建表失败：{e}")))?;
-            // C02 派生检索索引两表（单一来源：crate::index::search_index::SEARCH_DDL）
+            // 派生检索索引两表（单一来源：crate::index::search_index::SEARCH_DDL）
             conn.execute_batch(crate::index::search_index::SEARCH_DDL)
                 .map_err(|e| GuanlanError::Internal(format!("按契约 DDL 建检索索引失败：{e}")))?;
             // 早期库缺 detail_json：补列不重建
@@ -688,7 +686,7 @@ impl Writer {
                 )
                 .map_err(|e| GuanlanError::Internal(format!("补 detail_json 列失败：{e}")))?;
             }
-            // E02：早期库 revision_drafts 缺草案分支标签/上下文哈希清单/回执摘要列——幂等补列不重建
+            // 早期库 revision_drafts 缺草案分支标签/上下文哈希清单/回执摘要列：幂等补列不重建
             for (col, ddl) in [
                 (
                     "draft_version_label",
@@ -871,7 +869,7 @@ impl Writer {
         Ok(rows)
     }
 
-    /// 全库 `(current_path, file_id)` 轻量映射（B05：reconcile 派生索引的路径表专用——
+    /// 全库 `(current_path, file_id)` 轻量映射（供 reconcile 派生索引路径表专用：
     /// 只取两列，避免整表 FileRow 反序列化；与 `list_files(.., true)` 行集同口径）
     pub fn all_path_ids(&self, workspace_id: &str) -> Result<Vec<(String, String)>, GuanlanError> {
         let mut stmt = self
@@ -888,8 +886,8 @@ impl Writer {
         Ok(rows)
     }
 
-    /// 全库 `(file_id, 最新 revision_id)` 映射（B05：单条 GROUP BY 替代逐文件
-    /// `latest_revision` 的 N+1 查询——万级库上可把派生索引从秒级降到毫秒级）
+    /// 全库 `(file_id, 最新 revision_id)` 映射（单条 GROUP BY 替代逐文件
+    /// `latest_revision` 的 N+1 查询，大工作区上可显著降低派生索引耗时）
     pub fn latest_revision_ids(&self) -> Result<Vec<(String, String)>, GuanlanError> {
         let mut stmt = self
             .conn
@@ -910,7 +908,7 @@ impl Writer {
         Ok(rows)
     }
 
-    /// 身份恢复候选（missing / trashed 行；B05：SQL 侧过滤替代全表 FileRow 反序列化）
+    /// 身份恢复候选（missing / trashed 行；由 SQL 侧过滤替代全表 FileRow 反序列化）
     pub fn list_recovery_candidates(
         &self,
         workspace_id: &str,
@@ -1301,7 +1299,7 @@ impl Writer {
 
     /// 插入版本行；引用未登记的快照时报错（不变量：版本行存在 ⇒ 快照已在磁盘）
     ///
-    /// **B01 例外**：`snapshot_available = 0` 的版本是「只记元数据、不存快照」的
+    /// **元数据模式例外**：`snapshot_available = 0` 的版本是「只记元数据、不存快照」的
     /// 降级版本（音视频 / 未知二进制 / 超阈值文件）——磁盘上**确实没有**这份
     /// 字节，因此不要求 `blobs` 行。此时 `snapshot_hash` 仍如实记内容哈希，
     /// 读取侧按「快照不可用」诚实返回（契约 §3.5）。
@@ -1376,7 +1374,7 @@ impl Writer {
         );
         match result {
             Ok(_) => {
-                // E05：关键决定/草案/检查点/治理事件同事务自动封存进防篡改哈希链
+                // 关键决定/草案/检查点/治理事件同事务自动封存进防篡改哈希链
                 if crate::storage::ledger::is_ledger_sealed_kind(&event.kind) {
                     let event_seq = self.conn.last_insert_rowid();
                     let snapshot = crate::storage::ledger::LedgerEventSnapshot {
@@ -1466,7 +1464,7 @@ impl Writer {
         Ok(())
     }
 
-    // ===== C02 派生检索索引（search_docs / search_postings；可随时丢弃重建）=====
+    // ===== 派生检索索引（search_docs / search_postings；可随时丢弃重建）=====
 
     /// 原子替换单文件的检索文档与全部词项（差分同步与全量重建共用）
     pub fn replace_search_doc(
@@ -1693,7 +1691,7 @@ impl Writer {
         Ok(())
     }
 
-    /// 检查某 `content_hash` 是否已缓存 PDF 页级文本提取结果（B04，同一版本规则）
+    /// 检查某 `content_hash` 是否已缓存 PDF 页级文本提取结果（同一版本规则）
     pub fn get_pdf_extract_json(
         &self,
         content_hash: &str,
@@ -1720,7 +1718,7 @@ impl Writer {
         Ok(row)
     }
 
-    /// 写入/更新 PDF 页级提取缓存（B04，按 content_hash 内容寻址幂等）
+    /// 写入/更新 PDF 页级提取缓存（按 content_hash 内容寻址幂等）
     #[allow(clippy::too_many_arguments)]
     pub fn upsert_pdf_extract(
         &self,
@@ -1896,7 +1894,7 @@ impl Writer {
         Ok(())
     }
 
-    // ===== C01 · 候选事项（多信号编织；采纳前绝不写正式归属） =====
+    // ===== 候选事项（多信号编织；采纳前绝不写正式归属） =====
 
     /// 重扫编织：整体替换工作区的 candidate 态候选（adopted/dismissed 不动）。
     /// 同 candidate_key 幂等（重扫再生成的簇保持同 id 与 updated_at 刷新）。
@@ -2221,7 +2219,7 @@ impl Writer {
         Ok(map)
     }
 
-    /// 收集编织输入：active 文件信号 + 已解析显式引用边（C01 编排侧组装）
+    /// 收集编织输入：active 文件信号 + 已解析显式引用边（供候选事项编排侧组装）
     pub fn collect_weaver_inputs(
         &self,
         workspace_id: &str,
@@ -2370,8 +2368,8 @@ impl Writer {
         }
     }
 
-    /// 按 (initiative_id, stage) 反查槽位节点（冻结约束1：POST /checkpoints 的
-    /// node_id 缺省时按五槽位模型唯一命中）
+    /// 按 `(initiative_id, stage)` 反查槽位节点（POST /checkpoints 的
+    /// `node_id` 缺省时按五槽位模型唯一命中）
     pub fn find_task_node_by_stage(
         &self,
         workspace_id: &str,
@@ -2467,9 +2465,9 @@ impl Writer {
         Ok(rows)
     }
 
-    /// 「最近一次 SUCCESS」恢复查询（PRD 3.2）：按 stage（可选再按 node_id）取
-    /// 最新成功快照。node_id 为 None 时按 (initiative_id, stage) 命中——与
-    /// 约束1 的槽位反查口径一致（提交载荷不含 node_id 也能恢复）。
+    /// 「最近一次 SUCCESS」恢复查询：按 `stage`（可选再按 `node_id`）取
+    /// 最新成功快照。`node_id` 为 `None` 时按 `(initiative_id, stage)` 命中，
+    /// 与槽位反查口径一致（提交载荷不含 `node_id` 也能恢复）。
     pub fn latest_success_checkpoint(
         &self,
         workspace_id: &str,
@@ -2492,13 +2490,13 @@ impl Writer {
 
     /// checkpoint 插入载荷（定义见模块级 [`CheckpointInput`]）
     ///
-    /// 插入 checkpoint 行，返回主键（冻结约束2：seq 由库内既有行数派生——
+    /// 插入 checkpoint 行，返回主键：`seq` 由库内既有行数派生，
     /// 重启安全，跨进程重启不撞 PRIMARY KEY；重复 SUCCESS 是**追加**新行，
     /// 「最近一次 SUCCESS」按 created_at/rowid 取最新，见
-    /// [`Self::latest_success_checkpoint`]）。
+    /// [`Self::latest_success_checkpoint`]。
     ///
-    /// 主键 = `ckpt_` + stable_key(initiative_id|stage|node_id|seq)（冻结契约 E
-    /// 模板）；seq 冲突或 stable_key 哈希碰撞时按序递增重试（防御上限 64 次）。
+    /// 主键 = `ckpt_` + `stable_key(initiative_id|stage|node_id|seq)`；
+    /// seq 冲突或 stable_key 哈希碰撞时按序递增重试（防御上限 64 次）。
     pub fn insert_checkpoint(&self, input: &CheckpointInput) -> Result<String, GuanlanError> {
         if !CHECKPOINT_STATUSES.contains(&input.status.as_str()) {
             return Err(GuanlanError::BadRequest(format!(
@@ -2628,7 +2626,7 @@ impl Writer {
         Ok(())
     }
 
-    /// E02：按内容哈希（完整 64 位或至少 16 位前缀，允许带 `sha256:` 前缀）反查工作区修订 `(file_id, revision_id)`。
+    /// 按内容哈希（完整 64 位或至少 16 位前缀，允许带 `sha256:` 前缀）反查工作区修订 `(file_id, revision_id)`。
     /// 供采纳草案后写入 `derived_from_context` 因果边使用。
     pub fn find_revision_by_hash_or_prefix(
         &self,
@@ -2816,7 +2814,7 @@ impl Writer {
             .unwrap_or_default())
     }
 
-    /// 写 meta 键 `initiative_dirs`（幂等覆盖——建议1 的三个写入路径共用）
+    /// 写 meta 键 `initiative_dirs`（幂等覆盖，供各专项目录登记入口共用）
     pub fn set_initiative_dirs(&self, dirs: &[String]) -> Result<(), GuanlanError> {
         let value = serde_json::to_string(dirs)
             .map_err(|e| GuanlanError::Internal(format!("序列化 initiative_dirs 失败：{e}")))?;
@@ -2871,8 +2869,8 @@ impl Writer {
     /// 顺序：同哈希已存在且校验通过则不重写 → 写临时文件 → **重读临时文件重算
     /// SHA-256** 校验 → 同卷原子改名。
     ///
-    /// 与 TS 的差异：TS 写的是采集阶段已读入内存的字节；Rust 采集阶段不驻留内容
-    /// （方案 §165），改为**重读源文件**并流式落盘。因此源文件若在采集之后被
+    /// 与 TS 的差异：TS 写的是采集阶段已读入内存的字节；Rust 采集阶段不整批驻留内容，
+    /// 改为**重读源文件**并流式落盘。因此源文件若在采集之后被
     /// 改写，落盘内容与采集时的哈希不符——此时**不能**写入与哈希不符的快照，
     /// 按「本轮不稳定」处理（[`SnapshotOutcome::Unstable`]），由调用方当读取问题
     /// 记录并等下一轮恢复，而不是让整轮对账失败。
@@ -2915,7 +2913,7 @@ impl Writer {
         fs::read(self.blob_path_for(hash)).ok()
     }
 
-    /// V04 · 批量确立已读基线、单文件/目录标已读与标未读、一键撤销还原（单事务、幂等、绝不伪造 scrollPercent）。
+    /// 批量确立已读基线、单文件/目录标已读与标未读、一键撤销还原（单事务、幂等、绝不伪造 scrollPercent）。
     ///
     /// - `mark_baseline`：`scope = workspace | folder`（配合 `folder_prefix`），只更新
     ///   当前尚无基线或 `last_read_revision_id != files.last_revision_id` 的活跃文件，
@@ -3488,7 +3486,7 @@ mod tests {
             .expect("读版本");
         assert_eq!(version2, 2, "重开不回退版本");
 
-        // 人为把版本降回 1（模拟旧批次库）：ensure_schema 只升不降，升回 2
+        // 人为把版本降回 1（模拟旧 schema 版本库）：ensure_schema 只升不降，升回 2
         writer2
             .conn()
             .execute_batch("PRAGMA user_version = 1;")
@@ -3503,7 +3501,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// checkpoint seq 由库内派生（约束2）：重复提交追加新行不撞主键；
+    /// checkpoint seq 由库内既有行数派生：重复提交追加新行不撞主键；
     /// node_id 缺省与给定的 seq 各自独立计数
     #[test]
     fn checkpoint_seq_is_db_derived_and_restart_safe() {
@@ -3564,7 +3562,7 @@ mod tests {
             .expect("插第二行");
         assert_ne!(
             first, second,
-            "两次提交主键必须互异（约束2：撞主键即修复失败）"
+            "两次提交主键必须互异（seq 由库内行数派生，不得撞主键）"
         );
 
         // 模拟重启：新写连接（seq 计数仍来自库）
@@ -3595,7 +3593,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// initiative_dirs：meta 键幂等覆盖（建议1）
+    /// initiative_dirs：meta 键幂等覆盖
     #[test]
     fn initiative_dirs_roundtrip_and_cover() {
         let dir = std::env::temp_dir().join(format!(
@@ -3630,7 +3628,7 @@ mod tests {
             vec!["只此一个".to_owned()]
         );
 
-        // recompute 消费 meta dirs（PRD 例「BOM与图纸联动方案」）
+        // recompute 消费 meta dirs（非默认命名的自定义专项目录）
         let mut writer = writer;
         let workspace_id = writer.workspace().expect("ws").workspace_id;
         let outcome =

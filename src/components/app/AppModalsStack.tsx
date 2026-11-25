@@ -1,6 +1,6 @@
 /**
- * D01-a 拆解 · App 抽屉与弹窗栈（原 App.tsx 4045-4207 逐字迁入）。
- * 文件时间线抽屉 / MCP 控制台 / 工作区设置 / 证道阁上下文抽屉 / 草案回写通知 /
+ * App 抽屉与弹窗栈。
+ * 文件时间线抽屉 / MCP 控制台 / 工作区设置 / 智能体上下文抽屉 / 草案回写通知 /
  * 决策变更单 Toast / 右键菜单 / 命令面板 / 挂载面板 / QuickLook / 文件操作弹窗 /
  * 拖放导入浮层 / 系统动作反馈条。数据一律来自 useWorkspaceStore ctx。
  */
@@ -39,7 +39,7 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
     isMcpConsoleOpen, setIsMcpConsoleOpen, isSettingsOpen, setIsSettingsOpen,
     isContextDrawerOpen, setIsContextDrawerOpen, contextPointers, setContextPointers,
     config, activeInitiative, contextSessionCheckpointId, referenceMetaOf,
-    zhendaogePreset, presetPointers, recommendedMounts, focusedContextFileId, handleMountPointers,
+    agentContextPreset, presetPointers, recommendedMounts, focusedContextFileId, handleMountPointers,
     handleUpdatePointerGranularity, confirmedDecisionLines, pendingBlockerLines,
     decisionChangeNote, proposalToast, proposalAdopting, proposalRejecting, proposalAdoptNotice,
     proposalDiffExpanded, proposalDiffLoading, proposalDiffError, proposalDiffContent,
@@ -72,7 +72,7 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
           彻底消除右下角悬浮 ? 钮对右侧检查器「复制给智能体」与日历网格的遮挡。 */}
 
       {/* Modals & Drawers */}
-      {/* T04：以文件为中心的时间线抽屉——版本链按 occurred_at（无则 observed_at）排列，
+      {/* 以文件为中心的时间线抽屉——版本链按 occurred_at（无则 observed_at）排列，
           事件按 seq 挂到对应版本下；点有快照的版本可打开该时点内容 */}
       <FileTimelineDrawer
         isOpen={historyFileId !== ''}
@@ -103,10 +103,9 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
         onClearMutedFolders={ctx.handleClearMutedFolders}
       />
 
-      {/* GU-CC-02：Context Basket 抽屉——证道阁改造（PRD 4.1–4.3 / F4）：
+      {/* 智能体上下文清单抽屉：
           路由默认包一键带入 + 注入粒度 + Token 预算条 + 推荐挂载折叠 + MCP 自检 +
-          双模导出（导出文本经 zhendaogeExport 单一构建，formatContextForAgent
-          保留给 RightInspector 旧入口） */}
+          双模导出（离线降级经 agentContextExport 构建） */}
       <AgentContextDrawer
         isOpen={isContextDrawerOpen}
         onClose={() => setIsContextDrawerOpen(false)}
@@ -120,8 +119,8 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
         initiative={activeInitiative}
         sessionCheckpointId={contextSessionCheckpointId}
         referenceMetaOf={referenceMetaOf}
-        intent={zhendaogePreset.intent}
-        intentTemplate={zhendaogePreset.intentTemplate}
+        intent={agentContextPreset.intent}
+        intentTemplate={agentContextPreset.intentTemplate}
         presetPointers={presetPointers}
         recommendedMounts={recommendedMounts}
         onMountPointers={handleMountPointers}
@@ -131,7 +130,7 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
         decisionChangeNote={decisionChangeNote}
       />
 
-      {/* E04：轻量「批阅看板」抽屉（五态精简版 + 失联 unknown 孤儿诊断与安全修复） */}
+      {/* 轻量「批阅看板」抽屉（五态分栏 + 失联 unknown 孤儿诊断与安全修复） */}
       <ReviewBoardDrawer
         isOpen={isReviewBoardOpen}
         onClose={() => setIsReviewBoardOpen(false)}
@@ -147,7 +146,7 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
         onRepairOrphan={handleBoardRepairOrphan}
       />
 
-      {/* V10：「司辰手记」今日 / 近 7 日沉淀简报抽屉（Sheet inset + 可溯源 Markdown 导出） */}
+      {/* 「司辰手记」今日 / 近 7 日沉淀简报抽屉（Sheet inset + 可溯源 Markdown 导出） */}
       <ChronosDigestDrawer
         isOpen={ctx.isChronosDigestOpen}
         onClose={() => ctx.setIsChronosDigestOpen(false)}
@@ -160,7 +159,7 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
         onOpenDecision={(decisionId) => ctx.handleOpenDecisionReference(decisionId)}
       />
 
-      {/* 回写通知条（PRD 4.3 / F6 / E02）：智能体独立草案分支批阅（多模态 Diff / 退回重做 / 一键采纳） */}
+      {/* 回写通知条：智能体独立草案分支批阅（多模态 Diff / 退回重做 / 一键采纳） */}
       <ProposalToast
         toast={proposalToast}
         adopting={proposalAdopting}
@@ -177,17 +176,17 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
         onDismiss={handleDismissProposalToast}
       />
 
-      {/* AC-03（PRD 3.3 第 3 步）：决策变更单推送通知——点击查看证道阁 */}
+      {/* 决策变更单推送通知——点击查看上下文清单 */}
       <DecisionChangeToast
         note={decisionChangeToast}
-        onOpenZhendaoge={() => {
+        onOpenContextDrawer={() => {
           setDecisionChangeToast(null);
           openContextDrawer();
         }}
         onDismiss={() => setDecisionChangeToast(null)}
       />
 
-      {/* A04/A05：全局文件/目录右键操作菜单、身份保真文件操作弹窗、外部文件拖入引导浮层与系统动作反馈条 */}
+      {/* 全局文件/目录右键操作菜单、身份保真文件操作弹窗、外部文件拖入引导浮层与系统动作反馈条 */}
       <FileContextMenu
         menu={fileContextMenu}
         onClose={() => setFileContextMenu(null)}
@@ -255,7 +254,7 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
         onToggleMuteFolder={(folderRel) => ctx.handleToggleMuteFolder(folderRel)}
       />
 
-      {/* C03 + V08：Ctrl+K 全局时空命令面板（L4A 富预览 + Shift+Enter 直达时光机） */}
+      {/* Ctrl+K 全局时空命令面板（富预览 + Shift+Enter 直达时光机） */}
       <CommandPalette
         isOpen={isPaletteOpen}
         query={palette.query}
@@ -273,7 +272,7 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
         onRunAction={handlePaletteAction}
       />
 
-      {/* C05：挂载参考工作区管理面板（只读挂载 / 离线徽标 / 跨项目检索入口） */}
+      {/* 挂载参考工作区管理面板（只读挂载 / 离线徽标 / 跨项目检索入口） */}
       <MountManagerPanel
         isOpen={isMountPanelOpen}
         onClose={() => setMountPanelOpen(false)}

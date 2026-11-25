@@ -40,12 +40,12 @@ export type FileOpSubmitPayload =
       fileId: string;
       targetDir: string;
       newName?: string;
-      /** C04 确认制引用修复：用户在弹窗显式勾选后才为 true（绝不静默改写原文档）。 */
+      /** 确认制引用修复：用户在弹窗显式勾选后才为 true（绝不静默改写原文档）。 */
       updateReferences?: boolean;
     }
   | { kind: 'trash'; fileId: string; confirm: true };
 
-/** C04：受影响引用清单状态（宿主由 useReferencePathRepair 收集后传入；零 IO 同步）。 */
+/** 受影响引用清单状态（宿主由 useReferencePathRepair 收集后传入；零 IO 同步）。 */
 export interface ReferenceImpactState {
   loading: boolean;
   items: AffectedReferenceItem[];
@@ -60,20 +60,18 @@ export interface FileOpsModalProps {
   serverError: string | null;
   onClose: () => void;
   onSubmit: (payload: FileOpSubmitPayload) => Promise<void> | void;
-  /** C04：移动/改名涉及被 Markdown 决定证据引用的目标时的受影响引用清单。 */
+  /** 移动/改名涉及被 Markdown 决定证据引用的目标时的受影响引用清单。 */
   referenceImpact?: ReferenceImpactState | null;
 }
 
 /**
- * A05 独立文件操作弹窗（重命名 / 跨目录移动 / 移入系统回收站）。
+ * 独立文件操作弹窗（重命名 / 跨目录移动 / 移入系统回收站）。
  *
  * 设计约束：
  * - 严格保持独立组件，不向 App.tsx 堆叠表单状态；
- * - 颜色与动效 100% 取自 :root 设计令牌与 ui/primitives；
- * - 移入回收站强制勾选人工二次确认，绝不执行静默删除或永久物理删除。
- * C04 升级：
- * - 移动弹窗升级为「可输入过滤的目标目录选择器」——过滤输入常驻（任意目录数），
- *   目录列表自动隐藏被移动文件当前所在目录（防成环：同目录落点＝无变化落点）；
+ * - 颜色与动效全部取自 :root 设计令牌与 ui/primitives；
+ * - 移入回收站强制勾选人工二次确认，绝不执行静默删除或永久物理删除；
+ * - 移动弹窗采用可输入过滤的目标目录选择器（过滤输入常驻），自动隐藏被移动文件当前所在目录防成环；
  * - 移动/改名涉及被 Markdown 决定证据引用的目标（.pdf/.xlsx/.docx/.svg）时，
  *   预览受影响引用清单并由用户显式勾选是否同步更新相对路径——严格确认制，
  *   绝不静默改写原文档（取消＝零改写；保存桥不可用时禁用并诚实说明）。
@@ -158,8 +156,7 @@ export const FileOpsModal: React.FC<FileOpsModalProps> = ({
   }, [moveNewName, request, targetDir]);
 
   const filteredFolders = useMemo(() => {
-    // C04：防成环——目录列表自动隐藏被移动文件当前所在目录（同目录落点＝无效目标，
-    // 此前只显示「当前所在」标记仍可选，现直接隐藏让选择器只剩合法目标）。
+    // 防成环——目录列表自动隐藏被移动文件当前所在目录（同目录落点为无效目标，只保留合法目标）。
     const candidates = folderOptions.filter((dir) => dir !== currentDir);
     const q = folderFilter.trim().toLowerCase();
     if (!q) return candidates;
@@ -194,7 +191,7 @@ export const FileOpsModal: React.FC<FileOpsModalProps> = ({
         kind: 'rename',
         fileId: request.fileId,
         newName: renameCheck.normalizedName,
-        // C04 确认制：仅用户显式勾选且保存桥可用时才同步更新引用路径
+        // 确认制：仅用户显式勾选且保存桥可用时才同步更新引用路径
         updateReferences: referenceRepairSelectable ? updateReferencesConfirmed : undefined,
       });
     } else if (request.kind === 'move' && moveCheck?.ok) {
@@ -378,7 +375,7 @@ export const FileOpsModal: React.FC<FileOpsModalProps> = ({
                 />
               </div>
 
-              {/* 现有目录快选（C04 升级：可输入过滤的目标目录选择器——过滤输入常驻；
+              {/* 现有目录快选（可输入过滤的目标目录选择器——过滤输入常驻；
                   列表自动隐藏当前所在目录防成环，只呈现合法目标） */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
@@ -496,7 +493,7 @@ export const FileOpsModal: React.FC<FileOpsModalProps> = ({
             </div>
           )}
 
-          {/* C04 · 确认制引用路径修复（移动/改名涉及被 Markdown 决定证据引用的目标）：
+          {/* 确认制引用路径修复（移动/改名涉及被 Markdown 决定证据引用的目标）：
               弹窗预览受影响引用清单，用户显式勾选后才同步更新相对路径——
               严格确认制，绝不静默改写原文档；取消＝零改写；
               保存桥不可用（浏览器/CLI 只读环境）＝修复能力诚实禁用 */}

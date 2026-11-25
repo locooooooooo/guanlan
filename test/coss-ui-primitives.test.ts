@@ -1,10 +1,10 @@
 /**
- * V01 · coss.com/ui 原语基座、全局明暗令牌与 appThemeStore 契约测试
+ * coss.com/ui 原语基座、全局明暗令牌与 appThemeStore 契约测试
  *
  * 覆盖：
  * 1. cn() 样式合并与 Tailwind 冲突消解；
  * 2. appThemeStore 三态解析（light / dark / system）、订阅通知与同值短路；
- * 3. V01 首批 11 个 coss 原语 SSR 渲染、data-slot 槽位契约、Base UI useRender 多态与 reduced-motion；
+ * 3. 基础 11 个 coss 原语 SSR 渲染、data-slot 槽位契约、Base UI useRender 多态与 reduced-motion；
  * 4. src/index.css 的 @theme inline、:root/.dark 语义令牌完备性与 reduced-motion 停帧覆盖。
  */
 import assert from 'node:assert/strict';
@@ -64,12 +64,12 @@ function readSrc(relPath: string): string {
   return readFileSync(fileURLToPath(new URL(`../src/${relPath}`, import.meta.url)), 'utf8');
 }
 
-test('V01 cn()：支持条件拼接与 Tailwind 冲突类后者覆盖', () => {
+test('cn()：支持条件拼接与 Tailwind 冲突类后者覆盖', () => {
   assert.equal(cn('px-2 py-1', false && 'hidden', 'px-4'), 'py-1 px-4');
   assert.equal(cn('rounded-lg border', 'rounded-xl'), 'border rounded-xl');
 });
 
-test('V01 appThemeStore：三态解析纯函数、订阅通知与同值短路', () => {
+test('appThemeStore：三态解析纯函数、订阅通知与同值短路', () => {
   assert.equal(resolveEffectiveAppTheme('light', true), 'light');
   assert.equal(resolveEffectiveAppTheme('dark', false), 'dark');
   assert.equal(resolveEffectiveAppTheme('system', false), 'light');
@@ -103,7 +103,7 @@ test('V01 appThemeStore：三态解析纯函数、订阅通知与同值短路', 
   assert.equal(getAppThemeMode(), 'light');
 });
 
-test('V01 Button：多变体、loading 态、Base UI render 多态与 motion-reduce 契约', () => {
+test('Button：多变体、loading 态、Base UI render 多态与 motion-reduce 契约', () => {
   const baseHtml = renderToStaticMarkup(createElement(Button, { variant: 'outline' }, '打开文档'));
   assert.ok(baseHtml.includes('data-slot="button"'));
   assert.ok(baseHtml.includes('bg-clip-padding'));
@@ -125,7 +125,7 @@ test('V01 Button：多变体、loading 态、Base UI render 多态与 motion-red
   assert.ok(linkHtml.includes('data-slot="button"'));
 });
 
-test('V01 Badge / Kbd / Separator / Spinner / Skeleton 原语 SSR 契约', () => {
+test('Badge / Kbd / Separator / Spinner / Skeleton 原语 SSR 契约', () => {
   const badgeHtml = renderToStaticMarkup(
     createElement(Badge, { variant: 'success', size: 'sm' }, '已同步'),
   );
@@ -155,7 +155,7 @@ test('V01 Badge / Kbd / Separator / Spinner / Skeleton 原语 SSR 契约', () =>
   assert.ok(glassHtml.includes('data-glass-skeleton=""'));
 });
 
-test('V01 Frame / CardFrame / Group / Toolbar / Empty 三卡扇形空态 SSR 契约', () => {
+test('Frame / CardFrame / Group / Toolbar / Empty 三卡扇形空态 SSR 契约', () => {
   const frameHtml = renderToStaticMarkup(
     createElement(
       Frame,
@@ -239,7 +239,7 @@ test('V01 Frame / CardFrame / Group / Toolbar / Empty 三卡扇形空态 SSR 契
   assert.ok(emptyHtml.includes('-rotate-10') && emptyHtml.includes('rotate-10'), '三卡扇形叠影图标栈');
 });
 
-test('V01 index.css 契约：@theme inline、:root/.dark 语义令牌配对与 reduced-motion 停帧', () => {
+test('index.css 契约：@theme inline、:root/.dark 语义令牌配对与 reduced-motion 停帧', () => {
   const css = readSrc('index.css');
   assert.ok(css.includes('@theme inline {'), '应声明 Tailwind v4 @theme inline 映射层');
   assert.ok(css.includes('.dark {'), '应声明全局 .dark 语义令牌块');

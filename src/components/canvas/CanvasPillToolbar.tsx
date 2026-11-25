@@ -1,22 +1,18 @@
 /**
- * v0.8 任务空间桌面 · 画布底部药丸工具栏（R4 / 组件契约 C5；starfix T3 三栏并一收口）。
+ * 画布底部药丸工具栏（底部悬浮唯一控制栏）。
  *
  * 挂画布底部正中（宿主 Tailwind：left-1/2 -translate-x-1/2 bottom-4，z-20 低于
  * 叙事抽屉 z-30）；磨砂底 = --cv-panel 92% + backdrop-blur（canvasWidgets.css）。
- * starfix T3：画布上只允许这一颗悬浮药丸——原左下角胶囊（⚙视图设置 | 司辰日期 |
- * 缩放簇 | 重置）与右下角泳道图例整栏退役，功能按「全部收敛进本药丸」迁入：
- *  ⑥ ⚙视图设置（触发宿主既有布局/特效弹层，弹层随迁至药丸上方正中）；
- *  ⑦ 缩放簇（− / 百分比读数 / +）+ 重置 —— 读数沿用 data-testid="canvas-scale-indicator"
- *    锚点（既有测试锚点原样保留，只挪挂载点）；滚轮缩放与重置运镜语义不变；
- *  ⑧ 图例「?」——点击展开四泳道图例气泡（气泡由宿主渲染，本组件只出按钮）。
- * 五控件（顺序即契约）：
+ * 汇总画布核心交互控件，避免左下/右下多条悬浮栏叠加遮挡：
  *  ① +添加上下文 —— 宿主接既有 onAddEvidencePointer 链路；
- *  ② 指针/抓手双态 —— aria-pressed 语义（--cv-pill-active-* 取值，starfix T1 冻结）；
+ *  ② 指针/抓手双态 —— aria-pressed 语义（--cv-pill-active-* 取值）；
  *  ③ 只看最新/看版本演进双态 —— 联动宿主 isNodeInActiveTimeSlice/activeDate 语义；
- *  ④ 司辰时间轴滑块开关 —— 显隐常驻司辰（R6 去常驻后的唯一渲染入口）；
- *  ⑤ ?快捷键 —— 就地轻弹层（宿主渲染）。
- * 旧左下栏的「司辰日期轮换 / 回到全域」不迁入：轮换=点主干刻度与司辰滑块，
- * 「回到全域」=再点当前选中刻度（GraphCanvasView clickTick 既有出口，T05 契约不变）。
+ *  ④ 司辰时间轴滑块开关 —— 显隐司辰时间轴并支持时光流转重演；
+ *  ⑤ ?快捷键 —— 就地轻弹层（宿主渲染）；
+ *  ⑥ ⚙视图设置 —— 触发宿主布局/特效弹层（定位在药丸上方正中）；
+ *  ⑦ 缩放簇（− / 百分比读数 / +）+ 重置 —— 读数保留 data-testid="canvas-scale-indicator"；
+ *  ⑧ 图例「?」—— 点击展开四泳道图例气泡（气泡由宿主渲染，本组件只出按钮）。
+ * 日期切换经主干刻度与司辰滑块完成，再次点击当前选中刻度可回到全域视图。
  * 锚点：容器 data-cv-pill-toolbar，控件 data-cv-pill-btn="add-context|tool|version-view|chronos|view-settings|zoom-out|zoom-percent|zoom-in|reset-view|legend|shortcuts"。
  * 舷窗纪律：样式全走 .cvw-*，零内联色值。
  */
@@ -37,8 +33,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
-// css 装载上移 App.tsx（总装，指挥授权）：node --test/tsx 测试链加载不了 .css 扩展名，
-// 组件内 import 会让 gc-12/wf2/canvas-theme 文件级失败；由 App 常驻装载兜底，零视觉变化
+// 样式文件统一由 App.tsx 装载：Node 测试链不解析 .css 导入，由 App 常驻装载兜底
 
 export interface CanvasPillToolbarProps {
   tool: 'pointer' | 'pan';
@@ -52,15 +47,15 @@ export interface CanvasPillToolbarProps {
   onToggleTimeFlow?: () => void;
   onAddContext: () => void;
   onShowShortcuts: () => void;
-  /* starfix T3 收敛件：视图设置弹层开关（弹层本体由宿主渲染） */
+  /* 视图设置弹层开关（弹层本体由宿主渲染） */
   viewSettingsOpen: boolean;
   onToggleViewSettings: () => void;
-  /* starfix T3 收敛件：缩放簇（− / 读数 / +）与重置运镜；读数=整数百分比 */
+  /* 缩放簇（− / 读数 / +）与重置运镜；读数=整数百分比 */
   zoomPercent: number;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onResetView: () => void;
-  /* starfix T3 收敛件：泳道图例「?」气泡开关（气泡本体由宿主渲染） */
+  /* 泳道图例「?」气泡开关（气泡本体由宿主渲染） */
   legendOpen: boolean;
   onToggleLegend: () => void;
 }
@@ -101,7 +96,7 @@ export default function CanvasPillToolbar({
 
       <span className="cvw-pill-sep" aria-hidden="true" />
 
-      {/* ② 指针/抓手双态：aria-pressed 双钮形制（v0.6 §4.3 分段钮同族） */}
+      {/* ② 指针/抓手双态：aria-pressed 双钮形制 */}
       <button
         type="button"
         className="cvw-pill-btn"

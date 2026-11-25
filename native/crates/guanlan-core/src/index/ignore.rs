@@ -1,6 +1,6 @@
-//! `.gitignore` 解析与匹配（B01 · 采集白名单放开后的忽略纪律）。
+//! `.gitignore` 解析与匹配（全文件类型采集的忽略纪律）。
 //!
-//! B01 放开采集白名单后，「工作区内什么算资料」由两条规则共同决定：
+//! 「工作区内什么算资料」由两条规则共同决定：
 //!
 //! 1. **系统/依赖目录黑名单**（[`crate::index::collector::DEFAULT_EXCLUDED`]）：
 //!    `node_modules` / `.git` / `target` / `__pycache__` 等——这些目录里的东西
@@ -116,7 +116,7 @@ impl Gitignore {
         self.rules.is_empty()
     }
 
-    /// 规则只读视图（B05：collector 缓存命中时按既有规则重建实例，避免重复读盘解析）。
+    /// 规则只读视图（collector 缓存命中时按既有规则重建实例，避免重复读盘解析）。
     pub fn rules(&self) -> &[IgnoreRule] {
         &self.rules
     }

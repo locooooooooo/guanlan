@@ -8,22 +8,22 @@ import {
 import type { DecisionChangeNote } from '../utils/decisionChangeNote';
 
 /**
- * 决策变更单推送通知（PRD 3.3 第 3 步 / AC-03）。
+ * 决策变更单推送通知。
  *
  * Inline 拍板完成（或 SSE decision_writeback 到达）后，App 生成
- * 《最新已拍板决策变更单》并推送到证道阁；本通知条告知用户，并提供
- * 「查看证道阁」入口。与 ProposalToast 同属右下角非侵入通知，错开一档
+ * 《最新已拍板决策变更单》并推送到上下文清单；本通知条告知用户，并提供
+ * 「查看上下文清单」入口。与 ProposalToast 同属右下角非侵入通知，错开一档
  * 垂直位置避免两条同时出现时重叠。
  */
 export interface DecisionChangeToastProps {
   note: DecisionChangeNote | null;
-  onOpenZhendaoge: () => void;
+  onOpenContextDrawer: () => void;
   onDismiss: () => void;
 }
 
 const DecisionChangeToast: React.FC<DecisionChangeToastProps> = ({
   note,
-  onOpenZhendaoge,
+  onOpenContextDrawer,
   onDismiss,
 }) => {
   if (!note) return null;
@@ -36,7 +36,7 @@ const DecisionChangeToast: React.FC<DecisionChangeToastProps> = ({
     >
       <div className="flex items-start justify-between gap-3">
         <p className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-medium">
-          已向证道阁推送《{DECISION_CHANGE_NOTE_TITLE}》
+          已向上下文清单推送《{DECISION_CHANGE_NOTE_TITLE}》
         </p>
         <button
           type="button"
@@ -55,9 +55,9 @@ const DecisionChangeToast: React.FC<DecisionChangeToastProps> = ({
           本文档阻塞性 P0/P1 已清零，长任务节点已恢复。
         </p>
       )}
-      <Button variant="secondary" size="sm" onClick={onOpenZhendaoge} className="cursor-pointer">
+      <Button variant="secondary" size="sm" onClick={onOpenContextDrawer} className="cursor-pointer">
         <ArrowUpRight className="w-3.5 h-3.5" />
-        <span>查看证道阁</span>
+        <span>查看上下文清单</span>
       </Button>
     </div>
   );

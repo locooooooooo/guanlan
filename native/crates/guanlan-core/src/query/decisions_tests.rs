@@ -345,7 +345,7 @@ fn relations_filters_unresolved_and_labels() {
     cleanup_dir(&fixture.dir);
 }
 
-/// issue #23：两级投影的行为等价性——摘要投影选主陈述的口径必须与完整归并一致
+/// 两级投影的行为等价性：摘要投影选主陈述的口径必须与完整归并一致
 /// （版本观察时间优先、同时间比陈述观察时间、再比行号），且页外决定不构造证据。
 #[test]
 fn decision_summary_projection_matches_primary_selection() {
@@ -416,7 +416,7 @@ fn decision_summary_projection_matches_primary_selection() {
     cleanup_dir(&fixture.dir);
 }
 
-/// issue #23：missing 文件/无版本行的陈述不能被简单过滤掉（证据不丢弃）
+/// missing 文件或无版本行的陈述不能被简单过滤掉（证据不丢弃）
 #[test]
 fn decision_evidence_keeps_missing_files_and_history() {
     let (fixture, ws_id, store) = setup_decisions("decisions-missing");

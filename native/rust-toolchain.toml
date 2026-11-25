@@ -1,4 +1,4 @@
-# 观澜 Rust workspace 工具链锁定（issue #16/#17）
+# 观澜 Rust workspace 工具链锁定
 #
 # 为什么锁定：`cargo fmt` 与 `clippy -D warnings` 的诊断集合随工具链版本变化——
 # 不锁定就无法保证「本地通过 = CI 通过」，也无法复现历史基线。

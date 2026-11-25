@@ -1,7 +1,7 @@
-//! 决策解析器（PRD v2.0 §3.3；冻结契约 apiContract B5、任务书 3.3）。
+//! 决策卡点块解析器（参见 `native/docs/contract-storage.md` §4.3.5）。
 //!
 //! 解析 Markdown 中的 `[P0/P1/P2 - 待确认]` 卡点块，产出结构化
-//! [`crate::domain::model::DecisionItem`]。标准块字段（PRD 3.3 解析语法规则）：
+//! [`crate::domain::model::DecisionItem`]。标准块字段包括：
 //! 「决定：___」「确认人：___」「角色：___」「现/新运行条件：___」
 //! 「生效范围与日期：___」+ 推荐语与选项行。
 //!
@@ -13,11 +13,10 @@
 //! - 选项：`可选方案：` 行（`/` 分隔）与 `- **选项 X**：…` 行，与
 //!   [`crate::index::derive`] 的抽取口径一致。
 //!
-//! **不 bump EXTRACT_RULE_VERSION**（评审约束5 三难裁定的本步落地）：本解析器
-//! 只影响**新增版本**的派生；存量工作区的卡点块要等文件内容变化产生新版本后
-//! 才能抽出陈述。Node+Rust 双侧同版本 bump 需改 server/WorkspaceStore.ts:131
-//! （超出本批次文件范围），已登记 contract-storage.md §4.3 待办。夹具不含
-//! 卡点块（grep 实证），parity/冒烟不受影响。
+//! **维持 `EXTRACT_RULE_VERSION` 不变**（详见 `contract-storage.md` §4.3.5）：
+//! 为与旧 Node 管线保持写入对拍且不触发存量工作区全量重派生，本解析器
+//! 只作用于**新增版本**的派生；存量工作区中已含卡点块的文件在内容变化产生新版本后
+//! 才会抽出对应陈述。
 
 use std::sync::OnceLock;
 
@@ -52,7 +51,7 @@ pub struct DecisionBlock {
     pub confirmed: bool,
     /// 卡点标题（标记行 `[P1 - 待确认]` 之后的文字）
     pub question: String,
-    /// 决定（PRD 3.3「决定：」）
+    /// 决定（「决定：」字段值）
     pub decision: FieldValue,
     pub confirmer: FieldValue,
     pub role: Option<String>,
@@ -225,7 +224,7 @@ fn fill_block_fields(block: &mut DecisionBlock, body: &[&str], field: &Regex) {
                 "生效范围与日期" => {
                     block.effective_scope = value.filled().map(str::to_owned);
                 }
-                // 「推荐理由：」与「推荐：」都归推荐语（PRD 3.3 推荐控件的语源）
+                // 「推荐理由：」与「推荐：」均归入推荐语字段
                 "推荐理由" | "推荐" if block.recommendation.is_none() => {
                     block.recommendation = value.filled().map(str::to_owned);
                 }

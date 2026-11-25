@@ -1,5 +1,5 @@
-//! C02 · Rust 服务端全文 + 路径 + 符号混合倒排索引（契约 contract-query-api.md §2.4、
-//! contract-storage.md §11 v3 派生段）。
+//! Rust 服务端全文 + 路径 + 符号混合倒排索引（参见 contract-query-api.md §2.4、
+//! contract-storage.md §12）。
 //!
 //! 定位：**可随时丢弃重建的派生检索索引**。两表全部可由 `files` + `revisions` +
 //! blobs 快照 + `pdf_extracts` / `office_extracts` 完整重算，任意损坏后经
@@ -273,7 +273,7 @@ pub fn body_from_pdf(record: &PdfExtractRecord) -> DocBody {
     }
 }
 
-/// docx 段落 → 正文行 + 段锚（`#para=N`，对齐 B03 officeAnchor 语义）
+/// docx 段落 → 正文行 + 段锚（`#para=N`，与 Office 结构化抽取锚点语义一致）
 pub fn body_from_docx(record: &OfficeExtractRecord) -> DocBody {
     let mut lines: Vec<String> = Vec::new();
     let mut paras: Vec<u64> = Vec::new();
@@ -299,7 +299,7 @@ pub fn body_from_docx(record: &OfficeExtractRecord) -> DocBody {
     }
 }
 
-/// xlsx 单元格 → 正文行（每格一行）+ 单元格锚（`Sheet!A3`，对齐 B03 语义）
+/// xlsx 单元格 → 正文行（每格一行）+ 单元格锚（`Sheet!A3`，与 Office 结构化抽取锚点语义一致）
 pub fn body_from_xlsx(record: &OfficeExtractRecord) -> DocBody {
     #[derive(serde::Serialize)]
     struct CellAnchor<'a> {
@@ -550,14 +550,14 @@ pub fn rebuild_all(
         Ok(())
     })?;
 
-    // 全量文件清单 + 最新版本映射（B05 口径：两条批量轻查询替代逐文件 N+1）
+    // 全量文件清单 + 最新版本映射（两条批量轻查询替代逐文件 N+1）
     let files = writer.list_files(workspace_id, true)?;
     let latest: HashMap<String, String> = writer.latest_revision_ids()?.into_iter().collect();
 
     let mut synced = 0usize;
     for chunk in files.chunks(REBUILD_CHUNK) {
         // 先在事务外完成全部 IO 与分词（快照读取/extracts 解析绝不占写锁持有期），
-        // 再进事务做纯内存落库——与 B03/B04 derive 主流程同口径。
+        // 再进事务做纯内存落库，与 Office/PDF 派生主流程保持一致。
         let mut built: Vec<(SearchDocRow, Vec<SearchPostingRow>)> = Vec::with_capacity(chunk.len());
         let mut removes: Vec<String> = Vec::new();
         for row in chunk {

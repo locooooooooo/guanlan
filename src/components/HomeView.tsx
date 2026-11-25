@@ -17,14 +17,14 @@ import type {
 } from '../services/apiTypes';
 import { MultiProjectOverviewStrip } from './MultiProjectOverviewStrip';
 import { formatUiMeta } from '../utils/formatMeta';
-// 首页聚合口径全部复用既有单一出口：未读三态走 GL-01，任务包分组同概览看板，
+// 首页聚合口径全部复用既有单一出口：未读三态、任务包分组同概览看板，
 // 高价值待阅走统计契约（computeHighValueReading/highValueReadingHeading）——
 // 组件内零造数，不新建任何判定或接口。
 import { hasUnreadChanges } from '../utils/guanlanEngine';
 // SVG 封面编码走 per-file 预览缓存单一出口（原组件内 AtlasView 同式拷贝退役）
 import { getFilePreviewEntry } from '../utils/filePreviewCache';
 import { computeHighValueReading, highValueReadingHeading } from '../utils/highValueReading';
-// 统一状态机 SSOT（方案 F2）：决策状态词与未决口径单一出口（与 DecisionRadar 同源，AC-01）
+// 统一状态机 SSOT：决策状态词与未决口径单一出口（与 DecisionRadar 同源）
 import {
   DECISION_STATUS_CONFLICT,
   DECISION_STATUS_PENDING,
@@ -39,10 +39,10 @@ import {
 import type { PackageDoc, TaskPackage } from '../utils/taskPackages';
 import { localDay } from '../utils/timeFormat';
 import { BRAND_SLOGAN, BRAND_SLOGAN_NOTE } from '../utils/brandIdentity';
-// v0.6 品牌界面升级 + V07 coss Frame/CardFrame 容器
+// 品牌界面 + coss Frame/CardFrame 容器
 import { Button, IconButton } from './ui/primitives';
 import { Badge, CardFrame, Frame, FramePanel } from './ui';
-// v0.8 专题橱窗：两张微渐变专题卡（C1）+ 任务包视觉预览网格（C2，替换原「任务动态」节）
+// 专题橱窗：两张微渐变专题卡 + 任务包视觉预览网格（替换原「任务动态」节）
 import FeaturedFocusCards from './FeaturedFocusCards';
 import type { FeaturedDecisionItem, FeaturedPackageInfo } from './FeaturedFocusCards';
 import TaskPackageGallery from './TaskPackageGallery';
@@ -59,15 +59,15 @@ interface HomeViewProps {
   files: FileRecord[];
   readingStates: Record<string, ReadingState>;
   events: TimelineEvent[];
-  /** /summary 的真实计数；v0.8 首页已不再展示统计大数字（R1），字段保留待总装票统一改接线 */
+  /** /summary 的真实计数；首页已不再展示统计大数字，字段保留待统一改接线 */
   summary: WorkspaceSummary | null;
   /** /events/days 按日聚合——事件走势小图的唯一数据源 */
   eventDays: EventDaysResult | null;
   /** App 已算好的「最近 7 天」列表（文档日期 = revisions[0].source_time 本地日历日） */
   recentItems: HomeRecentItem[];
-  /** 待拍板决策原始数组（总装票接线；接线前缺省 []——N=0 渲染空态，不炸不造数） */
+  /** 待拍板决策原始数组（接线前缺省 []——N=0 渲染空态，不炸不造数） */
   decisions?: DecisionAssertion[];
-  /** V03 SSOT：服务端全库未决待拍板真实总数（消除 288 vs 100 分页分裂） */
+  /** 服务端全库未决待拍板真实总数（避免分页加载造成统计偏差） */
   decisionsUnresolvedTotal?: number | null;
   onOpenDoc: (fileId: string) => void;
   /** 续读入口：与左栏目录 / 悬浮岛同一链路（钉回上次读到的版本） */
@@ -75,20 +75,20 @@ interface HomeViewProps {
   onMarkFullyRead: (fileId: string, revisionId: string) => void;
   onOpenPackageBoard: () => void;
   onOpenPanorama: () => void;
-  /** U10：带日期直飞全景星图（锁定 activeDate 语义，绝不 toggle）——
+  /** 带日期直飞全景星图（锁定 activeDate 语义，绝不 toggle）——
       司辰徽记「今日切片」与事件走势柱图共用同一接线点；
       缺省时点击降级为无日期的 onOpenPanorama（仍诚实可达，不锁定具体日） */
   onOpenPanoramaAt?: (date: string) => void;
-  /** U10：带日期直飞全景日历（锁定 activeDate + 聚焦当日沉淀卡）——
+  /** 带日期直飞全景日历（锁定 activeDate + 聚焦当日沉淀卡）——
       走势区「日历看该日」次级入口；缺省时该入口不渲染 */
   onOpenCalendarAt?: (date: string) => void;
-  /** 点击卡 A 斜叠决策微型卡 → 顶栏雷达对应项（总装票接线；接线前缺省 no-op） */
+  /** 点击卡 A 斜叠决策微型卡 → 顶栏雷达对应项（接线前缺省 no-op） */
   onOpenDecision?: (decisionId: string) => void;
-  /** V10：打开「司辰手记」今日/本周沉淀简报抽屉 */
+  /** 打开「司辰手记」今日/本周沉淀简报抽屉 */
   onOpenChronosDigest?: () => void;
-  /** F1（AC-01）：App 级 /state-overview 唯一数据源，透传任务包橱窗渲染六态徽标 */
+  /** App 级 /state-overview 唯一数据源，透传任务包橱窗渲染六态徽标 */
   stateOverview?: StateOverviewResponse | null;
-  /** A04：文件右键菜单 */
+  /** 文件右键菜单 */
   systemActions?: DesktopFileActionCallbacks;
   /** Quiet.md 多项目并存总览：存在时首页顶部展示跨项目工作台与汇总脉搏 */
   multiProject?: {
@@ -143,7 +143,7 @@ function lastSevenDays(): string[] {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// U10 纯函数出口（无 DOM 依赖，test/ui-ux-polish-04-polish.test.ts 直测）：
+// 纯函数出口（无 DOM 依赖，test/ui-ux-polish-04-polish.test.ts 直测）：
 // 走势柱模型（可点击时光入口）与司辰今日徽记摘要全部真实派生，组件内零造数。
 // 新增/演进分类与 graphEvents.computeTrunkAccumulation 同一语义出处
 // （appeared/discovered/workspace_baseline = 新增·首次纳入，其余 = 内容演进）。
@@ -172,14 +172,14 @@ export interface HomeTrendBar {
   date: string;
   count: number;
   /** day 粒度且日期为精确 YYYY-MM-DD 才可作直跳载荷；
-      week/month 聚合桶与畸形键诚实禁跳（apiTypes 契约：只有 day 桶能定位到某日） */
+      week/month 聚合桶与畸形键诚实禁跳（只有 day 桶能定位到某日） */
   jumpable: boolean;
 }
 
 /**
- * 走势柱模型聚合（U10 可点击时光入口）：
+ * 走势柱模型聚合（可点击时光入口）：
  * ''（日期待考）桶恒排除 → 按日期升序 → 取最近 HOME_TREND_BAR_LIMIT 桶；
- * count 负值/NaN 钳 0（诚实下界），jumpable 按 apiTypes 契约逐桶判定。
+ * count 负值/NaN 钳 0（诚实下界），jumpable 按事件日契约逐桶判定。
  */
 export function buildHomeTrendBars(eventDays: EventDaysResult | null): HomeTrendBar[] {
   const groups = (eventDays?.groups ?? [])
@@ -277,7 +277,7 @@ const HomeView: React.FC<HomeViewProps> = ({
 }) => {
   const { greeting, dateLabel } = greetingHeader();
 
-  // U10 司辰今日徽记：今天 = 本地日历日（与 lastSevenDays 同一口径，不引 UTC 日界）；
+  // 司辰今日徽记：今天 = 本地日历日（与 lastSevenDays 同一口径，不引 UTC 日界）；
   // 摘要全部由真实 eventDays 今日桶派生（buildChronosTodaySummary 零造数）
   const today = useMemo(() => localDay(new Date().toISOString()), []);
   const chronos = useMemo(() => buildChronosTodaySummary(eventDays, today), [eventDays, today]);
@@ -295,13 +295,13 @@ const HomeView: React.FC<HomeViewProps> = ({
     [packagesBase, events]
   );
 
-  // 文件索引：近期待阅行回查 / 卡 B 待验收计数 / Gallery 契约位共用
+  // 文件索引：近期待阅行回查 / 卡 B 待验收计数 / Gallery 共用
   const fileById = useMemo(() => new Map(files.map((f) => [f.file_id, f])), [files]);
 
-  // SVG 封面 dataUri（R5）：per-file 预览缓存单一出口（filePreviewCache）——此处原是
+  // SVG 封面 dataUri：per-file 预览缓存单一出口（filePreviewCache）——此处原是
   // AtlasView 同式的又一份拷贝（每次 files 身份变化全量重清洗重编码），已收敛；
   // 修订未变 O(1) 命中，仅新到文件编码一次。同份 map 喂 Gallery 封面与卡 B 斜叠图纸，
-  // 规格工作流2 的封面/斜叠图因此同源不缺供，不依赖 optional 静默降级
+  // 封面与斜叠图因此同源不缺供，不依赖 optional 静默降级
   const svgDataUris = useMemo(() => {
     const map: Record<string, string> = {};
     for (const f of files) {
@@ -328,12 +328,12 @@ const HomeView: React.FC<HomeViewProps> = ({
     return active.reduce((best, p) => (p.eventCount > best.eventCount ? p : best), active[0]);
   }, [packagesBase, events, windowStart]);
 
-  // 卡 B 契约物化（C1 FeaturedPackageInfo）：待验收 N = 交付阶段文档中 GL-01 未读数
-  // （reason !== 'up_to_date'，与统计契约 pending 口径一致）；封面文档 = 有 dataUri 的
-  // svg 中当前版最新者（工票 T4「最新 SVG 封面」——docs 是阅读顺序不是时间序，按
+  // 卡 B 物化（FeaturedPackageInfo）：待验收 N = 交付阶段文档中未读数
+  // （reason !== 'up_to_date'，与统计 pending 口径一致）；封面文档 = 有 dataUri 的
+  // svg 中当前版最新者（「最新 SVG 封面」——docs 是阅读顺序不是时间序，按
   // currentRevisionOf observed_at 取 max，时间全缺则首份兜底），无 svg → 承载
   // latestConclusion 的文档（排版封面），无结论 → 不发 cover；badgeLine = packageBadgeLine
-  // 真实派生（工票 T4 斜叠排版封面消费）
+  // 真实派生（斜叠排版封面消费）
   const activePackageInfo = useMemo<FeaturedPackageInfo | null>(() => {
     if (!activePackage) return null;
     const awaitingAcceptance = activePackage.docs.filter((d) => {
@@ -376,9 +376,9 @@ const HomeView: React.FC<HomeViewProps> = ({
     };
   }, [activePackage, fileById, readingStates, svgDataUris]);
 
-  // 卡 A（R2）：与 DecisionRadar 同口径——候选（isCandidateOnly）只作线索不计入；
-  // 待拍板 = 来源不一致(冲突) + 待确认。方案 F2：状态词与未决过滤收敛到
-  // stateProjection 单一出口（UNRESOLVED/DECISION_STATUS_* 常量），不再双份硬编码；
+  // 卡 A：与 DecisionRadar 同口径——候选（isCandidateOnly）只作线索不计入；
+  // 待拍板 = 来源不一致(冲突) + 待确认。状态词与未决过滤收敛到
+  // stateProjection 单一出口（UNRESOLVED/DECISION_STATUS_* 常量），不双份硬编码；
   // 展示序镜像雷达分区（冲突优先，区内 byBlocked 同式排序取前 2；byBlocked 为
   // 雷达模块内私有比较器，此处按其实现镜像并注明出处）
   const decisionItems = useMemo<FeaturedDecisionItem[]>(() => {
@@ -398,7 +398,7 @@ const HomeView: React.FC<HomeViewProps> = ({
       status: d.status,
     }));
   }, [decisions]);
-  // 未决计数与 DecisionRadar unresolvedCount 同一出口（V03 SSOT：优先消费服务端全库未决总数）
+  // 未决计数与 DecisionRadar unresolvedCount 同一出口（优先消费服务端全库未决总数）
   const decisionCount = useMemo(
     () =>
       typeof decisionsUnresolvedTotal === 'number' && decisionsUnresolvedTotal >= 0
@@ -407,14 +407,14 @@ const HomeView: React.FC<HomeViewProps> = ({
     [decisions, decisionsUnresolvedTotal]
   );
 
-  // 近期待阅（R4）：统计契约单一出口（高价值∩未读，entries 已排序），展示层只截前 6
+  // 近期待阅：统计单一出口（高价值∩未读，entries 已排序），展示层只截前 6
   const highValueStats = useMemo(
     () => computeHighValueReading(files, readingStates),
     [files, readingStates]
   );
   const todoEntries = useMemo(() => highValueStats.entries.slice(0, 6), [highValueStats.entries]);
 
-  // 事件走势：纯函数出口（U10 可点击时光入口）——''（日期待考）桶不进图，升序取最近
+  // 事件走势：纯函数出口（可点击时光入口）——''（日期待考）桶不进图，升序取最近
   // 24 桶；只有 day 粒度且日期为精确 YYYY-MM-DD 的桶才可作直跳载荷（聚合桶诚实禁跳）
   const trendBars = useMemo(() => buildHomeTrendBars(eventDays), [eventDays]);
   const trendMax = Math.max(1, ...trendBars.map((g) => g.count));
@@ -470,7 +470,7 @@ const HomeView: React.FC<HomeViewProps> = ({
 
   return (
     <div className="depth-0-surface relative flex-1 min-h-0 overflow-y-auto">
-      {/* V07：对称居中画布（ReadingIsland 已于 V02 收编顶栏，取消右侧多余 pr-16 留白） */}
+      {/* 对称居中画布（ReadingIsland 已收编顶栏，取消右侧多余 pr-16 留白） */}
       <div className="relative mx-auto w-full max-w-6xl space-y-6 px-4 pb-14 pt-6 sm:px-6 sm:pt-7">
         {/* 问候头 + 工作区状态胶囊 + 快捷入口 */}
         <header
@@ -510,7 +510,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                   </>
                 )}
               </div>
-              {/* U10 司辰今日徽记胶囊：今日新增/演进微摘要全部真实派生（eventDays 今日桶
+              {/* 司辰今日徽记胶囊：今日新增/演进微摘要全部真实派生（eventDays 今日桶
                   by_kind，新增分类与 computeTrunkAccumulation 同一语义出处；未命中日诚实
                   降级为「今日暂无新动态」，绝不重复 meta 胶囊的资产/待拍板统计）。
                   悬停轻摇（motion-safe 变换，component 侧过渡不进共享动效层）呼应星图司辰；
@@ -594,7 +594,7 @@ const HomeView: React.FC<HomeViewProps> = ({
           </div>
         )}
 
-        {/* 专题橱窗（v0.8）：卡 A 待拍板决策 / 卡 B 今日最活跃专项 */}
+        {/* 专题橱窗：卡 A 待拍板决策 / 卡 B 今日最活跃专项 */}
         <div
           className="glx-hero-reveal"
           style={{ '--glx-stagger': 2 } as React.CSSProperties}
@@ -623,7 +623,7 @@ const HomeView: React.FC<HomeViewProps> = ({
           />
         </div>
 
-        {/* 近期待阅：V07 coss Frame + FramePanel 精密托盘，带阶段胶囊与快速已读勾选 */}
+        {/* 近期待阅：coss Frame + FramePanel 精密托盘，带阶段胶囊与快速已读勾选 */}
         <section
           aria-label="近期待阅"
           className="glx-hero-reveal"
@@ -727,7 +727,7 @@ const HomeView: React.FC<HomeViewProps> = ({
           className="glx-hero-reveal grid grid-cols-1 gap-5 xl:grid-cols-3"
           style={{ '--glx-stagger': 5 } as React.CSSProperties}
         >
-          {/* 事件走势：V07 coss CardFrame 自适应渐变柱图 + 峰值暖琥珀加冕 + 底部三指标平衡条 */}
+          {/* 事件走势：coss CardFrame 自适应渐变柱图 + 峰值暖琥珀加冕 + 底部三指标平衡条 */}
           <CardFrame
             aria-label="事件走势"
             className="flex flex-col rounded-2xl border border-border/80 bg-card p-5 shadow-xs xl:col-span-2"
@@ -737,7 +737,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                 事件走势
               </h2>
               <div className="flex items-center gap-1.5">
-                {/* U10：日历次级直跳——落点 = 最近一个有事件的直跳日（latestJumpableTrendDate
+                {/* 日历次级直跳——落点 = 最近一个有事件的直跳日（latestJumpableTrendDate
                     真实派生，不造「峰值日」概念）；缺 onOpenCalendarAt 时入口不渲染 */}
                 {calendarJumpDate && onOpenCalendarAt && (
                   <button
@@ -777,7 +777,7 @@ const HomeView: React.FC<HomeViewProps> = ({
               {trendBars.map((g, idx) => {
                 const isPeak = g.count === trendMax && g.count > 0;
                 const heightPct = Math.max(8, (g.count / trendMax) * 100);
-                // U10：可点击时光入口——jumpable 桶渲染为 button（data-home-trend-bar 承载
+                // 可点击时光入口——jumpable 桶渲染为 button（data-home-trend-bar 承载
                 // 精确 YYYY-MM-DD 直跳载荷）；week/month 聚合桶与畸形键保持 div（诚实禁跳，
                 // 不可假装能定位到某日）。柱高仍是 inline height:%（视觉量，非动画量——
                 // 生长动效只有既有 glx-bar-rise 的 scaleY）。

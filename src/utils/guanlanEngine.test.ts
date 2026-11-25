@@ -38,9 +38,9 @@ import type {
 // 内容与原样本逐字一致，保证既有断言行为不变。
 // ============================================================
 export const INITIAL_WORKSPACE_CONFIG: WorkspaceConfig = {
-  rootPath: 'C:\\Users\\34689\\Downloads\\拥抱AI',
-  rootKey: 'ws_yongbao_ai_9f3a2c',
-  dataDirPath: '%LOCALAPPDATA%/Guanlan/workspaces/ws_yongbao_ai_9f3a2c/',
+  rootPath: 'D:\\Workspaces\\sample-project',
+  rootKey: 'ws_sample_project_9f3a2c',
+  dataDirPath: '%LOCALAPPDATA%/Guanlan/workspaces/ws_sample_project_9f3a2c/',
   excludedDirs: [
     'node_modules',
     '.git',
@@ -118,7 +118,7 @@ export const INITIAL_FILES: FileRecord[] = [
         markdownContent: `# 四专项待确认事项（第一阶段汇总）
 
 文档日期：2026-11-04  
-所属项目：拥抱AI · 第一阶段专项治理  
+所属项目：示例工程 · 第一阶段专项治理  
 关联任务号：T-204、T-208
 
 ## 核心结论
@@ -129,7 +129,7 @@ export const INITIAL_FILES: FileRecord[] = [
 ## 需你决策
 
 ### Q01：PDM 物料编码一物多码历史过渡期规则
-- **决策集命名空间**：拥抱AI / 四专项待确认事项 :: Q01
+- **决策集命名空间**：示例工程 / 四专项待确认事项 :: Q01
 - **当前状态**：待确认
 - **选项 A**：立即冻结旧编码新增权限，存量 BOM 在 14 天内强制切换新码。
 - **选项 B**：保留 30 天双轨映射窗口，ERP 接口按对照表自动路由（架构组推荐）。
@@ -137,7 +137,7 @@ export const INITIAL_FILES: FileRecord[] = [
 - **影响与等待范围**：仅阻断“ERP 正式冻结开关上线”；**不阻断**存量物料台账核对与测试环境联调。
 
 ### Q03：跨部门知识库 PDF 图纸涉密分级默认策略
-- **决策集命名空间**：拥抱AI / 四专项待确认事项 :: Q03
+- **决策集命名空间**：示例工程 / 四专项待确认事项 :: Q03
 - **当前状态**：待确认
 - **选项 A**：未标记密级的历史 PDF 默认按“内部受限”隔离，仅检索文件名。
 - **选项 B**：默认全量抽取正文进入公共检索池。
@@ -166,7 +166,7 @@ export const INITIAL_FILES: FileRecord[] = [
         markdownContent: `# 四专项待确认事项（第一阶段汇总）
 
 文档日期：2026-11-05  
-所属项目：拥抱AI · 第一阶段专项治理  
+所属项目：示例工程 · 第一阶段专项治理  
 关联任务号：T-204、T-208
 
 ## 核心结论
@@ -178,7 +178,7 @@ export const INITIAL_FILES: FileRecord[] = [
 ## 需你决策
 
 ### Q01：PDM 物料编码一物多码历史过渡期规则
-- **决策集命名空间**：拥抱AI / 四专项待确认事项 :: Q01
+- **决策集命名空间**：示例工程 / 四专项待确认事项 :: Q01
 - **当前状态**：来源不一致（待核对）
 - **选项 A**：立即冻结旧编码新增权限，存量 BOM 在 14 天内强制切换新码。
 - **选项 B**：保留 30 天双轨映射窗口，ERP 接口按对照表自动路由（架构组推荐）。
@@ -186,12 +186,12 @@ export const INITIAL_FILES: FileRecord[] = [
 - **影响与等待范围**：仅影响正式冻结规则阈值配置；**不阻断**存量 BOM 基础核对与 ERP 沙箱验证。
 
 ### Q02：SVG 架构图与工艺路线图检索安全策略
-- **决策集命名空间**：拥抱AI / 四专项待确认事项 :: Q02
+- **决策集命名空间**：示例工程 / 四专项待确认事项 :: Q02
 - **当前状态**：已确认
 - **确认依据**：见 [决策回执](01-方案文档/决策回执.md) 第 32–39 行（确认人：李工 / 架构委员会，2026-11-05 10:15）。明确采用受限图片模式加载 SVG 并提取文本层检索，禁止直接拼入主 DOM。
 
 ### Q03：跨部门知识库 PDF 图纸涉密分级默认策略
-- **决策集命名空间**：拥抱AI / 四专项待确认事项 :: Q03
+- **决策集命名空间**：示例工程 / 四专项待确认事项 :: Q03
 - **当前状态**：待确认
 - **选项 A**：未标记密级的历史 PDF 默认按“内部受限”隔离，初始仅检索文件名与元数据。
 - **选项 B**：默认全量抽取正文进入公共检索池。
@@ -221,7 +221,7 @@ export const INITIAL_FILES: FileRecord[] = [
         markdownContent: `# 四专项待确认事项（第一阶段汇总）
 
 文档日期：2026-11-05  
-所属项目：拥抱AI · 第一阶段专项治理  
+所属项目：示例工程 · 第一阶段专项治理  
 关联任务号：T-204、T-208
 
 ## 核心结论
@@ -233,7 +233,7 @@ export const INITIAL_FILES: FileRecord[] = [
 ## 需你决策
 
 ### Q01：PDM 物料编码一物多码历史过渡期规则
-- **决策集命名空间**：拥抱AI / 四专项待确认事项 :: Q01
+- **决策集命名空间**：示例工程 / 四专项待确认事项 :: Q01
 - **当前状态**：来源不一致（待核对）
 - **选项 A**：立即冻结旧编码新增权限，存量 BOM 在 14 天内强制切换新码。
 - **选项 B**：保留 30 天双轨映射窗口，ERP 接口按对照表自动路由（架构组推荐）。
@@ -241,12 +241,12 @@ export const INITIAL_FILES: FileRecord[] = [
 - **影响与等待范围**：仅影响正式冻结规则阈值配置；**不阻断**存量 BOM 基础核对与 ERP 沙箱验证。
 
 ### Q02：SVG 架构图与工艺路线图检索安全策略
-- **决策集命名空间**：拥抱AI / 四专项待确认事项 :: Q02
+- **决策集命名空间**：示例工程 / 四专项待确认事项 :: Q02
 - **当前状态**：已确认
 - **确认依据**：见 [决策回执](01-方案文档/决策回执.md) 第 32–39 行（确认人：李工 / 架构委员会，2026-11-05 10:15）。明确采用受限图片模式加载 SVG 并提取文本层检索，禁止直接拼入主 DOM。
 
 ### Q03：跨部门知识库 PDF 图纸涉密分级默认策略
-- **决策集命名空间**：拥抱AI / 四专项待确认事项 :: Q03
+- **决策集命名空间**：示例工程 / 四专项待确认事项 :: Q03
 - **当前状态**：待确认
 - **选项 A**：未标记密级的历史 PDF 默认按“内部受限”隔离，初始仅检索文件名与元数据。
 - **选项 B**：默认全量抽取正文进入公共检索池。
@@ -450,7 +450,7 @@ export const INITIAL_FILES: FileRecord[] = [
         markdownContent: `# 决策回执（第一阶段登记簿）
 
 文档日期：2026-11-05  
-命名空间：拥抱AI / 四专项待确认事项  
+命名空间：示例工程 / 四专项待确认事项  
 关联汇总：[四专项待确认事项](01-方案文档/四专项待确认事项.md)
 
 ## 核心结论
@@ -514,7 +514,7 @@ export const INITIAL_FILES: FileRecord[] = [
 ## 需你决策
 
 ### Q03：移动端审批卡片超时免打扰时段设置
-- **决策集命名空间**：拥抱AI / 办公协同专项 :: Q03
+- **决策集命名空间**：示例工程 / 办公协同专项 :: Q03
 - **当前状态**：已确认
 - **选项与结论**：已由协同产品负责人王敏于 2026-11-04 确认采用“22:00–08:00 默认静默汇总推送”。
 - **影响与等待范围**：仅作用于办公协同消息网关，与知识库 PDF 涉密分级（四专项::Q03）完全无关。
@@ -701,7 +701,7 @@ export const INITIAL_FILES: FileRecord[] = [
         sizeBytes: 3650,
         snapshotAvailable: true,
         isBaselineProtected: true,
-        summaryNote: '观澜 v0.2 单进程架构：一个根目录、一个服务进程、一套 SQLite 索引',
+        summaryNote: '观澜单进程架构：一个根目录、一个服务进程、一套 SQLite 索引',
         svgExtractedTexts: [
           '已配置的工程目录 MD / SVG / PDF',
           '扫描与监听 稳定读取、内容哈希',
@@ -817,7 +817,7 @@ export const INITIAL_FILES: FileRecord[] = [
             pageNumber: 1,
             heading: '第 1 页 · ERP-PDM 主数据同步接口总则',
             extractedText:
-              '1.1 适用范围：本规范定义拥抱AI工程中 PDM 设计物料编码与 ERP 生产 BOM 的同步报文格式、幂等重试策略与异常回退机制。',
+              '1.1 适用范围：本规范定义示例工程中 PDM 设计物料编码与 ERP 生产 BOM 的同步报文格式、幂等重试策略与异常回退机制。',
             visualSummary: '封面与总则表格：包含接口版本 v2.4、报文签名头定义',
           },
           {
@@ -846,7 +846,7 @@ export const INITIAL_FILES: FileRecord[] = [
             pageNumber: 1,
             heading: '第 1 页 · ERP-PDM 主数据同步接口总则',
             extractedText:
-              '1.1 适用范围：本规范定义拥抱AI工程中 PDM 设计物料编码与 ERP 生产 BOM 的同步报文格式、幂等重试策略与异常回退机制。',
+              '1.1 适用范围：本规范定义示例工程中 PDM 设计物料编码与 ERP 生产 BOM 的同步报文格式、幂等重试策略与异常回退机制。',
             visualSummary: '封面与总则表格：包含接口版本 v2.4.1、报文签名头定义',
           },
           {
@@ -947,8 +947,8 @@ export const INITIAL_FILES: FileRecord[] = [
   },
   {
     file_id: 'file_12',
-    relative_path: 'docs/观澜-MCP轻量阅读器设计-v0.2.md',
-    title: '观澜 MCP 轻量阅读器设计 v0.2',
+    relative_path: 'docs/观澜-MCP轻量阅读器设计.md',
+    title: '观澜 MCP 轻量阅读器设计',
     format: 'md',
     folder: 'docs',
     role: '方案',
@@ -970,14 +970,14 @@ export const INITIAL_FILES: FileRecord[] = [
         sizeBytes: 18450,
         snapshotAvailable: true,
         isBaselineProtected: true,
-        summaryNote: 'v0.2 设计提案全文：用时间线找到变化，用关系找到依据，用阅读器理解内容',
-        markdownContent: `# 观澜 MCP 轻量阅读器设计 v0.2
+        summaryNote: '设计提案全文：用时间线找到变化，用关系找到依据，用阅读器理解内容',
+        markdownContent: `# 观澜 MCP 轻量阅读器设计
 
 日期：2026-11-05（Asia/Shanghai）  
 状态：设计提案，当前正在交互验证  
 分发方向：通用 MCP；拟评估 Magpie 工具插件渠道，尚未发布。  
 目标：在智能体持续修改工程时，让人快速找到资料、看懂变化，并追溯决定的依据。  
-样本工程：\`C:\\Users\\34689\\Downloads\\拥抱AI\`
+样本工程：\`D:\\Workspaces\\sample-project\`
 
 ## 核心结论
 
@@ -1136,7 +1136,7 @@ export const INITIAL_DECISIONS: DecisionAssertion[] = [
   {
     decision_id: 'dec_four_spec_q01',
     code: 'Q01',
-    namespace: '拥抱AI / 四专项待确认事项',
+    namespace: '示例工程 / 四专项待确认事项',
     question: 'PDM 物料编码一物多码历史过渡期规则（14天强制切换 vs 30天双轨映射）',
     status: '来源不一致',
     isCandidateOnly: false,
@@ -1205,7 +1205,7 @@ export const INITIAL_DECISIONS: DecisionAssertion[] = [
   {
     decision_id: 'dec_four_spec_q02',
     code: 'Q02',
-    namespace: '拥抱AI / 四专项待确认事项',
+    namespace: '示例工程 / 四专项待确认事项',
     question: 'SVG 架构图与工艺路线图检索安全策略',
     status: '已确认',
     isCandidateOnly: false,
@@ -1250,7 +1250,7 @@ export const INITIAL_DECISIONS: DecisionAssertion[] = [
   {
     decision_id: 'dec_four_spec_q03',
     code: 'Q03',
-    namespace: '拥抱AI / 四专项待确认事项',
+    namespace: '示例工程 / 四专项待确认事项',
     question: '跨部门知识库 PDF 图纸涉密分级默认策略',
     status: '待确认',
     isCandidateOnly: false,
@@ -1286,7 +1286,7 @@ export const INITIAL_DECISIONS: DecisionAssertion[] = [
   {
     decision_id: 'dec_oa_collab_q03',
     code: 'Q03',
-    namespace: '拥抱AI / 办公协同专项',
+    namespace: '示例工程 / 办公协同专项',
     question: '移动端审批卡片超时免打扰时段设置',
     status: '已确认',
     isCandidateOnly: false,
@@ -1319,7 +1319,7 @@ export const INITIAL_DECISIONS: DecisionAssertion[] = [
         claimedStatus: '已确认',
         confirmer: '王敏（协同产品负责人）',
         exactQuote:
-          '决策集命名空间：拥抱AI / 办公协同专项 :: Q03。当前状态：已确认。与知识库 PDF 涉密分级（四专项::Q03）完全无关。',
+          '决策集命名空间：示例工程 / 办公协同专项 :: Q03。当前状态：已确认。与知识库 PDF 涉密分级（四专项::Q03）完全无关。',
         note: '独立命名空间下的同名编号 Q03，绝不自动合并',
       },
     ],
@@ -1327,7 +1327,7 @@ export const INITIAL_DECISIONS: DecisionAssertion[] = [
   {
     decision_id: 'dec_candidate_webhook',
     code: 'CAND-01',
-    namespace: '拥抱AI / 办公协同专项（疑似决策候选）',
+    namespace: '示例工程 / 办公协同专项（疑似决策候选）',
     question: '是否将周报汇总接入同一个飞书/企微 Webhook 通道？',
     status: '未知',
     isCandidateOnly: true, // 疑似决策候选：不计入“待你确认”真实计数
@@ -1588,7 +1588,7 @@ test('SVG 与 PDF 检索覆盖边界：无文本层 SVG 与未索引 PDF 仅匹�
 });
 
 // ============================================================
-// p3 行为锁定：searchWorkspace 的截断 / 回退 / matchStrategy / 正文缓存语义。
+// 检索行为锁定：searchWorkspace 的截断 / 回退 / matchStrategy / 正文缓存语义。
 // 性能重构（per-file 命中计数 Map + revision_id 行缓存）前后输出必须逐字段一致。
 // ============================================================
 interface P3SearchFixtureSpec {
@@ -1745,7 +1745,7 @@ test('检索行为锁定：svgExtractedTexts 命中与无文本层 SVG 仅文件
 });
 
 test('检索行为锁定：contentCache 按 revision_id 参与正文匹配，缺失/版本不符时不产生命中', () => {
-  // T01：MD 正文不随 /scan 内联，markdownContent 缺失
+  // MD 正文不随 /scan 内联，markdownContent 缺失
   const file = makeSearchFixtureFile({
     file_id: 'p3_cache',
     relative_path: 'p3-fixtures/缓存回退.md',
@@ -1815,9 +1815,9 @@ test('决策准确性：同编号 Q03 按命名空间隔离，“推荐”“不
   const fourSpecQ03 = findDecisionsByCode(
     INITIAL_DECISIONS,
     'Q03',
-    '拥抱AI / 四专项待确认事项'
+    '示例工程 / 四专项待确认事项'
   );
-  const oaCollabQ03 = findDecisionsByCode(INITIAL_DECISIONS, 'Q03', '拥抱AI / 办公协同专项');
+  const oaCollabQ03 = findDecisionsByCode(INITIAL_DECISIONS, 'Q03', '示例工程 / 办公协同专项');
   assert.equal(fourSpecQ03.length, 1);
   assert.equal(oaCollabQ03.length, 1);
   assert.equal(fourSpecQ03[0].status, '待确认');
@@ -1921,14 +1921,14 @@ test('局部关系图与复制给智能体：支持一跳/二跳展开并输出�
     `导出时间应等于此刻北京时间：actual=${actualStamp}, expected=${expectedBeijing}`
   );
 
-  // GU-CC-02：sha256 输出完整 64 位十六进制（原 slice(0,16)+「...」截断让校验凭证形同虚设）
+  // sha256 输出完整 64 位十六进制（原 slice(0,16)+「...」截断让校验凭证形同虚设）
   assert.ok(
     formatted.includes('sha256:c7e329f5d4261a99325160324150693241506932415069324150693241506903'),
     '内容哈希必须逐字输出完整 64 位，不得截断'
   );
   assert.ok(!formatted.includes('...`'), '哈希行不得再带截断省略号');
 
-  // GU-CC-02：唯一输出——本地挂钟手拼的时间字段不得存在（buildStructuredPrompt 已删除，
+  // 唯一输出——本地挂钟手拼的时间字段不得存在（buildStructuredPrompt 已删除，
   // 其「生成于 HH:MM (+08:00)」标记为非 +08:00 时区机器错标 8 小时的来源）；
   // (+08:00) 只允许出现在受上方 Intl 守卫的导出时间行
   assert.ok(!formatted.includes('生成于'), '不得残留本地挂钟手拼时间标记「生成于」');
@@ -1939,9 +1939,9 @@ test('局部关系图与复制给智能体：支持一跳/二跳展开并输出�
   );
 });
 
-// GU-CC-02：统一证据导出器契约——单一函数单一字符串（「复制」「生成结构化 Prompt」、
+// 统一证据导出器契约——单一函数单一字符串（「复制」「生成结构化 Prompt」、
 // RightInspector 入口全部经由 formatContextForAgent），sha256 全长、摘录逐字不截断
-test('GU-CC-02 统一导出器：sha256 完整 64 位、摘录逐字不截断、整文件凭证与指针字段一致', () => {
+test('统一导出器：sha256 完整 64 位、摘录逐字不截断、整文件凭证与指针字段一致', () => {
   // 真实形态的 64 位十六进制（空串 sha256）
   const sha64 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
   // >120 字且含换行的摘录：旧的 buildStructuredPrompt 会 slice(0,120) 截断，
@@ -1965,7 +1965,7 @@ test('GU-CC-02 统一导出器：sha256 完整 64 位、摘录逐字不截断、
   };
   const out = formatContextForAgent([pointer], INITIAL_WORKSPACE_CONFIG.rootPath);
 
-  // 指针字段逐字出现且一致（验收 2）
+  // 指针字段逐字出现且一致
   assert.ok(out.includes(`sha256:${sha64}`), '完整 64 位 sha256 必须逐字出现');
   assert.ok(!out.includes(`${sha64.slice(0, 16)}...`), '不得残留 16 位截断形态');
   assert.ok(out.includes('file_id=f_gucc02'));
@@ -1973,7 +1973,7 @@ test('GU-CC-02 统一导出器：sha256 完整 64 位、摘录逐字不截断、
   assert.ok(out.includes('Full File'), "locator.kind === 'file' 输出整文件定位段");
   assert.ok(out.includes(`\`${pointer.observed_at}\``), '观察时间逐字出现');
 
-  // 摘录逐字不截断（验收 5）：整块引用（含换行续引）与输入一致
+  // 摘录逐字不截断：整块引用（含换行续引）与输入一致
   assert.ok(
     out.includes(`> ${longExcerpt.replace(/\n/g, '\n> ')}`),
     '摘录必须逐字完整出现（含换行续引），不得 slice 截断'
@@ -2019,10 +2019,10 @@ test('Graph 节点悬停预览与动态拖拽连线计算：返回核心结论�
   assert.ok(bounds.height >= 340);
 });
 
-// ---------- GL-01：未读三态文案单一出口 ----------
+// ---------- 未读三态文案单一出口 ----------
 
-test('GL-01 unreadStatusLabel：三态映射正确，never_read 不含「上次读」字样', () => {
-  // D02 术语两态统一：未读新件（首次收录）/ 读后有更新（读后变更）——绝不混同
+test('unreadStatusLabel：三态映射正确，never_read 不含「上次读」字样', () => {
+  // 术语两态统一：未读新件（首次收录）/ 读后有更新（读后变更）——绝不混同
   assert.equal(unreadStatusLabel('never_read'), '未读新件（尚未建立阅读基线）');
   assert.equal(unreadStatusLabel('updated_since_last_read'), '读后有更新');
   assert.equal(unreadStatusLabel('up_to_date'), '已读最新');
@@ -2033,11 +2033,11 @@ test('GL-01 unreadStatusLabel：三态映射正确，never_read 不含「上次�
   assert.ok(
     !unreadStatusLabel('never_read').includes('读后有更新') &&
       !unreadStatusLabel('updated_since_last_read').includes('未读新件'),
-    '两态措辞互斥：首次收录与读后变更不得混同（D02 停机条件）'
+    '两态措辞互斥：首次收录与读后变更不得混同'
   );
 });
 
-test('GL-01 未读文案按 reason 渲染：右栏与悬停预览共用同一措辞', () => {
+test('未读文案按 reason 渲染：右栏与悬停预览共用同一措辞', () => {
   const file01 = INITIAL_FILES.find((f) => f.file_id === 'file_01')!;
 
   // 从未建立阅读基线 → never_read（右栏用 unreadStatusLabel(unreadInfo.reason) 渲染此值）
@@ -2067,7 +2067,7 @@ test('GL-01 未读文案按 reason 渲染：右栏与悬停预览共用同一措
   );
 });
 
-test('GL-01 组件断言：右栏按 reason 如实渲染 never_read 与读后更新两种文案', () => {
+test('组件断言：右栏按 reason 如实渲染 never_read 与读后更新两种文案', () => {
   const file: FileRecord = {
     file_id: 'f_gl01',
     relative_path: 'gl/right-inspector.md',
@@ -2105,7 +2105,7 @@ test('GL-01 组件断言：右栏按 reason 如实渲染 never_read 与读后更
     indexGeneration: 1,
   };
 
-  // 从未建立阅读基线：右栏必须说真话，不得出现「读后有更新」（D02 两态互斥）
+  // 从未建立阅读基线：右栏必须说真话，不得出现「读后有更新」（两态互斥）
   const neverHtml = renderToStaticMarkup(React.createElement(RightInspector, baseProps));
   assert.ok(neverHtml.includes('未读新件（尚未建立阅读基线）'));
   assert.ok(!neverHtml.includes('读后有更新'));

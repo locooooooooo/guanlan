@@ -1,4 +1,4 @@
-//! C02 有界检索（契约 contract-query-api.md §2.4 /api/v1/search）。
+//! 有界检索（契约 contract-query-api.md §2.4 /api/v1/search）。
 //!
 //! 三通道混合：
 //! 1. **倒排候选**：`search_postings` 按词项（Bigram/词元/编号/单字）取 posting
@@ -10,8 +10,8 @@
 //!    携带行号与 quote）。
 //!
 //! 定位与片段：MD/文本/代码给 1-based 行号；SVG 给文本 fragment；PDF 给行→页锚
-//! （`anchor_json.pages`）；docx 给 `#para=N`、xlsx 给 `Sheet!A3`（对齐 B03
-//! officeAnchor 语义）。每文件命中上限 3（契约沿用前端语义）。
+//! （`anchor_json.pages`）；docx 给 `#para=N`、xlsx 给 `Sheet!A3`（对齐 Office
+//! `officeAnchor` 语义）。每文件命中上限 3（契约沿用前端语义）。
 //!
 //! 一致性：派生索引非 `ready`（building/absent——首次建索引中或被清空待重建）
 //! 时诚实返回空 items + 状态字段，绝不拿半成品索引冒充结果。
@@ -258,7 +258,7 @@ fn empty_response(generation: &u64, query: &str, mode: &str, state: String) -> S
     }
 }
 
-/// 派生检索索引状态（C05 挂载摘要复用：`ready` = state 标记 ready 且规则版本现行）。
+/// 派生检索索引状态（供挂载摘要等处复用：`ready` = state 标记 ready 且规则版本现行）。
 /// 状态/版本缺失按 `absent`——绝不把半成品索引冒充可用。
 pub fn search_state_of(store: &ReadonlyStore) -> Result<String, GuanlanError> {
     let state = store.read_meta(META_STATE)?;
@@ -359,9 +359,9 @@ fn verify_doc(plan: &QueryPlan, doc: &DocRow, score: &CandidateScore) -> Vec<Sea
                 let line = lines.get(idx).copied().unwrap_or("").trim();
                 let locator = locator_for(&doc.format, &doc.anchor_json, idx, line);
                 hits.push(SearchHit {
-                    // C05 修复：正文命中携带真实 file_id（C02 曾留空——跨库合并与
-                    // 前端「Enter 打开」都按 file_id 去重/路由，空值会让全部正文
-                    // 命中挤进同一键；契约 §2.4 SearchHit.file_id 本就要求真实值）
+                    // 正文命中必须携带真实 file_id：跨库合并与前端「Enter 打开」都按
+                    // file_id 去重/路由，空值会让全部正文命中挤进同一键（契约 §2.4
+                    // SearchHit.file_id 要求真实值）
                     file_id: doc.file_id.clone(),
                     revision_id: doc.revision_id.clone(),
                     relative_path: doc.rel_path.clone(),

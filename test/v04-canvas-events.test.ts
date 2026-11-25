@@ -121,12 +121,12 @@ test('卡片两行制映射：文件名+角标+摘要原文，不伪造指标与
   // 行2 = 摘要原文（headline 原样透出，不另造数）
   assert.equal(card.detail, '文档自述日期：方案 A（2026-11-05）');
   // 底行角标 = HH:MM（observed_at 的本地时钟分量，不重复完整日期）；
-  // TA-03：期望值由 Node 的 Date 本地字段独立算出（不再直接截 UTC 串）
+  // 期望值由 Node 的 Date 本地字段独立算出（不再直接截 UTC 串）
   const observedDate = new Date(item().observed_at);
   const localClock = `${String(observedDate.getHours()).padStart(2, '0')}:${String(
     observedDate.getMinutes()
   ).padStart(2, '0')}`;
-  // tf_4/D3 起[分类]前缀删除（与卡底首枚语义徽章恒同源、同卡重复），分类由徽章行独家承载：
+  // [分类]前缀不重复拼入角标（与卡底首枚语义徽章恒同源），分类由徽章行独家承载：
   // 文档自述日期首枚徽章 TIM=轮次、modified 首枚 REV=版本、决策首枚 DEC=决策，均不再拼进角标
   assert.equal(card.observedClock, localClock);
   assert.equal(card.cornerLabel, localClock);
@@ -171,7 +171,7 @@ test('场景默认落在最新有日期的一天，日期待考单独成组且�
   assert.equal(scene.activeDate, '2026-11-05', '默认选最新有日期的一天');
   assert.equal(scene.active?.count, 3);
   assert.equal(scene.active?.matterCount, 2, '两个不同业务决定 = 两个事项');
-  // tf_4/D2 排序权重：决策类（e2/e3，tier 0）恒先于新出现类（e1，tier 1）；同层内保持时刻降序
+  // 排序权重：决策类（e2/e3，tier 0）恒先于新出现类（e1，tier 1）；同层内保持时刻降序
   assert.deepEqual(scene.active?.cards.map((c) => c.eventId), ['e2', 'e3', 'e1']);
   assert.equal(scene.totals.events, 5);
   assert.equal(scene.totals.days, 2);

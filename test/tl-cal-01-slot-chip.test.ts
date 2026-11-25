@@ -12,7 +12,7 @@ import {
 import type { FileRecord, TimelineEvent } from '../src/types/guanlan';
 
 /**
- * TL-CAL-01：日历板同槽 >3 份文档不可点——最小止血（前 3 枚 pill + 「+N」聚合芯片）。
+ * 日历板同槽 >3 份文档不可点修复（前 3 枚 pill + 「+N」聚合芯片）。
  *
  * 旧实现（CalendarBoardView 原 251-252）：同槽堆叠用 marginLeft:(j%3)*4、zIndex:(j%3)+1，
  * 第 4 枚起与前 3 枚位置逐像素重合、zIndex 循环，被覆盖者完全不可命中
@@ -52,7 +52,7 @@ function marginValues(html: string): number[] {
 
 // ---------- 验收 1（纯函数层）：7 份拆为前 3 pill + 芯片 N=总份数；(j%3) 口径不复存在 ----------
 
-test('TL-CAL-01 纯函数：7 份槽 → 前 3 枚 pill + 芯片 N=7；≤3 份槽不出芯片', () => {
+test('日历同槽聚合纯函数：7 份槽 → 前 3 枚 pill + 芯片 N=7；≤3 份槽不出芯片', () => {
   assert.equal(SLOT_PILL_LIMIT, 3, '可见 pill 上限为 3（与旧版可触达数一致）');
 
   const seven = splitSlotForRender([1, 2, 3, 4, 5, 6, 7]);
@@ -74,7 +74,7 @@ test('TL-CAL-01 纯函数：7 份槽 → 前 3 枚 pill + 芯片 N=7；≤3 份�
 
 // ---------- 验收 1（渲染层）：7 份槽 = 恰好 3 pill + 1 芯片「+7」，pill 偏移互不重合 ----------
 
-test('TL-CAL-01 渲染：7 份槽恰好 3 pill + 1 芯片「+7」，(j%3) 逐像素重合不再发生', () => {
+test('日历同槽聚合渲染：7 份槽恰好 3 pill + 1 芯片「+7」，(j%3) 逐像素重合不再发生', () => {
   const files = [...Array.from({ length: 7 }, () => file(SLOT_DATE)), file(null)];
   const html = renderToString(
     createElement(CalendarBoardView, { files, events: [], onOpenDocument: () => {} })
@@ -102,7 +102,7 @@ test('TL-CAL-01 渲染：7 份槽恰好 3 pill + 1 芯片「+7」，(j%3) 逐像
 
 // ---------- 验收 3：≤3 份的槽渲染与现版同构（不出现芯片；3 份为不出芯片的边界） ----------
 
-test('TL-CAL-01 渲染：≤3 份槽不出芯片（2 份/恰好 3 份两档边界）', () => {
+test('日历同槽聚合渲染：≤3 份槽不出芯片（2 份/恰好 3 份两档边界）', () => {
   for (const n of [2, 3]) {
     const html = renderToString(
       createElement(CalendarBoardView, {
@@ -127,7 +127,7 @@ test('TL-CAL-01 渲染：≤3 份槽不出芯片（2 份/恰好 3 份两档边�
 
 // ---------- 验收 2（清单层）：芯片展开的清单条目数 = 槽全部份数，逐条携带该槽 fileId ----------
 
-test('TL-CAL-01 当日清单：条目数=槽全部份数（7），逐条携带该槽 fileId，头计数同一 N 口径', () => {
+test('日历当日清单：条目数=槽全部份数（7），逐条携带该槽 fileId，头计数同一 N 口径', () => {
   const items = Array.from({ length: 7 }, () => file(SLOT_DATE));
   const html = renderToString(
     createElement(SlotDayList, {
@@ -159,7 +159,7 @@ test('TL-CAL-01 当日清单：条目数=槽全部份数（7），逐条携带�
 
 // ---------- 验收 4：EVENTS 行（事件刻度）渲染路径不受本次改动影响 ----------
 
-test('TL-CAL-01 事件行不受影响：eventTicks 刻度照常按 source_time 落轴渲染', () => {
+test('日历事件行不受影响：eventTicks 刻度照常按 source_time 落轴渲染', () => {
   const ev = {
     event_id: 'ev_tlcal',
     kind: 'modified',

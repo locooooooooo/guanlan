@@ -103,14 +103,14 @@ describe('统一门禁脚本：一步结果的描述', () => {  const step = { l
         output: 'test result: ok. 3 passed; 0 failed;',
         skipped: [
           'domain::vectors_fixture_test::identity_vectors_from_fixture: 身份数字向量夹具不存在',
-          'domain::triage::tests::parity_100_percent_against_ringflow_node_js_engine: 未找到主仓 workflow-triage.js',
+          'domain::tests::optional_fixture_check: 未找到可选测试夹具',
         ],
       },
       step,
     );
     assert.equal(
       skipped.text,
-      '通过，3 通过 / 0 失败。2 个测试跳过、什么都没验证（不计入）：identity_vectors_from_fixture、parity_100_percent_against_ringflow_node_js_engine',
+      '通过，3 通过 / 0 失败。2 个测试跳过、什么都没验证（不计入）：identity_vectors_from_fixture、optional_fixture_check',
     );
     const noneSkipped = describeResult({ code: 0, output: 'test result: ok. 3 passed; 0 failed;', skipped: [] }, step);
     assert.equal(noneSkipped.text, '通过，3 通过 / 0 失败');

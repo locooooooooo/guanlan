@@ -1,16 +1,14 @@
 /**
- * D01-a 四层拆解 · GraphCanvasView 行为控制器（任务卡 D01-a ②）。
+ * GraphCanvasView 行为控制器。
  *
- * 从 GraphCanvasView.tsx 组件体原样迁入的全部 state / memo / effect / handler——
- * 单一行为出口 useGraphCanvasController(props) 返回 ctx，供四层消费：
+ * 汇总画布全部 state / memo / effect / handler，经 useGraphCanvasController(props) 返回 ctx，
+ * 供四个视图层消费：
  *  - graph/GraphSceneLayer.tsx（静态 Scene 节点层）
  *  - graph/GraphOverlayLayer.tsx（屏幕空间 Overlay 覆盖层）
  *  - graph/graphCanvasChrome.tsx（浮动 Chrome 工具栏）
  *  - graph/GraphSourcesPanel.tsx（浮动 Chrome · Sources 面板）
  *
- * 迁移纪律：只搬移不改写——hook 顺序、闭包依赖、effect deps 与拆解前逐字一致
- * （原组件把 hooks 全部跑完才做 visible 早退，控制器保持同一形态；早退由
- * GraphCanvasView 装配层承担，像素回归护栏覆盖）。
+ * 保持 hooks 执行顺序完整，visible 早退由 GraphCanvasView 装配层承担。
  */
 
 import React, {
@@ -38,16 +36,16 @@ import {
   computeFanOutBounds,
   hasUnreadChanges,
 } from '../../utils/guanlanEngine';
-// TA-03：画布上的时刻/日期统一按本地时区展示（含时刻 ISO 不再直切 UTC 串）
+// 画布上的时刻/日期统一按本地时区展示（含时刻 ISO 不再直切 UTC 串）
 import { formatLocalClock, localDay } from '../../utils/timeFormat';
-// D05：星图画布 Alt+方向键 沿连线空间漫游 + prefers-reduced-motion 动态运镜降级
+// 星图画布 Alt+方向键 沿连线空间漫游 + prefers-reduced-motion 动态运镜降级
 import { effectiveMotionDurationMs } from '../../utils/keyboardShortcuts';
 import {
   buildSpatialNavCards,
   useCanvasSpatialNav,
   type CanvasNavCard,
 } from './useCanvasSpatialNav';
-// issue #27：视口裁剪与卡片物化的纯函数（可单测，组件只做挂载决策）
+// 视口裁剪与卡片物化的纯函数（可单测，组件只做挂载决策）
 import {
   buildCardDescriptors,
   PACKAGE_GROUP_MAX_CARDS,
@@ -55,7 +53,7 @@ import {
   lodGatesForTier,
   lodTierForScale,
 } from '../../utils/canvasViewport';
-// D01-a ③：任务包标题显示名固化（Overlay 标题层 + 折叠组头行共用同一份覆盖表）
+// 任务包标题显示名固化（Overlay 标题层 + 折叠组头行共用同一份覆盖表）
 import {
   getPackageTitleOverrides,
   setPackageTitleOverride,
@@ -77,16 +75,13 @@ import {
 } from '../../utils/graphEvents';
 import type { EventDayGranularity, EventDaysResult } from '../../services/workspaceClient';
 import type { StateOverviewResponse } from '../../services/apiTypes';
-// wf_2：语义聚合层既有导出——任务包 chip（taskPackageOf 名称 + stageOfPath 阶段标签）与
-// 同日合并卡的 changeLabel（dayMergeLabel，DoD2 逐字口径）；documentIdentity 为既有工具；
-// starfix2 T1：appeared 卡行3 摘要走 extractCoreSummary 既有回退链（正文核心结论，不造假）
+// 语义聚合层导出：任务包 chip（taskPackageOf 名称 + stageOfPath 阶段标签）、
+// 同日合并卡的 changeLabel（dayMergeLabel）以及 appeared 卡核心结论摘要（extractCoreSummary）
 import { dayMergeLabel, extractCoreSummary, stageOfPath, taskPackageOf } from '../../utils/taskPackages';
-// 统一状态机 SSOT（方案 F2）：星图卡阶段回退词单一出口（AC-01 四视图同词）；
-// F1/F2：有 /state-overview artifact 行时改渲染六态词（服务端优先，无行回退阶段词）。
-// 胶囊样式保持画布暗端 --cv-* 件（六态词与亮端同源，配色仍走画布主题令牌）。
+// 统一状态投影单一数据源：有 /state-overview artifact 行时渲染六态词，无行时回退阶段词；
+// 胶囊样式保持画布暗端 --cv-* 令牌。
 import { indexStateOverview } from '../../utils/stateProjection';
-// v0.8 任务空间桌面五件（画布工匠）：分组容器/富预览卡/药丸工具栏/小地图/叙事抽屉——
-// 新 chrome 全部落新文件，本组件只做外科手术式接入；样式由各组件自带 canvasWidgets.css
+// 画布桌面组件：分组容器 / 富预览卡 / 药丸工具栏 / 小地图 / 叙事抽屉（样式由 App.tsx 装载 canvasWidgets.css）
 import { PACKAGE_GROUP_FRAME_H } from '../canvas/PackageGroupFrame';
 import { RICH_CARD_W } from '../canvas/RichDocPreviewCard';
 import type { DesktopFileActionCallbacks } from '../FileContextMenu';
@@ -117,11 +112,11 @@ import {
   type PanoramaMode,
   type SubAgentCardModel,
 } from './geometry';
-// D01-b：正交避障连线引擎（纯函数几何层第二块；障碍清单与升级连线入口）
+// 正交避障连线引擎（障碍清单与升级连线入口）
 import type { ObstacleRect } from './edgeRouting';
-// D02：增量聚光灯（读后真实变化条目类型；派生在宿主 store，本层只透传）
+// 增量聚光灯（读后真实变化条目类型；派生在宿主 store，本层只透传）
 import type { SpotlightChangeItem } from '../../utils/readingSpotlight';
-// V10：司辰时光步进回放纯函数（日/周步进 + 1x/2x 倍速节拍）
+// 司辰时光步进回放纯函数（日/周步进 + 1x/2x 倍速节拍）
 import {
   chronosReplayIntervalMs,
   stepChronosReplayIndex,
@@ -146,19 +141,19 @@ export interface GraphCanvasViewProps {
   onOpenDecisionModal: (decisionId: string, targetEvidence?: DecisionSourceEvidence) => void;
   onAddEvidencePointer: (pointer: EvidencePointer) => void;
   indexGeneration: number;
-  /** v0.4 第二轮：真实工程事件（按日聚合）；缺失时画布展示空态，不再回退样本卡片 */
+  /** 真实工程事件（按日聚合）；缺失时画布展示空态，不回退样本卡片 */
   eventDays?: EventDaysResult | null;
   /** 当前选中的日期（'' = 日期待考；undefined = 由画布自选最新一天） */
   activeDate?: string;
-  /** T05：支持 undefined —— 再次点击当前刻度/日期即取消选中，回到画布自选最新一天 */
+  /** 支持 undefined —— 再次点击当前刻度/日期即取消选中，回到画布自选最新一天 */
   onSelectDate?: (date: string | undefined) => void;
-  /** T05：把某天的全部事件在 Timeline 打开（App 以 from=to=该日 下推服务端筛选） */
+  /** 把某天的全部事件在 Timeline 打开（App 以 from=to=该日 下推服务端筛选） */
   onOpenDayInTimeline?: (date: string) => void;
-  /** T03：标尺桶粒度（day 逐日 / week 周聚合 / month 月聚合）；取数由上层完成 */
+  /** 标尺桶粒度（day 逐日 / week 周聚合 / month 月聚合）；取数由上层完成 */
   granularity?: EventDayGranularity;
-  /** T03：切换标尺粒度（月/周/日），上层按新粒度重新取数 */
+  /** 切换标尺粒度（月/周/日），上层按新粒度重新取数 */
   onGranularityChange?: (granularity: EventDayGranularity) => void;
-  /** T03：点 week/month 聚合刻度下钻到日（上层按该桶的日期窗口重新取数） */
+  /** 点 week/month 聚合刻度下钻到日（上层按该桶的日期窗口重新取数） */
   onDrillToBucket?: (bucketDate: string, bucketGranularity: EventDayGranularity) => void;
   selectedEventId?: string;
   onSelectEvent?: (eventId: string) => void;
@@ -166,28 +161,26 @@ export interface GraphCanvasViewProps {
   panoramaMode: PanoramaMode;
   /** ⑤ 切换全景模式（'list'/'calendar' 由上层渲染 TimelineView/CalendarBoardView） */
   onPanoramaModeChange: (mode: PanoramaMode) => void;
-  /** v0.7 评审第 2 轮（延迟项）：画布主题值不再作本组件 prop——作 prop 则一次翻转=
-   *  本组件（数千 SVG 节点）整树重渲。活值在 canvasThemeStore，需要主题的两个叶子
-   *  （页签 theme、分段钮）各自 useSyncExternalStore 订阅；data-canvas-theme 由宿主
-   *  App 命令式直写舷窗 DOM。本组件自身零主题感知、翻转零重渲，色值全走 --cv-* */
-  /** v0.7：切换画布主题（持久化与活值更新在宿主 handler 内） */
+  /** 画布主题值不经本组件 prop 透传，避免切换主题触发数千 SVG 节点整树重渲；
+   *  活值存于 canvasThemeStore，仅页签与分段钮各自 useSyncExternalStore 订阅，
+   *  data-canvas-theme 由宿主 App 命令式直写舷窗 DOM，画布色值统一消费 --cv-* 令牌。 */
+  /** 切换画布主题（持久化与活值更新在宿主 handler 内） */
   onCanvasThemeChange?: (theme: CanvasTheme) => void;
-  /** P0-3（v0.7 提示文本治理）：工作区根路径——工程名动态化取其尾链；
-   *  上层（KnowledgeGraph 持 root）未接线时回退中性「观澜」，绝不再自报演示工程名 */
+  /** 工作区根路径——工程名动态取其尾链；未提供时回退中性名称「观澜」 */
   root?: string;
-  /** issue #27：画布是否在前台可见。隐藏时本组件保持挂载（选中态/缩放/布局不丢），
+  /** 画布是否在前台可见。隐藏时本组件保持挂载（选中态/缩放/布局不丢），
    *  但停止渲染与昂贵的派生计算（分组、卡片、整棵 SVG）。缺省 true。 */
   visible?: boolean;
-  /** F1/F2（AC-01）：App 级 /state-overview 唯一数据源；事件卡有 artifact 行时
-   *  行 4 胶囊渲染六态词，无行回退既有阶段词（断连行为与基线一致）。 */
+  /** App 级 /state-overview 唯一数据源；事件卡有 artifact 行时
+   *  行 4 胶囊渲染六态词，无行回退既有阶段词。 */
   stateOverview?: StateOverviewResponse | null;
-  /** A04：资源管理器定位 / 默认应用打开 / 右键文件操作菜单 */
+  /** 资源管理器定位 / 默认应用打开 / 右键文件操作菜单 */
   systemActions?: DesktopFileActionCallbacks;
   /**
-   * D02 增量聚光灯（可选，宿主单一数据源派生后下推）：开启时「上次离开前已读且
+   * 增量聚光灯（可选，宿主单一数据源派生后下推）：开启时「上次离开前已读且
    * 未变」的节点退为低对比度背景骨架（dimmedFileIds），仅高亮读后真实变化三类；
    * 司辰旁导航条（GraphSpotlightBar）消费 items/cursor 做按时间逐条批阅。
-   * undefined = 关闭/宿主未接线：画布零样式注入（D01-a 像素基线零扰动）。
+   * undefined = 关闭/宿主未接线：画布不注入聚光灯样式。
    */
   spotlight?: {
     enabled: boolean;
@@ -197,7 +190,7 @@ export interface GraphCanvasViewProps {
     onToggle: () => void;
     onCursor: (cursor: number) => void;
   };
-  /** V10：呼出「司辰手记」今日/本周沉淀简报抽屉 */
+  /** 呼出「司辰手记」今日/本周沉淀简报抽屉 */
   onOpenChronosDigest?: () => void;
   /** 嵌入星图顶栏的域过滤/静默徽标插槽（原生 flex 排布，杜绝绝对定位悬浮压盖顶栏按钮） */
   topBarSlot?: React.ReactNode;
@@ -236,11 +229,10 @@ export function useGraphCanvasController({
   onOpenChronosDigest,
   topBarSlot,
 }: GraphCanvasViewProps) {
-  // P0-3：三处演示工程名「拥抱AI」动态化——取工作区根路径尾链（增补 §3 终稿口径）；
-  // 空根路径回退「观澜」中性名，不再自报他项目名
+  // 工程名动态化：取工作区根路径尾链；空根路径回退中性名「观澜」
   const stateIndex = useMemo(() => indexStateOverview(stateOverview), [stateOverview]);
   const workspaceName = root.split(/[\\/]/).filter(Boolean).pop() || '观澜';
-  // C7：默认不选中任何卡（''）；subAgentCards 变化时校正 effect 自动落到第一张卡，杜绝「右栏显示 A、画布无选中」
+  // 默认不选中任何卡（''）；subAgentCards 变化时校正 effect 自动落到第一张卡，避免右栏与画布选中失步
   const [selectedCanvasNodeId, setSelectedCanvasNodeId] = useState<string>('');
   const [hoveredCanvasNodeId, setHoveredCanvasNodeId] = useState<string | null>(null);
   const [hoveredPreviewAnchor, setHoveredPreviewAnchor] = useState<{
@@ -252,38 +244,37 @@ export function useGraphCanvasController({
 
   const [isFanOutCollapsed, setIsFanOutCollapsed] = useState(false);
   const [canvasLayoutMode, setCanvasLayoutMode] = useState<'xray' | 'force' | 'radial'>('xray');
-  // C3→R3①：Sources 面板默认收起为窄条（85% 屏幕还给画布）；复用现役收起机制——
-  // 切换时画布可视原点随面板宽度 260ms 动画左移/右移避让（SOURCES_PANEL_COLLAPSED_LEFT=36）
+  // Sources 面板默认收起为窄条（将主要视口留给画布）；切换时画布可视原点随面板宽度 260ms 动画避让（SOURCES_PANEL_COLLAPSED_LEFT=36）
   const [sourcesPanelCollapsed, setSourcesPanelCollapsed] = useState(true);
-  // v0.8 R3③：叙事抽屉（取代 334px 常驻检视器）。narrativeTarget 显式记录抽屉对象：
+  // 叙事抽屉状态。narrativeTarget 显式记录抽屉对象：
   // nodeId=事件卡叙事 / fileId=文件叙事 / 空对象=工程轴中枢叙事；open 只管滑出与否
   const [narrativeDrawerOpen, setNarrativeDrawerOpen] = useState(false);
   const [narrativeTarget, setNarrativeTarget] = useState<{
     nodeId?: string;
     fileId?: string;
   } | null>(null);
-  // v0.8 R4：药丸工具栏三态 + 快捷键轻弹层；指针态禁拖拽平移（zoom filter 分流）
+  // 药丸工具栏三态 + 快捷键轻弹层；指针态禁拖拽平移（zoom filter 分流）
   const [canvasTool, setCanvasTool] = useState<'pointer' | 'pan'>('pointer');
   const [versionView, setVersionView] = useState<'latest' | 'evolution'>('latest');
   const [showShortcuts, setShowShortcuts] = useState(false);
-  // starfix T3：泳道图例气泡开合（自右下图例栏收敛进药丸「?」钮；与快捷键弹层/视图设置弹层同锚位互斥防叠开）
+  // 泳道图例气泡开合（挂底部药丸「?」钮，与快捷键弹层/视图设置弹层同锚位互斥防叠开）
   const [legendOpen, setLegendOpen] = useState(false);
   // 司辰常驻执掌时间轴：默认显露于主干左侧与激活日同行，并可由药丸工具栏开关显隐
   const [chronosSliderOpen, setChronosSliderOpen] = useState(true);
   // 时光流转重演：自最早沉淀日向今日逐日/逐周推进，展现时间流逝与文件一点一点累积
   const [isTimeFlowPlaying, setIsTimeFlowPlaying] = useState(false);
-  // V10：步进粒度（日/周）与播放倍速（1x/2x）
+  // 步进粒度（日/周）与播放倍速（1x/2x）
   const [replayUnit, setReplayUnit] = useState<ChronosReplayUnit>('day');
   const [replaySpeed, setReplaySpeed] = useState<ChronosReplaySpeed>(1);
-  // v0.8 R2：富预览卡选中（新节点不在 sub_ 槽位体系内，独立记录；顶栏「详情」按它解析目标）
+  // 富预览卡选中（不在 sub_ 槽位体系内，独立记录；顶栏「详情」按它解析目标）
   const [selectedRichDocFileId, setSelectedRichDocFileId] = useState<string | null>(null);
-  // v0.8 R5：stage 高度（小地图 viewport 折算需要；与 stageWidth 同一 ResizeObserver）
+  // stage 高度（小地图 viewport 折算需要；与 stageWidth 同一 ResizeObserver）
   const [stageHeight, setStageHeight] = useState(0);
-  // v0.4 第二轮：真实事件模式下由「真实日期」驱动；真实事件缺失/加载中的回退仍用原演示时段
+  // 真实事件模式下由「真实日期」驱动；真实事件缺失/加载中时回退默认时段
   const [localActiveDate, setLocalActiveDate] = useState<string | undefined>(undefined);
   const activeDate = activeDateProp !== undefined ? activeDateProp : localActiveDate;
-  // T05：selectDate 支持 undefined —— 取消选中（onSelectDate 通知上层清除 activeDate）
-  // 3.4：选中某一天时叠加 500ms 平滑运镜（panToDate 为函数声明，提升后可用；
+  // selectDate 支持 undefined —— 取消选中（onSelectDate 通知上层清除 activeDate）
+  // 选中某一天时叠加 500ms 平滑运镜（panToDate 为函数声明，提升后可用；
   // 只在点击/司辰切版本这类离散入口触发，拖拽与滚轮路径不受影响）
   const selectDateInternal = (date: string | undefined, opts?: { keepPlaying?: boolean; pan?: boolean }) => {
     if (!opts?.keepPlaying) setIsTimeFlowPlaying(false);
@@ -292,10 +283,9 @@ export function useGraphCanvasController({
     if (date && opts?.pan !== false) panToDate(date);
   };
   const selectDate = (date: string | undefined) => selectDateInternal(date);
-  // 双源回位：App 侧 Esc（第④级直接 setActiveDate(undefined)，不经 selectDate）清掉 prop 后，
-  // activeDate 的取值式回退（prop ?? local）会回吸 localActiveDate 残留的旧日期——画布刻度
-  // 高亮、顶栏「司辰·日期」chip 全部停在已清除的那天（「回到全域」钮已随 starfix T3 收敛
-  // 退役，出口=再点当前选中刻度）。这里只在
+  // 双源回位：App 侧 Esc 清掉 prop 后，activeDate 的取值式回退（prop ?? local）
+  // 会回吸 localActiveDate 残留的旧日期——画布刻度高亮、顶栏「司辰·日期」chip 会停在
+  // 已清除的那天（再次点击当前选中刻度可回到全域）。这里只在
   // 「prop 已清而本地仍有值」时回写一次 undefined（不等守卫防多余渲染；selectDate 双写
   // 路径里 prop 与 local 同进同出，本 effect 恒为空转）。deps 只挂 prop：本地值本身变化
   // 无需重跑，方向恒为 prop→local 单向回位。
@@ -305,7 +295,7 @@ export function useGraphCanvasController({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 单向回位守卫，local 依赖见上注释
   }, [activeDateProp]);
-  // T03：标尺刻度点击路由已并入里程碑层 clickTick（截断无操作、周/月下钻、逐日选中/再点取消）
+  // 标尺刻度点击路由已并入里程碑层 clickTick（截断无操作、周/月下钻、逐日选中/再点取消）
 
   const [activeTimeSlice, setActiveTimeSlice] = useState<'all' | '0:00' | '1:00' | '2:00'>('all');
   const [liveFlowEnabled, setLiveFlowEnabled] = useState<boolean>(true);
@@ -341,25 +331,24 @@ export function useGraphCanvasController({
   const svgRef = useRef<SVGSVGElement | null>(null);
   const zoomLayerRef = useRef<SVGGElement | null>(null);
   const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-  // C3：stage 容器尺寸（选中卡→右栏高亮线的屏幕坐标终点需要）
+  // stage 容器尺寸（小地图 viewport 折算与定位需要）
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [stageWidth, setStageWidth] = useState(0);
-  // C3：平移钳制的用户空间下界（trunkX-170，随 main_hub 拖动更新；constrain 闭包经 ref 读最新值）
+  // 平移钳制的用户空间下界（trunkX-170，随 main_hub 拖动更新；constrain 闭包经 ref 读最新值）
   const minSafeUserXRef = useRef(0);
 
-  // R3①：Sources 默认收起 → 初始可视原点贴窄条右缘（COLLAPSED_LEFT=36），不再让 222px 的
-  // 展开位留白；展开面板时 toggleSourcesPanel 仍锚定 SAFE_LEFT（几何常量一字未动）。
-  // starfix T4：默认缩放冻结 100%（was 0.91）——真正的初始机位由下方「聚焦最近活跃日期
-  // 展开节点」的一次性 effect 运镜落定，这里只是挂载瞬间的同 k 初值，避免首帧闪变
+  // Sources 默认收起 → 初始可视原点贴窄条右缘（COLLAPSED_LEFT=36）；
+  // 展开面板时 toggleSourcesPanel 锚定 SAFE_LEFT。默认缩放 100%，真正的初始机位由下方
+  // 「聚焦最近活跃日期展开节点」的一次性 effect 运镜落定，这里仅设同 k 初值防首帧闪变。
   const [zoomTransform, setZoomTransform] = useState<{ x: number; y: number; k: number }>({
     x: SOURCES_PANEL_COLLAPSED_LEFT,
     y: 48,
     k: 1,
   });
-  // D04 · 返回画布视口「丝毫不差」：zoom 'end' 落 React state 的值做了量化
+  // 返回画布视口保真：zoom 'end' 落 React state 的值做了量化
   // （x/y 取整、k 两位小数——仅供小地图/百分比文本展示），若用它恢复 d3 内部
   // transform 会引入 ≤0.5px 平移与 ≤0.5% 缩放漂移。本 ref 保存最后一次手势的
-  // 全精度 transform，重挂/切回时用它还原（展示态仍消费量化 state，零变化）。
+  // 全精度 transform，重挂/切回时用它还原（展示态仍消费量化 state）。
   const zoomExactRef = useRef<{ x: number; y: number; k: number }>({
     x: SOURCES_PANEL_COLLAPSED_LEFT,
     y: 48,
@@ -398,8 +387,8 @@ export function useGraphCanvasController({
   }));
   const [activeDraggingNodeId, setActiveDraggingNodeId] = useState<string | null>(null);
 
-  // wf_2：revision_id → versionNumber 查表（同日同文件合并的版本解析；EventDayItem 无版本号，
-  // 只能由调用方从 FileRecord.revisions 注入——禁止在 GE 层伪造）
+  // revision_id → versionNumber 查表（同日同文件合并的版本解析；EventDayItem 无版本号，
+  // 只能由调用方从 FileRecord.revisions 注入——禁止在图谱事件层伪造）
   const revisionVersionById = useMemo(() => {
     const map = new Map<string, number>();
     for (const f of files) {
@@ -410,24 +399,22 @@ export function useGraphCanvasController({
     return map;
   }, [files]);
 
-  // v0.4 第二轮：真实工程事件的画布场景（标尺/折叠组/导航都来自持久事件）
+  // 真实工程事件的画布场景（标尺/折叠组/导航均来自持久事件）
   const scene = useMemo(
     () =>
       buildCanvasEventScene(eventDays, {
         activeDate,
         maxCardsPerGroup: 6,
-        // wf_2：注入版本解析器 → 同 file_id 同日多版本合并为一张卡（v1 → v3 · 今日演进 2 次）
+        // 注入版本解析器，将同 file_id 同日多版本合并为一张卡（v1 → v3 · 今日演进 2 次）
         resolveVersion: (revisionId) =>
           revisionId ? revisionVersionById.get(revisionId) ?? null : null,
       }),
     [eventDays, activeDate, revisionVersionById]
   );
 
-  // starfix2 T4：主干刻度渲染入口——scene.ruler 再过一道同桶键严格去重（Set 保序取首现，
-  // graphEvents.dedupeTicksByDate）。scene 入口已有 dedupeEventGroupsByDate 源头并组，但
-  // 用户实测主干竖轴仍连续出现同日多标签——渲染侧不再信任上游数组：主干里程碑标签、
-  // 标签步长、司辰锚 y、日期卡锚 y、panToDate/拖放命中 y 全部消费这一份 trunkTicks，
-  // 同一日期在主干轴上恒恰好 1 个刻度/标签（11-13/11-14 连续重复的渲染侧根除）
+  // 主干刻度渲染入口：scene.ruler 再经同桶键去重（graphEvents.dedupeTicksByDate），
+  // 主干里程碑标签、标签步长、司辰锚 y、日期卡锚 y、panToDate/拖放命中 y 全部消费
+  // 同一份 trunkTicks，确保同一日期在主干轴上恰好仅出现 1 个刻度与标签。
   const trunkTicks = useMemo(
     () => compressEmptyRulerGaps(dedupeTicksByDate(scene.ruler)),
     [scene.ruler]
@@ -456,14 +443,13 @@ export function useGraphCanvasController({
   const trunkX = mainHubPos.x + 62;
   const trunkStartY = mainHubPos.y + 74;
   const trunkEndY = 710;
-  // C1④：里程碑纵轴（轴顶/轴底各留 36px 呼吸位；总高 532 也是日期标注步长的 perDay 基数）
+  // 里程碑纵轴（轴顶/轴底各留 36px 呼吸位；总高 532 也是日期标注步长的 perDay 基数）
   const TRUNK_AXIS_TOP = trunkStartY + TRUNK_AXIS_PAD;
   const TRUNK_AXIS_BOTTOM = trunkEndY - TRUNK_AXIS_PAD;
-  // C2：司辰恒锚定主干左侧（x 不漂移）；纵向 y 渲染期恒等派生（tf_1/B1 契约A）——
-  // 非拖拽帧一律贴 activeDate 命中的里程碑刻度（idx<0（日期待考/未命中）落轴顶=最新端；
-  // ruler 空回退旧默认 y），拖拽期间读 nodePositions 跟手、松手立即回吸派生值。
-  // 徽标 epochLabel 与本 y 同帧同源（同一 activeDate），不再存在「徽标写 A 日、本体悬在 B 高度」的帧。
-  // starfix2 T4：索引/长度取 trunkTicks（去重序列），与主干渲染同一份序——司辰悬空高度恒压在画出来的那枚刻度上
+  // 司辰恒锚定主干左侧（x 不漂移）；纵向 y 在渲染期直接派生——
+  // 非拖拽帧一律贴 activeDate 命中的里程碑刻度（idx<0 落轴顶最新端，ruler 空回退默认 y），
+  // 拖拽期间读 nodePositions 跟手、松手立即回吸派生值。
+  // 徽标 epochLabel 与本 y 同帧同源（同一 activeDate），索引取去重序列 trunkTicks。
   const chronosIdx = trunkTicks.findIndex((t) => t.date === scene.activeDate);
   const chronosPos = {
     x: trunkX + CHRONOS_TRUNK_DX,
@@ -480,18 +466,17 @@ export function useGraphCanvasController({
           : DEFAULT_NODE_POSITIONS.chronos_deity.y,
   };
 
-  // C3：平移钳制的用户空间下界 = trunkX - 170（固定文字组锚点），随 main_hub 拖动更新
+  // 平移钳制的用户空间下界 = trunkX - 170（固定文字组锚点），随 main_hub 拖动更新
   useEffect(() => {
     minSafeUserXRef.current = Math.max(0, trunkX + FIXED_TEXT_TRUNK_DX);
   }, [trunkX]);
 
-  // tf_1/B1（契约A）：旧「司辰 y 随 activeDate 的 setNodePositions 同步 effect」已删除——
-  // y 改为渲染期派生（见上方 chronosPos），杜绝存储态残留（切布局/重置后闪回旧默认高度的缺口）。
-  // nodePositions.chronos_deity 的写路径（拖拽/布局切换）保留，但仅拖拽帧被读取。
+  // 司辰 y 由渲染期派生（见上方 chronosPos），不再经 effect 写入 nodePositions，
+  // 避免切布局或重置后回弹到残留高度；nodePositions.chronos_deity 仅在拖拽帧读取。
 
-  // T02 标尺辅助量：当日最大事件数（驱动里程碑光点大小）与日期标注步长（按密度取 ≥30px 间隔；
-  // perDay 基数 = 主干里程碑纵轴高度 532 = TRUNK_AXIS_BOTTOM(674) - TRUNK_AXIS_TOP(142)）。
-  // starfix2 T4：两者同源 trunkTicks（去重序列）——步长的 index 口径与渲染序列一致
+  // 标尺辅助量：当日最大事件数（驱动里程碑光点大小）与日期标注步长（按密度取 ≥30px 间隔；
+  // perDay 基数 = 主干里程碑纵轴高度 532 = TRUNK_AXIS_BOTTOM(674) - TRUNK_AXIS_TOP(142)），
+  // 两者同源 trunkTicks 去重序列。
   const rulerMaxCount = useMemo(
     () => trunkTicks.reduce((max, t) => Math.max(max, t.count), 0),
     [trunkTicks]
@@ -505,27 +490,25 @@ export function useGraphCanvasController({
     ) ?? 365;
   }, [trunkTicks]);
 
-  // starfix2 T2：展开框组头全量措辞（graphEvents.fanOutDayHeaderLine 单一出口）——
+  // 展开框组头全量措辞（graphEvents.fanOutDayHeaderLine 单一出口）：
   // 「{日期} · 共 {n} 条事件（已合并为 {m} 份活跃文档 · 点击查看全天 →）」，
-  // n=当日事件总数（active.count 真实总数）、m=合并后活跃文档数（active.cards.length，
-  // 同日同文件合并/同基名并组后每卡一份活跃文档）；「⑃」前缀在此拼接（收起态保留）。
-  // 渲染按 FANOUT_DAY_HEADER_TAIL 切双色 tspan，不再做任何截断
+  // n 为当日事件总数，m 为合并后活跃文档数；「⑃」前缀在此拼接，
+  // 渲染按 FANOUT_DAY_HEADER_TAIL 切双色 tspan，不做截断。
   const fanOutHeaderLine =
     scene.hasRealEvents && scene.active
       ? `⑃ ${fanOutDayHeaderLine(scene.active.label, scene.active.count, scene.active.cards.length)}`
       : '⑃ 扇出 · 暂无事件卡片';
-  // T03：当前标尺粒度（上层状态优先，缺省回退场景自带粒度；空场景为 day）
+  // 当前标尺粒度（上层状态优先，缺省回退场景自带粒度；空场景为 day）
   const rulerGranularity: EventDayGranularity = granularity ?? scene.granularity ?? 'day';
 
-  // 1.2：唯一锚点文字——左侧日期汇总卡已承载的日期集合，主干刻度的日期文本自动让位
-  // （每个日期全画布至多 1 处文字；判定逻辑见 trunkTickShowsLabel，单测覆盖）
+  // 唯一锚点文字：左侧日期汇总卡已承载的日期集合，主干刻度的日期文本自动让位
+  // （每个日期全画布至多 1 处文字；判定逻辑见 trunkTickShowsLabel）
   const navigatorDateSet = useMemo(
     () => new Set(scene.navigator.map((nav) => nav.date)),
     [scene.navigator]
   );
 
-  // 3.1：当前选中日期命中的主干刻度 y（用户空间）——主干→右栏电流脉冲的起点
-  // starfix2 T4：命中索引同源 trunkTicks（去重序列），与渲染刻度 y 恒一致
+  // 当前选中日期命中的主干刻度 y（用户空间，同源 trunkTicks 去重序列）——主干→右栏电流脉冲的起点
   const activeTickY = useMemo(() => {
     if (!scene.hasRealEvents || !scene.activeDate || trunkTicks.length === 0) return null;
     const idx = trunkTicks.findIndex((t) => t.date === scene.activeDate);
@@ -536,11 +519,9 @@ export function useGraphCanvasController({
   // 3.2：弹簧交错展开的触发键——日期切换 / 扇出收起态 / 布局切换时子卡重挂一次，动画从头播放
   const springRevealKey = `${scene.activeDate ?? 'none'}|${isFanOutCollapsed ? 'c' : 'e'}|${canvasLayoutMode}`;
 
-  // 真实事件卡片：占用既有 8 个布局槽位；starfix2 T1 起卡面改四行层级（280x116）。
-  // 行1 大字=fileName（documentIdentity.basename 链既有产物，目录前缀不再拼名前——
-  //   dirPrefix 降级行2 前缀 + hover title）；行1 右=versionSpan 胶囊
-  //   （versionSpanCapsule 单一出口：合并卡 v6 → v8 (2次)、modified v7 → v8、appeared 新出现 vN，
-  //   版本号仍由 revisionId → FileRecord.revisions[].versionNumber 查表解析，杜绝伪造）；
+  // 真实事件卡片（280x116 四行层级，占用 8 个布局槽位）：
+  // 行1 左=fileName（basename，目录前缀放行2与 hover title）；行1 右=versionSpan 胶囊
+  //   （versionSpanCapsule 单一出口，版本号由 FileRecord.revisions 查表解析，不伪造）；
   // 行2=pkgPath（taskPackageOf(relative_path).id 所属专项路径）；
   // 行3=digestLine（canvasChangeDigestLine 章节拼接+描述 / appeared=extractCoreSummary 正文核心结论）；
   // 行4 左=packageStage（stageOfPath）右=+N/-M行 · HH:MM（changeCounts + observedClock）。
@@ -551,8 +532,8 @@ export function useGraphCanvasController({
       let changeLabel = '';
       let versionSpan = '';
       if (card.mergedDay) {
-        // wf_2：同 file_id 同日合并卡——changeLabel 保持 DoD2 逐字口径（hover/其他消费方）；
-        // 卡面行1 右胶囊走 starfix2 新措辞（versionSpanCapsule：v6 → v8 (2次)）
+        // 同 file_id 同日合并卡：changeLabel 供 hover 与其他消费方使用；
+        // 卡面行1 右胶囊采用 versionSpanCapsule 措辞（如 v6 → v8 (2次)）
         changeLabel = dayMergeLabel(card.mergedDay);
         versionSpan = versionSpanCapsule({ merged: card.mergedDay });
       } else if (card.revisionId && !card.decisionId && file) {
@@ -564,14 +545,13 @@ export function useGraphCanvasController({
           versionSpan = versionSpanCapsule({ kind: card.kind, version: vn });
         }
       }
-      // starfix T6：「检测到更新」（modified）类事件卡直出 1-2 行核心变更摘要。
-      // changedSections 两条既有链取一：事件表（TimelineEvent.changedSections，payload
-      // changed_sections）优先，缺失回退版本链（Revision.changedSectionsFromPrev）；
-      // +/- 行数 T5 起优先取事件表结构化真值（TimelineEvent.addedLines/removedLines，
-      // payload 直映），缺失回退服务端 detail 定式「（+N/-M 行）」——都缺即 null，不伪造。
-      // 非 modified 卡不做派生（appeared/决策卡无 diff 链，硬套就是编造）；
-      // 跨目录拷贝并组卡（mergedCount>1）也不做——行3 保留「×N 样本内同基名拷贝」
-      // 诚实计数前缀 headline，被摘要替换会丢并组信息。
+      // 「检测到更新」（modified）类事件卡直出 1-2 行核心变更摘要。
+      // changedSections 优先取事件表（TimelineEvent.changedSections），缺失回退版本链
+      // （Revision.changedSectionsFromPrev）；+/- 行数优先取事件表结构化真值
+      // （TimelineEvent.addedLines/removedLines），缺失回退服务端 detail 定式「（+N/-M 行）」——
+      // 均缺失时保持 null，绝不伪造。
+      // 非 modified 卡不做派生（appeared/决策卡无 diff 链）；
+      // 跨目录拷贝并组卡（mergedCount>1）也不做——行3 保留「×N 样本内同基名拷贝」计数前缀 headline。
       let changeSummary = '';
       let changeCounts: { added: number; removed: number } | null = null;
       let digestLine = '';
@@ -583,15 +563,14 @@ export function useGraphCanvasController({
         const derived = deriveCanvasChangeSummary({
           changedSections,
           detail: ev?.detail,
-          // T5：结构化行数随事件表直入——章节变更卡的 +/- 不再只能靠 detail 定式兜底；
-          // changedSections 落版本链回退时 ev 可能无行数 → undefined → 摘要层自行兜底
+          // 结构化行数优先由事件表传入；changedSections 落版本链回退时 ev 可能无行数，交由摘要层兜底
           addedLines: ev?.addedLines,
           removedLines: ev?.removedLines,
         });
         changeSummary = derived.description;
         changeCounts = derived.counts;
-        // starfix2 T1 行3：章节名拼接 + 一句描述（严禁只写 +1/-1 行充当摘要——
-        // 行数在行4 右承载）；无章节且无描述时空串回退 detail headline（诚实呈现）
+        // 行3 摘要：章节名拼接 + 一句描述（严禁仅用 +1/-1 行充当摘要，行数由行4 右侧承载）；
+        // 无章节且无描述时留空回退 detail headline
         digestLine = polishEventCardDigestLine({
           changedSections,
           description: derived.description,
@@ -599,12 +578,12 @@ export function useGraphCanvasController({
           counts: derived.counts,
         });
       } else if (card.kind === 'appeared' && file && !card.mergedCount) {
-        // starfix2 T1 行3（appeared）：新出现文件展示正文第一句核心结论——
-        // extractCoreSummary 既有回退链（显式结论章节→逐章节→原文首段→summaryNote），
-        // 压完 ≤80 字；拿不到正文返回空串回退 headline，绝不拿文件属性冒充结论
+        // 新出现文件（appeared）行3 展示正文第一句核心结论——
+        // 经 extractCoreSummary 回退链（显式结论章节→逐章节→原文首段→summaryNote）压至 ≤80 字；
+        // 拿不到正文时返回空串回退 headline，绝不拿文件属性冒充结论
         digestLine = extractCoreSummary(file);
       }
-      // wf_2：任务包 chip（DoD1 逐字：任务包名 + 核心文档名，行首不再裸显截断前缀路径）
+      // 任务包标识：展示任务包名 + 核心文档名，行首不裸显截断前缀路径
       const pkg = file ? taskPackageOf(file.relative_path) : null;
       const isBaselineCard = !card.fileId && (card.fileName === '-' || card.fileName === '—' || !card.fileName.trim());
       const resolvedFileName = isBaselineCard ? '工作区基线' : card.fileName;
@@ -619,7 +598,7 @@ export function useGraphCanvasController({
         fileName: resolvedFileName,
         dirPrefix: card.dirPrefix,
         changeLabel,
-        // starfix2 T1：行1 右版本跨度胶囊 / 行2 所属专项路径（taskPackageOf 链）/
+        // 行1 右版本跨度胶囊 / 行2 所属专项路径（taskPackageOf 链）/
         // 行3 内容摘要 / 行2 回退词（决策等无文件事件透出事件类型界面词）
         versionSpan,
         pkgPath: pkg?.id === '__root__' ? '根目录' : (pkg?.id ?? ''),
@@ -630,7 +609,7 @@ export function useGraphCanvasController({
         cornerLabel: card.cornerLabel,
         observedClock: card.observedClock,
         detail: card.detail,
-        // starfix T6：核心变更摘要直出（modified 卡；无可诚实透出时为空串回退 headline）
+        // 核心变更摘要直出（modified 卡；无可诚实透出时为空串回退 headline）
         changeSummary,
         changeCounts,
         format: card.format ?? 'md',
@@ -648,8 +627,8 @@ export function useGraphCanvasController({
         },
         outputSummary: card.detail,
         timeRange: card.dateLabel,
-        // tf_6/F2：选中调光按桶键（组键）比对，与展示用 dateLabel 分离——
-        // observed 口径与周/月桶下本组卡不再因键格式不同被误降透明度
+        // 选中调光按桶键（组键）比对，与展示用 dateLabel 分离——
+        // observed 口径与周/月桶下本组卡不会因键格式不同被误降透明度
         timeBucket: card.bucketDate,
       };
     });
@@ -658,8 +637,8 @@ export function useGraphCanvasController({
   // 真实事件卡片就绪时占用既有 8 个布局槽位；缺失/加载中时为空数组，画布展示空态
   const subAgentCards: SubAgentCardModel[] = realEventCards ?? [];
 
-  // v0.3: 左侧 Sources 四个入口指向真实文件（决策 / SVG / 方案 / 需求）
-  // v0.4 第二轮：事件模式下改为「最近四个日期」的导航入口
+  // 左侧 Sources 四个入口指向真实文件（决策 / SVG / 方案 / 需求）；
+  // 事件模式下由下方 leftSourceNodes 改为「最近四个日期」的导航入口
   const sourceFileNodes: LeftSourceNodeModel[] = useMemo(() => {
     const pick = (
       predicate: (f: FileRecord) => boolean
@@ -760,17 +739,16 @@ export function useGraphCanvasController({
     ];
   }, [files]);
 
-  // v0.4 第二轮：事件模式下，左侧四个浮动节点变成「最近四个日期」的导航
+  // 事件模式下，左侧四个浮动节点切换为「最近四个日期」的导航入口
   const leftSourceNodes: LeftSourceNodeModel[] = useMemo(() => {
     if (!scene.hasRealEvents || scene.navigator.length === 0) return sourceFileNodes;
     const short: Record<CapabilityCode, string> = {
       MD: 'I', DEC: 'R', REV: 'S', SVG: 'A', TIM: 'M', PDF: 'C', REL: 'H',
     };
     const ids = ['src_round15', 'src_svg_engine', 'src_four_spec', 'src_receipt'];
-    // tf_2/B2+B4（契约B）：锚刻度 y 与默认位运行时派生（随 main_hub 拖动重算），不再用旧逐日硬编码
-    // 146/146/214/432（yOffsets，死变量）与 targetTrunkY [174,174,248,462]；
-    // 待考桶（ruler 无此键）锚位=轴底下方 18px 的 off-timeline 槽位，不指任何日期刻度。
-    // starfix2 T4：锚 y 取 trunkTicks（去重序列）——连线终点恒落在画出来的那枚刻度上
+    // 锚刻度 y 与默认位运行时派生（随 main_hub 拖动重算），不再硬编码静态偏移；
+    // 待考桶（ruler 无此键）锚位落在轴底下方 18px 的 off-timeline 槽位，不指任何日期刻度。
+    // 锚 y 取去重后的 trunkTicks 序列，保证连线终点恒落在渲染出来的那枚刻度上
     const navAnchorYs = scene.navigator.map((nav) => {
       const idx = trunkTicks.findIndex((t) => t.date === nav.date);
       return idx >= 0
@@ -784,8 +762,7 @@ export function useGraphCanvasController({
       navDefaultYs.push(i === 0 ? y0 : Math.max(y0, navDefaultYs[i - 1] + 56));
     });
     return scene.navigator.map((nav, i) => {
-      // T06：徽章读真实格式计数最高者（nav.formats），无可判定格式时落 TIM 中性——
-      // 此前把事件种类当格式推导，种类永不等于 svg/pdf，导航器恒显回退值 MD
+      // 徽章按该日出现频次最高的真实文件格式取值（nav.formats），无可判定格式时落 TIM 中性
       const badge: CapabilityCode =
         nav.format === 'svg'
           ? 'SVG'
@@ -833,10 +810,10 @@ export function useGraphCanvasController({
     });
   }, [scene, trunkTicks, trunkAccumulation, sourceFileNodes, TRUNK_AXIS_TOP, TRUNK_AXIS_BOTTOM]);
 
-  // tf_2/B2+B3（契约B）：导航卡位置解析——nodePositions 仍优先（用户拖拽/力导向/星环都产出新对象引用），
-  // 但重置与切回 x-ray 写回的是 DEFAULT_NODE_POSITIONS 的同一对象引用（{...DEFAULT_NODE_POSITIONS} 浅拷贝），
-  // 视同未拖拽 → 默认位回派生值（事件模式=锚刻度 y−24，见 leftSourceNodes 的 yOffset），
-  // 保证「布局重置/切回 x-ray 后回到派生默认」；演示模式（date undefined）回退旧默认，行为不变
+  // 导航卡位置解析：nodePositions 优先（用户拖拽/力导向/星环都产出新对象引用）；
+  // 但重置与切回 x-ray 写回的是 DEFAULT_NODE_POSITIONS 的同一对象引用（浅拷贝），
+  // 视同未拖拽 → 默认位回派生值（事件模式为锚刻度 y−24，见 leftSourceNodes 的 yOffset），
+  // 保证布局重置或切回 x-ray 后回到派生默认；非事件模式（date undefined）回退静态默认
   const resolveLeftSourcePos = (
     src: LeftSourceNodeModel
   ): { x: number; y: number } => {
@@ -844,7 +821,7 @@ export function useGraphCanvasController({
     const baseDefault = DEFAULT_NODE_POSITIONS[src.id];
     if (storedPos && storedPos !== baseDefault) return storedPos;
     if (src.date !== undefined && baseDefault) {
-      // 1.2：日期卡恒落在独立左侧轨道（离主干 ≥120px、离司辰立绘 ≥16px），
+      // 日期卡恒落在独立左侧轨道（离主干 ≥120px、离司辰立绘 ≥16px），
       // 随 main_hub 拖动实时重算；用户拖过卡则走上面的 storedPos 分支，拖拽交互不回退
       return { x: dateCardRailX(trunkX), y: src.yOffset };
     }
@@ -958,16 +935,16 @@ export function useGraphCanvasController({
     svgSelection.call(zoomBehavior);
     if (!zoomInitializedRef.current) {
       zoomInitializedRef.current = true;
-      // R3①：默认收起态初始 transform 贴窄条右缘（与 zoomTransform useState 初值同源）；
-      // starfix T4：默认缩放 100%（真实机位由「聚焦展开节点」effect 随后运镜修正）
+      // 默认收起态初始 transform 贴窄条右缘（与 zoomTransform useState 初值同源），
+      // 初始缩放 100%（真实机位由「聚焦展开节点」effect 随后运镜修正）
       svgSelection.call(
         zoomBehavior.transform,
         d3.zoomIdentity.translate(SOURCES_PANEL_COLLAPSED_LEFT, 48).scale(1)
       );
     } else {
       // 从隐藏切回或切换工具时，同步恢复 d3 内部 transform 状态。
-      // D04：恢复值取 zoomExactRef（最后一次手势的全精度），量化 state 只作展示——
-      // 阅读器往返后画布平移/缩放零漂移（任务卡 D04「视口坐标与缩放比丝毫不差」）。
+      // 恢复值取 zoomExactRef（最后一次手势的全精度），量化 state 仅作展示，
+      // 确保从阅读器往返后画布平移与缩放零漂移。
       const exact = zoomExactRef.current;
       svgSelection.call(
         zoomBehavior.transform,
@@ -987,7 +964,7 @@ export function useGraphCanvasController({
 
   // transform 属性已去 React 托管（JSX 不再写 transform），改由本 effect 在挂载/显露时写一次
   // 初始变换：layoutEffect 在首帧绘制前落定，不闪回原点；此后该属性只由 zoom 事件直写。
-  // D04：显露时写全精度 ref 值（量化值仅展示面），随后 zoom 行为恢复分支同样全精度。
+  // 显露时写全精度 ref 值（量化值仅用于展示面），与上方 zoom 行为恢复保持一致。
   useLayoutEffect(() => {
     if (!visible) return;
     const zoomLayer = zoomLayerRef.current;
@@ -1070,9 +1047,9 @@ export function useGraphCanvasController({
     // 拖放司辰即直达该日：时间轴高亮、司辰回吸落位、右侧当日变动文档立即展开
     selectDateInternal(tick.date, { pan: false });
 
-    // tf_6/F3：锚日按当前时间口径（eventDays.order）取值——observed=采集日、occurred=材料记载日
+    // 锚日按当前时间口径（eventDays.order）取值：observed=采集日、occurred=材料记载日
     // （source_time=occurred_at 的透出，project.ts）；occurred 口径下无 occurred 的事件
-    // （source_time 空）不匹配任何刻度（与「待考不进轴」一致），不再串显其他日期采集的事件
+    // （source_time 空）不匹配任何刻度（与「待考不进轴」一致），避免串显其他日期采集的事件
     const dropOrder = chronosDropContextRef.current.eventDays?.order ?? 'occurred';
     const tickEvents = chronosDropContextRef.current.events.filter((item) =>
       eventMatchesRulerTick(
@@ -1321,7 +1298,7 @@ export function useGraphCanvasController({
     if (svgEl && zoomB) {
       const targetTransform = d3.zoomIdentity.translate(targetX, targetY).scale(clampedK);
       if (effectiveMs <= 0) {
-        // D05 prefers-reduced-motion 静态降级：跳过 D3 transition，零补间即时落位
+        // prefers-reduced-motion 静态降级：跳过 D3 transition，零补间即时落位
         d3.select(svgEl).call(zoomB.transform, targetTransform);
       } else {
         d3.select(svgEl)
@@ -1340,11 +1317,11 @@ export function useGraphCanvasController({
     applyProgrammaticZoom(zoomExactRef.current.k + delta);
   };
 
-  /** 3.4 平滑运镜时长：与动效基座的 --dur-pan(500ms) 同值（CSS 变量读不进 d3 transition，
+  /** 平滑运镜时长：与动效基座的 --dur-pan(500ms) 同值（CSS 变量读不进 d3 transition，
    *  这里以常量对齐；改一处须同改 index.css 的 --dur-pan）。 */
   function panToDate(date: string) {
     const stageEl = stageRef.current;
-    // starfix2 T4：命中索引同源 trunkTicks（去重序列）——运镜落点恒在渲染出来的那枚刻度上
+    // 命中索引取去重后的 trunkTicks 序列，保证运镜落点恒在渲染出来的那枚刻度上
     if (!stageEl || trunkTicks.length === 0 || stageWidth <= 0) return;
     const idx = trunkTicks.findIndex((t) => t.date === date);
     if (idx < 0) return;
@@ -1375,11 +1352,11 @@ export function useGraphCanvasController({
     setNodePositions({ ...DEFAULT_NODE_POSITIONS });
     setCanvasLayoutMode('xray');
     setActiveTimeSlice('all');
-    // starfix T4：重置=回到默认 100% 缩放，顶部留 48px 呼吸位防裁切
+    // 重置回默认 100% 缩放，顶部留 48px 呼吸位防裁切
     applyProgrammaticZoom(1, { x: SOURCES_PANEL_SAFE_LEFT, y: 48 });
   };
 
-  // C3：Sources 面板收起/展开——画布可视原点随面板宽度 260ms 动画右移/左移补位，
+  // Sources 面板收起/展开：画布可视原点随面板宽度 260ms 动画右移/左移补位，
   // 面板展开时原点锚定 SAFE_LEFT（面板右缘），收起时回退到窄条右侧
   const toggleSourcesPanel = () => {
     const next = !sourcesPanelCollapsed;
@@ -1393,7 +1370,7 @@ export function useGraphCanvasController({
 
   const cycleChronosTimeSlice = () => {
     setMeteorBurstKey((k) => k + 1);
-    // v0.4：事件模式下司辰沿真实日期序列移动（含「日期待考」），而不是演示时段
+    // 事件模式下司辰沿真实日期序列移动（含「日期待考」），而非演示时段
     if (scene.hasRealEvents && scene.days.length > 0) {
       const current = scene.activeDate;
       const idx = scene.days.findIndex((d) => d.date === current);
@@ -1541,8 +1518,7 @@ export function useGraphCanvasController({
     return files.filter((f) => hasUnreadChanges(f, readingStates[f.file_id]).isUnread).length;
   }, [files, readingStates]);
 
-  // v0.8：右栏检视器退役后 contextRows/activeEventFile/activeEventChangedSections 三 memo
-  // 一并退役；「上下文/变更章节/关联文件」内容在 narrativeMemo（下方）按抽屉目标重排为
+  // 上下文、变更章节与关联文件在下方 useGraphCanvasNarrative 中按抽屉目标组织为
   // 时间轴叙事分节（发生→变更章节→关联决策→引用依据）。
 
   const mdFiles = useMemo(() => files.filter((f) => f.format === 'md'), [files]);
@@ -1553,7 +1529,7 @@ export function useGraphCanvasController({
     return showAllMdSources ? mdFiles : mdFiles.slice(0, 4);
   }, [mdFiles, showAllMdSources]);
 
-  // W08：findings 用真实统计——MD 文件最新版本的变更章节数之和（替代写死的「93 findings」）
+  // findings 统计取真实值：MD 文件最新版本的变更章节数之和
   const mdFindingsCount = useMemo(() => {
     return mdFiles.reduce(
       (sum, f) => sum + (f.revisions[f.revisions.length - 1]?.changedSectionsFromPrev?.length ?? 0),
@@ -1565,8 +1541,7 @@ export function useGraphCanvasController({
     const visibleCards = isFanOutCollapsed ? subAgentCards.slice(0, 2) : subAgentCards;
     const boxes = visibleCards.map((c) => {
       const pos = nodePositions[c.id] || DEFAULT_NODE_POSITIONS[c.id];
-      // starfix2 T1：卡几何改吃 EVENT_CARD_W/H 常量（旧 152x90 字面退役）——
-      // 展开框尺寸、初始聚焦运镜、小地图世界框全部随之走新四行卡几何
+      // 卡几何统一取 EVENT_CARD_W/H 常量，使展开框尺寸、初始聚焦运镜与小地图世界框保持一致
       return {
         x: pos.x,
         y: pos.y,
@@ -1575,27 +1550,25 @@ export function useGraphCanvasController({
       };
     });
     const bounds = computeFanOutBounds(boxes, isFanOutCollapsed);
-    // starfix2 T2：组头全量渲染的宽度下限连带——单卡日的引擎最小宽（330）装不下
-    // 「⑃ …（… · 点击查看全天 →）」全串自适应胶囊（约 410px），会顶进「收起」按钮带；
-    // 展开框宽抬到「胶囊全宽 + 左起 12 + 按钮带 82 + 呼吸 38」之下限，保证胶囊右缘
-    // 恒在按钮左缘之前 ≥14px（fanOutHeaderCapsuleWidth 的钳制上界在此盒宽下永不触发截字）
+    // 组头全量渲染的宽度下限：单卡日的引擎最小宽（330）装不下完整的组头胶囊，
+    // 将展开框宽抬到「胶囊全宽 + 左起 12 + 按钮带 82 + 呼吸 38」之下限，保证胶囊右缘
+    // 恒在按钮左缘之前 ≥14px（避免截字或顶进「收起」按钮带）
     const headerNeed =
       fanOutHeaderCapsuleWidth(fanOutHeaderLine, Number.POSITIVE_INFINITY) + 12 + 82 + 38;
     return { ...bounds, width: Math.max(bounds.width, headerNeed) };
   }, [subAgentCards, nodePositions, isFanOutCollapsed, fanOutHeaderLine]);
 
-  // C7③：选中卡的画布坐标（不存在选中卡时为 null，高亮线不渲染）
+  // 选中卡的画布坐标（不存在选中卡时为 null，高亮线不渲染）
   const selectedCardPos = useMemo(() => {
     const sel = subAgentCards.find((c) => c.id === selectedCanvasNodeId);
     if (!sel) return null;
     return nodePositions[sel.id] || DEFAULT_NODE_POSITIONS[sel.id];
   }, [subAgentCards, selectedCanvasNodeId, nodePositions]);
 
-  // starfix T4：进入星图的一次性机位——镜头自动居中聚焦「最近活跃日期的展开节点」。
-  // 展开节点 = 当前激活日（scene.active=最新有事件日，未手动选日时的缺省选中）的扇出容器
-  // （fanOutBounds），即默认展开的那组事件卡。挂载初值只保证不闪（k=1 贴窄条），等
-  // stage 尺寸与场景就绪后按 500ms（--dur-pan 同值）平滑运镜到展开容器居中的机位；
-  // 一次性 ref 守卫，之后用户自由平移缩放、点日期走 panToDate 既有链路，本 effect 不再插手。
+  // 进入星图的一次性机位：镜头自动居中聚焦「最近活跃日期的展开节点」。
+  // 展开节点即当前激活日（scene.active=最新有事件日，未手动选日时的缺省选中）的扇出容器
+  // （fanOutBounds）。挂载初值先以 k=1 贴窄条避免首帧闪烁，待 stage 尺寸与场景就绪后按
+  // 500ms（--dur-pan 同值）平滑运镜到居中机位；一次性 ref 守卫，后续不再干预用户运镜。
   const initialFocusDoneRef = useRef(false);
   useEffect(() => {
     if (initialFocusDoneRef.current) return;
@@ -1603,7 +1576,7 @@ export function useGraphCanvasController({
     if (!scene.hasRealEvents || !scene.active) return;
     if (fanOutBounds.width <= 0 || fanOutBounds.height <= 0) return;
     initialFocusDoneRef.current = true;
-    const k = 1; // 默认视口冻结 100%（工票 T4）
+    const k = 1; // 默认视口缩放 100%
     // 以完整「日期卡 — 司辰 — 时间主干 — 当日文档扇出」四联画居中构图，
     // 让司辰与时光沉淀轴天然位于首屏视觉中心
     const triptychLeft = dateCardRailX(trunkX);
@@ -1627,16 +1600,16 @@ export function useGraphCanvasController({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 一次性运镜守卫
   }, [stageWidth, stageHeight, scene.hasRealEvents, scene.active]);
 
-  // issue #27：共享文件索引——渲染期按 id 取文件不再逐卡 files.find（O(C×F) → O(C)）
+  // 共享文件索引：渲染期按 id 取文件避免逐卡 files.find（O(C×F) → O(C)）
   const fileById = useMemo(
     () => new Map(files.map((f) => [f.file_id, f])),
     [files]
   );
 
-  // ═══ v0.8 任务空间桌面：任务包分组横排布局（R1）═══
-  // 分组数据：buildCanvasPackageGroups(files, events) 纯函数（graphEvents 层，判定零复写）；
-  // 「焦点任务包置首」在组件层按 selectedFileId 再排——分组数据本身不感知选中态。
-  // issue #27：隐藏时不构建（组件仍挂载，state/缩放/布局不受影响）
+  // ═══ 任务空间桌面：任务包分组横排布局 ═══
+  // 分组数据由 buildCanvasPackageGroups(files, events) 纯函数提供；
+  // 「焦点任务包置首」在组件层按 selectedFileId 再排，分组数据本身不感知选中态。
+  // 画布隐藏时跳过构建以节省开销（组件仍保活挂载，state/缩放/布局不受影响）
   const packageGroups = useMemo(
     () => (visible ? buildCanvasPackageGroups(files, events) : []),
     [visible, files, events]
@@ -1674,7 +1647,7 @@ export function useGraphCanvasController({
     });
   }, [orderedPackageGroups, trunkX]);
 
-  // issue #27：卡片描述一次性物化——依赖只看包文档内容，拖动单节点（改 nodePositions
+  // 卡片描述一次性物化：依赖只看包文档内容，拖动单节点（改 nodePositions
   // → trunkX → 布局坐标）不触发重建，逐帧渲染直接消费
   const packageCardsByPkg = useMemo(
     () =>
@@ -1689,7 +1662,7 @@ export function useGraphCanvasController({
     [orderedPackageGroups, versionView]
   );
 
-  // ═══ v0.8 R5：小地图世界包围盒（zoom 层全部内容锚点：节点位/扇出盒/分组横排/主干）═══
+  // ═══ 小地图世界包围盒（zoom 层全部内容锚点：节点位/扇出盒/分组横排/主干）═══
   const canvasWorldBounds = useMemo(() => {
     let minX = Number.POSITIVE_INFINITY;
     let minY = Number.POSITIVE_INFINITY;
@@ -1719,15 +1692,15 @@ export function useGraphCanvasController({
     };
   }, [nodePositions, trunkX, trunkStartY, trunkEndY, fanOutBounds, packageGroupLayouts]);
 
-  // ═══ D01-b：画布卡片本体障碍清单（连线避障引擎的 obstacles 输入）═══
+  // ═══ 画布卡片本体障碍清单（连线避障引擎的 obstacles 输入）═══
   // 与渲染口径逐一同源（折叠时事件卡只取前 2 张、司辰默认收起不入障碍、包容器横排全量）；
-  // 纯矩形数组，消费方：GraphSceneTrunk 遗留连线升级 + GraphRelationEdges 证据链连线。
+  // 纯矩形数组，供 GraphSceneTrunk 主干连线与 GraphRelationEdges 证据链连线避障使用。
   // 拖拽/展开/收起改 nodePositions → 本清单重算 → 连线路由同帧重算（实时跟随不脱钩）。
   const graphObstacleRects = useMemo<ObstacleRect[]>(() => {
     const rects: ObstacleRect[] = [];
     // 主节点卡（150×76 与 GraphSceneNodes 渲染 foreignObject 同尺寸）
     rects.push({ id: 'main_hub', x: mainHubPos.x, y: mainHubPos.y, width: 150, height: 76 });
-    // 司辰立绘（R6 去常驻：滑块收起时不渲染 → 不入障碍；盒宽 CHRONOS_MASCOT_WIDTH=132，
+    // 司辰立绘（滑块收起时不渲染 → 不入障碍；盒宽 CHRONOS_MASCOT_WIDTH=132，
     // 高覆盖立绘 124 + 底部徽标带 translate(4,138)+36 ≈ 174）
     if (chronosSliderOpen) {
       rects.push({
@@ -1800,9 +1773,9 @@ export function useGraphCanvasController({
     };
   }, [zoomTransform, stageWidth, stageHeight]);
 
-  // issue #27 验收 2：包容器按视口（含预留边距）挂载——不再「每包限 6 卡但把所有包全渲染」。
-  // 世界坐标仍由完整布局序列给出（跨包定位/小地图/双击打开不受影响，验收 5）；
-  // 裁剪只决定 DOM 挂载。焦点包即使出入视口也保留（选中态与叙事抽屉目标不断链）。
+  // 包容器按视口（含预留边距）裁剪挂载，避免视口外所有包全部渲染；
+  // 世界坐标仍由完整布局序列给出（跨包定位/小地图/双击打开不受影响），
+  // 焦点包即使出入视口也保留，确保选中态与叙事抽屉目标不断链。
   const mountedPkgIds = useMemo(
     () =>
       visiblePackageGroupIds(
@@ -1817,7 +1790,7 @@ export function useGraphCanvasController({
     [packageGroupLayouts, minimapViewport, focusedPkgId]
   );
 
-  // R5：小地图跳转 = 目标世界点居中 + 同款左缘钳制（与 panToDate 一致的程序化运镜）
+  // 小地图跳转：目标世界点居中并施加与 panToDate 一致的左缘钳制与程序化运镜
   const handleMinimapJump = (x: number, y: number) => {
     const k = zoomExactRef.current.k || 1;
     const rawX = stageWidth / 2 - x * k;
@@ -1830,16 +1803,16 @@ export function useGraphCanvasController({
     );
   };
 
-  // ═══ D01-a ④：quarter-octave 缩放分桶 LOD（缩小鸟瞰自动退化为轻骨架）═══
+  // ═══ quarter-octave 缩放分桶 LOD（缩小鸟瞰自动退化为轻骨架）═══
   // 档位随 gesture end 落定的 zoomTransform.k 翻转（连续缩放帧内直写 transform 不触发
-  // 重渲，档位只在跨 quarter-octave 桶时变化一次）；k ≥ 0.5（基线全部镜头所在档）
-  // 恒 full——LOD 只在鸟瞰档收纯装饰/流式层，正常阅读缩放零视觉变化。
+  // 重渲，档位只在跨 quarter-octave 桶时变化一次）；k ≥ 0.5 时恒为 full——
+  // LOD 只在鸟瞰档收起纯装饰/流式层，正常阅读缩放零视觉变化。
   const lodTier = useMemo(() => lodTierForScale(zoomTransform.k), [zoomTransform.k]);
   const lodGates = useMemo(() => lodGatesForTier(lodTier), [lodTier]);
 
-  // ═══ D01-a ③：任务包标题显示名（Overlay 恒定像素字号层 + 折叠组头行同源）═══
-  // 活值订阅 packageTitleStore（翻转只重渲消费标题的两个叶子，不拉整树）；
-  // 双击原位改名落 store 固化（重 derivation 不回退），磁盘目录名不动（hover 显真名）。
+  // ═══ 任务包标题显示名（Overlay 恒定像素字号层 + 折叠组头行同源）═══
+  // 订阅 packageTitleStore（翻转只重渲消费标题的两个叶子，不拉整树）；
+  // 双击原位改名落 store 固化（重算不回退），磁盘目录名保持不变（hover 显真名）。
   const pkgTitleOverrides = useSyncExternalStore(
     subscribePackageTitles,
     getPackageTitleOverrides
@@ -1867,7 +1840,7 @@ export function useGraphCanvasController({
     [subAgentCards, onSelectFile]
   );
 
-  // ═══ v0.8 R3：叙事抽屉内容（自包含装配块抽至 graphCanvasNarrative.tsx，输入同源）═══
+  // ═══ 叙事抽屉内容（装配逻辑抽至 graphCanvasNarrative.tsx）═══
   const { narrative, narrativeCopyFileId } = useGraphCanvasNarrative({
     narrativeTarget,
     subAgentCards,
@@ -1887,7 +1860,7 @@ export function useGraphCanvasController({
   });
 
   // D3 Curve Generator for the 4-strand central river trunk（四条泳道曲线，x 偏移 -5/-1/+3/+7；
-  // hard_3 起泳道语义化：md=橙 / svg=紫 / pdf=黄 / 未判定=蓝，见泳道渲染与图例）
+  // 泳道按格式语义化：md=橙 / svg=紫 / pdf=黄 / 未判定=蓝，见泳道渲染与图例）
   const d3RiverStrands = useMemo(() => {
     const lineGen = d3.line<[number, number]>().curve(d3.curveBasis);
     return {
@@ -2022,14 +1995,12 @@ export function useGraphCanvasController({
   useEffect(() => () => cancelExplore(), []);
   const exploreAfterClick = (fileId: string, revisionId?: string, eventId?: string) => {
     cancelExplore();
-    // v0.4：下钻到具体版本与事件（不是在读磁盘当前内容）
+    // 下钻到具体版本与事件（不是在读磁盘当前内容）
     pendingExplore.current = setTimeout(() => onExploreFile(fileId, revisionId, eventId), 240);
   };
-  // v0.8 R3③：双击语义变更——旧「双击直开阅读器」退役（readAfterDoubleClick 删除），改
-  // 「双击查看详情」滑出叙事抽屉；「打开原文」迁抽屉 footer 首位钮（复用 openFileReader）。
+  // 双击查看详情：滑出叙事抽屉；「打开原文」位于抽屉 footer 首位按钮（复用 openFileReader）。
   // 指名目标优先：nodeId=事件卡叙事；fileId=文件叙事；空对象=按当前选中态解析（工程轴）。
-  // 进抽屉先取消 pending 的单击下钻（旧 readAfterDoubleClick 同款 cancelExplore——
-  // 否则双击后 240ms 下钻把画布切到 depth-1，抽屉随隐藏层消失）。
+  // 进抽屉前先取消 pending 的单击下钻，避免双击后 240ms 触发下钻将画布切到 depth-1 导致抽屉消失。
   const openNarrativeDrawer = (target?: { nodeId?: string; fileId?: string }) => {
     cancelExplore();
     if (target && (target.nodeId || target.fileId)) {
@@ -2122,7 +2093,7 @@ export function useGraphCanvasController({
   };
 
   const isNodeInActiveTimeSlice = (bucket: string) => {
-    // v0.8 R4③：版本演进视图放开按日调光——演进跨日期展开，不再因选中某日把其余时段降透明
+    // 版本演进视图放开按日调光：演进跨日期展开，不因选中某日把其余时段降透明
     if (versionView === 'evolution') return true;
     if (scene.hasRealEvents) {
       // 事件模式：卡片都属于当前日期组；左侧日期导航按选中日期高亮
@@ -2134,7 +2105,7 @@ export function useGraphCanvasController({
     return activeTimeSlice === bucket;
   };
 
-  // ═══ D05：星图画布 Alt+方向键 沿引用/因果连线空间漫游 ═══
+  // ═══ 星图画布 Alt+方向键 沿引用/因果连线空间漫游 ═══
   // 候选节点与渲染几何同源（事件卡 + 左侧来源卡 + 任务包横排富预览卡）；
   // 跳转同步右栏选中并居中运镜（reduced-motion 自动 durationMs=0 静态降级）。
   const spatialNavCards = useMemo<CanvasNavCard[]>(() => {
@@ -2306,7 +2277,7 @@ export function useGraphCanvasController({
     trunkAccumulation,
     accumulationSummary,
     accumulationRibbonPath,
-    // D01-b：卡片本体障碍清单（与渲染口径同源；relations 原已直通 ctx，证据链连线层消费）
+    // 卡片本体障碍清单（与渲染口径同源；relations 原已直通 ctx，证据链连线层消费）
     graphObstacleRects,
     mainHubPos,
     trunkX,
@@ -2376,7 +2347,7 @@ export function useGraphCanvasController({
     handleCopyInspectorPointer,
     isNodeVisibleByCategory,
     isNodeInActiveTimeSlice,
-    // D02 增量聚光灯（宿主派生，本层透传；undefined = 关闭态零注入）
+    // 增量聚光灯（宿主派生，本层透传；undefined = 关闭态零注入）
     spotlight,
   };
 }

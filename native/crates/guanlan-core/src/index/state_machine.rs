@@ -1,18 +1,17 @@
-//! 统一状态机 SSOT（PRD v2.0 §2.2/§3.1/§3.2；冻结契约 stateMachine 段）。
+//! 统一状态机 SSOT（参见 `native/docs/contract-storage.md` §4.3）。
 //!
 //! 三层结构中的**第②层（纯函数）**：
-//! ①存储 = `initiatives` / `artifact_states` / `task_nodes` / `checkpoints` 新表
-//!   （[`crate::index::writer`]，contract-storage.md §4.3）；
+//! ①存储 = `initiatives` / `artifact_states` / `task_nodes` / `checkpoints` 表
+//!   （[`crate::index::writer`]，`contract-storage.md` §4.3）；
 //! ②本模块 = 六态枚举、迁移规则、五槽位声明式重算、checklist 计数、专项识别、
 //!   token 估算——全部无 IO 纯函数，单测穷举；
-//! ③前端投影 = `src/utils/stateProjection.ts`（前端批次落地，与本模块
-//!   同规则镜像）。
+//! ③前端投影 = `src/utils/stateProjection.ts`（与本模块同规则镜像）。
 //!
-//! 迁移规则（穷举表，PRD 2.2 + 冻结契约裁定）：
+//! 迁移规则（穷举表）：
 //! - Draft→PendingReview 当 (pending_p0+pending_p1)>0；
 //! - PendingReview→ApprovedRevision 当 p0==0 && p1==0 && has_selected_revision；
 //! - ApprovedRevision→Executing 当 task_running（= 执行槽或交付槽 running，
-//!   持久跨轮——阻塞1 修复）；
+//!   跨轮持久维持）；
 //! - Executing→Delivered 当 checklist_total>0 && checklist_done==checklist_total
 //!   && p0+p1==0 && 执行槽 completed && 交付槽 completed（具体槽位判据）；
 //! - Delivered→Archived 当 user_accepted（唯一来源=archive 写线程置位）或
@@ -29,9 +28,9 @@ use regex::Regex;
 use crate::domain::normalize_rel_path;
 use crate::index::ident::stable_key;
 
-// ---------- 六态文档/专项状态（PRD 2.2） ----------
+// ---------- 六态文档/专项状态 ----------
 
-/// 统一文档与专项状态机（SSOT）。wire 词为 snake_case（apiContract A）。
+/// 统一文档与专项状态机（SSOT）。wire 词为 snake_case。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DocState {
     Draft,
@@ -68,11 +67,11 @@ impl DocState {
     }
 }
 
-// ---------- 六态阶段（apiContract A；PRD 2.1 的「提案」对应「蓝图」——裁定值） ----------
+// ---------- 六态阶段（提案类文档归入「蓝图」阶段） ----------
 
-/// 专项阶段。wire 词为中文（apiContract A：current_stage）。
+/// 专项阶段。wire 词为中文（`current_stage`）。
 /// 排序即流水线次序：待分类 < 蓝图 < 计划 < 决策 < 执行 < 交付
-/// （`current_stage` 取已归类文档的最靠后阶段——裁定值，登记 §4.3）。
+/// （`current_stage` 取已归类文档的最靠后阶段，详见 `contract-storage.md` §4.3）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Stage {
     /// 待分类（未归入任何标准阶段的文档；排名最低，不推进专项 current_stage）
@@ -84,7 +83,7 @@ pub enum Stage {
     Delivery,
 }
 
-/// 五个标准阶段槽位的固定次序（task_nodes 五槽位，PRD 3.1）。
+/// 五个标准阶段槽位的固定次序（`task_nodes` 五槽位）。
 pub const PIPELINE_STAGES: [Stage; 5] = [
     Stage::Blueprint,
     Stage::Plan,
@@ -118,7 +117,7 @@ impl Stage {
         }
     }
 
-    /// 阶段 → 槽位类型（node_kind 按阶段固定，冻结契约 E）：
+    /// 阶段 → 槽位类型（`node_kind` 按阶段固定）：
     /// 蓝图→derive、计划→derive、决策→await_decision、执行→generate、交付→deliver
     pub fn slot_kind(self) -> Option<SlotKind> {
         match self {
@@ -131,10 +130,10 @@ impl Stage {
     }
 }
 
-// ---------- 任务节点状态（PRD 3.1 Task DAG） ----------
+// ---------- 任务节点状态（Task DAG） ----------
 
-/// 子任务节点持久态（task_nodes.state）。`suspended_on_hitl` 是**节点持久态**，
-/// 只存在于 task_nodes 层——job 是瞬时执行载体，不承载挂起语义（阻塞3 裁定）。
+/// 子任务节点持久态（`task_nodes.state`）。`suspended_on_hitl` 是**节点持久态**，
+/// 只存在于 `task_nodes` 层——job 是瞬时执行载体，不承载挂起语义。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NodeState {
     Queued,
@@ -206,7 +205,7 @@ impl SlotKind {
 
 // ---------- 信号与迁移 ----------
 
-/// 状态迁移信号（纯函数入参；不落持久列，每轮重算——冻结契约 stateMachine 段）
+/// 状态迁移信号（纯函数入参；不落持久列，每轮重算）
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct StateSignals {
     pub pending_p0: u32,
@@ -214,7 +213,7 @@ pub struct StateSignals {
     pub pending_p2: u32,
     pub checklist_done: u32,
     pub checklist_total: u32,
-    /// v1 口径 = 存在已捕获版本（selected_revision_id = files.last_revision_id）
+    /// 是否存在已捕获版本（`selected_revision_id = files.last_revision_id`）
     pub has_selected_revision: bool,
     /// 该专项执行槽或交付槽 state=='running'（持久生产端：每轮 reconcile 重算维持）
     pub task_running: bool,
@@ -229,7 +228,7 @@ pub struct SlotGates {
     pub deliver_completed: bool,
 }
 
-/// 超期归档阈值（天）。PRD 2.2：超期自动归档。
+/// 超期自动归档阈值（天）。
 pub const ARCHIVE_AFTER_IDLE_DAYS: u32 = 30;
 
 /// 单步状态迁移（穷举表，见模块注释）。返回 None = 维持现状。
@@ -295,7 +294,7 @@ pub fn next_artifact_state(
 }
 
 /// 迁移到不动点：从持久化当前态出发逐步推进，返回**每一单步迁移**的路径
-/// （阻塞4：同一文件的多级状态迁移身份互异，全部记账）。上限 = 6（六态环上
+/// （同一文件的多级状态迁移身份互异，全部记账）。上限 = 6（六态环上
 /// 最多 5 步；超出视为规则抖动，防御性截断）。
 pub fn advance_to_fixpoint(
     current: DocState,
@@ -315,16 +314,16 @@ pub fn advance_to_fixpoint(
     path
 }
 
-// ---------- 五槽位声明式重算（PRD 3.1；冻结契约 E） ----------
+// ---------- 五槽位声明式重算 ----------
 
-/// 槽位重算输入（冻结契约 E 的每槽判据，调用方从库内行推导）
+/// 槽位重算输入（各槽位判据，调用方从库内行推导）
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SlotRules {
     /// 前置阶段槽位是否 completed（五槽位链式门禁；蓝图槽无前置，恒 true）
     pub upstream_completed: bool,
     /// 该阶段至少一个文档
     pub has_artifact: bool,
-    /// 该阶段至少一个文档且有内容（v1 口径 = 最新版本 size_bytes>0）
+    /// 该阶段至少一个文档且有内容（以最新版本 `size_bytes > 0` 判定）
     pub stage_has_content: bool,
     /// 未决阻塞级事项数（P0+P1；决策槽与交付槽共用）
     pub pending_p0_p1: u32,
@@ -335,10 +334,10 @@ pub struct SlotRules {
     pub checklist_total: u32,
 }
 
-/// 槽位状态声明式重算（冻结契约 E 逐槽规则；单测穷举）。
+/// 槽位状态声明式重算（单测穷举）。
 ///
 /// **幂等性即 running 的持久性**：同输入重算结果稳定——每轮 reconcile 重算
-/// 维持 running，直至完成条件满足或外部 checkpoint 到达（阻塞1 修复核心）。
+/// 维持 running，直至完成条件满足或外部 checkpoint 到达。
 pub fn slot_state(kind: SlotKind, r: &SlotRules) -> NodeState {
     // 前置门禁：前置阶段槽位未 completed → 本槽 queued（所有槽位共用）
     if !r.upstream_completed {
@@ -397,7 +396,7 @@ pub fn slot_state(kind: SlotKind, r: &SlotRules) -> NodeState {
     }
 }
 
-/// 节点 ID（冻结契约 E）：`node_` + stable_key(initiative_id|stage|slot)，
+/// 节点 ID：`node_` + `stable_key(initiative_id|stage|slot)`，
 /// 幂等可对拍（每轮重算同一节点得到同一 ID）。
 pub fn node_id_of(initiative_id: &str, stage: Stage, kind: SlotKind) -> String {
     format!(
@@ -410,13 +409,13 @@ pub fn node_id_of(initiative_id: &str, stage: Stage, kind: SlotKind) -> String {
     )
 }
 
-/// task_running 信号定义（冻结契约 E）：该专项执行槽或交付槽 state=='running'
+/// `task_running` 信号定义：该专项执行槽或交付槽 `state == "running"`
 /// （持久生产端）。
 pub fn task_running(generate: NodeState, deliver: NodeState) -> bool {
     generate == NodeState::Running || deliver == NodeState::Running
 }
 
-// ---------- checklist 计数（PRD 2.2 交付清单；建议7） ----------
+// ---------- checklist 计数（交付清单） ----------
 
 /// 交付清单计数：markdown 任务列表 `- [ ]` / `- [x]`。
 /// 返回 (已完成, 总数)。跳过代码围栏内的行。
@@ -447,15 +446,14 @@ pub fn derive_checklist(content: &str) -> (u32, u32) {
     (done, total)
 }
 
-// ---------- 专项识别（冻结契约 stateMachine 段：建议1/6 闭合写入路径） ----------
+// ---------- 专项识别 ----------
 
 /// 专项识别：默认 `current_path` 首段目录名匹配 `^\d{2}-` 或含「专项」；
 /// `meta` 表键 `initiative_dirs`（JSON 字符串数组）追加目录名。
 /// 返回首段目录名；顶层文件与未匹配目录返回 None。
 ///
-/// 已知裁定值：PRD 例「BOM与图纸联动方案」不满足默认集，必须经
-/// `initiative_dirs` 登记（scan --initiative-dir / set_initiative_dirs job /
-/// seed 示例——登记 §4.3，待 PRD 作者确认默认集）。
+/// 例如「BOM与图纸联动方案」这类不带数字前缀也不含「专项」的目录，不满足默认规则，
+/// 须经 `initiative_dirs` 显式登记（`scan --initiative-dir` 或 `set_initiative_dirs`）。
 pub fn recognize_initiative(relative_path: &str, initiative_dirs: &[String]) -> Option<String> {
     let normalized = normalize_rel_path(relative_path);
     let (first, _rest) = normalized.split_once('/')?;
@@ -482,9 +480,9 @@ pub fn initiative_id_of(dir_name: &str) -> String {
     format!("init_{}", stable_key(dir_name))
 }
 
-/// 文档阶段判定（裁定值，登记 §4.3）：按相对路径关键词短路匹配。
+/// 文档阶段判定（见 `contract-storage.md` §4.3）：按相对路径关键词短路匹配。
 /// 次序：决策 → 计划 → 交付 → 蓝图 → 执行 → 待分类。
-/// 依据：detect_role 的「决策」优先口径 + PRD 3.1 阶段文档命名惯例
+/// 依据：`detect_role` 的「决策」优先口径与阶段文档常见命名惯例
 /// （如 03-待确认事项→决策、方案/计划→计划、交付清单→交付）。
 pub fn stage_from_path(relative_path: &str) -> Stage {
     let path = normalize_rel_path(relative_path);
@@ -522,7 +520,7 @@ pub fn stage_from_path(relative_path: &str) -> Stage {
     Stage::Unclassified
 }
 
-// ---------- token 估算（冻结契约 B0/B7：双端同公式锁死） ----------
+// ---------- token 估算（前后端同公式锁死） ----------
 
 /// CJK 码位区间（写死，双端一致）：U+3000–U+303F ∪ U+4E00–U+9FFF ∪
 /// U+F900–U+FAFF ∪ U+FF01–U+FF5E（UTF-8 下每字符 3 字节）。
@@ -828,7 +826,7 @@ mod tests {
     fn fixpoint_records_every_single_step() {
         let gates = SlotGates::default();
         // 多级迁移：pending_review 未决清零 + 选中修订 + task_running →
-        // approved_revision → executing（两单步都要记账——阻塞4 回归锁）
+        // approved_revision → executing（两单步都必须逐一记账）
         let path = advance_to_fixpoint(
             DocState::PendingReview,
             &signals(0, 0, 0, 0, true, true, 0),
@@ -978,7 +976,7 @@ mod tests {
         assert_eq!(slot_state(SlotKind::Deliver, &none), NodeState::Queued);
     }
 
-    /// running 的持久性由幂等性证明（阻塞1）：同输入重算结果稳定
+    /// running 的持久性由幂等性保证：同输入重算结果稳定
     #[test]
     fn slot_recompute_is_idempotent_for_running() {
         let r = rules(true, true, false, 0);
@@ -1047,7 +1045,7 @@ mod tests {
             recognize_initiative("BOM专项/联动.md", &[]),
             Some("BOM专项".to_owned())
         );
-        // PRD 例「BOM与图纸联动方案」不在默认集——必须经 initiative_dirs 登记
+        // 不带两位数字前缀也不含「专项」的目录不在默认集——必须经 initiative_dirs 登记
         assert_eq!(recognize_initiative("BOM与图纸联动方案/x.md", &[]), None);
         let dirs = vec!["BOM与图纸联动方案".to_owned()];
         assert_eq!(
@@ -1107,10 +1105,10 @@ mod tests {
         assert_eq!(SlotKind::AwaitDecision.as_str(), "await_decision");
     }
 
-    // ---------- token 估算（B0 向量：编译期依赖，缺文件=编译错误） ----------
+    // ---------- token 估算（共享向量：编译期依赖，缺文件=编译错误） ----------
 
-    /// 向量源：native/testdata/token-vectors.json（git 内静态文件，
-    /// 路径自 src/index/ 上行四级到 native/testdata/；无 seed 依赖、无 ci.yml 改动）。
+    /// 向量源：`native/testdata/token-vectors.json`（git 内静态文件，
+    /// 路径自 `src/index/` 上行四级到 `native/testdata/`，无需外部夹具）。
     const TOKEN_VECTORS_RAW: &str = include_str!("../../../../testdata/token-vectors.json");
 
     #[test]
@@ -1120,7 +1118,7 @@ mod tests {
         let rows = vectors["vectors"].as_array().expect("vectors 数组");
         assert!(
             rows.len() >= 12,
-            "向量数应 ≥12（冻结契约 B0）：{}",
+            "共享 token 估算向量数应 ≥12：{}",
             rows.len()
         );
         for row in rows {

@@ -1,4 +1,4 @@
-//! C01 · 候选事项（多信号编织产物）只读查询与 wire 组装。
+//! 候选事项（多信号编织产物）只读查询与 wire 组装。
 
 use crate::dto::InitiativeCandidatesResponse;
 use crate::error::GuanlanError;

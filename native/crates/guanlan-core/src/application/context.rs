@@ -1,22 +1,22 @@
-//! 「证道阁」上下文组装器（PRD v2.0 §4.1/§4.2/§4.3；冻结契约 B）。
+//! 智能体上下文组装器。
 //!
-//! 三入口默认包（PRD 4.1 表）：
+//! 三入口默认包：
 //! - `document`（文档正文页）：当前文档完整正文 + 所属专项 README/核心定位（摘要）
 //!   + 当前文档关联 P0/P1 未决事项；
 //! - `initiative`（专项详情）：各阶段最新定版（选中修订）文档摘要 + 当前阶段全量
 //!   正文 + 该专项全部未决事项；
 //! - `global`（首页总览）：最近活跃 Top-3 专项核心摘要 + 全局最高优先级未决汇总。
 //!
-//! 双模输出（PRD 4.3）：模式 A `<guanlan_context>` XML 结构 Markdown；模式 B
+//! 双模输出：模式 A `<guanlan_context>` XML 结构 Markdown；模式 B
 //! `guanlan-mcp/v1` JSON 载荷（session_checkpoint_id / context_bundle /
 //! allowed_mcp_tools / guardrails）。
 //!
-//! Token 预算（PRD 4.2）：est_tokens = ceil(cjk*0.7 + non_cjk_bytes/3.5)
+//! Token 预算：est_tokens = ceil(cjk*0.7 + non_cjk_bytes/3.5)
 //! （[`crate::index::state_machine::estimate_tokens`]，双端同公式）；超阈值时给
 //! 全量条目的降级建议（est_tokens 降序）。
 //!
-//! 推荐挂载排序裁定值（登记 contract-query-api.md）：本文引用(3)/同专项引用(3)
-//! > 跨专项引用(2) > 命名关联(1)（unresolved 边=命名关联）。
+//! 推荐挂载排序：本文引用(3)/同专项引用(3) > 跨专项引用(2) > 命名关联(1)
+//! （unresolved 边归为命名关联）。
 
 use std::collections::HashMap;
 
@@ -43,7 +43,7 @@ const UPSTREAM_SNIPPET_MAX_CHARS: usize = 520;
 /// 脱敏替换令牌（停机红线护栏：本机密钥/环境变量绝不进入上下文包）
 pub const REDACTED_SECRET_MARKER: &str = "[REDACTED_SECRET]";
 
-/// 上下文意图（契约 B intent）
+/// 上下文意图（intent）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContextIntent {
     Document,
@@ -70,7 +70,7 @@ impl ContextIntent {
     }
 }
 
-/// 输出模式（契约 B mode）
+/// 输出模式（mode）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContextMode {
     Structured,
@@ -97,7 +97,7 @@ impl ContextMode {
     }
 }
 
-/// 注入粒度（契约 B + E03：full | summary | diff_only | metadata_only | decisions_only）
+/// 注入粒度（full | summary | diff_only | metadata_only | decisions_only）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContextGranularity {
     Full,
@@ -130,7 +130,7 @@ impl ContextGranularity {
     }
 }
 
-/// 上下文请求（契约 B 请求体；items 缺省/空 → 按意图组装默认包）
+/// 上下文请求（items 缺省/空时按意图组装默认包）
 #[derive(Debug, Clone)]
 pub struct ContextRequest {
     pub intent: ContextIntent,
@@ -139,11 +139,11 @@ pub struct ContextRequest {
     pub items: Vec<ContextItemInput>,
     pub mode: ContextMode,
     pub budget_tokens: u64,
-    /// 内联正文上限（service 层传入 budget.max_single()，issue #32）
+    /// 内联正文上限（service 层传入 budget.max_single()）
     pub max_inline_bytes: usize,
 }
 
-/// 显式条目（契约 B items[]）
+/// 显式条目（items[]）
 #[derive(Debug, Clone)]
 pub struct ContextItemInput {
     pub file_id: String,
@@ -180,7 +180,7 @@ struct InitiativeMeta {
     current_stage: String,
 }
 
-/// GET/POST /api/v1/context 的组装入口（单短读事务，契约 B）。
+/// GET/POST /api/v1/context 的组装入口（单短读事务）。
 pub fn assemble_context(
     store: &ReadonlyStore,
     request: &ContextRequest,
@@ -598,7 +598,7 @@ fn initiative_file_filter(view: &WorkspaceView, initiative_id: Option<&str>) -> 
         .collect()
 }
 
-/// 三入口默认包（PRD 4.1 表 + E03 零空态自动预选：当前定稿全文 + 专项核心 + 上游规范引用）
+/// 三入口默认包（零空态自动预选：当前定稿全文 + 专项核心 + 上游规范引用）
 fn default_items(
     conn: &rusqlite::Connection,
     workspace_id: &str,
@@ -638,7 +638,7 @@ fn default_items(
                     push_unique(&mut items, companion, ContextGranularity::Summary);
                 }
             }
-            // E03：上游规范/引用文档自动预选（最多 2 篇，摘要粒度）
+            // 上游规范/引用文档自动预选（最多 2 篇，摘要粒度）
             if let Some(meta) = view.files.get(focus) {
                 if let Some(rev_id) = meta.last_revision_id.as_deref() {
                     let upstream_ids = upstream_target_file_ids(conn, workspace_id, focus, rev_id)?;
@@ -728,7 +728,7 @@ fn default_items(
             for (file_id, _) in current_files {
                 push_unique(&mut items, file_id, ContextGranularity::Full);
             }
-            // E03 零空态兜底：若专项内文件处于非标准阶段（如「待分类」），仍自动预选核心材料
+            // 零空态兜底：若专项内文件处于非标准阶段（如「待分类」），仍自动预选核心材料
             if items.is_empty() && !all_init_files.is_empty() {
                 for (idx, (file_id, _)) in all_init_files.into_iter().take(6).enumerate() {
                     let g = if idx == 0 {
@@ -767,7 +767,7 @@ fn default_items(
                     push_unique(&mut items, fallback, ContextGranularity::Summary);
                 }
             }
-            // E03 零空态兜底：扁平目录无已识别专项时，按路径序预选前 3 篇活跃非敏感文档
+            // 零空态兜底：扁平目录无已识别专项时，按路径序预选前 3 篇活跃非敏感文档
             if items.is_empty() {
                 let mut active: Vec<(&String, &FileMeta)> = view
                     .files
@@ -1204,7 +1204,7 @@ fn recommended_ranked_push(
 
 // ---------- 模式 A / 模式 B ----------
 
-/// DocState wire 词 → PRD 2.2 中文标签
+/// DocState wire 词 → 中文标签
 fn state_label(state: &str) -> &'static str {
     match state {
         "draft" => "草稿",
@@ -1228,7 +1228,7 @@ fn granularity_label(granularity: &str) -> &'static str {
     }
 }
 
-/// PRD 4.3 模式 A + E03：`<guanlan_context>` XML 结构 Markdown（与预览/复制/MCP 同源）
+/// 模式 A：`<guanlan_context>` XML 结构 Markdown（与预览/复制/MCP 同源）
 fn render_markdown(
     workspace_root: &str,
     initiative_name: Option<&str>,
@@ -1398,7 +1398,7 @@ fn xml_attr(text: &str) -> String {
         .replace('"', "&quot;")
 }
 
-/// PRD 4.3 模式 B：guanlan-mcp/v1 JSON 载荷
+/// 模式 B：guanlan-mcp/v1 JSON 载荷
 fn render_payload(
     store: &ReadonlyStore,
     view: &WorkspaceView,
@@ -1414,7 +1414,7 @@ fn render_payload(
         .iter()
         .map(|item| {
             let granularity = match item.granularity.as_str() {
-                // PRD 4.3 模式 B 示例口径：summary → summary_only
+                // 模式 B 结构化载荷口径：summary 映射为 summary_only
                 "summary" => "summary_only",
                 other => other,
             };
@@ -1488,9 +1488,9 @@ fn latest_success_checkpoint_id(
     })
 }
 
-// ================= E03：四档粒度内容派生、上游规范片段与密钥/环境变量脱敏护栏 =================
+// ================= 四档粒度内容派生、上游规范片段与密钥/环境变量脱敏护栏 =================
 
-/// 查询版本真实 content_hash（用于 payload hash 与 E02 input_context_hashes 对齐）
+/// 查询版本真实 content_hash（用于 payload hash 与草案 input_context_hashes 对齐）
 fn lookup_revision_hash(conn: &rusqlite::Connection, revision_id: &str) -> Option<String> {
     conn.query_row(
         "SELECT content_hash FROM revisions WHERE revision_id = ?",
@@ -1647,7 +1647,7 @@ fn upstream_target_file_ids(
     Ok(out)
 }
 
-/// E03：抽取上游规范/引用片段（从焦点/已选文档的出边自动溯源，按规范优先级排序并强制脱敏）
+/// 抽取上游规范/引用片段（从焦点/已选文档的出边自动溯源，按规范优先级排序并强制脱敏）
 fn collect_upstream_snippets(
     store: &ReadonlyStore,
     conn: &rusqlite::Connection,
@@ -1782,7 +1782,7 @@ fn collect_upstream_snippets(
     Ok((out, redacted_total))
 }
 
-/// E03 停机红线护栏：判定路径是否属于本机密钥/环境变量敏感文件（绝不自动装入上下文包）
+/// 停机红线护栏：判定路径是否属于本机密钥/环境变量敏感文件（绝不自动装入上下文包）
 pub fn is_sensitive_secret_path(path: &str) -> bool {
     let norm = path.replace('\\', "/").to_lowercase();
     let base = norm.rsplit('/').next().unwrap_or(&norm);
@@ -1826,7 +1826,7 @@ pub fn is_sensitive_secret_path(path: &str) -> bool {
         || norm.starts_with(".aws/")
 }
 
-/// E03 停机红线护栏：确定性密钥与环境变量凭证脱敏器（零正则 crate 依赖）。
+/// 停机红线护栏：确定性密钥与环境变量凭证脱敏器（零正则 crate 依赖）。
 /// 返回 `(脱敏后文本, 拦截次数)`；任何 PEM 私钥块、云厂商/模型 API Key、Bearer 令牌、
 /// URL 内嵌密码、`.env`/YAML/JSON 中的敏感键值行一律替换为 `[REDACTED_SECRET]`。
 pub fn sanitize_context_text(input: &str) -> (String, usize) {

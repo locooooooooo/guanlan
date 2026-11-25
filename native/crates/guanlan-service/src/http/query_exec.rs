@@ -1,4 +1,4 @@
-//! 有界查询执行通道（issue #4：建立有界查询通道，隔离读连接并传递取消）。
+//! 有界查询执行通道：隔离读连接、限制并发与排队并传递取消信号。
 //!
 //! 此前全部处理器共享 `Arc<Mutex<ReadonlyStore>>`：慢查询持锁期间轻量请求全部
 //! 排队，队列无上限、无 deadline、无饱和反馈；错误包络的 generation 还在
@@ -18,7 +18,7 @@
 //!   错误包络取缓存值——异步线程不再同步抢数据库锁。
 //!
 //! 容量回收纪律：查询结束（含失败/取消）总是先归还连接再释放许可。查询体的 panic
-//! 由 `catch_unwind` 接住（issue #36）：连接被丢弃、重建并重新认领工作区后再入池，
+//! 由 `catch_unwind` 接住：连接被丢弃、重建并重新认领工作区后再入池，
 //! 不再随任务消失。剩下的唯一泄漏路径是任务级的 JoinError（`catch_unwind` 之外的
 //! 极端情形，如 OOM）：连接随任务消失，池缩容，不做连接重建。
 
@@ -209,7 +209,7 @@ impl QueryExecutor {
                 cached_generation.store(ws.index_generation, Ordering::SeqCst);
                 generation_valid.store(true, Ordering::SeqCst);
             }
-            // issue #36：查询体在 catch_unwind 里跑——panic 不再让连接随任务消失，
+            // 查询体在 catch_unwind 里跑——panic 不再让连接随任务消失，
             // 而是走「丢弃脏连接 → 重建并重新认领工作区 → 入池」
             let out = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&store)))
                 .unwrap_or_else(|_| {

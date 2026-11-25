@@ -1,7 +1,7 @@
 /**
- * D01-a 四层拆解 · GraphCanvasView 薄装配层（任务卡 D01-a ②）。
+ * GraphCanvasView 四层薄装配层。
  *
- * 巨石（5027 行）已按四层拆入 graph/ 目录：
+ * 具体实现按职责拆分在 graph/ 目录下：
  *  - graph/geometry.ts                纯函数几何布局引擎（零 UI 依赖、可单测）
  *  - graph/useGraphCanvasController.tsx 单一行为控制器（state/memo/effect/handler → ctx）
  *  - graph/GraphSceneLayer.tsx        静态 Scene 节点层（整棵 SVG 场景）
@@ -9,8 +9,7 @@
  *  - graph/graphCanvasChrome.tsx      浮动 Chrome 工具栏（顶栏/视图设置/药丸接线）
  *  - graph/GraphSourcesPanel.tsx      浮动 Chrome · Sources 面板
  *
- * 本文件只保留：测试兼容再导出（gc-12/wf2/starfix2/canvas-theme 既有导入路径不变）
- * + 层装配（DOM 嵌套结构与拆解前逐字一致，像素回归护栏覆盖）。
+ * 本文件保留几何导出（保持既有单测导入路径不变）与四层装配结构。
  */
 
 import React from 'react';
@@ -93,7 +92,7 @@ import { GraphSpotlightBar } from './graph/GraphSpotlightBar';
 
 /**
  * 全景溯源星图画布（四层装配）。
- * issue #27 验收 4：隐藏时不渲染整棵 SVG（组件保持挂载，选中态/缩放/布局全在控制器
+ * 隐藏时不渲染整棵 SVG（组件保持挂载，选中态/缩放/布局全在控制器
  * state，重新显示即恢复）。派生的分组与卡片在控制器 memo 里同样按 visible 短路。
  */
 export const GraphCanvasView: React.FC<GraphCanvasViewProps> = (props) => {
@@ -101,10 +100,10 @@ export const GraphCanvasView: React.FC<GraphCanvasViewProps> = (props) => {
   if (!props.visible) return null;
 
   return (
-    // 撑满 .dark-porthole 实际可用高（h-full min-h-0），不再写死 100vh-chrome-h——
+    // 撑满 .dark-porthole 实际可用高（h-full min-h-0），不写死 100vh-chrome-h——
     // 顶部存在 L4A 进度条或通知横幅时，底部药丸工具栏绝不被挤出视口下缘
     <div className="h-full min-h-0 w-full bg-[color:var(--cv-void)] text-[color:var(--cv-ink)] flex flex-col overflow-hidden select-none relative">
-      {/* 全景溯源工作区顶栏：星图/列表/日历 三态切换（契约⑤）+ 画布主题分段钮 + 当前司辰日期。 */}
+      {/* 全景溯源工作区顶栏：星图/列表/日历三态切换 + 画布主题分段钮 + 当前司辰日期。 */}
       <GraphTopBar ctx={ctx} />
 
       {/* Main Full-Bleed Workspace Stage（stageRef 供选中卡→右栏高亮线取 clientWidth） */}
@@ -112,7 +111,7 @@ export const GraphCanvasView: React.FC<GraphCanvasViewProps> = (props) => {
         {/* LEFT FLOATING PANEL: "Sources"（浮动 Chrome · 来源面板） */}
         <GraphSourcesPanel ctx={ctx} />
 
-        {/* D02 增量聚光灯浮出批阅微条（居中浮于画布顶部，展开时不撑爆顶栏、抽屉滑出时自动让位） */}
+        {/* 增量聚光灯浮出批阅微条（居中浮于画布顶部，展开时不撑爆顶栏、抽屉滑出时自动让位） */}
         <GraphSpotlightBar ctx={ctx} mode="nav" />
 
         {/* ② 视图设置弹层（浮动 Chrome） */}
@@ -121,13 +120,13 @@ export const GraphCanvasView: React.FC<GraphCanvasViewProps> = (props) => {
         {/* CENTER D3.JS SVG GRAPH CANVAS（静态 Scene 节点层） */}
         <GraphSceneLayer ctx={ctx} />
 
-        {/* D01-a ③ 任务包标题 Overlay（屏幕空间恒定像素字号 + 双击原位改名） */}
+        {/* 任务包标题 Overlay（屏幕空间恒定像素字号 + 双击原位改名） */}
         <GraphPackageTitleOverlay ctx={ctx} />
 
-        {/* C4 泳道图例（屏幕空间 Overlay） */}
+        {/* 泳道图例（屏幕空间 Overlay） */}
         <GraphLaneLegend ctx={ctx} />
 
-        {/* C7③/3.1 叙事抽屉「直流电流」连线（屏幕空间 Overlay） */}
+        {/* 叙事抽屉「直流电流」连线（屏幕空间 Overlay） */}
         <GraphNarrativeLinkOverlay ctx={ctx} />
 
         {/* ④ 司辰时间机器摘要气泡（屏幕空间 Overlay） */}
@@ -136,16 +135,16 @@ export const GraphCanvasView: React.FC<GraphCanvasViewProps> = (props) => {
         {/* FLOATING HOVER PREVIEW CARD（屏幕空间 Overlay） */}
         <GraphHoverPreviewCard ctx={ctx} />
 
-        {/* v0.8 R5 右上小地图（屏幕空间 Overlay） */}
+        {/* 右上小地图（屏幕空间 Overlay） */}
         <GraphMiniMapSection ctx={ctx} />
 
-        {/* v0.8 R4 底部药丸工具栏（浮动 Chrome） */}
+        {/* 底部药丸工具栏（浮动 Chrome） */}
         <GraphPillToolbarSection ctx={ctx} />
 
-        {/* R4⑤ ?快捷键就地轻弹层（屏幕空间 Overlay） */}
+        {/* ?快捷键就地轻弹层（屏幕空间 Overlay） */}
         <GraphShortcutsPop ctx={ctx} />
 
-        {/* v0.8 R3 叙事抽屉（屏幕空间 Overlay） */}
+        {/* 叙事抽屉（屏幕空间 Overlay） */}
         <GraphNarrativeDrawerSection ctx={ctx} />
       </div>
     </div>

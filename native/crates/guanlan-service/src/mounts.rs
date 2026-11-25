@@ -1,10 +1,10 @@
-//! C05 挂载注册表：只读参考工作区（第二库）的挂载 / 卸载 / 列表 / 溯源。
+//! 挂载注册表：只读参考工作区（第二库）的挂载 / 卸载 / 列表 / 溯源。
 //!
-//! 职责与纪律（任务卡 C05 / 契约 contract-query-api.md §2.5、contract-storage.md §13）：
+//! 职责与纪律（契约 contract-query-api.md §2.5、contract-storage.md §13）：
 //! 1. **只读第二库**：参考区经 [`guanlan_core::storage::ReadonlyStore::open_at`]
 //!    以 `SQLITE_OPEN_READONLY` 打开其数据目录下的 `index.db`——参考区零写入，
 //!    与主区写入者（唯一写线程）互不相干；
-//! 2. **挂载前互斥校验**（quiet-md 外挂目录隔离纪律）：参考区与主区、参考区与
+//! 2. **挂载前互斥校验**（外挂目录隔离纪律）：参考区与主区、参考区与
 //!    既有挂载区两两做父子目录判定，互为祖先/后代一律 `MOUNT_REJECTED`（409），
 //!    绝不放行嵌套成环；同一目录（含大小写变体）重复挂载 → `CONFLICT`；
 //! 3. **确定性写拦截**：主区 rename/move/trash 端点受理前经
@@ -218,7 +218,7 @@ impl MountRegistry {
         let name = mount_display_name(normalized);
 
         let mut inner = self.inner.lock().unwrap_or_else(|p| p.into_inner());
-        // ① 与主区互斥（quiet-md：外挂目录严禁与主区互为父子）
+        // ① 与主区互斥（外挂目录严禁与主区互为父子）
         if let Some(primary) = &inner.primary_root {
             match path_relation(primary, normalized) {
                 PathRelation::Equal => {
@@ -417,7 +417,7 @@ impl MountRegistry {
         query::cross_search::mount_list_files(store, mount_id, &entry.name, &entry.root_path, limit)
     }
 
-    /// 联合检索：对全部在线挂载区跑 C02 检索（串行；离线区 response=None）。
+    /// 联合检索：对全部在线挂载区执行混合倒排检索（串行；离线区 response=None）。
     /// 单区失败不拖垮整体——该区原位降级离线，响应诚实标注。
     pub fn search_mounts(
         &self,
