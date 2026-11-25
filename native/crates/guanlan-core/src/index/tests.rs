@@ -961,3 +961,31 @@ fn reconcile_aborts_cleanly_on_cancel_without_partial_writes() {
     );
     assert_eq!(ws.index_generation, 0, "取消的对账不得推进代际");
 }
+
+#[test]
+fn missing_detection_lookup_is_indexed_at_workspace_scale() {
+    // 缺失检测对「已入库文件数」次判定；线性扫描在 8 万文件上是数十亿次比较，
+    // 而这段判定在写事务里执行。这里用 8 万条已见路径/身份压一次查找，
+    // 2 秒上限是给 debug 构建与慢机器的余量（集合判定实际在毫秒级）。
+    const N: usize = 80_000;
+    let paths: Vec<String> = (0..N)
+        .map(|index| format!("资料/{:03}/文档-{index:05}.md", index % 500))
+        .collect();
+    let ids: Vec<String> = (0..N).map(|index| format!("file_{index:05}")).collect();
+    let seen = crate::index::SeenFiles::new(paths.iter().cloned(), ids.iter().cloned());
+
+    let started = std::time::Instant::now();
+    let mut hits = 0usize;
+    for index in 0..N {
+        if seen.contains(&paths[index], &ids[index]) {
+            hits += 1;
+        }
+    }
+    let elapsed = started.elapsed();
+
+    assert_eq!(hits, N, "已见路径与已见身份都应命中");
+    assert!(
+        elapsed < std::time::Duration::from_secs(2),
+        "8 万次缺失判定耗时 {elapsed:?}：判定必须是集合查找，退回线性扫描会把这轮写事务拖死"
+    );
+}

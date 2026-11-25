@@ -33,7 +33,7 @@ pub mod writer;
 #[path = "tests.rs"]
 mod tests;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -307,6 +307,32 @@ fn check_cancelled(options: &ReconcileOptions, stage: &str) -> Result<(), Guanla
         )));
     }
     Ok(())
+}
+
+/// 本轮已见文件集合：路径与 `file_id` 各建一张哈希表。
+///
+/// 缺失检测要回答「这条已入库记录是否仍在本轮采集范围里」，判定次数等于已入库
+/// 文件数；用 `Vec::contains` 做线性扫描时，5 万文件一轮就是数十亿次字符串比较。
+/// 这段判定跑在写事务里，会把唯一写线程和排队中的交互写命令一起堵住。
+pub(crate) struct SeenFiles {
+    paths: HashSet<String>,
+    ids: HashSet<String>,
+}
+
+impl SeenFiles {
+    pub(crate) fn new(
+        paths: impl IntoIterator<Item = String>,
+        ids: impl IntoIterator<Item = String>,
+    ) -> Self {
+        Self {
+            paths: paths.into_iter().collect(),
+            ids: ids.into_iter().collect(),
+        }
+    }
+
+    pub(crate) fn contains(&self, path: &str, file_id: &str) -> bool {
+        self.paths.contains(path) || self.ids.contains(file_id)
+    }
 }
 
 /// 对账一次扫描，写入持久历史
@@ -622,12 +648,13 @@ fn reconcile_collected(
     } else {
         None
     };
-    let seen_paths: Vec<String> = collected
-        .files
-        .iter()
-        .map(|file| normalize_rel_path(&file.relative_path))
-        .collect();
-    let seen_ids: Vec<String> = pending.iter().map(|plan| plan.file_id.clone()).collect();
+    let seen = SeenFiles::new(
+        collected
+            .files
+            .iter()
+            .map(|file| normalize_rel_path(&file.relative_path)),
+        pending.iter().map(|plan| plan.file_id.clone()),
+    );
 
     let mut new_statements: Vec<StatementRow> = Vec::new();
     let mut derived_statements = 0usize;
@@ -975,7 +1002,7 @@ fn reconcile_collected(
         if let Some(missing_files) = &missing_files {
             for row in missing_files {
                 let current_path = normalize_rel_path(&row.current_path);
-                if seen_paths.contains(&current_path) || seen_ids.contains(&row.file_id) {
+                if seen.contains(&current_path, &row.file_id) {
                     continue;
                 }
                 writer.mark_file_status(&row.file_id, "missing")?;
