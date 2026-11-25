@@ -441,6 +441,24 @@ export function saveExpandedProjects(ids: readonly string[]): void {
   }
 }
 
+/**
+ * 切换当前聚焦项目后的展开集：新的聚焦项目展开，旧的聚焦项目收起；
+ * 其他项目若由用户手动展开则保持原样——多项目同时展开仍是显式能力，
+ * 不让每次切换把整列项目树越堆越长。
+ */
+export function expandedProjectsAfterActivate(
+  prev: ReadonlySet<string>,
+  previousActiveId: string,
+  nextActiveId: string
+): string[] {
+  const next = new Set(prev);
+  if (previousActiveId && previousActiveId !== nextActiveId) {
+    next.delete(previousActiveId);
+  }
+  if (nextActiveId) next.add(nextActiveId);
+  return Array.from(next);
+}
+
 /** 构建任意非激活项目的完整目录树（合并真实空目录 + 受管文件）。 */
 export function buildProjectFolderTree(
   files: readonly ProjectTreeFileEntryDto[],

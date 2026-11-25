@@ -9,6 +9,7 @@ import {
   clampSidebarWidth,
   collectMergedFolderOptions,
   collectSubtreeFileIds,
+  expandedProjectsAfterActivate,
   filterMovableFolderTargets,
   isFolderMoveBlocked,
   SIDEBAR_WIDTH_MAX,
@@ -419,3 +420,26 @@ test('多项目 SSR：LeftSidebar 平级多项目树 + AddProjectModal + MultiPr
   assert.ok(overviewHtml.includes('是否开启多项目模式？'));
 });
 
+
+test('切换聚焦项目：旧聚焦项目收起、新聚焦项目展开，手动展开的其他项目保持', () => {
+  assert.deepEqual(
+    expandedProjectsAfterActivate(new Set(['alpha', 'gamma']), 'alpha', 'beta').sort(),
+    ['beta', 'gamma'],
+    '旧聚焦 alpha 收起，新聚焦 beta 展开，手动展开的 gamma 保持'
+  );
+  assert.deepEqual(
+    expandedProjectsAfterActivate(new Set(['alpha', 'beta']), 'alpha', 'beta').sort(),
+    ['beta'],
+    '新项目已展开时也要收起旧聚焦项目'
+  );
+  assert.deepEqual(
+    expandedProjectsAfterActivate(new Set(), '', 'beta'),
+    ['beta'],
+    '首次激活只展开新项目'
+  );
+  assert.deepEqual(
+    expandedProjectsAfterActivate(new Set(['alpha']), 'alpha', ''),
+    [],
+    '无新聚焦项目时不展开任何项目'
+  );
+});

@@ -26,6 +26,7 @@ import {
   postTrashFolderInProject,
 } from '../services/workspaceClient';
 import {
+  expandedProjectsAfterActivate,
   loadExpandedProjects,
   loadGlobalPinnedFiles,
   normalizeFolderPath,
@@ -219,9 +220,17 @@ export function useMultiProjects({
       const added = res.data.project;
       setProjects(res.data.projects);
       setActiveProjectId(res.data.active_project_id);
+      const nextActiveId = res.data.active_project_id;
       setExpandedProjects((prev) => {
-        const next = new Set(prev);
-        next.add(added.project_id);
+        // 添加并激活相当于一次聚焦切换：新项目展开，旧的聚焦项目收起；
+        // 只添加不激活时保留当前展开集（多项目同时展开仍是显式能力）。
+        const next =
+          nextActiveId && nextActiveId !== activeProjectId
+            ? new Set([
+                ...expandedProjectsAfterActivate(prev, activeProjectId, nextActiveId),
+                added.project_id,
+              ])
+            : new Set([...prev, added.project_id]);
         saveExpandedProjects(Array.from(next));
         return next;
       });
@@ -238,7 +247,7 @@ export function useMultiProjects({
       );
       return true;
     },
-    [loadProjectTree, onProjectActivated, refreshAll, showToast]
+    [activeProjectId, loadProjectTree, onProjectActivated, refreshAll, showToast]
   );
 
   const handleActivateProject = useCallback(
@@ -258,9 +267,15 @@ export function useMultiProjects({
       setProjects(res.data.projects);
       setActiveProjectId(res.data.active_project_id);
       setExpandedProjects((prev) => {
-        if (prev.has(projectId)) return prev;
-        const next = new Set(prev);
-        next.add(projectId);
+        // 聚焦切换：新项目展开，旧的聚焦项目收起；用户手动展开的其他项目保持。
+        // 不能因新项目已在展开集里就提前返回——旧聚焦项目仍要收起。
+        const next = new Set(
+          expandedProjectsAfterActivate(
+            prev,
+            activeProjectId,
+            res.data.active_project_id || projectId
+          )
+        );
         saveExpandedProjects(Array.from(next));
         return next;
       });
