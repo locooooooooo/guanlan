@@ -3,7 +3,7 @@
  *
  * 纯常量模块，禁止导入 React 或 .css，以便 node:test 直接导入核验。
  * 全站（顶栏、首页问候头、桌面首启引导、设置关于页、文档标题）共享此处口径，
- * 与桌面壳图标（native/crates/guanlan-desktop/gen-icon.mjs）同承司辰「新月指针 + 琥珀沙漏」母题。
+ * 与桌面壳图标（native/crates/guanlan-desktop/gen-icon.mjs）同承司辰「曜石银匣文件夹 + 弧形银翼 + 朱砂眼与流沙漏」母题。
  */
 
 export const BRAND_NAME = '观澜';
@@ -26,4 +26,4 @@ export const BRAND_TITLE_FULL = `${BRAND_NAME} ${BRAND_NAME_EN} · ${BRAND_SLOGA
 export const BRAND_SHORT_DESCRIPTION = `${BRAND_NAME}（${BRAND_NAME_EN}）— ${BRAND_SLOGAN} · 本地可追溯文件工作台`;
 
 /** 司辰图标的完整视觉元描述（供 aria/文档核对，不随装饰漂移） */
-export const BRAND_ICON_MOTIF = '司辰星盘沙漏徽（银白新月星轨、12 点权杖指针与琥珀宝珠、居中暖琥珀流沙漏）';
+export const BRAND_ICON_MOTIF = '司辰翼漏银匣徽（透明底曜石缎面文件夹、折耳权杖朱砂眼、温润象牙夹页、对称拉丝银翼与铂银朱砂流沙漏）';

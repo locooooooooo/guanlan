@@ -3,31 +3,34 @@ import React, { useId } from 'react';
 export type BrandMarkSize = 'sm' | 'md' | 'lg';
 
 interface BrandMarkProps {
-  /** sm=24px（顶栏）/ md=34px（关于页）/ lg=44px（首启引导） */
+  /** sm=28px（顶栏，与 28px 折栏钮和双行品牌文案平齐）/ md=36px（关于页）/ lg=44px（首启引导） */
   size?: BrandMarkSize;
   className?: string;
 }
 
 const SIZE_CLASSES: Record<BrandMarkSize, string> = {
-  sm: 'size-6 rounded-[7px]',
-  md: 'size-9 rounded-[10px]',
-  lg: 'size-11 rounded-[12px]',
+  sm: 'size-7',
+  md: 'size-9',
+  lg: 'size-11',
 };
 
 /**
- * 司辰星盘沙漏徽（与 native/crates/guanlan-desktop/gen-icon.mjs 同源的光学矢量版本）。
+ * 司辰翼漏银匣徽（与 native/crates/guanlan-desktop/gen-icon.mjs 同源的光学矢量版本）。
  *
- * 视觉母题直承司辰立绘：澜墨深空圆角底 + 薰衣草星雾 + 银白新月星盘环 +
- * 12 点司辰权杖指针与琥珀核心珠 + 居中暖琥珀流沙漏 + 3 点四芒星芒。
+ * 视觉母题直承司辰原画与观澜纸墨气质：透明底曜石缎面双层文件夹 + 左上折耳司辰权杖朱砂眼 +
+ * 夹层温润象牙纸页 + 居中对称弧形拉丝银翼与铂银朱砂流沙漏，小尺寸下仍清晰耐看、不挤压发糊。
  * 纯静态零动画（遵循 P1 静：ping / 呼吸动效仅用于未读与新变化提示，不属品牌位）。
  */
 export const BrandMark: React.FC<BrandMarkProps> = ({ size = 'sm', className = '' }) => {
   // React 19 SSR 与客户端均支持 useId()，多处同页渲染时渐变 ID 互不碰撞
   const rawId = useId();
   const uid = rawId.replace(/[^a-zA-Z0-9_-]/g, '');
-  const bgGradId = `gl-bm-bg-${uid}`;
-  const irisGlowId = `gl-bm-iris-${uid}`;
-  const warmGlowId = `gl-bm-warm-${uid}`;
+  const backGradId = `gl-bm-back-${uid}`;
+  const paperGradId = `gl-bm-paper-${uid}`;
+  const frontGradId = `gl-bm-front-${uid}`;
+  const sheenGlowId = `gl-bm-sheen-${uid}`;
+  const wingHiGradId = `gl-bm-wing-hi-${uid}`;
+  const wingLoGradId = `gl-bm-wing-lo-${uid}`;
   const silverGradId = `gl-bm-silver-${uid}`;
   const sandGradId = `gl-bm-sand-${uid}`;
 
@@ -35,99 +38,183 @@ export const BrandMark: React.FC<BrandMarkProps> = ({ size = 'sm', className = '
     <span
       aria-hidden="true"
       data-brand-mark={size}
-      className={`inline-flex shrink-0 items-center justify-center overflow-hidden shadow-[0_2px_8px_rgba(17,32,48,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] ${SIZE_CLASSES[size]} ${className}`}
+      data-brand-motif="folder-hourglass"
+      data-chronos-emblem="wings-tab-eye"
+      className={`inline-flex shrink-0 aspect-square items-center justify-center ${SIZE_CLASSES[size]} ${className}`}
     >
       <svg
         viewBox="0 0 32 32"
+        preserveAspectRatio="xMidYMid meet"
         fill="none"
         className="size-full block"
         aria-hidden="true"
       >
         <defs>
-          <linearGradient id={bgGradId} x1="4" y1="2" x2="28" y2="30" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#1C2846" />
-            <stop offset="100%" stopColor="#0C1627" />
+          <linearGradient id={backGradId} x1="16" y1="4" x2="16" y2="14" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#323848" />
+            <stop offset="100%" stopColor="#1A1E29" />
           </linearGradient>
-          <radialGradient id={irisGlowId} cx="36%" cy="34%" r="58%">
-            <stop offset="0%" stopColor="#7C6FD0" stopOpacity="0.46" />
-            <stop offset="100%" stopColor="#7C6FD0" stopOpacity="0" />
-          </radialGradient>
-          <radialGradient id={warmGlowId} cx="50%" cy="52%" r="36%">
-            <stop offset="0%" stopColor="#F58642" stopOpacity="0.4" />
-            <stop offset="100%" stopColor="#F58642" stopOpacity="0" />
-          </radialGradient>
-          <linearGradient id={silverGradId} x1="5" y1="4" x2="26" y2="28" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#FFFFFF" />
-            <stop offset="60%" stopColor="#E4EEFD" />
-            <stop offset="100%" stopColor="#C4D3EE" />
+          <linearGradient id={paperGradId} x1="16" y1="8.8" x2="16" y2="11.2" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#F5F1EA" />
+            <stop offset="100%" stopColor="#CCCFE0" />
           </linearGradient>
-          <linearGradient id={sandGradId} x1="16" y1="12" x2="16" y2="23" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#FFB86C" />
-            <stop offset="52%" stopColor="#F27E3B" />
-            <stop offset="100%" stopColor="#D65222" />
+          <linearGradient id={frontGradId} x1="4" y1="10" x2="28" y2="28.5" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#3E455A" />
+            <stop offset="56%" stopColor="#262B3B" />
+            <stop offset="100%" stopColor="#161A25" />
+          </linearGradient>
+          <radialGradient id={sheenGlowId} cx="32%" cy="32%" r="64%">
+            <stop offset="0%" stopColor="#A69EDA" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#A69EDA" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id={wingHiGradId} x1="16" y1="15.2" x2="16" y2="20.4" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#E8ECF8" />
+            <stop offset="100%" stopColor="#9DA6BE" />
+          </linearGradient>
+          <linearGradient id={wingLoGradId} x1="16" y1="17.8" x2="16" y2="22.4" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#BDC4D9" />
+            <stop offset="100%" stopColor="#727C98" />
+          </linearGradient>
+          <linearGradient id={silverGradId} x1="16" y1="12.6" x2="16" y2="25.8" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#FAFBFD" />
+            <stop offset="100%" stopColor="#A8B0C4" />
+          </linearGradient>
+          <linearGradient id={sandGradId} x1="16" y1="15.2" x2="16" y2="24.5" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#FFA66C" />
+            <stop offset="48%" stopColor="#F07440" />
+            <stop offset="100%" stopColor="#D44E2A" />
           </linearGradient>
         </defs>
 
-        {/* 澜墨深空圆角琉璃底 + 薰衣草星雾 + 琥珀暖晕 */}
-        <rect width="32" height="32" fill={`url(#${bgGradId})`} />
-        <rect width="32" height="32" fill={`url(#${irisGlowId})`} />
-        <rect width="32" height="32" fill={`url(#${warmGlowId})`} />
-
-        {/* 银白新月星盘环（左厚右纤的偏心圆环，零硬折痕） */}
+        {/* 曜石缎面后板 + 左上折耳（外侧透明无多余方框底） */}
         <path
-          fillRule="evenodd"
-          clipRule="evenodd"
-          d="M16 4.98A11.5 11.5 0 1 1 15.99 4.98ZM16.92 6.78A9.7 9.7 0 1 0 16.93 6.78Z"
-          fill={`url(#${silverGradId})`}
+          d="M3.85 4H11.55C12.75 4 13.72 4.58 14.54 5.7L15.44 6.92C15.94 7.58 16.56 7.84 17.44 7.84H28.4C29.5 7.84 30.4 8.74 30.4 9.84V26.08C30.4 27.4 29.32 28.48 28 28.48H4C2.68 28.48 1.6 27.4 1.6 26.08V6.24C1.6 5 2.61 4 3.85 4Z"
+          fill={`url(#${backGradId})`}
         />
 
-        {/* 12 点司辰权杖指针尖 + 核心琥珀宝珠 */}
-        <path d="M16 1.85L17.45 5.45L16 7.15L14.55 5.45Z" fill="#F8FBFF" />
-        <circle cx="16" cy="5.45" r="1.45" fill="#F4F8FF" />
-        <circle cx="16" cy="5.45" r="0.96" fill="#0E1728" />
-        <circle cx="16" cy="5.45" r="0.66" fill="#F3843E" />
+        {/* 折耳司辰权杖朱砂核心眼（精钢铂银镶口 + 暖朱砂宝珠） */}
+        <circle cx="7.05" cy="6.48" r="1.12" fill="#DCE2F0" />
+        <circle cx="7.05" cy="6.48" r="0.80" fill="#10131C" />
+        <circle cx="7.05" cy="6.48" r="0.56" fill="#F07440" />
 
-        {/* 3 点四芒星芒（与左侧新月平衡，呼应全景星图） */}
-        <path
-          d="M27.3 14.55Q27.3 16.48 29.2 16.48Q27.3 16.48 27.3 18.41Q27.3 16.48 25.4 16.48Q27.3 16.48 27.3 14.55Z"
-          fill="#FFF7EB"
+        {/* 夹层温润象牙纸页折边（呼应本地档案纸墨质感） */}
+        <rect
+          x="2.9"
+          y="8.88"
+          width="26.2"
+          height="3.2"
+          rx="1.05"
+          fill={`url(#${paperGradId})`}
         />
 
-        {/* 居中琉璃沙漏主体 */}
+        {/* 曜石缎面前袋面板 + 冷银微倒角细边 + 极轻蚀刻星轨暗环 */}
+        <rect
+          x="1.6"
+          y="10"
+          width="28.8"
+          height="18.48"
+          rx="2.35"
+          fill={`url(#${frontGradId})`}
+        />
+        <rect
+          x="1.6"
+          y="10"
+          width="28.8"
+          height="18.48"
+          rx="2.35"
+          fill={`url(#${sheenGlowId})`}
+        />
+        <circle
+          cx="16"
+          cy="19.24"
+          r="7.1"
+          stroke="#B8C2E2"
+          strokeOpacity="0.16"
+          strokeWidth="0.45"
+        />
+        <rect
+          x="1.96"
+          y="10.36"
+          width="28.08"
+          height="17.76"
+          rx="2.0"
+          stroke="#98A2C0"
+          strokeOpacity="0.28"
+          strokeWidth="0.72"
+        />
         <path
-          d="M11.6 10.65C11.6 13.75 14.75 15.35 15.25 16.48C14.75 17.61 11.6 19.21 11.6 22.3H20.4C20.4 19.21 17.25 17.61 16.75 16.48C17.25 15.35 20.4 13.75 20.4 10.65Z"
-          fill="#0D1729"
-          fillOpacity="0.86"
+          d="M3.95 10.36H28.05"
+          stroke="#CBD3EB"
+          strokeOpacity="0.48"
+          strokeWidth="0.72"
+          strokeLinecap="round"
         />
 
-        {/* 上仓暖琥珀流沙 + 细腰金线 + 下仓沉淀丘 */}
+        {/* 司辰对称弧形拉丝银翼（自沙漏腰后向左右舒展，不挤压沙漏本体） */}
+        <g>
+          {/* 左翼三层羽刃（下短羽 -> 中次羽 -> 上主羽） */}
+          <path
+            d="M14.1 20.6C12.2 20.3 10.3 20.6 8.8 21.5C10.5 22.1 12.6 21.8 14.3 21.2Z"
+            fill={`url(#${wingLoGradId})`}
+          />
+          <path
+            d="M14.2 19.7C11.6 18.6 8.8 18.3 6.5 19.1C8.6 20.4 11.7 20.7 14.3 20.4Z"
+            fill={`url(#${wingLoGradId})`}
+          />
+          <path
+            d="M14.3 18.8C11.2 16.5 7.5 15.5 4.6 16.5C7.1 18.4 10.8 19.4 14.4 19.6Z"
+            fill={`url(#${wingHiGradId})`}
+          />
+          {/* 右翼三层羽刃（镜像对称） */}
+          <path
+            d="M17.9 20.6C19.8 20.3 21.7 20.6 23.2 21.5C21.5 22.1 19.4 21.8 17.7 21.2Z"
+            fill={`url(#${wingLoGradId})`}
+          />
+          <path
+            d="M17.8 19.7C20.4 18.6 23.2 18.3 25.5 19.1C23.4 20.4 20.3 20.7 17.7 20.4Z"
+            fill={`url(#${wingLoGradId})`}
+          />
+          <path
+            d="M17.7 18.8C20.8 16.5 24.5 15.5 27.4 16.5C24.9 18.4 21.2 19.4 17.6 19.6Z"
+            fill={`url(#${wingHiGradId})`}
+          />
+        </g>
+
+        {/* 居中司辰沙漏：烟熏深色玻璃内腔 */}
         <path
-          d="M12.75 12.65Q16 13.45 19.25 12.65C18.65 14.35 16.75 15.45 16 16.48C15.25 15.45 13.35 14.35 12.75 12.65Z"
+          d="M11.82 13.84C11.82 16.6 14.72 18.08 15.26 19.24C14.72 20.4 11.82 21.88 11.82 24.64H20.18C20.18 21.88 17.28 20.4 16.74 19.24C17.28 18.08 20.18 16.6 20.18 13.84Z"
+          fill="#0F121B"
+          fillOpacity="0.94"
+        />
+
+        {/* 司辰朱砂琥珀流沙（上仓漏斗 + 细腰亮金流沙 + 下仓沉淀丘紧贴底盖） */}
+        <path
+          d="M12.82 15.96Q16 16.68 19.18 15.96C18.56 17.48 16.76 18.44 16 19.24C15.24 18.44 13.44 17.48 12.82 15.96Z"
           fill={`url(#${sandGradId})`}
         />
         <path
-          d="M12.35 22.05C13.1 19.8 14.7 18.75 16 18.75C17.3 18.75 18.9 19.8 19.65 22.05Z"
+          d="M12.24 24.46C12.98 22.24 14.64 21.06 16 21.06C17.36 21.06 19.02 22.24 19.76 24.46Z"
           fill={`url(#${sandGradId})`}
         />
         <line
           x1="16"
-          y1="16.1"
+          y1="18.85"
           x2="16"
-          y2="19.1"
-          stroke="#FFD28A"
+          y2="21.35"
+          stroke="#FFDAA6"
           strokeWidth="0.9"
           strokeLinecap="round"
         />
 
-        {/* 沙漏银白玻璃廓线与上下端盖 */}
+        {/* 拉丝铂银玻璃廓线 + 车削圆角端盖 */}
         <path
-          d="M11.6 10.65C11.6 13.75 14.75 15.35 15.25 16.48C14.75 17.61 11.6 19.21 11.6 22.3H20.4C20.4 19.21 17.25 17.61 16.75 16.48C17.25 15.35 20.4 13.75 20.4 10.65Z"
+          d="M11.82 13.84C11.82 16.6 14.72 18.08 15.26 19.24C14.72 20.4 11.82 21.88 11.82 24.64H20.18C20.18 21.88 17.28 20.4 16.74 19.24C17.28 18.08 20.18 16.6 20.18 13.84Z"
           stroke={`url(#${silverGradId})`}
-          strokeWidth="0.88"
+          strokeWidth="0.94"
           strokeLinejoin="round"
         />
-        <rect x="10.45" y="9.1" width="11.1" height="1.6" rx="0.8" fill={`url(#${silverGradId})`} />
-        <rect x="10.45" y="22.25" width="11.1" height="1.6" rx="0.8" fill={`url(#${silverGradId})`} />
+        <rect x="10.72" y="12.74" width="10.56" height="1.48" rx="0.74" fill={`url(#${silverGradId})`} />
+        <rect x="10.72" y="24.22" width="10.56" height="1.48" rx="0.74" fill={`url(#${silverGradId})`} />
       </svg>
     </span>
   );

@@ -145,8 +145,8 @@ interface TopHeaderProps {
   onMarkReadingBaselineFromIsland?: () => Promise<boolean> | void;
 }
 
-/* 品牌徽见 ./BrandMark.tsx：与桌面壳图标同源的司辰星盘沙漏徽
-   （银白新月星轨 + 12 点权杖指针 + 暖琥珀流沙漏），由 src/utils/brandIdentity.ts
+/* 品牌徽见 ./BrandMark.tsx：与桌面壳图标同源的司辰翼漏银匣徽
+   （透明底曜石缎面文件夹 + 折耳朱砂眼 + 象牙夹页 + 对称拉丝银翼与铂银朱砂沙漏），由 src/utils/brandIdentity.ts
    的品牌口径驱动顶栏标题与 Slogan。 */
 
 export const TopHeader: React.FC<TopHeaderProps> = ({

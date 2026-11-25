@@ -1,10 +1,11 @@
-// 生成桌面壳图标源图（1024×1024 RGBA PNG）：司辰星盘沙漏徽。
-// 视觉母题直承司辰立绘（public/assets/aistudio/image_85bd7b05.png）：
-// - 澜墨星夜圆角琉璃底（#112030 为核 + 薰衣草星雾 + 琥珀暖晕 + 微涟漪）
-// - 银白新月星盘环（左厚右纤的书法弧，零硬折痕）
-// - 12 点司辰权杖指针尖与琥珀核心珠（与银环一体铸成）
-// - 居中琉璃沙漏与暖琥珀流沙（上仓漏斗 + 细流 + 下仓沉淀丘）
-// - 3 点四芒星芒与 6 点锚点，平衡左右视觉重心
+// 生成桌面壳图标源图（1024×1024 RGBA PNG）：司辰翼漏银匣徽。
+// 视觉母题与配色直承司辰原画（public/assets/aistudio/image_85bd7b05.png）与观澜纸墨气质：
+// - 透明底三层圆角文件夹廓形（占满画布 90% 宽度，无外框压迫感与外溢暗影）：
+//   深曜石缎面灰蓝折耳与前袋（微带星雾斜光与 1px 冷银倒角，明暗任务栏下均立体分明）；
+// - 左上折耳嵌饰司辰权杖同款精钢朱砂核心眼（点睛收束折耳重心）；
+// - 前后板夹层露出一道温润象牙纸页折边，强化「本地档案工作台」层次且令 16px 折耳清晰可辨；
+// - 前板正中满比例嵌饰司辰标志性的「弧形拉丝银翼 + 车削铂银玻璃沙漏 + 朱砂琥珀流沙」，
+//   佐以极克制的表盘星轨暗纹，16px 到 1024px 均辨识度十足且不拥挤发糊。
 //
 // 纯 Node 实现（zlib 内置），无第三方依赖；4×4 MSAA 抗锯齿。
 // 改样式后在仓库根运行：
@@ -24,11 +25,18 @@ const smoothstep = (e0, e1, x) => {
   return t * t * (3 - 2 * t);
 };
 const mix = (a, b, t) => a + (b - a) * t;
+const mix3 = (c1, c2, t) => [mix(c1[0], c2[0], t), mix(c1[1], c2[1], t), mix(c1[2], c2[2], t)];
 
 function sdRoundedBox(px, py, bx, by, r) {
   const qx = Math.abs(px) - bx + r;
   const qy = Math.abs(py) - by + r;
   return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
+}
+
+/** 四角半径可分上下设定的圆角矩形 SDF（上左/上右用 rTop，下左/下右用 rBot） */
+function sdRoundedBoxTopBot(px, py, bx, by, rTop, rBot) {
+  const r = py < 0 ? rTop : rBot;
+  return sdRoundedBox(px, py, bx, by, r);
 }
 
 function sdCircle(px, py, cx, cy, r) {
@@ -44,37 +52,128 @@ function sdSegment(px, py, ax, ay, bx, by) {
   return Math.hypot(pax - bax * h, pay - bay * h);
 }
 
-function sdTriangle(px, py, ax, ay, bx, by, cx, cy) {
-  const e0x = bx - ax, e0y = by - ay;
-  const e1x = cx - bx, e1y = cy - by;
-  const e2x = ax - cx, e2y = ay - cy;
-  const v0x = px - ax, v0y = py - ay;
-  const v1x = px - bx, v1y = py - by;
-  const v2x = px - cx, v2y = py - cy;
-  const pq0x = v0x - e0x * clamp((v0x * e0x + v0y * e0y) / (e0x * e0x + e0y * e0y), 0, 1);
-  const pq0y = v0y - e0y * clamp((v0x * e0x + v0y * e0y) / (e0x * e0x + e0y * e0y), 0, 1);
-  const pq1x = v1x - e1x * clamp((v1x * e1x + v1y * e1y) / (e1x * e1x + e1y * e1y), 0, 1);
-  const pq1y = v1y - e1y * clamp((v1x * e1x + v1y * e1y) / (e1x * e1x + e1y * e1y), 0, 1);
-  const pq2x = v2x - e2x * clamp((v2x * e2x + v2y * e2y) / (e2x * e2x + e2y * e2y), 0, 1);
-  const pq2y = v2y - e2y * clamp((v2x * e2x + v2y * e2y) / (e2x * e2x + e2y * e2y), 0, 1);
-  const s = Math.sign(e0x * e2y - e0y * e2x);
-  const d = Math.min(
-    pq0x * pq0x + pq0y * pq0y,
-    pq1x * pq1x + pq1y * pq1y,
-    pq2x * pq2x + pq2y * pq2y
-  );
-  const inside = Math.min(
-    s * (v0x * e0y - v0y * e0x),
-    s * (v1x * e1y - v1y * e1x),
-    s * (v2x * e2y - v2y * e2x)
-  );
-  return -Math.sqrt(d) * Math.sign(inside);
+/**
+ * 弧形羽刃 SDF（二次贝塞尔骨架 + 两端收尖、中段丰润的羽片厚度轮廓）。
+ * 相比直线胶囊，能自然还原司辰羽翼上扬微拱、羽尖清隽的雕塑感。
+ */
+function sdCurvedFeather(px, py, p0x, p0y, p1x, p1y, p2x, p2y, rRoot, rMid, rTip) {
+  // 8 段折线逼近二次贝塞尔，在羽翼尺度下远小于半像素误差且速度极快
+  let bestD = 1e9;
+  let bestT = 0;
+  let bestSignedY = 0;
+  let prevX = p0x;
+  let prevY = p0y;
+  const STEPS = 10;
+  for (let i = 1; i <= STEPS; i++) {
+    const t1 = i / STEPS;
+    const mt1 = 1 - t1;
+    const curX = mt1 * mt1 * p0x + 2 * mt1 * t1 * p1x + t1 * t1 * p2x;
+    const curY = mt1 * mt1 * p0y + 2 * mt1 * t1 * p1y + t1 * t1 * p2y;
+
+    const pax = px - prevX;
+    const pay = py - prevY;
+    const bax = curX - prevX;
+    const bay = curY - prevY;
+    const h = clamp((pax * bax + pay * bay) / (bax * bax + bay * bay + 1e-9), 0, 1);
+    const t = ((i - 1) + h) / STEPS;
+    const qx = prevX + bax * h;
+    const qy = prevY + bay * h;
+    const dist = Math.hypot(px - qx, py - qy);
+    // 羽片宽度：根部窄、中后段（t≈0.62）饱满、羽尖利落收细
+    const profile =
+      t < 0.62
+        ? mix(rRoot, rMid, smoothstep(0.0, 0.62, t))
+        : mix(rMid, rTip, Math.pow((t - 0.62) / 0.38, 1.35));
+    const d = dist - profile;
+    if (d < bestD) {
+      bestD = d;
+      bestT = t;
+      bestSignedY = (py - qy) / (profile + 1e-4);
+    }
+    prevX = curX;
+    prevY = curY;
+  }
+  return { d: bestD, t: bestT, ridge: bestSignedY };
 }
 
-// 琉璃沙漏弧线：宽肩收腰，贴合司辰左手沙漏比例
+/** 司辰对称双翼（三层紧密叠合的弧形羽刃，贴合司辰肩后银翼比例） */
+function evalChronosWings(hx, hy) {
+  const ax = Math.abs(hx);
+  // 粗筛包围盒，非羽翼区直接跳过曲线求值，兼顾 4×4 MSAA 渲染速度
+  if (ax < 0.08 || ax > 0.80 || hy < -0.34 || hy > 0.30) {
+    return null;
+  }
+  // 主翼长羽（上扬微拱、羽尖舒展）
+  const f1 = sdCurvedFeather(ax, hy, 0.14, 0.00, 0.43, -0.22, 0.71, -0.17, 0.030, 0.060, 0.011);
+  // 中翼次羽（紧贴主羽下缘顺势展开）
+  const f2 = sdCurvedFeather(ax, hy, 0.14, 0.05, 0.38, -0.06, 0.59, -0.01, 0.026, 0.050, 0.010);
+  // 下翼短羽（收拢托底，收束双翼轮廓）
+  const f3 = sdCurvedFeather(ax, hy, 0.14, 0.09, 0.31, 0.07, 0.45, 0.14, 0.022, 0.038, 0.009);
+  return { f1, f2, f3, d: Math.min(f1.d, f2.d, f3.d) };
+}
+
+// 文件夹几何骨架：参照 Windows 11 Fluent 文件夹比例，加一层夹页纸张形成精致三层厚度
+const TAB_X0 = -0.28;
+const TAB_X1 = 0.04;
+const BACK_TAB_Y = -0.75;
+const BACK_SHOULDER_Y = -0.51;
+const FOLDER_HALF_W = 0.90;
+const FOLDER_BOT_Y = 0.78;
+const PAPER_TOP_Y = -0.445;
+const PAPER_HALF_W = 0.818;
+const FRONT_TOP_Y = -0.375;
+const FRONT_CY = (FRONT_TOP_Y + FOLDER_BOT_Y) * 0.5; // +0.2025
+const FRONT_HALF_H = (FOLDER_BOT_Y - FRONT_TOP_Y) * 0.5; // 0.5775
+
+function backTopY(x) {
+  return mix(BACK_TAB_Y, BACK_SHOULDER_Y, smoothstep(TAB_X0, TAB_X1, x));
+}
+
+function backTopSlope(x) {
+  if (x <= TAB_X0 || x >= TAB_X1) return 0;
+  const u = (x - TAB_X0) / (TAB_X1 - TAB_X0);
+  return ((BACK_SHOULDER_Y - BACK_TAB_Y) * 6 * u * (1 - u)) / (TAB_X1 - TAB_X0);
+}
+
+/** 文件夹后板（含左上折耳）精确 SDF：无拼接鼓包，四角为标准圆弧 */
+function sdFolderBack(x, y) {
+  const rTL = 0.14;
+  const rTR = 0.125;
+  const rBot = 0.15;
+
+  if (x < -FOLDER_HALF_W + rTL && y < BACK_TAB_Y + rTL) {
+    return Math.hypot(x - (-FOLDER_HALF_W + rTL), y - (BACK_TAB_Y + rTL)) - rTL;
+  }
+  if (x > FOLDER_HALF_W - rTR && y < BACK_SHOULDER_Y + rTR) {
+    return Math.hypot(x - (FOLDER_HALF_W - rTR), y - (BACK_SHOULDER_Y + rTR)) - rTR;
+  }
+  if (x < -FOLDER_HALF_W + rBot && y > FOLDER_BOT_Y - rBot) {
+    return Math.hypot(x - (-FOLDER_HALF_W + rBot), y - (FOLDER_BOT_Y - rBot)) - rBot;
+  }
+  if (x > FOLDER_HALF_W - rBot && y > FOLDER_BOT_Y - rBot) {
+    return Math.hypot(x - (FOLDER_HALF_W - rBot), y - (FOLDER_BOT_Y - rBot)) - rBot;
+  }
+  const dLeft = -FOLDER_HALF_W - x;
+  const dRight = x - FOLDER_HALF_W;
+  const dBot = y - FOLDER_BOT_Y;
+  const dTop = (backTopY(x) - y) / Math.hypot(1, backTopSlope(x));
+  return Math.max(dLeft, dRight, dTop, dBot);
+}
+
+/** 文件夹夹层象牙纸页 SDF（仅在前袋上沿与后板之间露出清脆纸边） */
+function sdPaperSheet(x, y) {
+  return sdRoundedBox(x, y - 0.02, PAPER_HALF_W, 0.465, 0.064);
+}
+
+/** 文件夹前袋面板 SDF */
+function sdFolderFront(x, y) {
+  return sdRoundedBoxTopBot(x, y - FRONT_CY, FOLDER_HALF_W, FRONT_HALF_H, 0.105, 0.15);
+}
+
+// 司辰琉璃沙漏弧线：宽肩丰润、细腰挺拔
 function hourglassHalfWidth(y, H, wCap, wWaist) {
   const u = clamp(Math.abs(y) / H, 0, 1);
-  const c = clamp(Math.pow(u, 1.55) * (2.2 - 1.2 * Math.pow(u, 0.85)), 0, 1);
+  const c = clamp(Math.pow(u, 1.48) * (2.1 - 1.1 * Math.pow(u, 0.85)), 0, 1);
   const sm = u * u * (3 - 2 * u);
   const blend = mix(sm, Math.sin(u * Math.PI * 0.5), 0.25);
   return mix(wWaist, wCap, mix(blend, c, 0.25));
@@ -94,200 +193,246 @@ function sdHourglassBody(lx, ly, H, wCap, wWaist) {
   return Math.hypot(Math.max(dx, 0), dy);
 }
 
-function sdStar4(px, py, cx, cy, r) {
-  const dx = Math.abs(px - cx);
-  const dy = Math.abs(py - cy);
-  const p = 0.54;
-  const v = Math.pow(Math.pow(dx / r + 1e-6, p) + Math.pow(dy / r + 1e-6, p), 1 / p);
-  return (v - 1) * r * 0.52;
-}
-
-// 书法感新月星盘环：左侧 9 点为丰润新月，经 12/6 点平滑过渡为右侧 3 点纤细星轨
-function sdCrescentOrbit(x, y, rOut, maxW, minW) {
-  const r = Math.hypot(x, y);
-  const dOut = r - rOut;
-  const cosT = r > 1e-6 ? x / r : 0;
-  const u = (1 - cosT) * 0.5;
-  const thickness = mix(minW, maxW, Math.pow(u, 1.35));
-  const dIn = rOut - thickness - r;
-  return Math.max(dOut, dIn);
-}
-
-function blendOver(dst, r, g, b, a) {
+function blendOverPremul(dst, r, g, b, a) {
   if (a <= 0) return;
   const ia = 1 - a;
   dst[0] = dst[0] * ia + r * a;
   dst[1] = dst[1] * ia + g * a;
   dst[2] = dst[2] * ia + b * a;
+  dst[3] = dst[3] * ia + a;
 }
 
-function addGlow(dst, r, g, b, a) {
+function blendOnOpaque(col, r, g, b, a) {
   if (a <= 0) return;
-  dst[0] = Math.min(255, dst[0] + r * a);
-  dst[1] = Math.min(255, dst[1] + g * a);
-  dst[2] = Math.min(255, dst[2] + b * a);
+  const ia = 1 - a;
+  col[0] = col[0] * ia + r * a;
+  col[1] = col[1] * ia + g * a;
+  col[2] = col[2] * ia + b * a;
+}
+
+function addGlow(col, r, g, b, a) {
+  if (a <= 0) return;
+  col[0] = Math.min(255, col[0] + r * a);
+  col[1] = Math.min(255, col[1] + g * a);
+  col[2] = Math.min(255, col[2] + b * a);
+}
+
+/** 司辰权杖核心眼：精钢铂银镶口 + 暗凹槽 + 暖朱砂琥珀宝珠（带左上微星点高光） */
+function drawChronosTabEye(col, x, y, gx, gy, rOuter, rGem) {
+  const dOuter = sdCircle(x, y, gx, gy, rOuter);
+  const bezelA = smoothstep(AA, -AA, dOuter);
+  if (bezelA > 0) {
+    const bt = clamp((y - (gy - rOuter)) / (2 * rOuter), 0, 1);
+    const bc = mix3([242, 245, 252], [156, 165, 188], bt);
+    blendOnOpaque(col, bc[0], bc[1], bc[2], bezelA * 0.96);
+  }
+  blendOnOpaque(col, 14, 17, 26, smoothstep(AA, -AA, sdCircle(x, y, gx, gy, rOuter * 0.72)) * 0.96);
+  const gA = smoothstep(AA, -AA, sdCircle(x, y, gx, gy, rGem));
+  if (gA > 0) {
+    const gd = clamp(Math.hypot(x - (gx - rGem * 0.30), y - (gy - rGem * 0.30)) / (rGem * 1.45), 0, 1);
+    const gc = mix3([255, 204, 140], [212, 70, 36], gd);
+    blendOnOpaque(col, gc[0], gc[1], gc[2], gA);
+    // 左上晶点微高光
+    const specA = smoothstep(AA, -AA, sdCircle(x, y, gx - rGem * 0.32, gy - rGem * 0.32, rGem * 0.24));
+    blendOnOpaque(col, 255, 248, 236, specA * 0.72);
+  }
 }
 
 function sampleIcon(x, y) {
-  // 1. 圆角方徽底（占画布 94%，Windows 任务栏 / 标题栏下体量饱满）
-  const dBg = sdRoundedBox(x, y, 0.94, 0.94, 0.43);
-  const bgAlpha = smoothstep(AA, -AA, dBg);
-  if (bgAlpha <= 0.001) return [0, 0, 0, 0];
+  // 0. 透明外廓：绝不烘培外溢阴影，由系统任务栏自行绘投影
+  const dBack = sdFolderBack(x, y);
+  const dPaper = sdPaperSheet(x, y);
+  const dFront = sdFolderFront(x, y);
+  const out = [0, 0, 0, 0];
 
-  // 澜墨深空底色（#1C2846 -> #0C1627）
-  const gt = clamp((x * 0.35 + y * 0.65 + 1) * 0.5, 0, 1);
-  const col = [mix(28, 11, gt), mix(40, 21, gt), mix(70, 39, gt)];
-
-  // 薰衣草星雾（左上，呼应司辰羽翼与界面交互色）+ 琥珀暖晕（居中，托起流沙）
-  const r0 = Math.hypot(x, y);
-  const dIris = Math.hypot((x + 0.22) * 0.9, (y + 0.24) * 0.9);
-  addGlow(col, 124, 111, 212, Math.exp(-dIris * dIris * 2.1) * 0.36);
-  addGlow(col, 245, 134, 66, Math.exp(-r0 * r0 * 5.2) * 0.34);
-
-  // 外圈极轻水纹星轨（保留「观澜」一脉相承的静水意象）
-  const dOuterRipple = Math.abs(r0 - 0.835) - 0.0038;
-  blendOver(col, 214, 228, 252, smoothstep(AA * 1.5, -AA * 1.5, dOuterRipple) * 0.09);
-
-  // 琉璃内沿高光折边
-  const dRim = Math.abs(dBg + 0.014) - 0.009;
-  const rimGrad = smoothstep(0.65, -0.75, y * 0.8 + x * 0.3);
-  blendOver(col, 244, 248, 255, smoothstep(AA, -AA, dRim) * mix(0.06, 0.24, rimGrad));
-
-  // 主徽微微下沉 0.03，给 12 点司辰指针留足天头呼吸
-  const cx = x;
-  const cy = y - 0.03;
-
-  // 2. 银白新月星盘环 + 12 点司辰权杖指针（一体铸银，无缝衔接）
-  const rOut = 0.72;
-  const dRing = sdCrescentOrbit(cx, cy, rOut, 0.155, 0.029);
-
-  const fy = -0.688;
-  const dSpearTop = sdTriangle(cx, cy, 0, -0.892, -0.068, fy + 0.012, 0.068, fy + 0.012);
-  const dSpearBot = sdTriangle(cx, cy, 0, fy + 0.092, -0.044, fy - 0.004, 0.044, fy - 0.004);
-  const dCollar = sdCircle(cx, cy, 0, fy, 0.066);
-  const dFinial = Math.min(dSpearTop, dSpearBot, dCollar);
-
-  const ringA = smoothstep(AA, -AA, dRing);
-  if (ringA > 0) {
-    const r = Math.hypot(cx, cy);
-    const cosT = r > 1e-6 ? cx / r : 0;
-    const leftFactor = (1 - cosT) * 0.5;
-    const topFactor = clamp((-cy + rOut) / (2 * rOut), 0, 1);
-    const bright = clamp(0.45 * leftFactor + 0.55 * topFactor, 0, 1);
-    const alphaMod = mix(0.64, 1.0, smoothstep(0.05, 0.55, leftFactor));
-    blendOver(
-      col,
-      mix(196, 252, bright),
-      mix(210, 253, bright),
-      mix(244, 255, bright),
-      ringA * alphaMod
-    );
+  // 1. 后板 + 左上折耳（深曜石灰蓝 + 司辰权杖朱砂核心眼）
+  const backA = smoothstep(AA, -AA, dBack);
+  if (backA > 0.001) {
+    const bt = clamp((y - BACK_TAB_Y) / (FRONT_TOP_Y - BACK_TAB_Y + 0.35), 0, 1);
+    const bCol = mix3([50, 56, 72], [26, 30, 41], bt);
+    // 折耳顶缘冷银细倒角
+    const dBackRim = Math.abs(dBack + 0.011) - 0.0068;
+    const topRimMask = smoothstep(-0.38, -0.74, y);
+    blendOnOpaque(bCol, 158, 168, 198, smoothstep(AA, -AA, dBackRim) * topRimMask * 0.36);
+    // 夹层纸页上沿落到后板的微影
+    const crease = smoothstep(-0.50, PAPER_TOP_Y + 0.01, y) * 0.28;
+    blendOnOpaque(bCol, 10, 12, 18, crease);
+    // 司辰权杖朱砂核心眼（镶于折耳左中位，呼应流沙暖色与司辰身份）
+    drawChronosTabEye(bCol, x, y, -0.56, -0.595, 0.066, 0.038);
+    blendOverPremul(out, bCol[0], bCol[1], bCol[2], backA);
   }
 
-  const finialA = smoothstep(AA, -AA, dFinial);
-  if (finialA > 0) {
-    // 指针左右微切面反光，立体如钟表精钢指针
-    const facet = cx < 0 ? 1.0 : 0.9;
-    blendOver(col, 252 * facet, 253 * facet, 255, finialA);
+  // 2. 夹层温润象牙纸页（赋予档案工作台的纸墨质感，并令暗底任务栏下折耳与前板层次分明）
+  const paperA = smoothstep(AA, -AA, dPaper) * smoothstep(AA, -AA, dBack);
+  if (paperA > 0.001 && y < FRONT_TOP_Y + 0.04) {
+    const pt = clamp((y - PAPER_TOP_Y) / 0.095, 0, 1);
+    const pCol = mix3([245, 241, 234], [204, 207, 218], pt);
+    const fLipSh = smoothstep(FRONT_TOP_Y - 0.042, FRONT_TOP_Y + 0.005, y) * 0.32;
+    blendOnOpaque(pCol, 22, 26, 38, fLipSh);
+    const pRim = smoothstep(PAPER_TOP_Y + 0.020, PAPER_TOP_Y, y) * 0.45;
+    blendOnOpaque(pCol, 255, 253, 249, pRim);
+    blendOverPremul(out, pCol[0], pCol[1], pCol[2], paperA);
   }
 
-  // 权杖指针核心暗凹槽 + 暖琥珀宝珠（司辰右手权杖标志细节）
-  const dGemSocket = sdCircle(cx, cy, 0, fy, 0.041);
-  blendOver(col, 14, 23, 40, smoothstep(AA, -AA, dGemSocket) * 0.94);
-  const dGem = sdCircle(cx, cy, 0, fy, 0.0315);
-  const gemA = smoothstep(AA, -AA, dGem);
-  if (gemA > 0) {
-    const gd = clamp(Math.hypot(cx + 0.009, cy - (fy - 0.009)) / 0.038, 0, 1);
-    blendOver(col, mix(255, 224, gd), mix(190, 86, gd), mix(110, 36, gd), gemA);
-  }
+  // 3. 前袋面板（曜石缎面灰蓝 + 星雾斜光 + 蚀刻表盘暗环 + 精密冷银倒角边）
+  const frontA = smoothstep(AA, -AA, dFront);
+  if (frontA > 0.001) {
+    const fy = clamp((y - FRONT_TOP_Y) / (FOLDER_BOT_Y - FRONT_TOP_Y), 0, 1);
+    const fx = clamp((x + FOLDER_HALF_W) / (2 * FOLDER_HALF_W), 0, 1);
+    const diag = clamp(fy * 0.72 + fx * 0.28, 0, 1);
+    const fCol = mix3([62, 69, 90], [22, 26, 37], diag);
 
-  // 3 点四芒星芒（与左侧厚新月形成视觉平衡，呼应全景星图）
-  const sx = 0.705;
-  const sy = 0.0;
-  const dStarGlow = Math.hypot(cx - sx, cy - sy);
-  addGlow(col, 255, 222, 175, Math.exp(-dStarGlow * dStarGlow * 55) * 0.42);
-  blendOver(col, 255, 248, 238, smoothstep(AA, -AA, sdStar4(cx, cy, sx, sy, 0.095)));
+    // 宽幅柔和斜向缎面漫反射（承司辰羽翼一丝薰衣草冷银光泽）
+    const sheenBand = Math.exp(-Math.pow((x * 0.65 + (y - FRONT_CY) * 0.75 + 0.36) / 0.56, 2));
+    addGlow(fCol, 166, 158, 218, sheenBand * 0.14);
 
-  // 6 点微锚点
-  blendOver(col, 230, 240, 255, smoothstep(AA, -AA, sdStar4(cx, cy, 0, 0.7, 0.052)) * 0.86);
+    // 居中微弱朱砂暖晕
+    const hx = x;
+    const hy = y - FRONT_CY;
+    const hr = Math.hypot(hx, hy);
+    addGlow(fCol, 244, 124, 70, Math.exp(-hr * hr * 6.8) * 0.14);
 
-  // 3. 居中琉璃沙漏（司辰左手流沙漏）
-  const H = 0.395;
-  const wCap = 0.275;
-  const wWaist = 0.042;
-  const dGlass = sdHourglassBody(cx, cy, H, wCap, wWaist);
-  const glassFillA = smoothstep(AA, -AA, dGlass);
-  if (glassFillA > 0) {
-    blendOver(col, 12, 22, 40, glassFillA * 0.84);
-    const leftGlass = smoothstep(0.02, -0.22, cx) * smoothstep(0.04, 0.34, Math.abs(cy));
-    addGlow(col, 210, 232, 255, leftGlass * 0.2 * glassFillA);
-  }
+    // 极克制的曜石表盘星轨蚀刻暗环（大尺寸呈钟表雕刻感，16px 下零干扰）
+    const dDialRing = Math.abs(hr - 0.445) - 0.0042;
+    blendOnOpaque(fCol, 184, 194, 226, smoothstep(AA * 1.4, -AA * 1.4, dDialRing) * 0.13);
 
-  // 沙漏内腔与暖琥珀流沙
-  const dCavity = sdHourglassBody(cx, cy, H - 0.026, wCap - 0.04, wWaist - 0.011);
-  const cavityMask = smoothstep(AA, -AA, dCavity);
-  if (cavityMask > 0) {
-    // 上仓流沙（约 62% 满，带中央微凹漏斗面）
-    const topSurface = -0.245 + 0.036 * Math.exp(-(cx * cx) / 0.016);
-    const upperMask = smoothstep(-AA, AA, cy - topSurface) * smoothstep(AA, -AA, cy - 0.014);
-    // 下仓沉淀丘
-    const moundSurface = 0.125 + 0.92 * cx * cx + 0.14 * Math.abs(cx);
-    const lowerMask = smoothstep(-AA, AA, cy - moundSurface);
-    // 细腰流沙金线（落入下仓沙丘顶点处柔顺融色，不留胶囊硬边）
-    const dStream = sdSegment(cx, cy, 0, -0.02, 0, 0.145) - 0.0175;
-    const streamMask = smoothstep(AA, -AA, dStream);
-    const streamHighlight = streamMask * smoothstep(0.148, 0.085, cy);
+    // 精密 CNC 冷银外细边 + 顶缘折边高光 + 底缘收暗
+    const dOuterEdge = Math.abs(dFront + 0.011) - 0.0068;
+    const outerEdgeA = smoothstep(AA, -AA, dOuterEdge);
+    blendOnOpaque(fCol, 134, 144, 174, outerEdgeA * 0.25);
+    const topHi = smoothstep(FRONT_TOP_Y + 0.072, FRONT_TOP_Y, y);
+    blendOnOpaque(fCol, 198, 206, 232, outerEdgeA * topHi * 0.48);
+    const botShade = smoothstep(FOLDER_BOT_Y - 0.095, FOLDER_BOT_Y, y) * 0.38;
+    blendOnOpaque(fCol, 10, 12, 19, botShade);
 
-    const sandA = clamp(Math.max(upperMask, lowerMask, streamMask), 0, 1) * cavityMask;
-    if (sandA > 0) {
-      const st = clamp((cy + 0.26) / 0.65, 0, 1);
-      const centerLum = Math.exp(-(cx * cx) / 0.025);
-      const topHighlight = Math.exp(-Math.pow((cy - topSurface) / 0.032, 2)) * upperMask * 0.45;
-      let sr = mix(255, 222, st);
-      let sg = mix(174, 86, st);
-      let sb = mix(90, 38, st);
-      const boost = clamp(streamHighlight * 0.55 + centerLum * 0.18 + topHighlight, 0, 0.85);
-      sr = mix(sr, 255, boost);
-      sg = mix(sg, 224, boost);
-      sb = mix(sb, 150, boost);
-      blendOver(col, sr, sg, sb, sandA);
+    // 4. 司辰对称弧形拉丝银翼（自沙漏腰后向两侧舒展，不挤压沙漏本体）
+    const wings = evalChronosWings(hx, hy);
+    const wingsSh = evalChronosWings(hx, hy - 0.032);
+    if (wingsSh) {
+      blendOnOpaque(fCol, 8, 10, 16, smoothstep(0.044, -0.014, wingsSh.d) * 0.44);
     }
+    if (wings) {
+      // 原画同款极轻薰衣草冷辉贴着羽翼外沿浮现
+      addGlow(
+        fCol,
+        178,
+        158,
+        236,
+        Math.exp(-Math.max(wings.d, 0) * 20) * smoothstep(0.055, -0.015, wings.d - 0.045) * 0.16
+      );
+
+      // 由下到上三层叠加：下短羽 -> 中次羽 -> 上主羽，每片带明暗羽脊立体感
+      const feathers = [
+        { f: wings.f3, hi: [164, 170, 192], lo: [96, 104, 128] },
+        { f: wings.f2, hi: [198, 204, 224], lo: [120, 128, 152] },
+        { f: wings.f1, hi: [236, 240, 250], lo: [146, 154, 178] },
+      ];
+      for (const item of feathers) {
+        // 每片羽刃下方投落一丝叠层缝影，让三层羽毛层次如浮雕银饰
+        blendOnOpaque(fCol, 12, 15, 24, smoothstep(0.026, -0.004, item.f.d) * 0.34);
+        const fa = smoothstep(AA, -AA, item.f.d);
+        if (fa > 0) {
+          // 羽刃上沿受光亮银、下沿微暗，外端羽尖略提亮
+          const ridgeLight = clamp(0.55 - item.f.ridge * 0.45, 0, 1);
+          const lit = clamp(ridgeLight * 0.65 + item.f.t * 0.35, 0, 1);
+          const fc = mix3(item.lo, item.hi, lit);
+          blendOnOpaque(fCol, fc[0], fc[1], fc[2], fa * 0.96);
+        }
+      }
+    }
+
+    // 5. 居中满比例司辰沙漏（拉丝铂银端盖与廓线 + 烟熏玻璃腔 + 司辰朱砂琥珀流沙）
+    const H = 0.338;
+    const wCap = 0.262;
+    const wWaist = 0.046;
+    const capW = wCap + 0.068;
+    const capH = 0.043;
+
+    // 沙漏压在双翼之上的立体落影，立刻确立主次层级
+    const shY = hy - 0.032;
+    const dTotalSh = Math.min(
+      sdHourglassBody(hx, shY, H, wCap + 0.024, wWaist + 0.018),
+      sdRoundedBox(hx, shY + H + capH * 0.45, capW, capH, capH),
+      sdRoundedBox(hx, shY - H - capH * 0.45, capW, capH, capH)
+    );
+    blendOnOpaque(fCol, 8, 10, 16, smoothstep(0.058, -0.018, dTotalSh) * 0.56);
+
+    const dGlass = sdHourglassBody(hx, hy, H, wCap, wWaist);
+    const glassFillA = smoothstep(AA, -AA, dGlass);
+    if (glassFillA > 0) {
+      blendOnOpaque(fCol, 14, 17, 26, glassFillA * 0.94);
+      const leftGlass = smoothstep(0.04, -0.22, hx) * smoothstep(0.04, 0.30, Math.abs(hy));
+      addGlow(fCol, 215, 228, 252, leftGlass * 0.14 * glassFillA);
+    }
+
+    // 司辰朱砂琥珀流沙
+    const dCavity = sdHourglassBody(hx, hy, H - 0.008, wCap - 0.036, wWaist - 0.012);
+    const cavityMask = smoothstep(AA, -AA, dCavity);
+    if (cavityMask > 0) {
+      const topSurface = -0.195 + 0.040 * Math.exp(-(hx * hx) / 0.018);
+      const upperMask = smoothstep(-AA, AA, hy - topSurface) * smoothstep(AA, -AA, hy - 0.012);
+      const moundSurface = 0.095 + 1.04 * hx * hx + 0.12 * Math.abs(hx);
+      const lowerMask = smoothstep(-AA, AA, hy - moundSurface);
+      const dStream = sdSegment(hx, hy, 0, -0.015, 0, 0.118) - 0.0155;
+      const streamMask = smoothstep(AA, -AA, dStream);
+      const streamHi = streamMask * smoothstep(0.122, 0.065, hy);
+
+      const sandA = clamp(Math.max(upperMask, lowerMask, streamMask), 0, 1) * cavityMask;
+      if (sandA > 0) {
+        const st = clamp((hy + 0.21) / 0.55, 0, 1);
+        const sCol = mix3([255, 166, 108], [212, 78, 42], st);
+        const topHi2 = Math.exp(-Math.pow((hy - topSurface) / 0.028, 2)) * upperMask * 0.44;
+        const boost = clamp(streamHi * 0.56 + Math.exp(-(hx * hx) / 0.024) * 0.12 + topHi2, 0, 0.80);
+        const fin = mix3(sCol, [255, 218, 166], boost);
+        blendOnOpaque(fCol, fin[0], fin[1], fin[2], sandA);
+      }
+    }
+
+    // 琉璃内壁贴弧高光
+    if (hx < -0.05 && hy > -0.28 && hy < -0.07) {
+      const dInnerSpec = Math.abs(dGlass + 0.046) - 0.008;
+      const arcFade = smoothstep(-0.28, -0.22, hy) * smoothstep(-0.07, -0.13, hy);
+      blendOnOpaque(fCol, 255, 255, 255, smoothstep(AA, -AA, dInnerSpec) * arcFade * 0.38);
+    }
+
+    // 拉丝铂银玻璃廓线
+    const dGlassStroke = Math.abs(dGlass) - 0.024;
+    const strokeA = smoothstep(AA, -AA, dGlassStroke);
+    if (strokeA > 0) {
+      const gt2 = clamp((hy + H) / (2 * H), 0, 1);
+      const fc = mix3([246, 247, 251], [176, 183, 200], gt2);
+      blendOnOpaque(fCol, fc[0], fc[1], fc[2], strokeA * 0.98);
+    }
+
+    // 上下车削铂银端盖
+    const dTopCap = sdRoundedBox(hx, hy + H + capH * 0.45, capW, capH, capH);
+    const dBotCap = sdRoundedBox(hx, hy - H - capH * 0.45, capW, capH, capH);
+    const dCaps = Math.min(dTopCap, dBotCap);
+    const capsA = smoothstep(AA, -AA, dCaps);
+    if (capsA > 0) {
+      const isTop = dTopCap < dBotCap;
+      const localY = isTop ? hy + H + capH * 0.45 : hy - H - capH * 0.45;
+      const vt = clamp((localY + capH) / (2 * capH), 0, 1);
+      const cc = mix3([250, 251, 254], [158, 166, 186], vt);
+      const capTopHi = smoothstep(-capH * 0.15, -capH * 0.85, localY) * 0.35;
+      blendOnOpaque(cc, 255, 255, 255, capTopHi);
+      blendOnOpaque(fCol, cc[0], cc[1], cc[2], capsA);
+    }
+
+    // 细腰温润微光
+    const dWaist = Math.hypot(hx, hy);
+    addGlow(fCol, 255, 198, 136, Math.exp(-dWaist * dWaist * 150) * 0.28);
+
+    blendOverPremul(out, fCol[0], fCol[1], fCol[2], frontA);
   }
 
-  // 琉璃内壁贴弧高光（沿左上玻璃肩曲线弯曲）
-  if (cx < -0.05 && cy > -0.34 && cy < -0.09) {
-    const dInnerSpec = Math.abs(dGlass + 0.044) - 0.008;
-    const arcFade = smoothstep(-0.34, -0.27, cy) * smoothstep(-0.09, -0.15, cy);
-    blendOver(col, 255, 255, 255, smoothstep(AA, -AA, dInnerSpec) * arcFade * 0.42);
-  }
-
-  // 沙漏银白玻璃廓线
-  const dGlassStroke = Math.abs(dGlass) - 0.019;
-  const strokeA = smoothstep(AA, -AA, dGlassStroke);
-  if (strokeA > 0) {
-    const gt2 = clamp((cy + H) / (2 * H), 0, 1);
-    blendOver(col, mix(248, 212, gt2), mix(251, 224, gt2), mix(255, 244, gt2), strokeA * 0.94);
-  }
-
-  // 上下银白端盖（带微立体渐变）
-  const capW = wCap + 0.064;
-  const capH = 0.042;
-  const dTopCap = sdRoundedBox(cx, cy + H + capH * 0.48, capW, capH, capH);
-  const dBotCap = sdRoundedBox(cx, cy - H - capH * 0.48, capW, capH, capH);
-  const dCaps = Math.min(dTopCap, dBotCap);
-  const capsA = smoothstep(AA, -AA, dCaps);
-  if (capsA > 0) {
-    const isTop = dTopCap < dBotCap;
-    const localY = isTop ? cy + H + capH * 0.48 : cy - H - capH * 0.48;
-    const vt = clamp((localY + capH) / (2 * capH), 0, 1);
-    blendOver(col, mix(255, 206, vt), mix(255, 218, vt), mix(255, 240, vt), capsA);
-  }
-
-  // 细腰暖金微辉
-  const dWaist = Math.hypot(cx, cy);
-  addGlow(col, 255, 205, 125, Math.exp(-dWaist * dWaist * 130) * 0.55);
-
-  return [col[0], col[1], col[2], bgAlpha * 255];
+  if (out[3] <= 1e-4) return [0, 0, 0, 0];
+  return [
+    clamp(out[0] / out[3], 0, 255),
+    clamp(out[1] / out[3], 0, 255),
+    clamp(out[2] / out[3], 0, 255),
+    clamp(out[3] * 255, 0, 255),
+  ];
 }
 
 // 4×4 MSAA 渲染 1024×1024 RGBA 像素缓冲
