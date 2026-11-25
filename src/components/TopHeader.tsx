@@ -520,14 +520,18 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             }}
             title={`${BRAND_NAME} · ${BRAND_SLOGAN} · 返回今日首页`}
             aria-label={`${BRAND_NAME}，${BRAND_SLOGAN}，返回今日首页`}
-            className="flex items-center gap-1.5 whitespace-nowrap shrink-0 group cursor-pointer"
+            data-brand-lockup="header"
+            className="flex items-center gap-2 whitespace-nowrap shrink-0 group cursor-pointer"
           >
-            <BrandMark size="sm" />
+            <BrandMark
+              size="sm"
+              className="motion-safe:transition-transform motion-safe:duration-150 group-hover:scale-[1.04]"
+            />
             <span className="flex flex-col leading-none">
-              <span className="whitespace-nowrap text-[length:var(--text-ui-body)] leading-[16px] font-semibold tracking-tight text-[color:var(--ink-strong)] group-hover:text-[color:var(--accent-iris-deep)] motion-safe:transition-colors">
+              <span className="font-serif-claude whitespace-nowrap text-[14.5px] leading-[16px] font-semibold tracking-[-0.015em] text-[color:var(--ink-strong)] group-hover:text-[color:var(--accent-iris-deep)] motion-safe:transition-colors">
                 {BRAND_NAME}
               </span>
-              <span className="hidden xl:block whitespace-nowrap text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-medium tracking-tight text-[color:var(--ink-soft)]">
+              <span className="hidden xl:block mt-0.5 whitespace-nowrap text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-medium tracking-tight text-[color:var(--ink-soft)]">
                 {BRAND_SLOGAN}
               </span>
             </span>

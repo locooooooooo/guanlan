@@ -1,8 +1,12 @@
+<p align="center">
+  <img src="native/crates/guanlan-desktop/icons/128x128@2x.png" width="96" height="96" alt="观澜 Guanlan — 司辰翼漏银匣徽" />
+</p>
+
 # 观澜 Guanlan
 
 **简体中文** | [English](README.en.md)
 
-> 司辰记时，观澜见脉。让每一次演变与拍板都有迹可循。
+> 司辰记时，观澜见脉。档案在本地，每次改动与拍板都有迹可循。
 
 观澜是一款**本地优先、零锁定**的文件工作台：为任意目录建立可追溯的时间线与版本快照，用星图关系与证据锚点串起「为什么变成现在这样」，并内置全格式阅读器与 MCP 智能体上下文基座。
 

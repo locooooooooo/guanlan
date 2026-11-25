@@ -531,25 +531,40 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
                   <div className="px-3.5 py-2 text-[12px] font-semibold text-foreground">
                     关于观澜（Guanlan）
                   </div>
-                  <FramePanel className="space-y-3">
-                    <div className="flex items-center gap-2.5">
-                      <BrandMark size="md" />
-                      <div className="min-w-0 flex-1">
+                  <FramePanel className="space-y-3.5">
+                    <div
+                      data-about-brand-hero=""
+                      className="flex items-center gap-3.5 rounded-lg border border-border/70 bg-muted/25 p-3.5"
+                    >
+                      <BrandMark size="xl" />
+                      <div className="min-w-0 flex-1 space-y-1">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-[14px] font-semibold text-foreground">
-                            {BRAND_NAME} · {BRAND_SLOGAN}
-                          </span>
+                          <div className="flex items-baseline gap-2 min-w-0">
+                            <span className="font-serif-claude text-[16px] leading-tight font-semibold tracking-tight text-foreground">
+                              {BRAND_NAME}
+                            </span>
+                            <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
+                              {BRAND_NAME_EN}
+                            </span>
+                          </div>
                           <Badge
                             variant="brand"
                             size="sm"
                             data-about-version={APP_BUILD_INFO.version}
-                            className="font-mono tabular-nums"
+                            className="font-mono tabular-nums shrink-0"
                           >
                             {APP_BUILD_INFO.versionTag}
                           </Badge>
                         </div>
-                        <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-                          {BRAND_NAME_EN} · {BRAND_SLOGAN_NOTE}
+                        <p className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-foreground">
+                          <span
+                            aria-hidden="true"
+                            className="inline-block size-1.5 shrink-0 rounded-full bg-[#E86E3B]"
+                          />
+                          <span>{BRAND_SLOGAN}</span>
+                        </p>
+                        <p className="text-[11.5px] leading-snug text-muted-foreground">
+                          {BRAND_SLOGAN_NOTE}
                         </p>
                       </div>
                     </div>

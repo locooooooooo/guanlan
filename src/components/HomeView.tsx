@@ -546,10 +546,16 @@ const HomeView: React.FC<HomeViewProps> = ({
             </h1>
             <p
               data-brand-slogan=""
-              className="mt-1 text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)] text-[color:var(--ink-soft)]"
+              className="mt-1.5 inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)] text-[color:var(--ink-soft)]"
             >
-              <span className="font-medium text-[color:var(--ink-strong)]">{BRAND_SLOGAN}</span>
-              <span aria-hidden="true" className="mx-1.5 opacity-40">·</span>
+              <span className="inline-flex items-center gap-1.5 font-medium text-[color:var(--ink-strong)]">
+                <span
+                  aria-hidden="true"
+                  className="inline-block size-1.5 shrink-0 rounded-full bg-[#E86E3B]"
+                />
+                {BRAND_SLOGAN}
+              </span>
+              <span aria-hidden="true" className="opacity-35">·</span>
               <span>{BRAND_SLOGAN_NOTE}</span>
             </p>
           </div>

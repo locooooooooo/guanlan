@@ -1,9 +1,9 @@
 import React, { useId } from 'react';
 
-export type BrandMarkSize = 'sm' | 'md' | 'lg';
+export type BrandMarkSize = 'sm' | 'md' | 'lg' | 'xl';
 
 interface BrandMarkProps {
-  /** sm=28px（顶栏，与 28px 折栏钮和双行品牌文案平齐）/ md=36px（关于页）/ lg=44px（首启引导） */
+  /** sm=28px（顶栏）/ md=36px（紧凑卡片）/ lg=48px（首启引导）/ xl=56px（关于页品牌头图） */
   size?: BrandMarkSize;
   className?: string;
 }
@@ -11,7 +11,8 @@ interface BrandMarkProps {
 const SIZE_CLASSES: Record<BrandMarkSize, string> = {
   sm: 'size-7',
   md: 'size-9',
-  lg: 'size-11',
+  lg: 'size-12',
+  xl: 'size-14',
 };
 
 /**

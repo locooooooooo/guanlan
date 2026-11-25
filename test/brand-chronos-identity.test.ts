@@ -1,9 +1,10 @@
 /**
- * 司辰品牌口径：图标母题（曜石银匣文件夹 + 折耳权杖朱砂眼 + 象牙夹页 + 对称银翼与朱砂沙漏）与 Slogan 的单一出口。
- * 把品牌常量改回旧文案，或把品牌徽改回无司辰双翼/亮宝蓝塑料文件夹/旧星盘圆徽，本文件会失败。
+ * 司辰品牌口径：全产品 Logo（曜石银匣文件夹 + 折耳权杖朱砂眼 + 象牙夹页 + 对称银翼与朱砂沙漏）
+ * 与 Slogan（司辰记时，观澜见脉 · 档案在本地，每次改动与拍板都有迹可循）的单一出口守卫。
+ * 把任何一处品牌文案改回旧口径，或把品牌徽改回无司辰双翼/亮宝蓝塑料文件夹/旧星盘圆徽，本文件会失败。
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -13,13 +14,20 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { BrandMark } from '../src/components/BrandMark';
 import { TopHeader } from '../src/components/TopHeader';
 import { WorkspaceGateModal } from '../src/components/WorkspaceGateModal';
+import { WorkspaceSettingsModal } from '../src/components/modals/WorkspaceSettingsModal';
 import { EMPTY_WORKSPACE_CONFIG } from '../src/stores/useWorkspaceStore';
 import {
   BRAND_ICON_MOTIF,
+  BRAND_LONG_DESCRIPTION,
   BRAND_NAME,
+  BRAND_NAME_EN,
+  BRAND_SHORT_DESCRIPTION,
   BRAND_SLOGAN,
   BRAND_SLOGAN_EN,
+  BRAND_SLOGAN_EXTENDED,
+  BRAND_SLOGAN_EXTENDED_EN,
   BRAND_SLOGAN_NOTE,
+  BRAND_SLOGAN_NOTE_EN,
   BRAND_TITLE_FULL,
 } from '../src/utils/brandIdentity';
 
@@ -47,51 +55,76 @@ function decodeRgbaPng(buf: Buffer): { width: number; height: number; rgba: Uint
   return { width, height, rgba };
 }
 
-test('品牌口径：司辰 Slogan 是单一出口，不再使用旧的知识工作台文案', () => {
+test('品牌口径：司辰中英 Slogan 与「档案在本地」副句是单一出口，不再残留旧文案', () => {
   assert.equal(BRAND_NAME, '观澜');
+  assert.equal(BRAND_NAME_EN, 'Guanlan');
   assert.equal(BRAND_SLOGAN, '司辰记时，观澜见脉');
-  assert.equal(BRAND_SLOGAN_NOTE, '让每一次演变与拍板都有迹可循');
+  assert.equal(BRAND_SLOGAN_NOTE, '档案在本地，每次改动与拍板都有迹可循');
+  assert.equal(BRAND_SLOGAN_EXTENDED, '司辰记时，观澜见脉 · 档案在本地，每次改动与拍板都有迹可循');
   assert.equal(BRAND_SLOGAN_EN, 'Chronos keeps time. Guanlan reveals the trace.');
+  assert.equal(
+    BRAND_SLOGAN_NOTE_EN,
+    'Your folders stay local — every change and decision stays traceable.'
+  );
+  assert.equal(
+    BRAND_SLOGAN_EXTENDED_EN,
+    'Chronos keeps time. Guanlan reveals the trace. Your folders stay local — every change and decision stays traceable.'
+  );
   assert.equal(BRAND_TITLE_FULL, '观澜 Guanlan · 司辰记时，观澜见脉');
+  assert.ok(BRAND_SHORT_DESCRIPTION.includes(BRAND_SLOGAN));
+  assert.ok(BRAND_LONG_DESCRIPTION.includes(BRAND_SLOGAN_NOTE));
   assert.ok(
     BRAND_ICON_MOTIF.includes('文件夹') &&
       BRAND_ICON_MOTIF.includes('银翼') &&
       BRAND_ICON_MOTIF.includes('沙漏')
   );
   assert.equal(BRAND_SLOGAN.includes('可追溯知识工作台'), false);
-  assert.equal(BRAND_SLOGAN.includes('用时间线找到变化'), false);
+  assert.equal(BRAND_SLOGAN_NOTE.includes('让每一次演变'), false);
 });
 
-test('司辰翼漏银匣徽 SSR：透明底曜石文件夹 + 折耳朱砂眼 + 象牙夹页 + 司辰双翼沙漏，防挤压不退回旧版', () => {
-  const html = renderToStaticMarkup(React.createElement(BrandMark, { size: 'md' }));
-  assert.ok(html.includes('data-brand-mark="md"'), '尺寸应落到 data-brand-mark');
+test('司辰翼漏银匣徽 SSR 与独立矢量标 public/guanlan-logo.svg：四档规格完整且防挤压不退回旧版', () => {
+  for (const size of ['sm', 'md', 'lg', 'xl'] as const) {
+    const html = renderToStaticMarkup(React.createElement(BrandMark, { size }));
+    assert.ok(html.includes(`data-brand-mark="${size}"`), `规格 ${size} 应落到 data-brand-mark`);
+    assert.ok(
+      html.includes('data-brand-motif="folder-hourglass"'),
+      '品牌徽应标明文件夹+沙漏母题'
+    );
+    assert.ok(
+      html.includes('data-chronos-emblem="wings-tab-eye"'),
+      '品牌徽应标明司辰双翼与折耳朱砂眼元素'
+    );
+    assert.ok(
+      html.includes('aspect-square') && html.includes('shrink-0'),
+      '容器必须锁等比防压缩'
+    );
+    assert.ok(
+      html.includes('preserveAspectRatio="xMidYMid meet"'),
+      'SVG 必须锁定等比居中缩放'
+    );
+    assert.ok(html.includes('#3E455A') && html.includes('#161A25'), '文件夹前板应为曜石缎面灰蓝渐变');
+    assert.ok(html.includes('#F5F1EA'), '夹层应含温润象牙纸页');
+    assert.ok(html.includes('#E8ECF8') && html.includes('#BDC4D9'), '应含司辰对称拉丝银翼渐变');
+    assert.ok(html.includes('#F07440') && html.includes('#D44E2A'), '沙漏流沙与折耳眼应为司辰朱砂琥珀');
+    assert.equal(html.includes('#5868DA'), false, '不得退回高饱和塑料宝蓝');
+    assert.equal(html.includes('animate'), false, '品牌徽保持静态');
+    assert.equal(html.includes('fill-rule="evenodd"'), false, '不得退回旧版偏心新月星盘环');
+    assert.equal(/<circle[^>]*r="2\.1"/.test(html), false, '不得退回旧版中心实点圆徽');
+  }
+
+  const logoSvgPath = resolve(repoRoot, 'public/guanlan-logo.svg');
+  assert.ok(existsSync(logoSvgPath), 'public/guanlan-logo.svg 应存在');
+  const logoSvg = readFileSync(logoSvgPath, 'utf8');
   assert.ok(
-    html.includes('data-brand-motif="folder-hourglass"'),
-    '品牌徽应标明文件夹+沙漏母题'
+    logoSvg.includes('#3E455A') &&
+      logoSvg.includes('#F5F1EA') &&
+      logoSvg.includes('#E8ECF8') &&
+      logoSvg.includes('#F07440'),
+    '独立矢量标应与 BrandMark 配色和母题一致'
   );
-  assert.ok(
-    html.includes('data-chronos-emblem="wings-tab-eye"'),
-    '品牌徽应标明司辰双翼与折耳朱砂眼元素'
-  );
-  assert.ok(
-    html.includes('aspect-square') && html.includes('shrink-0'),
-    '容器必须锁等比防压缩'
-  );
-  assert.ok(
-    html.includes('preserveAspectRatio="xMidYMid meet"'),
-    'SVG 必须锁定等比居中缩放'
-  );
-  assert.ok(html.includes('#3E455A') && html.includes('#161A25'), '文件夹前板应为曜石缎面灰蓝渐变');
-  assert.ok(html.includes('#F5F1EA'), '夹层应含温润象牙纸页');
-  assert.ok(html.includes('#E8ECF8') && html.includes('#BDC4D9'), '应含司辰对称拉丝银翼渐变');
-  assert.ok(html.includes('#F07440') && html.includes('#D44E2A'), '沙漏流沙与折耳眼应为司辰朱砂琥珀');
-  assert.equal(html.includes('#5868DA'), false, '不得退回高饱和塑料宝蓝');
-  assert.equal(html.includes('animate'), false, '品牌徽保持静态');
-  assert.equal(html.includes('fill-rule="evenodd"'), false, '不得退回旧版偏心新月星盘环');
-  assert.equal(/<circle[^>]*r="2\.1"/.test(html), false, '不得退回旧版中心实点圆徽');
 });
 
-test('顶栏与首启引导渲染司辰 Slogan，并挂上防压缩司辰翼漏文件夹品牌徽', () => {
+test('顶栏、首启引导、关于观澜与首页全链路渲染升级后的品牌锁头与新 Slogan', () => {
   const header = renderToStaticMarkup(
     React.createElement(TopHeader, {
       activeTab: 'home',
@@ -120,6 +153,7 @@ test('顶栏与首启引导渲染司辰 Slogan，并挂上防压缩司辰翼漏�
       onOpenContextDrawer: () => {},
     })
   );
+  assert.ok(header.includes('data-brand-lockup="header"'), '顶栏应渲染统一品牌锁头');
   assert.match(
     header,
     /leading-\[var\(--lh-micro\)\][^>]*>司辰记时，观澜见脉</,
@@ -143,20 +177,38 @@ test('顶栏与首启引导渲染司辰 Slogan，并挂上防压缩司辰翼漏�
     })
   );
   assert.ok(gate.includes(`欢迎使用${BRAND_NAME}`));
-  assert.ok(gate.includes(BRAND_SLOGAN));
+  assert.ok(gate.includes('data-gate-slogan=""'), '首启引导应独立呈献品牌 Slogan 行');
+  assert.ok(gate.includes(BRAND_SLOGAN) && gate.includes(BRAND_SLOGAN_NOTE));
   assert.ok(gate.includes('data-brand-mark="lg"'));
   assert.equal(gate.includes('欢迎使用观澜 · 选择本地工作区'), false);
 
+  const about = renderToStaticMarkup(
+    React.createElement(WorkspaceSettingsModal, {
+      isOpen: true,
+      onClose: () => {},
+      config: EMPTY_WORKSPACE_CONFIG,
+      initialTab: 'about',
+    })
+  );
+  assert.ok(about.includes('data-about-brand-hero=""'), '关于观澜应渲染升级后的品牌头图卡');
+  assert.ok(about.includes('data-brand-mark="xl"'), '关于观澜品牌头图应使用 xl 规格');
+  assert.ok(about.includes(BRAND_SLOGAN) && about.includes(BRAND_SLOGAN_NOTE));
+
   const home = readFileSync(resolve(repoRoot, 'src/components/HomeView.tsx'), 'utf8');
   assert.ok(
-    home.includes('data-brand-slogan') && home.includes('{BRAND_SLOGAN}'),
-    '首页问候下应挂司辰 Slogan，而不是另写一套文案'
+    home.includes('data-brand-slogan') &&
+      home.includes('{BRAND_SLOGAN}') &&
+      home.includes('{BRAND_SLOGAN_NOTE}'),
+    '首页问候下应挂司辰 Slogan 与副句，而不是另写一套文案'
   );
 });
 
-test('窗口标题、安装包短描述、README 与 1024px 桌面源图保持司辰翼漏文件夹一致口径', () => {
+test('窗口标题、元数据、安装包描述、中英文 README 与 1024px 桌面源图保持全端一致', () => {
   const html = readFileSync(resolve(repoRoot, 'index.html'), 'utf8');
   assert.ok(html.includes(`<title>${BRAND_TITLE_FULL}</title>`));
+  assert.ok(html.includes('href="/guanlan-logo.svg"'), 'index.html 应声明官方矢量图标 apple-touch-icon');
+  assert.ok(html.includes('name="theme-color" content="#1A1E29"'), 'theme-color 应匹配曜石品牌主色');
+  assert.ok(html.includes(BRAND_SLOGAN_NOTE), 'index.html description 应同步升级后的 Slogan 副句');
   assert.ok(
     html.includes('%23343B4F') &&
       html.includes('%23F2EFE9') &&
@@ -171,14 +223,21 @@ test('窗口标题、安装包短描述、README 与 1024px 桌面源图保持�
   const tauri = JSON.parse(
     readFileSync(resolve(repoRoot, 'native/crates/guanlan-desktop/tauri.conf.json'), 'utf8')
   ) as { bundle: { shortDescription: string; longDescription: string } };
-  assert.ok(tauri.bundle.shortDescription.includes(BRAND_SLOGAN));
-  assert.ok(tauri.bundle.longDescription.includes(BRAND_SLOGAN_NOTE));
-  assert.equal(tauri.bundle.shortDescription.includes('时空因果型'), false);
+  assert.equal(tauri.bundle.shortDescription, BRAND_SHORT_DESCRIPTION);
+  assert.equal(tauri.bundle.longDescription, BRAND_LONG_DESCRIPTION);
 
   const readme = readFileSync(resolve(repoRoot, 'README.md'), 'utf8');
   const readmeEn = readFileSync(resolve(repoRoot, 'README.en.md'), 'utf8');
-  assert.ok(readme.includes(BRAND_SLOGAN));
-  assert.ok(readmeEn.includes(BRAND_SLOGAN_EN));
+  assert.ok(
+    readme.includes('native/crates/guanlan-desktop/icons/128x128@2x.png'),
+    '中文 README 顶部应展示官方品牌 Logo'
+  );
+  assert.ok(readme.includes(BRAND_SLOGAN) && readme.includes(BRAND_SLOGAN_NOTE));
+  assert.ok(
+    readmeEn.includes('native/crates/guanlan-desktop/icons/128x128@2x.png'),
+    '英文 README 顶部应展示官方品牌 Logo'
+  );
+  assert.ok(readmeEn.includes(BRAND_SLOGAN_EN) && readmeEn.includes(BRAND_SLOGAN_NOTE_EN));
 
   const pngBuf = readFileSync(resolve(repoRoot, 'native/crates/guanlan-desktop/app-icon.png'));
   const { width, height, rgba } = decodeRgbaPng(pngBuf);
@@ -189,37 +248,31 @@ test('窗口标题、安装包短描述、README 与 1024px 桌面源图保持�
     const idx = (y * width + x) * 4;
     return [rgba[idx], rgba[idx + 1], rgba[idx + 2], rgba[idx + 3]] as const;
   };
-  // 1. 文件夹右上折耳外缺口必须保持透明
   assert.equal(pixelAt(860, 170)[3], 0, '文件夹折耳右侧缺口应为完全透明');
-  // 2. 左上折耳空白区（x=340, y=195）应为沉稳深曜石灰蓝
   const tabBgPx = pixelAt(340, 195);
   assert.equal(tabBgPx[3], 255, '文件夹左上折耳区域应不透明');
   assert.ok(
     tabBgPx[0] < 75 && tabBgPx[1] < 80 && tabBgPx[2] < 105 && tabBgPx[2] > tabBgPx[0],
     `折耳底色应呈深曜石灰蓝，实得 rgba(${tabBgPx.join(',')})`
   );
-  // 3. 左上折耳司辰权杖朱砂眼中心（x=225, y=207，对应 nx=-0.56, ny=-0.595）应为暖朱砂宝珠
   const eyePx = pixelAt(225, 207);
   assert.equal(eyePx[3], 255, '折耳朱砂眼应不透明');
   assert.ok(
     eyePx[0] > 215 && eyePx[1] > 100 && eyePx[2] < 140 && eyePx[0] > eyePx[2] + 90,
     `折耳权杖核心眼应呈暖朱砂色，实得 rgba(${eyePx.join(',')})`
   );
-  // 4. 前后板夹层纸页（x=512, y=300）必须为温润象牙白
   const paperPx = pixelAt(512, 300);
   assert.equal(paperPx[3], 255, '夹层纸页应不透明');
   assert.ok(
     paperPx[0] > 205 && paperPx[1] > 205 && paperPx[2] > 200,
     `夹层纸页应呈温润象牙白，实得 rgba(${paperPx.join(',')})`
   );
-  // 5. 司辰左侧主羽中段（x=290, y=540，对应 hx≈-0.43, hy≈-0.15）应为亮铂银色，显著亮于深曜石底
   const wingPx = pixelAt(290, 540);
   assert.equal(wingPx[3], 255, '司辰银翼应不透明');
   assert.ok(
     wingPx[0] > 155 && wingPx[1] > 160 && wingPx[2] > 180,
     `沙漏左侧应可见司辰拉丝银翼，实得 rgba(${wingPx.join(',')})`
   );
-  // 6. 居中沙漏下仓（x=512, y=745）必须落到司辰朱砂琥珀流沙丘
   const sandPx = pixelAt(512, 745);
   assert.equal(sandPx[3], 255, '居中沙漏下仓流沙应不透明');
   assert.ok(

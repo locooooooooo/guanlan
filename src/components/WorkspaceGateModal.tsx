@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, FolderOpen, RefreshCw, RotateCcw, ShieldCheck, X } from 'lucide-react';
 import type { DesktopSessionState } from '../services/desktopBridge';
-import { BRAND_NAME, BRAND_SLOGAN, BRAND_SLOGAN_NOTE } from '../utils/brandIdentity';
+import { BRAND_NAME, BRAND_NAME_EN, BRAND_SLOGAN, BRAND_SLOGAN_NOTE } from '../utils/brandIdentity';
 import { BrandMark } from './BrandMark';
 import { Button } from './ui/primitives';
 
@@ -57,7 +57,7 @@ export const WorkspaceGateModal: React.FC<WorkspaceGateModalProps> = ({
         />
         <div className="flex items-start gap-4">
           <div
-            className={`w-11 h-11 flex items-center justify-center shrink-0 ${
+            className={`w-12 h-12 flex items-center justify-center shrink-0 ${
               isConflict || isError
                 ? 'rounded-2xl bg-[color:color-mix(in_srgb,var(--stage-ink-decision)_14%,transparent)] text-[color:var(--stage-ink-decision-text)]'
                 : ''
@@ -70,19 +70,40 @@ export const WorkspaceGateModal: React.FC<WorkspaceGateModalProps> = ({
             )}
           </div>
           <div className="min-w-0 flex-1 space-y-1.5">
-            <h1 className="font-serif-claude text-[22px] leading-[1.3] font-semibold tracking-[-0.02em] text-[color:var(--ink-strong)]">
-              {isConflict
-                ? '工作区正被另一个观澜实例占用（ROOT_IN_USE）'
-                : isError
-                  ? '无法接入工作区'
-                  : `欢迎使用${BRAND_NAME}`}
-            </h1>
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <h1 className="font-serif-claude text-[22px] leading-[1.3] font-semibold tracking-[-0.02em] text-[color:var(--ink-strong)]">
+                {isConflict
+                  ? '工作区正被另一个观澜实例占用（ROOT_IN_USE）'
+                  : isError
+                    ? '无法接入工作区'
+                    : `欢迎使用${BRAND_NAME}`}
+              </h1>
+              {!isConflict && !isError && (
+                <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[color:var(--ink-soft)]">
+                  {BRAND_NAME_EN}
+                </span>
+              )}
+            </div>
+            {!isConflict && !isError && (
+              <p
+                data-gate-slogan=""
+                className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[length:var(--text-ui)] leading-[1.5] font-medium text-[color:var(--ink-strong)]"
+              >
+                <span
+                  aria-hidden="true"
+                  className="inline-block size-1.5 shrink-0 rounded-full bg-[#E86E3B]"
+                />
+                <span>{BRAND_SLOGAN}</span>
+                <span aria-hidden="true" className="opacity-35">·</span>
+                <span className="font-normal text-[color:var(--ink-soft)]">{BRAND_SLOGAN_NOTE}</span>
+              </p>
+            )}
             <p className="text-[length:var(--text-ui-body)] leading-[1.6] text-[color:var(--ink-soft)]">
               {isConflict
                 ? '同一工作区同一时刻只允许一个写入实例持有排他锁，以防止 SQLite 索引与版本快照竞争。请关闭另一实例后重试，或选择其他目录。'
                 : isError
                   ? err?.message || '工作区服务启动失败，请确认目录存在并可读取后重试。'
-                  : `${BRAND_SLOGAN} · ${BRAND_SLOGAN_NOTE}。选择任意本地项目或资料文件夹即可开始时空索引与版本回溯——所有索引与快照都保存在本机数据目录，绝不向你的业务目录写入隐藏文件。`}
+                  : '选择任意本地项目或资料文件夹即可建立可追溯时间线与版本快照——索引与快照均保存在本机私有数据目录，绝不向你的业务目录写入隐藏文件。'}
             </p>
           </div>
         </div>

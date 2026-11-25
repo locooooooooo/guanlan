@@ -1,8 +1,12 @@
+<p align="center">
+  <img src="native/crates/guanlan-desktop/icons/128x128@2x.png" width="96" height="96" alt="Guanlan — Chronos Winged Hourglass Folder" />
+</p>
+
 # Guanlan (观澜)
 
 [简体中文](README.md) | **English**
 
-> Chronos keeps time. Guanlan reveals the trace. Every change and decision stays accountable.
+> Chronos keeps time. Guanlan reveals the trace. Your folders stay local — every change and decision stays traceable.
 
 Guanlan is a **local-first, zero lock-in** file workbench. It builds a traceable timeline and version snapshots for any directory, ties decisions to the evidence behind them with a relation map and evidence anchors, and ships an all-format reader plus an MCP context base for coding agents.
 
