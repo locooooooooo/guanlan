@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, ArrowRight, BookMarked, CalendarDays, Check, Hourglass, Layers, Orbit, RotateCw } from 'lucide-react';
 import type {
   DecisionAssertion,
@@ -46,7 +46,14 @@ import { Badge, CardFrame, Frame, FramePanel } from './ui';
 import FeaturedFocusCards from './FeaturedFocusCards';
 import type { FeaturedDecisionItem, FeaturedPackageInfo } from './FeaturedFocusCards';
 import TaskPackageGallery from './TaskPackageGallery';
+import HomeWorkspaceVisuals from './HomeWorkspaceVisuals';
 import type { DesktopFileActionCallbacks } from './FileContextMenu';
+import {
+  PULSE_CURVE_VIEWBOX_H,
+  PULSE_CURVE_VIEWBOX_W,
+  buildPulseComposition,
+  pickHomeCoverSvgCandidates,
+} from '../utils/homeInsights';
 
 export interface HomeRecentItem {
   file_id: string;
@@ -105,6 +112,8 @@ interface HomeViewProps {
   dataError?: string | null;
   retryingConnection?: boolean;
   onRetryConnection?: () => void;
+  /** 首页有界预水合 SVG 封面（让带真实架构图的专项打开即现原图，而非退回空白线） */
+  onPrefetchSvgCover?: (fileId: string, revisionId: string) => void;
 }
 
 /** 当前版本解析：与 AtlasView/RightInspector 同款口径（current_revision_id 优先，缺失取末版） */
@@ -274,8 +283,11 @@ const HomeView: React.FC<HomeViewProps> = ({
   dataError = null,
   retryingConnection = false,
   onRetryConnection,
+  onPrefetchSvgCover,
 }) => {
   const { greeting, dateLabel } = greetingHeader();
+  const [pulseMode, setPulseMode] = useState<'stacked' | 'cumulative'>('stacked');
+  const [hoveredPulseIdx, setHoveredPulseIdx] = useState<number | null>(null);
 
   // 司辰今日徽记：今天 = 本地日历日（与 lastSevenDays 同一口径，不引 UTC 日界）；
   // 摘要全部由真实 eventDays 今日桶派生（buildChronosTodaySummary 零造数）
@@ -414,9 +426,22 @@ const HomeView: React.FC<HomeViewProps> = ({
   );
   const todoEntries = useMemo(() => highValueStats.entries.slice(0, 6), [highValueStats.entries]);
 
+  // 首页有界预水合专项 SVG 封面（至多 8 份，按 revisionId 去重，避免重复拉取）
+  const prefetchedSvgRevsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!onPrefetchSvgCover || dataSource !== 'real') return;
+    const candidates = pickHomeCoverSvgCandidates(packages, fileById, 8);
+    for (const item of candidates) {
+      if (prefetchedSvgRevsRef.current.has(item.revisionId)) continue;
+      prefetchedSvgRevsRef.current.add(item.revisionId);
+      onPrefetchSvgCover(item.fileId, item.revisionId);
+    }
+  }, [packages, fileById, dataSource, onPrefetchSvgCover]);
+
   // 事件走势：纯函数出口（可点击时光入口）——''（日期待考）桶不进图，升序取最近
   // 24 桶；只有 day 粒度且日期为精确 YYYY-MM-DD 的桶才可作直跳载荷（聚合桶诚实禁跳）
   const trendBars = useMemo(() => buildHomeTrendBars(eventDays), [eventDays]);
+  const pulse = useMemo(() => buildPulseComposition(trendBars, eventDays), [trendBars, eventDays]);
   const trendMax = Math.max(1, ...trendBars.map((g) => g.count));
   const trendTotal = trendBars.reduce((acc, g) => acc + g.count, 0);
   // 「日历看该日」次级入口落点：最近一个有事件的直跳日（无则不渲染入口）
@@ -614,10 +639,511 @@ const HomeView: React.FC<HomeViewProps> = ({
           />
         </div>
 
+        {/* 首屏视觉驾驶舱：左侧事件演进脉冲图（堆叠/累计切换）+ 右侧工作区态势图谱 */}
+        <div
+          className="glx-hero-reveal grid grid-cols-1 gap-5 lg:grid-cols-12 lg:items-stretch"
+          style={{ '--glx-stagger': 3 } as React.CSSProperties}
+        >
+          {/* 事件走势：堆叠构成 / 累计脉冲双视图 + 顶部零遮挡明细条 + 活跃日均线 */}
+          <CardFrame
+            aria-label="事件走势"
+            className="flex flex-col justify-between rounded-2xl border border-border/80 bg-card p-5 shadow-xs lg:col-span-7"
+          >
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <h2 className="text-[15px] leading-[22px] font-semibold tracking-tight text-foreground whitespace-nowrap">
+                    事件走势
+                  </h2>
+                  {/* 堆叠构成 / 累计曲线 切换：同一份真实数据的两种读法 */}
+                  <div
+                    role="tablist"
+                    aria-label="事件走势视图切换"
+                    className="inline-flex items-center rounded-lg border border-border/80 bg-muted/60 p-0.5"
+                  >
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={pulseMode === 'stacked'}
+                      data-home-trend-mode="stacked"
+                      onClick={() => {
+                        setPulseMode('stacked');
+                        setHoveredPulseIdx(null);
+                      }}
+                      className={`cursor-pointer whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] leading-none font-medium motion-safe:transition-colors ${
+                        pulseMode === 'stacked'
+                          ? 'bg-card text-foreground shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      构成
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={pulseMode === 'cumulative'}
+                      data-home-trend-mode="cumulative"
+                      onClick={() => {
+                        setPulseMode('cumulative');
+                        setHoveredPulseIdx(null);
+                      }}
+                      className={`cursor-pointer whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] leading-none font-medium motion-safe:transition-colors ${
+                        pulseMode === 'cumulative'
+                          ? 'bg-card text-foreground shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      累计
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {/* 日历次级直跳——落点 = 最近一个有事件的直跳日（latestJumpableTrendDate
+                      真实派生，不造「峰值日」概念）；缺 onOpenCalendarAt 时入口不渲染 */}
+                  {calendarJumpDate && onOpenCalendarAt && (
+                    <button
+                      type="button"
+                      data-home-trend-calendar-jump={calendarJumpDate}
+                      onClick={() => onOpenCalendarAt(calendarJumpDate)}
+                      title={`在全景日历中查看 ${calendarJumpDate} 并锁定聚焦`}
+                      aria-label={`在全景日历中查看 ${calendarJumpDate} 并锁定聚焦`}
+                      className="inline-flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-full bg-muted px-2 py-0.5 font-sans text-[11px] leading-4 font-medium tabular-nums text-[color:var(--accent-iris-deep)] motion-safe:transition-colors hover:bg-[color:var(--chip-active-bg)]"
+                    >
+                      <CalendarDays className="size-3" aria-hidden="true" />
+                      {`日历看 ${calendarJumpDate.slice(5)}`}
+                    </button>
+                  )}
+                  <Badge variant="outline" size="sm" className="font-sans tabular-nums whitespace-nowrap">
+                    {eventDays
+                      ? `${eventDays.granularity === 'day' ? '近 24 天' : `近 ${trendBars.length} 桶`} · ${trendTotal} 条`
+                      : '等待数据'}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* 零遮挡交互明细 / 图例条：悬停任意柱条或曲线节点即时展开真实构成与代表事件 */}
+              {(() => {
+                const activePt = hoveredPulseIdx !== null ? pulse.points[hoveredPulseIdx] ?? null : null;
+                return (
+                  <div
+                    data-home-trend-inspector=""
+                    className={`mt-2.5 flex min-h-[26px] items-center justify-between gap-2 rounded-lg px-2.5 py-1 text-[11px] motion-safe:transition-colors ${
+                      activePt
+                        ? 'bg-[color:var(--ink-anchor)] text-[color:var(--paper-on-ink)]'
+                        : 'bg-muted/35 text-muted-foreground'
+                    }`}
+                  >
+                    {activePt ? (
+                      <>
+                        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+                          <span className="shrink-0 font-mono font-semibold tabular-nums">
+                            {activePt.date}
+                          </span>
+                          <span className="shrink-0 whitespace-nowrap">
+                            <span className="font-mono font-semibold tabular-nums">{activePt.count}</span> 条
+                          </span>
+                          {pulseMode === 'cumulative' ? (
+                            <span className="shrink-0 whitespace-nowrap opacity-85">
+                              累计 <span className="font-mono font-medium tabular-nums">{activePt.cumulative}</span> 条
+                            </span>
+                          ) : activePt.hasKindBreakdown ? (
+                            <span className="hidden sm:inline-flex shrink-0 items-center gap-2 whitespace-nowrap opacity-90">
+                              <span>
+                                新增 <span className="font-mono tabular-nums">{activePt.added}</span>
+                              </span>
+                              <span>
+                                拍板 <span className="font-mono tabular-nums">{activePt.decision}</span>
+                              </span>
+                              <span>
+                                演进 <span className="font-mono tabular-nums">{activePt.evolved}</span>
+                              </span>
+                            </span>
+                          ) : null}
+                          {activePt.sampleHeadline && (
+                            <span className="min-w-0 truncate opacity-80">
+                              · {activePt.sampleHeadline}
+                            </span>
+                          )}
+                        </div>
+                        <span className="shrink-0 whitespace-nowrap text-[10.5px] opacity-80">
+                          {activePt.jumpable ? '点击看星图 ↗' : '聚合桶'}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                          {pulse.hasAnyBreakdown ? (
+                            <>
+                              <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                                <span
+                                  className="size-2 rounded-full"
+                                  style={{ backgroundColor: 'var(--accent-wave)' }}
+                                  aria-hidden="true"
+                                />
+                                新增纳入 <span className="font-mono tabular-nums text-foreground">{pulse.totalAdded}</span>
+                              </span>
+                              <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                                <span
+                                  className="size-2 rounded-full"
+                                  style={{ backgroundColor: 'var(--stage-ink-decision)' }}
+                                  aria-hidden="true"
+                                />
+                                决策拍板 <span className="font-mono tabular-nums text-foreground">{pulse.totalDecision}</span>
+                              </span>
+                              <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                                <span
+                                  className="size-2 rounded-full"
+                                  style={{ backgroundColor: 'var(--accent-iris-deep)' }}
+                                  aria-hidden="true"
+                                />
+                                内容演进 <span className="font-mono tabular-nums text-foreground">{pulse.totalEvolved}</span>
+                              </span>
+                            </>
+                          ) : (
+                            <span>
+                              窗口累计 <span className="font-mono tabular-nums text-foreground">{trendTotal}</span> 条
+                            </span>
+                          )}
+                        </div>
+                        {trendBars.length > 0 && (
+                          <span className="hidden sm:inline shrink-0 whitespace-nowrap text-[10.5px] opacity-75">
+                            悬停看明细 · 点击进星图
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {pulseMode === 'stacked' ? (
+                <div
+                  className="relative mt-3 flex h-[152px] items-end gap-1.5 pb-1"
+                  onMouseLeave={() => setHoveredPulseIdx(null)}
+                >
+                  {/* 柔和背景辅助刻度线（明暗双态自适应）+ 日均参考线 */}
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-x-0 top-0 bottom-1 flex flex-col justify-between"
+                  >
+                    <span className="border-t border-dashed border-border/70" />
+                    <span className="border-t border-dashed border-border/70" />
+                    <span className="border-t border-dashed border-border" />
+                  </div>
+                  {pulse.avgLineBottomPct > 0 && pulse.activeBuckets > 1 && (
+                    <div
+                      aria-hidden="true"
+                      data-home-trend-avg-line=""
+                      className="pointer-events-none absolute inset-x-0 z-[2] border-t border-dashed border-[color:var(--accent-iris)]/60"
+                      style={{ bottom: `calc(${pulse.avgLineBottomPct}% + 4px)` }}
+                      title={`活跃日均 ${pulse.avgPerActive.toFixed(1)} 条`}
+                    >
+                      <span className="absolute right-0 -top-[18px] rounded border border-border/60 bg-card/95 px-1.5 py-0.5 text-[10px] leading-none text-[color:var(--accent-iris-deep)]">
+                        日均 <span className="font-mono tabular-nums">{pulse.avgPerActive.toFixed(1)}</span>
+                      </span>
+                    </div>
+                  )}
+                  {trendBars.length === 0 && (
+                    <p className="relative z-[1] w-full self-center text-center text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-soft)]">
+                      暂无按日聚合的事件数据
+                    </p>
+                  )}
+                  {trendBars.map((g, idx) => {
+                    const point = pulse.points[idx];
+                    const isPeak = g.count === trendMax && g.count > 0;
+                    const isHovered = hoveredPulseIdx === idx;
+                    const heightPct = Math.max(8, (g.count / trendMax) * 100);
+                    // 可点击时光入口——jumpable 桶渲染为 button（data-home-trend-bar 承载
+                    // 精确 YYYY-MM-DD 直跳载荷）；week/month 聚合桶与畸形键保持 div（诚实禁跳，
+                    // 不可假装能定位到某日）。柱高仍是 inline height:%（视觉量，非动画量——
+                    // 生长动效只有既有 glx-bar-rise 的 scaleY）。
+                    const tipParts = [
+                      `${g.date.slice(5)} · ${g.count} 条`,
+                      point?.hasKindBreakdown
+                        ? `新增 ${point.added} · 拍板 ${point.decision} · 演进 ${point.evolved}`
+                        : null,
+                      point?.decisionTotal && point.decisionTotal > point.decision
+                        ? `含 ${point.decisionTotal} 项决策`
+                        : null,
+                      point?.sampleHeadline,
+                      g.jumpable ? '点击前往该日' : '聚合桶不可直跳',
+                    ].filter(Boolean);
+                    const barCore = point?.hasKindBreakdown ? (
+                      <div
+                        data-home-trend-stack=""
+                        className="glx-bar-rise flex w-full flex-col justify-end overflow-hidden rounded-t-[var(--r-ctl)] motion-safe:transition-opacity"
+                        style={
+                          {
+                            '--glx-bar-idx': idx,
+                            height: `${heightPct}%`,
+                            opacity: hoveredPulseIdx !== null && !isHovered ? 0.55 : 1,
+                          } as React.CSSProperties
+                        }
+                      >
+                        {point.added > 0 && (
+                          <span
+                            className="block w-full"
+                            style={{
+                              height: `${(point.added / point.count) * 100}%`,
+                              backgroundColor: 'var(--accent-wave)',
+                            }}
+                          />
+                        )}
+                        {point.decision > 0 && (
+                          <span
+                            className="block w-full"
+                            style={{
+                              height: `${(point.decision / point.count) * 100}%`,
+                              backgroundColor: 'var(--stage-ink-decision)',
+                            }}
+                          />
+                        )}
+                        {point.evolved > 0 && (
+                          <span
+                            className="block w-full"
+                            style={{
+                              height: `${(point.evolved / point.count) * 100}%`,
+                              backgroundColor: 'var(--accent-iris-deep)',
+                            }}
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <div
+                        className="glx-bar-rise w-full rounded-t-[var(--r-ctl)] motion-safe:transition-opacity"
+                        style={
+                          {
+                            '--glx-bar-idx': idx,
+                            height: `${heightPct}%`,
+                            backgroundColor: isPeak
+                              ? 'var(--accent-wave)'
+                              : 'var(--accent-iris-deep)',
+                            opacity:
+                              g.count > 0
+                                ? hoveredPulseIdx !== null && !isHovered
+                                  ? 0.55
+                                  : 1
+                                : 0.22,
+                          } as React.CSSProperties
+                        }
+                      />
+                    );
+                    if (!g.jumpable) {
+                      return (
+                        <div
+                          key={g.date}
+                          data-home-trend-bar={g.date}
+                          data-home-trend-jumpable="false"
+                          onMouseEnter={() => setHoveredPulseIdx(idx)}
+                          className={`group/bar relative z-[1] flex h-full min-w-0 flex-1 items-end rounded-t-md motion-safe:transition-colors ${
+                            isHovered ? 'bg-accent/40' : ''
+                          }`}
+                          title={tipParts.join(' · ')}
+                        >
+                          {barCore}
+                        </div>
+                      );
+                    }
+                    return (
+                      <button
+                        key={g.date}
+                        type="button"
+                        data-home-trend-bar={g.date}
+                        data-home-trend-jumpable="true"
+                        onMouseEnter={() => setHoveredPulseIdx(idx)}
+                        onFocus={() => setHoveredPulseIdx(idx)}
+                        onBlur={() => setHoveredPulseIdx(null)}
+                        onClick={() =>
+                          onOpenPanoramaAt ? onOpenPanoramaAt(g.date) : onOpenPanorama()
+                        }
+                        aria-label={`${g.date} · ${g.count} 条事件，点击前往该日全景星图`}
+                        className={`group/bar relative z-[1] flex h-full min-w-0 flex-1 cursor-pointer items-end rounded-t-md motion-safe:transition-colors ${
+                          isHovered ? 'bg-accent/40' : ''
+                        }`}
+                        title={tipParts.join(' · ')}
+                      >
+                        {barCore}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div
+                  className="relative mt-3 h-[152px]"
+                  onMouseLeave={() => setHoveredPulseIdx(null)}
+                >
+                  {trendBars.length === 0 ? (
+                    <p className="flex h-full items-center justify-center text-center text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-soft)]">
+                      暂无按日聚合的事件数据
+                    </p>
+                  ) : (
+                    <svg
+                      viewBox={`0 0 ${PULSE_CURVE_VIEWBOX_W} ${PULSE_CURVE_VIEWBOX_H}`}
+                      className="h-full w-full"
+                      role="img"
+                      aria-label={`事件累计曲线：近窗口累计 ${trendTotal} 条`}
+                    >
+                      <defs>
+                        <linearGradient id="glxPulseAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--accent-iris-deep)" stopOpacity="0.32" />
+                          <stop offset="100%" stopColor="var(--accent-iris-deep)" stopOpacity="0.02" />
+                        </linearGradient>
+                      </defs>
+                      {/* 辅助横向虚线：与柱图视觉坐标保持统一 */}
+                      <line
+                        x1="8"
+                        y1="14"
+                        x2={PULSE_CURVE_VIEWBOX_W - 8}
+                        y2="14"
+                        stroke="var(--border)"
+                        strokeDasharray="3 3"
+                        strokeOpacity="0.7"
+                      />
+                      <line
+                        x1="8"
+                        y1={PULSE_CURVE_VIEWBOX_H / 2}
+                        x2={PULSE_CURVE_VIEWBOX_W - 8}
+                        y2={PULSE_CURVE_VIEWBOX_H / 2}
+                        stroke="var(--border)"
+                        strokeDasharray="3 3"
+                        strokeOpacity="0.7"
+                      />
+                      <line
+                        x1="8"
+                        y1={PULSE_CURVE_VIEWBOX_H - 14}
+                        x2={PULSE_CURVE_VIEWBOX_W - 8}
+                        y2={PULSE_CURVE_VIEWBOX_H - 14}
+                        stroke="var(--border)"
+                      />
+                      {pulse.cumulativeArea && (
+                        <polygon
+                          points={pulse.cumulativeArea}
+                          fill="url(#glxPulseAreaGrad)"
+                        />
+                      )}
+                      {pulse.cumulativePolyline && (
+                        <polyline
+                          points={pulse.cumulativePolyline}
+                          fill="none"
+                          stroke="var(--accent-iris-deep)"
+                          strokeWidth="2.2"
+                          strokeLinejoin="round"
+                          strokeLinecap="round"
+                        />
+                      )}
+                      {pulse.points.map((p, idx) => (
+                        <g key={p.date}>
+                          {hoveredPulseIdx === idx && (
+                            <line
+                              x1={p.curveX}
+                              y1={10}
+                              x2={p.curveX}
+                              y2={PULSE_CURVE_VIEWBOX_H - 10}
+                              stroke="var(--accent-iris)"
+                              strokeWidth="1"
+                              strokeDasharray="3 3"
+                              opacity="0.6"
+                            />
+                          )}
+                          <circle
+                            cx={p.curveX}
+                            cy={p.curveY}
+                            r={hoveredPulseIdx === idx ? 4.5 : 3}
+                            fill={
+                              p.count === pulse.peakCount && p.count > 0
+                                ? 'var(--accent-wave)'
+                                : 'var(--accent-iris-deep)'
+                            }
+                            stroke="var(--card)"
+                            strokeWidth="1.5"
+                          />
+                          <circle
+                            cx={p.curveX}
+                            cy={p.curveY}
+                            r="10"
+                            fill="transparent"
+                            className={p.jumpable ? 'cursor-pointer' : 'cursor-default'}
+                            onMouseEnter={() => setHoveredPulseIdx(idx)}
+                            onClick={() => {
+                              if (!p.jumpable) return;
+                              if (onOpenPanoramaAt) onOpenPanoramaAt(p.date);
+                              else onOpenPanorama();
+                            }}
+                          >
+                            <title>{`${p.date} · 当日 ${p.count} 条 · 累计 ${p.cumulative} 条`}</title>
+                          </circle>
+                        </g>
+                      ))}
+                    </svg>
+                  )}
+                </div>
+              )}
+
+              {trendBars.length > 0 && (
+                <div className="mt-2 flex items-center justify-between text-[11px] leading-4 text-[color:var(--ink-soft)]">
+                  <span className="font-mono tabular-nums">{trendBars[0].date}</span>
+                  <span className="font-sans text-[11px] tabular-nums opacity-85">
+                    {`峰值 ${trendMax} 条/日`}
+                  </span>
+                  <span className="font-mono tabular-nums">{trendBars[trendBars.length - 1].date}</span>
+                </div>
+              )}
+            </div>
+
+            {trendBars.length > 0 && (() => {
+              const activeBuckets = trendBars.filter((b) => b.count > 0).length;
+              const avgPerActive = activeBuckets > 0 ? (trendTotal / activeBuckets).toFixed(1) : '0.0';
+              return (
+                <div className="mt-2.5">
+                  <div className="grid grid-cols-3 gap-2 border-t border-[color:var(--glass-hairline)] pt-2.5">
+                    <div className="rounded-[10px] bg-[color:var(--depth-0-base)] px-2.5 py-1.5">
+                      <span className="block font-sans text-[11px] font-medium text-[color:var(--ink-soft)]">
+                        活跃时段
+                      </span>
+                      <span className="mt-0.5 block font-mono text-[14px] font-semibold tabular-nums text-[color:var(--ink-strong)]">
+                        {activeBuckets} <span className="font-sans text-[11px] font-normal text-[color:var(--ink-soft)]">{eventDays?.granularity === 'day' ? '天' : '桶'}</span>
+                      </span>
+                    </div>
+                    <div className="rounded-[10px] bg-[color:var(--depth-0-base)] px-2.5 py-1.5">
+                      <span className="block font-sans text-[11px] font-medium text-[color:var(--ink-soft)]">
+                        日均节奏
+                      </span>
+                      <span className="mt-0.5 block font-mono text-[14px] font-semibold tabular-nums text-[color:var(--ink-strong)]">
+                        {avgPerActive} <span className="font-sans text-[11px] font-normal text-[color:var(--ink-soft)]">条</span>
+                      </span>
+                    </div>
+                    <div className="rounded-[10px] bg-[color:var(--depth-0-base)] px-2.5 py-1.5">
+                      <span className="block font-sans text-[11px] font-medium text-[color:var(--ink-soft)]">
+                        单日峰值
+                      </span>
+                      <span className="mt-0.5 block font-mono text-[14px] font-semibold tabular-nums text-[color:var(--accent-wave)]">
+                        {trendMax} <span className="font-sans text-[11px] font-normal text-[color:var(--ink-soft)]">条</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </CardFrame>
+
+          {/* 工作区态势图谱：态势环 / 阶段流 / 格式谱 三视图切换 */}
+          <HomeWorkspaceVisuals
+            className="lg:col-span-5"
+            files={files}
+            readingStates={readingStates}
+            packages={packages}
+            decisions={decisions ?? []}
+            decisionsUnresolvedTotal={decisionsUnresolvedTotal}
+            onOpenDecision={onOpenDecision}
+            onOpenDoc={onOpenDoc}
+            onOpenPackageBoard={onOpenPackageBoard}
+          />
+        </div>
+
         {/* 任务包橱窗（C2） */}
         <div
           className="glx-hero-reveal"
-          style={{ '--glx-stagger': 3 } as React.CSSProperties}
+          style={{ '--glx-stagger': 4 } as React.CSSProperties}
         >
           <TaskPackageGallery
             packages={packages}
@@ -633,7 +1159,7 @@ const HomeView: React.FC<HomeViewProps> = ({
         <section
           aria-label="近期待阅"
           className="glx-hero-reveal"
-          style={{ '--glx-stagger': 4 } as React.CSSProperties}
+          style={{ '--glx-stagger': 5 } as React.CSSProperties}
         >
           <Frame className="border border-border/75 shadow-xs">
             <div className="flex items-center justify-between gap-2 px-4 py-2.5">
@@ -643,8 +1169,8 @@ const HomeView: React.FC<HomeViewProps> = ({
                 </h2>
               </div>
               {highValueStats.pendingCount > todoEntries.length && (
-                <Badge variant="outline" size="sm" className="font-mono tabular-nums whitespace-nowrap">
-                  展示前 {todoEntries.length} 条
+                <Badge variant="outline" size="sm" className="font-sans tabular-nums whitespace-nowrap">
+                  展示前 <span className="font-mono">{todoEntries.length}</span> 条
                 </Badge>
               )}
             </div>
@@ -707,7 +1233,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                       </button>
                       <span
                         aria-hidden="true"
-                        className="hidden sm:inline-flex shrink-0 items-center gap-0.5 font-mono text-[length:var(--text-micro)] text-[color:var(--accent-iris-deep)] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 motion-safe:transition-opacity"
+                        className="hidden sm:inline-flex shrink-0 items-center gap-0.5 text-[11px] font-medium text-[color:var(--accent-iris-deep)] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 motion-safe:transition-opacity"
                       >
                         续读
                         <ArrowRight className="size-3" />
@@ -728,248 +1254,6 @@ const HomeView: React.FC<HomeViewProps> = ({
             </FramePanel>
           </Frame>
         </section>
-
-        <div
-          className="glx-hero-reveal grid grid-cols-1 gap-5 xl:grid-cols-3"
-          style={{ '--glx-stagger': 5 } as React.CSSProperties}
-        >
-          {/* 事件走势：coss CardFrame 自适应渐变柱图 + 峰值暖琥珀加冕 + 底部三指标平衡条 */}
-          <CardFrame
-            aria-label="事件走势"
-            className="flex flex-col rounded-2xl border border-border/80 bg-card p-5 shadow-xs xl:col-span-2"
-          >
-            <div className="flex items-baseline justify-between gap-2">
-              <h2 className="text-[15px] leading-[22px] font-semibold tracking-tight text-foreground">
-                事件走势
-              </h2>
-              <div className="flex items-center gap-1.5">
-                {/* 日历次级直跳——落点 = 最近一个有事件的直跳日（latestJumpableTrendDate
-                    真实派生，不造「峰值日」概念）；缺 onOpenCalendarAt 时入口不渲染 */}
-                {calendarJumpDate && onOpenCalendarAt && (
-                  <button
-                    type="button"
-                    data-home-trend-calendar-jump={calendarJumpDate}
-                    onClick={() => onOpenCalendarAt(calendarJumpDate)}
-                    title={`在全景日历中查看 ${calendarJumpDate} 并锁定聚焦`}
-                    aria-label={`在全景日历中查看 ${calendarJumpDate} 并锁定聚焦`}
-                    className="inline-flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-medium text-[color:var(--accent-iris-deep)] motion-safe:transition-colors hover:bg-[color:var(--chip-active-bg)]"
-                  >
-                    <CalendarDays className="size-3" aria-hidden="true" />
-                    日历看 {calendarJumpDate.slice(5)}
-                  </button>
-                )}
-                <Badge variant="outline" size="sm" className="font-mono tabular-nums whitespace-nowrap">
-                  {eventDays
-                    ? `${eventDays.granularity === 'day' ? '近 24 天' : `近 ${trendBars.length} 桶`} · ${trendTotal} 条`
-                    : '等待数据'}
-                </Badge>
-              </div>
-            </div>
-            <div className="relative mt-6 flex min-h-[156px] flex-1 items-end gap-1.5 pb-1">
-              {/* 柔和背景辅助刻度线（明暗双态自适应） */}
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 top-0 bottom-1 flex flex-col justify-between"
-              >
-                <span className="border-t border-dashed border-border/70" />
-                <span className="border-t border-dashed border-border/70" />
-                <span className="border-t border-dashed border-border" />
-              </div>
-              {trendBars.length === 0 && (
-                <p className="relative z-[1] w-full self-center text-center text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-soft)]">
-                  暂无按日聚合的事件数据
-                </p>
-              )}
-              {trendBars.map((g, idx) => {
-                const isPeak = g.count === trendMax && g.count > 0;
-                const heightPct = Math.max(8, (g.count / trendMax) * 100);
-                // 可点击时光入口——jumpable 桶渲染为 button（data-home-trend-bar 承载
-                // 精确 YYYY-MM-DD 直跳载荷）；week/month 聚合桶与畸形键保持 div（诚实禁跳，
-                // 不可假装能定位到某日）。柱高仍是 inline height:%（视觉量，非动画量——
-                // 生长动效只有既有 glx-bar-rise 的 scaleY）。
-                const barCore = (
-                  <>
-                    <div
-                      className="glx-bar-rise w-full rounded-t-[var(--r-ctl)] motion-safe:transition-opacity group-hover/bar:opacity-90"
-                      style={
-                        {
-                          '--glx-bar-idx': idx,
-                          height: `${heightPct}%`,
-                          backgroundColor: isPeak
-                            ? 'var(--accent-wave)'
-                            : 'var(--accent-iris-deep)',
-                          opacity: g.count > 0 ? 1 : 0.22,
-                        } as React.CSSProperties
-                      }
-                    />
-                    <span
-                      aria-hidden="true"
-                      className="pointer-events-none absolute -top-7 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-md bg-[color:var(--ink-anchor)] px-2 py-0.5 font-mono text-[10px] leading-none text-[color:var(--paper-on-ink)] opacity-0 shadow-md group-hover/bar:opacity-100 motion-safe:transition-opacity tabular-nums"
-                    >
-                      {g.jumpable
-                        ? `${g.date.slice(5)} · ${g.count} 条 · 点击前往该日`
-                        : `${g.date.slice(5)} · ${g.count} 条 · 聚合桶不可直跳`}
-                    </span>
-                  </>
-                );
-                if (!g.jumpable) {
-                  return (
-                    <div
-                      key={g.date}
-                      data-home-trend-bar={g.date}
-                      data-home-trend-jumpable="false"
-                      className="group/bar relative z-[1] flex h-full min-w-0 flex-1 items-end"
-                      title={`${g.date} · ${g.count} 条事件（非按日聚合，不可直跳定位）`}
-                    >
-                      {barCore}
-                    </div>
-                  );
-                }
-                return (
-                  <button
-                    key={g.date}
-                    type="button"
-                    data-home-trend-bar={g.date}
-                    data-home-trend-jumpable="true"
-                    onClick={() =>
-                      onOpenPanoramaAt ? onOpenPanoramaAt(g.date) : onOpenPanorama()
-                    }
-                    aria-label={`${g.date} · ${g.count} 条事件，点击前往该日全景星图`}
-                    className="group/bar relative z-[1] flex h-full min-w-0 flex-1 cursor-pointer items-end"
-                    title={`${g.date} · ${g.count} 条事件 · 点击前往该日`}
-                  >
-                    {barCore}
-                  </button>
-                );
-              })}
-            </div>
-            {trendBars.length > 0 && (() => {
-              const activeBuckets = trendBars.filter((b) => b.count > 0).length;
-              const avgPerActive = activeBuckets > 0 ? (trendTotal / activeBuckets).toFixed(1) : '0.0';
-              return (
-                <div className="mt-2.5 space-y-3">
-                  <div className="flex items-center justify-between text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-mono text-[color:var(--ink-soft)] tabular-nums">
-                    <span>{trendBars[0].date}</span>
-                    <span className="text-[10px] opacity-75">峰值 {trendMax} 条/日</span>
-                    <span>{trendBars[trendBars.length - 1].date}</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2.5 border-t border-[color:var(--glass-hairline)] pt-3">
-                    <div className="rounded-[10px] bg-[color:var(--depth-0-base)] px-3 py-2">
-                      <span className="block font-mono text-[10px] uppercase tracking-[0.1em] text-[color:var(--ink-soft)]">
-                        活跃时段
-                      </span>
-                      <span className="mt-0.5 block font-mono text-[15px] font-semibold tabular-nums text-[color:var(--ink-strong)]">
-                        {activeBuckets} <span className="font-sans text-[11px] font-normal text-[color:var(--ink-soft)]">{eventDays?.granularity === 'day' ? '天' : '桶'}</span>
-                      </span>
-                    </div>
-                    <div className="rounded-[10px] bg-[color:var(--depth-0-base)] px-3 py-2">
-                      <span className="block font-mono text-[10px] uppercase tracking-[0.1em] text-[color:var(--ink-soft)]">
-                        日均节奏
-                      </span>
-                      <span className="mt-0.5 block font-mono text-[15px] font-semibold tabular-nums text-[color:var(--ink-strong)]">
-                        {avgPerActive} <span className="font-sans text-[11px] font-normal text-[color:var(--ink-soft)]">条</span>
-                      </span>
-                    </div>
-                    <div className="rounded-[10px] bg-[color:var(--depth-0-base)] px-3 py-2">
-                      <span className="block font-mono text-[10px] uppercase tracking-[0.1em] text-[color:var(--ink-soft)]">
-                        单日峰值
-                      </span>
-                      <span className="mt-0.5 block font-mono text-[15px] font-semibold tabular-nums text-[color:var(--accent-wave)]">
-                        {trendMax} <span className="font-sans text-[11px] font-normal text-[color:var(--ink-soft)]">条</span>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-          </CardFrame>
-
-          {/* 最近 7 天 */}
-          <CardFrame
-            aria-label="最近七天文档"
-            className="flex flex-col rounded-2xl border border-border/80 bg-card p-5 shadow-xs"
-          >
-            <div className="flex items-baseline justify-between gap-2">
-              <div className="flex items-baseline gap-2">
-                <h2 className="text-[15px] leading-[22px] font-semibold tracking-tight text-foreground">
-                  最近 7 天
-                </h2>
-                <span className="font-mono text-[10.5px] tracking-[0.12em] uppercase text-muted-foreground">
-                  RECENT
-                </span>
-              </div>
-              <Badge variant="outline" size="sm" className="font-mono tabular-nums whitespace-nowrap">
-                {recentItems.length} 份
-              </Badge>
-            </div>
-            <div className="mt-3 flex-1 space-y-1">
-              {recentItems.length === 0 && (
-                <div className="flex h-full min-h-[120px] flex-col items-center justify-center gap-2.5 text-center">
-                  <span
-                    aria-hidden="true"
-                    className="inline-flex size-10 items-center justify-center rounded-full bg-muted"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" className="size-5">
-                      <circle cx="12" cy="12" r="9" stroke="var(--accent-iris)" strokeOpacity="0.35" strokeWidth="1.2" strokeDasharray="2 3" />
-                      <circle cx="12" cy="12" r="5" stroke="var(--accent-iris)" strokeOpacity="0.65" strokeWidth="1.2" />
-                      <circle cx="12" cy="12" r="2" fill="var(--accent-iris-deep)" />
-                    </svg>
-                  </span>
-                  <p className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-muted-foreground">
-                    近 7 天没有新文档落进工作区
-                  </p>
-                  <button
-                    type="button"
-                    onClick={onOpenPanorama}
-                    className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-muted px-3 py-1 text-[11px] font-medium text-[color:var(--accent-iris-deep)] hover:bg-[color:var(--chip-active-bg)] motion-safe:transition-colors"
-                  >
-                    去全景星图回溯历史
-                    <ArrowRight className="size-3" />
-                  </button>
-                </div>
-              )}
-              {recentItems.map((item) => {
-                const file = fileById.get(item.file_id);
-                return (
-                <button
-                  key={item.file_id}
-                  type="button"
-                  onClick={() => onOpenDoc(item.file_id)}
-                  onContextMenu={(e) => {
-                    if (!systemActions?.onOpenFileContextMenu || !file) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    systemActions.onOpenFileContextMenu(e, {
-                      kind: 'file',
-                      relativePath: file.relative_path,
-                      title: file.title,
-                      fileId: file.file_id,
-                      revisionId: file.current_revision_id,
-                    });
-                  }}
-                  title={item.title}
-                  className="group flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-left motion-safe:transition-colors hover:bg-accent/70"
-                >
-                  <span
-                    className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: formatUiMeta(item.format).dotColor }}
-                    aria-hidden="true"
-                  />
-                  <span className="min-w-0 flex-1 truncate text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)] font-medium text-foreground group-hover:text-[color:var(--accent-iris-deep)] motion-safe:transition-colors">
-                    {item.title}
-                  </span>
-                  <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[9.5px] uppercase text-muted-foreground group-hover:bg-card motion-safe:transition-colors">
-                    {item.format}
-                  </span>
-                  <span className="shrink-0 text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-mono text-muted-foreground tabular-nums">
-                    {item.date.slice(5)}
-                  </span>
-                </button>
-                );
-              })}
-            </div>
-          </CardFrame>
-        </div>
       </div>
     </div>
   );

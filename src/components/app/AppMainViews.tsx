@@ -188,6 +188,9 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
             onOpenPanoramaAt={handleJumpFromHomeToStarMap}
             onOpenCalendarAt={handleJumpFromHomeToCalendar}
             onOpenChronosDigest={() => ctx.setIsChronosDigestOpen(true)}
+            onPrefetchSvgCover={(fileId, revisionId) => {
+              void ctx.ensureRevisionContent(fileId, revisionId);
+            }}
             stateOverview={stateOverview}
             systemActions={systemActions}
             multiProject={{

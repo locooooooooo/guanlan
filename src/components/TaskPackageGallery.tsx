@@ -451,9 +451,9 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
                             {pkg.stage === '待分类' ? '通用专项' : `${pkg.stage}阶段`}
                           </span>
                         )}
-                        <span className="shrink-0 whitespace-nowrap font-mono text-[10px] leading-none tabular-nums text-muted-foreground">
-                          {pkg.stage === '待分类' ? '专项' : pkg.stage}
-                        </span>
+                          <span className="shrink-0 whitespace-nowrap font-mono text-[10px] leading-none tabular-nums text-muted-foreground">
+                            {pkg.stage === '待分类' ? '专项' : `${pkg.stage}阶段`}
+                          </span>
                       </span>
 
                       {coverUri ? (

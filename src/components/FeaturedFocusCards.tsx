@@ -184,14 +184,14 @@ const FeaturedFocusCards: React.FC<FeaturedFocusCardsProps> = ({
               >
                 <Scale className="size-4" />
               </span>
-              <span className="text-[11px] leading-none font-semibold tracking-[0.06em] text-[color:var(--accent-wave)]">
+              <span className="whitespace-nowrap text-[11px] leading-none font-semibold tracking-[0.06em] text-[color:var(--accent-wave)]">
                 决策焦点
               </span>
             </div>
 
             <div>
               <h2 className="flex flex-wrap items-baseline gap-2 text-[17px] leading-[24px] font-semibold tracking-tight text-[color:var(--ink-strong)]">
-                <span>待拍板</span>
+                <span className="whitespace-nowrap">待拍板</span>
                 <span className="inline-flex items-baseline gap-0.5 font-serif-claude text-[28px] leading-none font-bold tabular-nums text-[color:var(--accent-wave)]">
                   <span data-feature-count="decision">{decisionCount}</span>
                   <span className="font-sans text-[12px] font-medium text-[color:var(--ink-soft)]">项</span>
@@ -250,7 +250,7 @@ const FeaturedFocusCards: React.FC<FeaturedFocusCardsProps> = ({
             >
               {activePackage ? <Layers className="size-4" /> : <Compass className="size-4" />}
             </span>
-            <span className="text-[11px] leading-none font-semibold tracking-[0.06em] text-[color:var(--accent-iris-ink)]">
+            <span className="whitespace-nowrap text-[11px] leading-none font-semibold tracking-[0.06em] text-[color:var(--accent-iris-ink)]">
               活跃专项
             </span>
           </span>
@@ -268,13 +268,13 @@ const FeaturedFocusCards: React.FC<FeaturedFocusCardsProps> = ({
             <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] leading-[18px] text-[color:var(--ink-soft)]">
               {activePackage ? (
                 <>
-                  <strong className="font-semibold text-[color:var(--ink-strong)]">{activePackage.stage}</strong>
+                  <strong className="whitespace-nowrap font-semibold text-[color:var(--ink-strong)]">{activePackage.stage}</strong>
                   <span aria-hidden="true" className="opacity-35">·</span>
-                  <span className="font-mono tabular-nums text-[color:var(--ink-soft)]">
+                  <span className="whitespace-nowrap font-mono tabular-nums text-[color:var(--ink-soft)]">
                     {activePackage.docCount} 份
                   </span>
                   <span aria-hidden="true" className="opacity-35">·</span>
-                  <span>
+                  <span className="whitespace-nowrap">
                     待验收{' '}
                     <span data-feature-count="package" className="font-mono font-semibold tabular-nums text-[color:var(--accent-iris-ink)]">
                       {activePackage.awaitingAcceptance}

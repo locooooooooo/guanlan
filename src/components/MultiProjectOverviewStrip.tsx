@@ -58,8 +58,138 @@ export const MultiProjectOverviewStrip: React.FC<MultiProjectOverviewStripProps>
   );
   const totalAssets = overview?.total_files ?? list.reduce((a, p) => a + p.file_count, 0);
 
+  // 单项目且无跨项目动态时收拢为单行紧凑工作区条，避免 3 列网格在首屏留出大面积空白，
+  // 让核心可视化图表第一时间落入首屏视口；多项目时展开完整卡片矩阵与资产占比微条。
+  if (list.length === 1 && otherDecisions.length === 0 && otherRecentFiles.length === 0) {
+    const project = list[0];
+    const active = project.project_id === activeProjectId;
+    const offline =
+      project.status === 'offline' ||
+      project.status === 'root_in_use' ||
+      project.status === 'error';
+
+    return (
+      <section aria-label="多项目工作台" data-multi-project-overview="" data-project-layout="compact">
+        <Frame className="border border-border/75 shadow-xs">
+          <FramePanel className="px-3.5 py-2">
+            <div
+              data-project-card={project.project_id}
+              data-project-card-active={active ? 'true' : 'false'}
+              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2"
+            >
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <button
+                  type="button"
+                  onClick={() => onFocusProject(project.project_id, 'home')}
+                  className="flex items-center gap-2 shrink-0 max-w-[180px] text-left cursor-pointer group"
+                  title={`当前工作区「${project.name}」（${project.root_path}）`}
+                >
+                  <FolderOpen className="w-4 h-4 shrink-0 text-[color:var(--accent-iris-deep)]" />
+                  <span className="text-[13px] font-semibold text-foreground truncate group-hover:text-[color:var(--accent-iris-ink)]">
+                    {project.name}
+                  </span>
+                </button>
+                {active && (
+                  <Badge variant="brand" size="sm" className="shrink-0 whitespace-nowrap">
+                    当前聚焦
+                  </Badge>
+                )}
+                {project.is_scanning && (
+                  <Badge variant="brand" size="sm" title="后台正在对账索引" className="shrink-0 whitespace-nowrap">
+                    <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                    同步中
+                  </Badge>
+                )}
+                {project.readonly && (
+                  <Badge variant="secondary" size="sm" title="只读归档保护" className="shrink-0 whitespace-nowrap">
+                    <Lock className="w-2.5 h-2.5" />
+                    只读
+                  </Badge>
+                )}
+                {offline && (
+                  <Badge
+                    variant="error"
+                    size="sm"
+                    title={project.error || '目录不可访问'}
+                    className="shrink-0 whitespace-nowrap"
+                  >
+                    <AlertCircle className="w-2.5 h-2.5" />
+                    离线
+                  </Badge>
+                )}
+                <span
+                  className="hidden xl:inline-block min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground"
+                  title={project.root_path}
+                >
+                  {project.root_path}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                <div
+                  data-project-metrics=""
+                  className="flex items-center gap-1.5 font-sans text-[11.5px] tabular-nums text-muted-foreground"
+                >
+                  <span className="whitespace-nowrap shrink-0">{project.file_count} 文件</span>
+                  <span aria-hidden="true" className="opacity-35 shrink-0">·</span>
+                  <span className="whitespace-nowrap shrink-0">{project.folder_count} 目录</span>
+                  {project.pending_decisions_count > 0 && (
+                    <>
+                      <span aria-hidden="true" className="opacity-35 shrink-0">·</span>
+                      <span className="whitespace-nowrap shrink-0 text-[color:var(--accent-wave)] font-medium">
+                        {project.pending_decisions_count} 待拍板
+                      </span>
+                    </>
+                  )}
+                </div>
+
+                {!offline && (
+                  <Group
+                    aria-label={`${project.name}快捷视图`}
+                    className="h-6 shrink-0 rounded-md border border-border bg-muted/45"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onFocusProject(project.project_id, 'panorama')}
+                      title={`打开「${project.name}」的全景星图`}
+                      className="inline-flex h-full items-center gap-1 whitespace-nowrap rounded-s-[5px] px-2 text-[11px] text-muted-foreground hover:bg-accent hover:text-[color:var(--accent-iris-ink)] cursor-pointer motion-safe:transition-colors"
+                    >
+                      <Orbit className="w-3 h-3 shrink-0" />
+                      <span>星图</span>
+                    </button>
+                    <GroupSeparator className="h-3 self-center" />
+                    <button
+                      type="button"
+                      onClick={() => onFocusProject(project.project_id, 'library')}
+                      title={`进入「${project.name}」的知识资产库`}
+                      className="inline-flex h-full items-center gap-1 whitespace-nowrap rounded-e-[5px] px-2 text-[11px] text-muted-foreground hover:bg-accent hover:text-[color:var(--accent-iris-ink)] cursor-pointer motion-safe:transition-colors"
+                    >
+                      <Layers className="w-3 h-3 shrink-0" />
+                      <span>资料</span>
+                    </button>
+                  </Group>
+                )}
+
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  data-home-add-project-btn=""
+                  onClick={onAddProject}
+                  className="h-6 px-2 text-[11px] whitespace-nowrap"
+                >
+                  <FolderPlus className="w-3 h-3 text-[color:var(--accent-iris-deep)]" />
+                  <span>添加项目</span>
+                </Button>
+              </div>
+            </div>
+          </FramePanel>
+        </Frame>
+      </section>
+    );
+  }
+
   return (
-    <section aria-label="多项目工作台" data-multi-project-overview="">
+    <section aria-label="多项目工作台" data-multi-project-overview="" data-project-layout="grid">
       <Frame className="border border-border/75 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -91,6 +221,8 @@ export const MultiProjectOverviewStrip: React.FC<MultiProjectOverviewStripProps>
                 project.status === 'offline' ||
                 project.status === 'root_in_use' ||
                 project.status === 'error';
+              const sharePct =
+                totalAssets > 0 ? Math.max(4, Math.round((project.file_count / totalAssets) * 100)) : 0;
               return (
                 <div
                   key={project.project_id}
@@ -159,6 +291,23 @@ export const MultiProjectOverviewStrip: React.FC<MultiProjectOverviewStripProps>
                     >
                       {project.root_path}
                     </div>
+
+                    {totalAssets > 0 && (
+                      <div
+                        className="h-1.5 w-full overflow-hidden rounded-full bg-muted/70"
+                        title={`占全部纳管资产 ${Math.round((project.file_count / totalAssets) * 100)}%（${project.file_count} / ${totalAssets}）`}
+                      >
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${sharePct}%`,
+                            backgroundColor: active
+                              ? 'var(--accent-iris-deep)'
+                              : 'color-mix(in srgb, var(--accent-iris-deep) 45%, transparent)',
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* 指标与入口均强制 whitespace-nowrap + 响应式换行，避免「720 文\n件」折行 */}
