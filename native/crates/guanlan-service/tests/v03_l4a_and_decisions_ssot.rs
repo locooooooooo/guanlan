@@ -229,7 +229,7 @@ fn v03_decisions_ssot_matches_beyond_100_page_limit() {
     let store = ReadonlyStore::open_at(&ws.data_dir, &ws.root_str()).expect("ro");
     let boot = bootstrap(&store, &BootstrapQuery::default()).expect("bootstrap");
     let dec_page = decisions(&store, &DecisionsQuery::default()).expect("decisions");
-    let live = project_live_metrics(&store, &ws.root_str()).expect("project_live_metrics");
+    let live = project_live_metrics(&store, 0).expect("project_live_metrics");
 
     assert_eq!(boot.decisions.len(), 100, "默认首页批次仍按 100 条轻分页");
     assert_eq!(

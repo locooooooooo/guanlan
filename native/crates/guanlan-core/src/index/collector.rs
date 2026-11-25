@@ -234,6 +234,18 @@ pub fn collect_workspace_cancellable(
 /// 默认目录枚举上限（侧栏真实文件夹树，含空文件夹）
 pub const DEFAULT_MAX_FOLDERS: usize = 20_000;
 
+/// 目录清单（含空目录）。
+///
+/// `truncated` = 触到目录数或深度上限，清单之外还有目录；`incomplete` = 有目录读不到。
+/// 两者都表示「这份清单不是全貌」：调用方不得据此删掉既有目录记录，见
+/// `LESSONS.md` 的「读不全不等于没有」。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FolderListing {
+    pub folders: Vec<String>,
+    pub truncated: bool,
+    pub incomplete: bool,
+}
+
 /// 枚举工作区内所有可见真实目录（含空文件夹），沿用与 [`collect_workspace`] 一致的
 /// 排除黑名单、点号隐藏目录跳过、符号链接防护与 `.gitignore` 规则。
 pub fn collect_workspace_folders(
@@ -241,14 +253,15 @@ pub fn collect_workspace_folders(
     excluded_dirs: &[String],
     max_dirs: usize,
     max_depth: usize,
-) -> (Vec<String>, bool) {
+) -> FolderListing {
     let mut excluded: Vec<String> = DEFAULT_EXCLUDED.iter().map(|s| (*s).to_owned()).collect();
     excluded.extend(excluded_dirs.iter().cloned());
 
-    let mut folders = Vec::new();
-    let mut truncated = false;
+    let mut listing = FolderListing::default();
     if !root.is_dir() {
-        return (folders, false);
+        // 根目录本身读不到：清单不可信，交给调用方保留最后已知
+        listing.incomplete = true;
+        return listing;
     }
 
     let mut stack = IgnoreStack::default();
@@ -262,11 +275,10 @@ pub fn collect_workspace_folders(
         &excluded,
         max_dirs,
         max_depth,
-        &mut folders,
-        &mut truncated,
+        &mut listing,
         &mut stack,
     );
-    (folders, truncated)
+    listing
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -277,15 +289,16 @@ fn walk_folders(
     excluded: &[String],
     max_dirs: usize,
     max_depth: usize,
-    folders: &mut Vec<String>,
-    truncated: &mut bool,
+    listing: &mut FolderListing,
     stack: &mut IgnoreStack,
 ) {
-    if depth >= max_depth || folders.len() >= max_dirs {
-        *truncated = true;
+    if depth >= max_depth || listing.folders.len() >= max_dirs {
+        listing.truncated = true;
         return;
     }
     let Ok(entries) = fs::read_dir(dir) else {
+        // 这一层读不到：清单缺一块，标记不完整（不当作「没有子目录」）
+        listing.incomplete = true;
         return;
     };
     let mut names: Vec<(String, PathBuf)> = entries
@@ -295,14 +308,15 @@ fn walk_folders(
     names.sort_by(|a, b| a.0.cmp(&b.0));
 
     for (name, full_path) in names {
-        if folders.len() >= max_dirs {
-            *truncated = true;
+        if listing.folders.len() >= max_dirs {
+            listing.truncated = true;
             return;
         }
         if name.starts_with('.') || excluded.iter().any(|ex| ex == &name) {
             continue;
         }
         let Ok(meta) = fs::symlink_metadata(&full_path) else {
+            listing.incomplete = true;
             continue;
         };
         let ft = meta.file_type();
@@ -313,7 +327,7 @@ fn walk_folders(
         if stack.is_ignored(&rel, true) {
             continue;
         }
-        folders.push(rel.clone());
+        listing.folders.push(rel.clone());
         let pushed = read_gitignore(&full_path, &rel).map(|layer| {
             stack.push(layer);
         });
@@ -324,8 +338,7 @@ fn walk_folders(
             excluded,
             max_dirs,
             max_depth,
-            folders,
-            truncated,
+            listing,
             stack,
         );
         if pushed.is_some() {

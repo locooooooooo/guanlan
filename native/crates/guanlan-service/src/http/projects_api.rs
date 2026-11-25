@@ -269,7 +269,11 @@ async fn run_project_folder_op(
         )
     })?;
     match outcome {
-        Ok(Ok(resp)) => Ok(Json(resp)),
+        Ok(Ok(resp)) => {
+            // 目录结构变了：失效该项目的清单缓存
+            rt.invalidate_folder_listing();
+            Ok(Json(resp))
+        }
         Ok(Err(err)) => Err(ApiError::with_generation(err, state)),
         Err(_timeout) => Err(ApiError::with_generation(GuanlanError::IndexBusy, state)),
     }

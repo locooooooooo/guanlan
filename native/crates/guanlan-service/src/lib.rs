@@ -6,6 +6,7 @@
 //! index.db 并认领工作区行 → 绑定 127.0.0.1 → axum 路由。任何一步失败返回
 //! [`GuanlanError`]（CLI 端转统一错误包络退出；桌面壳弹启动失败提示）。
 
+pub mod folders;
 pub mod http;
 pub mod index_jobs;
 pub mod mcp;

@@ -134,7 +134,7 @@ pub fn mount_list_files(
         items.push(row.map_err(internal_sql)?);
     }
 
-    let (folders, folder_truncated) = collector::collect_workspace_folders(
+    let listing = collector::collect_workspace_folders(
         std::path::Path::new(root_path),
         &[],
         collector::DEFAULT_MAX_FOLDERS,
@@ -148,8 +148,8 @@ pub fn mount_list_files(
         root_path: root_path.to_owned(),
         online: true,
         total,
-        truncated: total > items.len() || folder_truncated,
-        folders,
+        truncated: total > items.len() || listing.truncated,
+        folders: listing.folders,
         items,
     })
 }

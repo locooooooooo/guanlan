@@ -8,14 +8,12 @@
 //!   确保新加入尚未建完倒排索引的项目也能立即可搜）。
 
 use std::collections::HashSet;
-use std::path::Path;
 
 use crate::dto::{
     CrossProjectDecisionItem, CrossProjectRecentFile, CrossProjectSearchHit, ProjectTreeFileEntry,
     ProjectTreeResponse, SearchLocator,
 };
 use crate::error::GuanlanError;
-use crate::index::collector;
 use crate::index::ident::folder_from_path;
 use crate::query::search::{search, SearchQuery};
 use crate::storage::{internal_sql, ReadonlyStore};
@@ -31,10 +29,13 @@ pub struct ProjectLiveMetrics {
     pub last_activity_at: Option<String>,
 }
 
-/// 读取单项目实时指标（只读 SQL + 真实目录数统计，毫秒级）
+/// 读取单项目实时指标（只读 SQL；目录数由调用方从目录清单缓存供给）。
+///
+/// 目录枚举要 `read_dir` 整棵树，**不放在只读连接上**：多项目并存时它会占满连接池，
+/// 把检索与翻页一起拖到 `INDEX_BUSY`。缓存与失效策略在服务层的目录清单缓存里。
 pub fn project_live_metrics(
     store: &ReadonlyStore,
-    root_path: &str,
+    folder_count: u64,
 ) -> Result<ProjectLiveMetrics, GuanlanError> {
     let ws = store.workspace()?;
     let ws_id = ws.workspace_id.as_str();
@@ -67,17 +68,10 @@ pub fn project_live_metrics(
         )
         .map_err(internal_sql)?;
 
-    let (folders, _) = collector::collect_workspace_folders(
-        Path::new(root_path),
-        &[],
-        collector::DEFAULT_MAX_FOLDERS,
-        collector::DEFAULT_MAX_DEPTH,
-    );
-
     Ok(ProjectLiveMetrics {
         index_generation: ws.index_generation,
         file_count: file_count.max(0) as u64,
-        folder_count: folders.len() as u64,
+        folder_count,
         pending_decisions_count: pending_decisions_count.max(0) as u64,
         last_scan_at: ws.last_scan_at,
         last_activity_at,
@@ -95,6 +89,8 @@ pub fn project_tree(
     is_active: bool,
     status: &str,
     limit: usize,
+    // 目录清单（含空目录）由调用方从缓存供给，查询体不做目录遍历
+    folder_listing: &crate::index::collector::FolderListing,
 ) -> Result<ProjectTreeResponse, GuanlanError> {
     let ws = store.workspace()?;
     let ws_id = ws.workspace_id.as_str();
@@ -150,13 +146,6 @@ pub fn project_tree(
         files.push(row.map_err(internal_sql)?);
     }
 
-    let (folders, folder_truncated) = collector::collect_workspace_folders(
-        Path::new(root_path),
-        &[],
-        collector::DEFAULT_MAX_FOLDERS,
-        collector::DEFAULT_MAX_DEPTH,
-    );
-
     Ok(ProjectTreeResponse {
         ok: true,
         project_id: project_id.to_owned(),
@@ -166,8 +155,8 @@ pub fn project_tree(
         is_active,
         status: status.to_owned(),
         total,
-        truncated: total > files.len() || folder_truncated,
-        folders,
+        truncated: total > files.len() || folder_listing.truncated,
+        folders: folder_listing.folders.clone(),
         files,
     })
 }
@@ -379,3 +368,7 @@ pub fn project_search(
 
     Ok(hits)
 }
+
+#[cfg(test)]
+#[path = "projects_tests.rs"]
+mod tests;

@@ -77,6 +77,8 @@ pub struct ProjectRuntime {
     pub jobs: IndexJobManager,
     pub watcher: Option<WatcherHandle>,
     pub mounts: Arc<MountRegistry>,
+    /// 目录清单缓存（枚举 `read_dir` 整棵树，不能放进只读查询体）
+    folders: crate::folders::FolderInventoryCache,
     owned: Mutex<OwnedRuntimeResources>,
 }
 
@@ -103,6 +105,7 @@ impl ProjectRuntime {
             jobs,
             watcher,
             mounts,
+            folders: crate::folders::FolderInventoryCache::new(),
             owned: Mutex::new(OwnedRuntimeResources {
                 watcher: watcher_owned,
                 jobs: Some(jobs_owned),
@@ -110,6 +113,18 @@ impl ProjectRuntime {
                 lock: Some(lock),
             }),
         })
+    }
+
+    /// 取本项目目录清单（进程内缓存；读不全时保留上一次结果）。
+    ///
+    /// 同步 `read_dir`：调用方应把它放进 `spawn_blocking`，不要占着异步工作线程。
+    pub fn folder_listing(&self) -> guanlan_core::index::collector::FolderListing {
+        self.folders.get(&self.root_path)
+    }
+
+    /// 文件夹增删改移成功后立即失效缓存，下一次读取重新枚举。
+    pub fn invalidate_folder_listing(&self) {
+        self.folders.invalidate(&self.root_path);
     }
 
     /// 优雅停止该项目的 watcher、写线程、通知桥与排他锁（绝不持锁跨 await，
@@ -784,10 +799,17 @@ impl ProjectHub {
         } else {
             slot.status.clone()
         };
+        // 目录清单在只读查询体之外取：read_dir 整棵树不能占着连接池
+        let listing = tokio::task::spawn_blocking({
+            let rt = Arc::clone(&rt);
+            move || rt.folder_listing()
+        })
+        .await
+        .unwrap_or_default();
         rt.exec
             .run(move |store| {
                 core_projects::project_tree(
-                    store, &pid, &name, &root_path, readonly, is_active, &status, limit,
+                    store, &pid, &name, &root_path, readonly, is_active, &status, limit, &listing,
                 )
             })
             .await
@@ -1045,10 +1067,16 @@ async fn build_project_entry(slot: &ProjectSlot, is_active: bool) -> ProjectEntr
     };
 
     let is_scanning = rt.jobs.has_active();
-    let root_path = slot.root_path.clone();
+    // 目录清单在查询体之外取（缓存内的 read_dir 不占只读连接）
+    let folder_count = tokio::task::spawn_blocking({
+        let rt = Arc::clone(rt);
+        move || rt.folder_listing().folders.len() as u64
+    })
+    .await
+    .unwrap_or(0);
     match rt
         .exec
-        .run(move |store| core_projects::project_live_metrics(store, &root_path))
+        .run(move |store| core_projects::project_live_metrics(store, folder_count))
         .await
     {
         Ok(m) => ProjectEntry {

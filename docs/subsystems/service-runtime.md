@@ -17,6 +17,7 @@
 | 实例身份 | `generate_instance_id` 由 pid、纳秒时钟、端口与根目录派生出 `inst_` 加 16 位十六进制。 | [`runtime/mod.rs`](../../native/crates/guanlan-service/src/runtime/mod.rs) |
 | 静态资源 | `resolve_dist_dir` 取 `GUANLAN_DIST_DIR` 或可执行文件同级的 `dist/`；目录存在才挂载，否则非 `/api` 路径返回 404 包络。 | [`runtime/mod.rs`](../../native/crates/guanlan-service/src/runtime/mod.rs)、[`http/mod.rs`](../../native/crates/guanlan-service/src/http/mod.rs) |
 | 多项目并存 | `ProjectHub` 管理多个 `ProjectRuntime`，每个项目有自己的数据目录、锁、写线程与连接池。项目表在 `projects.json`（`default_projects_file_path`）。 | [`projects.rs`](../../native/crates/guanlan-service/src/projects.rs) |
+| 目录清单缓存 | `FolderInventoryCache` 把整树目录枚举挪出只读查询：按根路径缓存（`GUANLAN_FOLDER_CACHE_MS`，默认 3 秒），文件夹增删改移成功后主动失效；本次有目录读不到时保留上一次成功结果。项目树、跨项目总览与 `/folders` 都读这份缓存。 | [`folders.rs`](../../native/crates/guanlan-service/src/folders.rs) |
 | 只读挂载 | `MountRegistry` 以只读方式打开参考工作区，状态在主区数据目录的 `mounts.json`。 | [`mounts.rs`](../../native/crates/guanlan-service/src/mounts.rs) |
 | 桌面壳跨源 | `build_router_with_desktop_cors` 只为 `tauri.localhost` 与本机开发端口放行 CORS。CLI 模式用 `build_router`。 | [`http/mod.rs`](../../native/crates/guanlan-service/src/http/mod.rs) |
 | 停机 | `RunningService::shutdown` 先经 `ProjectHub::signal_shutdown` 通知所有项目写线程协作中止在途大扫描，再关闭通知中枢、触发 axum 优雅停机（2 秒超时后强制 abort 防止长连接挂死），最后由 `ProjectHub::shutdown_all` 经 `spawn_blocking` join 写线程并逐个释放锁与监听。 | [`lib.rs`](../../native/crates/guanlan-service/src/lib.rs)、[`projects.rs`](../../native/crates/guanlan-service/src/projects.rs) |
@@ -77,6 +78,7 @@ CLI 最后打印端点行并 `join`。桌面壳持有 `RunningService`，切换�
 - 饱和一律是 `INDEX_BUSY`（503）并带 `Retry-After: 2`：队列满、排队超时、响应预算等待超时、写线程回执超时都用它。
 - 查询体 panic 不再让连接随任务消失：`catch_unwind` 接住后丢弃该连接、重建并重新认领工作区，对外返回 500。
 - 内联正文受响应字节预算约束，见[查询接口](query-api.md)。
+- 只读查询体不枚举工作区目录。目录清单（项目树、跨项目总览的目录数、`/folders`）由服务层的 `FolderInventoryCache` 供给，缓存失效由文件夹增删改移触发；读不到的目录保留上一次结果，不当作已删除。
 - `projects.json` 与 `mounts.json` 损坏或缺失都按空表起步，不阻断启动。某个项目遇 `ROOT_IN_USE` 或目录缺失时只是该项目离线，不拖垮其他项目。
 
 ## 验证
@@ -88,6 +90,8 @@ cargo test --locked -p guanlan-service --lib -- shutdown_aborts_in_flight_large_
 cargo test --locked -p guanlan-service --lib -- bounded_executor_saturates_deterministically cancel_releases_capacity_promptly panicking_query_is_contained_and_pool_recovers generation_cached_for_error_envelope_on_first_request
 cargo test --locked -p guanlan-service --lib -- response_budget
 cargo test --locked -p guanlan-service --lib -- multi_project_hub_end_to_end_lifecycle
+cargo test --locked -p guanlan-service --lib -- folders::
+cargo test --locked -p guanlan-core --lib -- query::projects::tests
 cargo test --locked -p guanlan-service --lib -- background_index_false_keeps_readonly_zero_scan_contract
 cargo test --locked -p guanlan-service --test v03_l4a_and_decisions_ssot
 ```

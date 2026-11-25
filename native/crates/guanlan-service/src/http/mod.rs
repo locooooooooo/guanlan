@@ -1084,17 +1084,43 @@ async fn run_folder_op_sync(
         )
     })?;
     match outcome {
-        Ok(Ok(resp)) => Ok(Json(resp)),
+        Ok(Ok(resp)) => {
+            // 目录结构变了：失效清单缓存，下一次 /folders 与项目树重新枚举
+            if let Some(hub) = &state.projects {
+                if let Some(rt) = hub.active_runtime() {
+                    rt.invalidate_folder_listing();
+                }
+            }
+            Ok(Json(resp))
+        }
         Ok(Err(err)) => Err(ApiError::with_generation(err, state)),
         Err(_timeout) => Err(ApiError::with_generation(GuanlanError::IndexBusy, state)),
     }
 }
 
 /// GET /api/v1/folders —— 枚举工作区全部真实目录（含空文件夹；与采集同口径排除黑名单与 .gitignore）
+///
+/// 目录枚举走项目运行时的清单缓存，不占只读连接：整树 `read_dir` 放进查询体时，
+/// 它会和检索、翻页抢连接池。没有项目中枢的装配（单项目测试）保持原有实时枚举。
 async fn folders_list(State(state): State<AppState>) -> Result<Json<FolderListResponse>, ApiError> {
+    if let Some(hub) = &state.projects {
+        if let Some(rt) = hub.active_runtime() {
+            let generation =
+                run_query(&state, |store| Ok(store.workspace()?.index_generation)).await?;
+            let listing = tokio::task::spawn_blocking(move || rt.folder_listing())
+                .await
+                .unwrap_or_default();
+            return Ok(Json(FolderListResponse {
+                ok: true,
+                index_generation: generation,
+                folders: listing.folders,
+                truncated: listing.truncated,
+            }));
+        }
+    }
     let resp = run_query(&state, move |store| {
         let ws = store.workspace()?;
-        let (folders, truncated) = collector::collect_workspace_folders(
+        let listing = collector::collect_workspace_folders(
             std::path::Path::new(&ws.root_path),
             &[],
             collector::DEFAULT_MAX_FOLDERS,
@@ -1103,8 +1129,8 @@ async fn folders_list(State(state): State<AppState>) -> Result<Json<FolderListRe
         Ok(FolderListResponse {
             ok: true,
             index_generation: ws.index_generation,
-            folders,
-            truncated,
+            folders: listing.folders,
+            truncated: listing.truncated,
         })
     })
     .await?;

@@ -2326,13 +2326,14 @@ mod tests {
         fs::create_dir_all(env.root.join(".hidden-dir")).expect("建隐藏目录");
         fs::create_dir_all(env.root.join("node_modules/pkg")).expect("建排除目录");
 
-        let (folders, truncated) = collector::collect_workspace_folders(
+        let listing = collector::collect_workspace_folders(
             &env.root,
             &[],
             collector::DEFAULT_MAX_FOLDERS,
             collector::DEFAULT_MAX_DEPTH,
         );
-        assert!(!truncated);
+        assert!(!listing.truncated);
+        let folders = listing.folders;
         assert!(
             folders.contains(&"empty-inbox".to_owned()),
             "必须包含空文件夹"
