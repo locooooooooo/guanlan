@@ -143,9 +143,12 @@ import {
   mergeServerReadingStates,
   nowLocalIso,
   pruneReadingStates,
+  READING_STATE_PERSIST_DEBOUNCE_MS,
   restoreReadingStatesSnapshot,
   saveReadingStates,
 } from '../utils/readingStateStore';
+// 阅读状态落盘合批（滚动进度高频更新，整表序列化不能每帧做）
+import { createCoalescedPersist, type CoalescedPersist } from '../utils/coalescedPersist';
 import {
   loadMutedFolders,
   normalizeMutedFolderPath,
@@ -689,11 +692,36 @@ export function useWorkspaceStore() {
   // 挂载管理面板开合（入口：命令面板动作行「挂载参考工作区」）
   const [isMountPanelOpen, setMountPanelOpen] = useState(false);
 
-  // 阅读状态按当前 workspace_id 独立写回；切换过渡态（ref=null）不落盘，避免写窜
+  // 阅读状态按当前 workspace_id 独立写回；切换过渡态（ref=null）不落盘，避免写窜。
+  // 落盘合批 800ms：滚动进度会高频更新整张表，整表 JSON.stringify 不能每帧做。
+  // 语义不变——每次变化后的最终状态都会被写出（尾沿、页面隐藏或切换工作区时补写）。
+  const readingPersistRef = useRef<CoalescedPersist | null>(null);
+  if (readingPersistRef.current === null) {
+    readingPersistRef.current = createCoalescedPersist(() => {
+      const workspaceId = readingWorkspaceIdRef.current;
+      if (!workspaceId) return;
+      saveReadingStates(readingStatesRef.current, workspaceId);
+    }, READING_STATE_PERSIST_DEBOUNCE_MS);
+  }
+  const readingPersist = readingPersistRef.current;
   useEffect(() => {
     if (!readingWorkspaceIdRef.current) return;
-    saveReadingStates(readingStates, readingWorkspaceIdRef.current);
-  }, [readingStates]);
+    readingPersist.schedule();
+  }, [readingPersist, readingStates]);
+  // 页面隐藏/卸载前补写：合批窗口内的最后一次变化不丢
+  useEffect(() => {
+    const flush = () => readingPersist.flush();
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+      flush();
+    };
+  }, [readingPersist]);
 
   // 静默目录清单按 workspace_id 独立写回观澜私有存储（绝不触碰用户工作区磁盘）
   useEffect(() => {
@@ -3463,6 +3491,8 @@ export function useWorkspaceStore() {
 
   // ── 桌面壳多工作区切换与彻底隔离重置 ─────────────────────────────────────
   const resetWorkspaceScopedState = useCallback(() => {
+    // 切换工作区/项目前补写当前工作区的阅读状态，合批窗口内的变化不丢
+    readingPersist.flush();
     readingWorkspaceIdRef.current = null;
     setReadingStates({});
     if (publishTimerRef.current !== null) {
@@ -3565,7 +3595,7 @@ export function useWorkspaceStore() {
     setFileContextMenu(null);
     setSystemToast(null);
     setDragDropOverlay({ active: false, paths: [], hoveredFolder: null });
-  }, []);
+  }, [readingPersist]);
 
   const applyDesktopSessionState = useCallback(
     (next: DesktopSessionState) => {

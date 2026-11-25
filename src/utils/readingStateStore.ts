@@ -11,6 +11,14 @@ import type { ReadingStateEntryDto } from '../services/apiTypes';
  */
 export const READING_STATE_STORAGE_KEY = 'guanlan.readingState.v1';
 
+/**
+ * 阅读状态落盘合批窗口（毫秒）。
+ *
+ * 滚动进度会高频改写整张表；每次变化都 `JSON.stringify` 全表，在数万条记录时
+ * 会占满主线程。合批只推迟写入时机，最终状态仍会落盘（尾沿 / 页面隐藏 / 切换工作区）。
+ */
+export const READING_STATE_PERSIST_DEBOUNCE_MS = 800;
+
 export type ReadingStateMap = Record<string, ReadingState>;
 
 export function readingStateStorageKey(workspaceId?: string): string {
