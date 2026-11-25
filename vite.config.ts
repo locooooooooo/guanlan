@@ -18,9 +18,9 @@ function resolveAppVersion(): string {
     const pkg = JSON.parse(readFileSync(path.join(CONFIG_DIR, 'package.json'), 'utf8')) as {
       version?: string;
     };
-    return pkg.version || '1.2.1';
+    return pkg.version || '1.2.2';
   } catch {
-    return '1.2.1';
+    return '1.2.2';
   }
 }
 

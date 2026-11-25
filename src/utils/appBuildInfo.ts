@@ -1,5 +1,5 @@
 /**
- * V12 · 应用构建与发行身份单一真相源（编译期注入 `v1.2.1` + `git-sha` + 构建时间戳）。
+ * V12 · 应用构建与发行身份单一真相源（编译期注入 `v1.2.2` + `git-sha` + 构建时间戳）。
  *
  * - 生产构建（vite build / Tauri bundle）由 vite.config.ts `define` 静态注入三项真实字段；
  * - Node SSR / tsx 单测环境无 Vite define 替换时自动回退至安全常量，绝不抛 ReferenceError；
@@ -11,20 +11,20 @@ declare const __GUANLAN_GIT_SHA__: string | undefined;
 declare const __GUANLAN_BUILD_TIME__: string | undefined;
 
 export interface AppBuildInfo {
-  /** 三端一致语义化版本号（如 "1.2.1"） */
+  /** 三端一致语义化版本号（如 "1.2.2"） */
   version: string;
   /** 编译期 Git 短哈希（如 "8d8e4ab"；无 git 环境回退 "dev"） */
   gitSha: string;
   /** 编译期 ISO-8601 UTC 构建时间戳 */
   buildTime: string;
-  /** 面向 UI 展示的完整版本标识（如 "v1.2.1"） */
+  /** 面向 UI 展示的完整版本标识（如 "v1.2.2"） */
   versionTag: string;
 }
 
 const resolvedVersion =
   typeof __GUANLAN_APP_VERSION__ === 'string' && __GUANLAN_APP_VERSION__.trim()
     ? __GUANLAN_APP_VERSION__.trim()
-    : '1.2.1';
+    : '1.2.2';
 
 const resolvedGitSha =
   typeof __GUANLAN_GIT_SHA__ === 'string' && __GUANLAN_GIT_SHA__.trim()

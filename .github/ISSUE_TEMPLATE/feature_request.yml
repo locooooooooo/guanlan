@@ -20,4 +20,4 @@ body:
     id: version
     attributes:
       label: 观澜版本（可选）
-      placeholder: v1.2.1（8d8e4ab）
+      placeholder: v1.2.2（8d8e4ab）

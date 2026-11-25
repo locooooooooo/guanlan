@@ -3,7 +3,7 @@
  *
  * 目标：在 5,507 份真实超大工程混合夹具（2,107 业务文档 + 3,400 工程代码 + 15 天连续百文日
  * + 288 未决待拍板 + L4A 自动排空至 100%）上，以无头 Chrome + CDP 固定脚本走完全站
- * 12 大场景 × 27 镜头（覆盖明暗双态、列表时光流、资产库概览、设置弹窗/v1.2.1 关于、司辰手记），
+ * 12 大场景 × 27 镜头（覆盖明暗双态、列表时光流、资产库概览、设置弹窗/v1.2.2 关于、司辰手记），
  * 并同步执行「Console 0 Error / 0 Warning」「288 SSOT 守恒」「日历同槽 0px 碰撞」「L4A 100% 自动排空」门禁；
  * compare 模式把当前截图与基线逐像素比对（drawImage + getImageData，零 npm 依赖），
  * 超差退出码 1。
@@ -22,7 +22,7 @@
  *  ⑧ 命令面板    palette（V08 Ctrl+K 双栏 L4A 富预览）
  *  ⑨ 批阅+轻预览  review-board（批阅看板六态泳道）、quick-preview（Space 轻预览）
  *  ⑩ 司辰手记    chronos-digest（V10 Sheet inset 今日/本周可溯源 Markdown 手记）
- *  ⑪ 设置与关于   settings-about（V08 分栏设置 + V12 v1.2.1 / git-sha / 构建时间透出）
+ *  ⑪ 设置与关于   settings-about（V08 分栏设置 + V12 v1.2.2 / git-sha / 构建时间透出）
  *  ⑫ 暗夜全局    dark-home、dark-calendar、dark-settings（V07 全站 .dark 语义双态总验）
  *
  * 分阶段纪律（像素回归）：
@@ -780,7 +780,7 @@ const SHOT_SCENES = [
   { scene: '⑧ Ctrl+K 双栏命令面板（L4A 富预览）', shots: ['palette'] },
   { scene: '⑨ 批阅看板与轻预览', shots: ['review-board', 'quick-preview'] },
   { scene: '⑩ 司辰手记抽屉（Sheet inset）', shots: ['chronos-digest'] },
-  { scene: '⑪ 设置弹窗与关于观澜（v1.2.1）', shots: ['settings-about'] },
+  { scene: '⑪ 设置弹窗与关于观澜（v1.2.2）', shots: ['settings-about'] },
   {
     scene: '⑫ 全站暗夜沉浸双态（.dark）',
     shots: ['dark-home', 'dark-calendar', 'dark-settings'],
@@ -1428,7 +1428,7 @@ async function captureAllShots(endpoint, gate) {
       { label: 'chronos digest closed' }
     );
 
-    // ══ 场景⑪ 设置弹窗与关于观澜（V08 分栏设置 + V12 v1.2.1 / git-sha / 构建时间透出） ══
+    // ══ 场景⑪ 设置弹窗与关于观澜（V08 分栏设置 + V12 v1.2.2 / git-sha / 构建时间透出） ══
     await clickButtonByAria(cdp, '项目设置');
     await waitFor(
       () => cdp.eval(`return Boolean(document.querySelector('[data-settings-modal="open"]'));`),
@@ -1439,8 +1439,8 @@ async function captureAllShots(endpoint, gate) {
       return true;
     `);
     await waitFor(
-      () => cdp.eval(`return Boolean(document.querySelector('[data-about-version="1.2.1"]'));`),
-      { label: 'about v1.2.1 badge' }
+      () => cdp.eval(`return Boolean(document.querySelector('[data-about-version="1.2.2"]'));`),
+      { label: 'about v1.2.2 badge' }
     );
     const aboutInfo = await cdp.eval(`
       return {
@@ -1449,7 +1449,7 @@ async function captureAllShots(endpoint, gate) {
         buildTime: document.querySelector('[data-about-build-time]')?.getAttribute('data-about-build-time') || '',
       };
     `);
-    assert.equal(aboutInfo.version, '1.2.1', `关于页版本应为 1.2.1，实得 ${JSON.stringify(aboutInfo)}`);
+    assert.equal(aboutInfo.version, '1.2.2', `关于页版本应为 1.2.2，实得 ${JSON.stringify(aboutInfo)}`);
     assert.ok(aboutInfo.gitSha.length >= 6, `关于页应透出编译期 git-sha，实得 ${JSON.stringify(aboutInfo)}`);
     assert.ok(aboutInfo.buildTime.length >= 10, `关于页应透出编译期构建时间，实得 ${JSON.stringify(aboutInfo)}`);
     console.log(
@@ -1542,8 +1542,8 @@ async function captureAllShots(endpoint, gate) {
       return true;
     `);
     await waitFor(
-      () => cdp.eval(`return Boolean(document.querySelector('[data-about-version="1.2.1"]'));`),
-      { label: 'dark about v1.2.1' }
+      () => cdp.eval(`return Boolean(document.querySelector('[data-about-version="1.2.2"]'));`),
+      { label: 'dark about v1.2.2' }
     );
     await settleFrames(cdp, 500);
     shots.set('dark-settings', await captureShot(cdp));
