@@ -1,8 +1,8 @@
 /**
- * v1.2.2 发行一致性、构建身份透出与跨视图终态回归护栏单测集。
+ * v1.2.3 发行一致性、构建身份透出与跨视图终态回归护栏单测集。
  *
  * 锁定以下核心发布契约：
- *  - package.json / native/Cargo.toml / tauri.conf.json 三端版本号完全一致（1.2.2）；
+ *  - package.json / native/Cargo.toml / tauri.conf.json 三端版本号完全一致（1.2.3）；
  *  - 编译期 git-sha 与构建时间戳在「设置 → 关于观澜」清晰透出，零 v1.2-dev 残留；
  *  - Tauri 正式安装包配置（NSIS + MSI + 右键菜单钩子 + externalBin CLI sidecar）完备；
  *  - 明暗语义令牌对称、5,500 份域过滤守恒、日历零碰撞、左栏虚拟切片与全站快捷键和弦护栏。
@@ -100,20 +100,20 @@ function keyInput(
 
 // ===== 1. 三端版本号与桌面打包配置一致性 =====
 
-test('package.json 版本号已升级至 1.2.2', () => {
+test('package.json 版本号已升级至 1.2.3', () => {
   const pkg = JSON.parse(
     readFileSync(new URL('../package.json', import.meta.url), 'utf8')
   ) as { version: string; name: string };
-  assert.equal(pkg.version, '1.2.2');
+  assert.equal(pkg.version, '1.2.3');
   assert.equal(pkg.name, 'guanlan');
 });
 
-test('native/Cargo.toml workspace.package.version 已同步升级至 1.2.2', () => {
+test('native/Cargo.toml workspace.package.version 已同步升级至 1.2.3', () => {
   const toml = readFileSync(new URL('../native/Cargo.toml', import.meta.url), 'utf8');
-  assert.match(toml, /\[workspace\.package\][\s\S]*?version\s*=\s*"1\.2\.2"/);
+  assert.match(toml, /\[workspace\.package\][\s\S]*?version\s*=\s*"1\.2\.3"/);
 });
 
-test('tauri.conf.json 版本号已同步升级至 1.2.2 且保持 NSIS+MSI 与右键菜单钩子', () => {
+test('tauri.conf.json 版本号已同步升级至 1.2.3 且保持 NSIS+MSI 与右键菜单钩子', () => {
   const conf = JSON.parse(
     readFileSync(
       new URL('../native/crates/guanlan-desktop/tauri.conf.json', import.meta.url),
@@ -125,7 +125,7 @@ test('tauri.conf.json 版本号已同步升级至 1.2.2 且保持 NSIS+MSI 与�
     bundle: { targets: string[]; windows: { nsis: { installerHooks: string } } };
   };
   assert.equal(conf.productName, 'Guanlan');
-  assert.equal(conf.version, '1.2.2');
+  assert.equal(conf.version, '1.2.3');
   assert.ok(conf.bundle.targets.includes('nsis'));
   assert.ok(conf.bundle.targets.includes('msi'));
   assert.equal(conf.bundle.windows.nsis.installerHooks, './installer/windows-context-menu.nsh');
@@ -159,21 +159,21 @@ test('tauri.release.conf.json 与 windows-context-menu.nsh 资产齐备', () => 
 // ===== 2. 构建身份格式化与「设置 → 关于观澜」SSR 验收 =====
 
 test('APP_BUILD_INFO 与 formatBuildTimestamp / formatBuildFingerprint 口径稳定', () => {
-  assert.equal(APP_BUILD_INFO.version, '1.2.2');
-  assert.equal(APP_BUILD_INFO.versionTag, 'v1.2.2');
+  assert.equal(APP_BUILD_INFO.version, '1.2.3');
+  assert.equal(APP_BUILD_INFO.versionTag, 'v1.2.3');
   assert.ok(APP_BUILD_INFO.gitSha.length > 0);
   assert.equal(formatBuildTimestamp('2026-11-23T17:30:45.123Z'), '2026-11-23 17:30 UTC');
   assert.equal(formatBuildTimestamp(''), '—');
   const fp = formatBuildFingerprint({
-    version: '1.2.2',
-    versionTag: 'v1.2.2',
+    version: '1.2.3',
+    versionTag: 'v1.2.3',
     gitSha: '8d8e4ab',
     buildTime: '2026-11-23T17:30:00.000Z',
   });
-  assert.equal(fp, 'v1.2.2 (8d8e4ab) · 2026-11-23 17:30 UTC');
+  assert.equal(fp, 'v1.2.3 (8d8e4ab) · 2026-11-23 17:30 UTC');
 });
 
-test('WorkspaceSettingsModal「关于观澜」清晰透出 v1.2.2 / git-sha / 构建时间戳且零 v1.2-dev 残留', () => {
+test('WorkspaceSettingsModal「关于观澜」清晰透出 v1.2.3 / git-sha / 构建时间戳且零 v1.2-dev 残留', () => {
   const html = renderToStaticMarkup(
     React.createElement(WorkspaceSettingsModal, {
       isOpen: true,
@@ -182,8 +182,8 @@ test('WorkspaceSettingsModal「关于观澜」清晰透出 v1.2.2 / git-sha / �
       initialTab: 'about',
     })
   );
-  assert.ok(html.includes('data-about-version="1.2.2"'));
-  assert.ok(html.includes('v1.2.2'));
+  assert.ok(html.includes('data-about-version="1.2.3"'));
+  assert.ok(html.includes('v1.2.3'));
   assert.ok(html.includes('data-about-git-sha='));
   assert.ok(html.includes('data-about-build-time='));
   assert.equal(html.includes('v1.2-dev'), false, '正式版不得残留 v1.2-dev');

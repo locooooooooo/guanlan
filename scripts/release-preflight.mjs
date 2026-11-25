@@ -13,7 +13,7 @@
  *
  * 用法（在仓库根目录执行）：
  *   node scripts/release-preflight.mjs                                      # 只查版本号
- *   node scripts/release-preflight.mjs --tag v1.2.2 --require-on-main
+ *   node scripts/release-preflight.mjs --tag v1.2.3 --require-on-main
  *   node scripts/release-preflight.mjs --assets dist-release
  *
  * 退出码：0 全部通过；1 有检查项不过；2 参数不合法。

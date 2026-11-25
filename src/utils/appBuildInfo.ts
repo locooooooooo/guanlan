@@ -11,20 +11,20 @@ declare const __GUANLAN_GIT_SHA__: string | undefined;
 declare const __GUANLAN_BUILD_TIME__: string | undefined;
 
 export interface AppBuildInfo {
-  /** 三端一致语义化版本号（如 "1.2.2"） */
+  /** 三端一致语义化版本号（如 "1.2.3"） */
   version: string;
   /** 编译期 Git 短哈希（如 "8d8e4ab"；无 git 环境回退 "dev"） */
   gitSha: string;
   /** 编译期 ISO-8601 UTC 构建时间戳 */
   buildTime: string;
-  /** 面向 UI 展示的完整版本标识（如 "v1.2.2"） */
+  /** 面向 UI 展示的完整版本标识（如 "v1.2.3"） */
   versionTag: string;
 }
 
 const resolvedVersion =
   typeof __GUANLAN_APP_VERSION__ === 'string' && __GUANLAN_APP_VERSION__.trim()
     ? __GUANLAN_APP_VERSION__.trim()
-    : '1.2.2';
+    : '1.2.3';
 
 const resolvedGitSha =
   typeof __GUANLAN_GIT_SHA__ === 'string' && __GUANLAN_GIT_SHA__.trim()
