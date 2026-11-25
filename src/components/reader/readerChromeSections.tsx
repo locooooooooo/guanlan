@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Bookmark,
+  CalendarDays,
   CheckCircle2,
   ChevronDown,
   FileCode,
@@ -39,7 +40,7 @@ import { Button } from '../ui/primitives';
 import { Group, GroupSeparator, Toolbar } from '../ui';
 import { FileSystemActionBar } from '../FileContextMenu';
 // observed_at 相对时间（「X 分钟前/今天 HH:mm」），单一事实源在 utils/timeFormat.ts
-import { formatLocalClock, formatRelativeObservedAt } from '../../utils/timeFormat';
+import { formatLocalClock, formatRelativeObservedAt, localDay } from '../../utils/timeFormat';
 import {
   DOC_STATE_LABEL,
   docStatePillClass,
@@ -588,6 +589,57 @@ function ReaderChangeNoticeChip({
   );
 }
 
+/**
+ * ⑤ 文件头文档时间：文章自己的时间（source_time = 文档内或文件 mtime 声称的日期）优先；
+ * 无记载时如实回退采集时刻（observed_at）并换标签——三口径不合并成一行无名的「时间」。
+ * 从待拍板等入口跳进证据原文时，第一眼即可判断材料的新鲜度（时间不再只藏在溯源面板）。
+ * sourceReliable=false 用于摘要占位版本行：它的 source_time 取的是最早版本
+ * （first_source_time），不能冒充当前版文档日期，此时同样回退采集时刻。
+ */
+export interface ReaderDocTimeView {
+  /** 可见时间取自哪一口径；SSR 测试锚点 data-reader-doc-time 同值。 */
+  basis: 'source_time' | 'observed_at';
+  /** 口径词：「文档日期 」/「采集于 」。 */
+  prefix: string;
+  /** 时间值（日期或相对时刻），用更深一档的字色保证可扫读。 */
+  value: string;
+  /** 可见文案（prefix + value，含口径词；供纯函数测试与读屏）。 */
+  label: string;
+  /** <time datetime> 的机器可读值。 */
+  dateTime: string;
+  /** 悬浮说明：同时列出两个口径，避免把采集时刻误当文章日期。 */
+  title: string;
+}
+
+export function buildReaderDocTimeView(
+  sourceTime: string | undefined,
+  observedAt: string,
+  sourceReliable = true
+): ReaderDocTimeView {
+  const observedLabel = formatRelativeObservedAt(observedAt);
+  const declared = sourceReliable ? (sourceTime?.trim() ?? '') : '';
+  const declaredDay = declared ? localDay(declared) : '';
+  // 只接受 YYYY-MM-DD 形状：坏值不冒充日期，回退到可核验的采集时刻。
+  if (/^\d{4}-\d{2}-\d{2}$/.test(declaredDay)) {
+    return {
+      basis: 'source_time',
+      prefix: '文档日期 ',
+      value: declaredDay,
+      label: `文档日期 ${declaredDay}`,
+      dateTime: declaredDay,
+      title: `文档日期（source_time）：${declaredDay}\n检测到更新（observed_at）：${observedLabel}`,
+    };
+  }
+  return {
+    basis: 'observed_at',
+    prefix: '采集于 ',
+    value: observedLabel,
+    label: `采集于 ${observedLabel}`,
+    dateTime: observedAt,
+    title: `本文未记载文档日期（source_time）\n检测到更新（observed_at）：${observedLabel}`,
+  };
+}
+
 /** 2. 单行阅读指挥条：身份、查看方式、动作三段并列。句子留在 title，不靠断点藏字。 */
 export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
   const {
@@ -637,6 +689,13 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
   const [dismissedNoticeKey, setDismissedNoticeKey] = useState<string | null>(null);
   const noticeKey = readingNotice ? `${readingNotice.at}:${readingNotice.count}` : null;
   const visibleNotice = readingNotice && noticeKey !== dismissedNoticeKey ? readingNotice : null;
+  const docTime = buildReaderDocTimeView(
+    currentRev.source_time,
+    currentRev.observed_at,
+    // 摘要占位版本行（content_sha256 为空）的 source_time 是最早版本时间，
+    // 不能冒充当前版文档日期；回退采集时刻，等 /revisions 详情到达后再切回。
+    currentRev.content_sha256 !== '',
+  );
   return (
     <div
       data-reader-header=""
@@ -776,6 +835,25 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
               {DOC_STATE_LABEL[artifactState.state]}
             </span>
           )}
+          {/* 文档时间常驻主行：从待拍板跳进证据原文时，第一眼就能判断材料新鲜度。
+              source_time（文档日期）优先；无记载回退 observed_at 并显式标注「采集于」，
+              不把采集时刻冒充文章日期。 */}
+          <span
+            data-reader-doc-time={docTime.basis}
+            title={docTime.title}
+            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[color:var(--glass-hairline)] bg-[color:var(--depth-1-bg)] px-2 py-0.5 font-medium text-[color:var(--ink-soft)]"
+          >
+            <CalendarDays className="w-3 h-3 shrink-0 opacity-70" aria-hidden="true" />
+            <span>
+              {docTime.prefix}
+              <time
+                dateTime={docTime.dateTime}
+                className="font-semibold tabular-nums text-[color:var(--ink-strong)]"
+              >
+                {docTime.value}
+              </time>
+            </span>
+          </span>
           {rollbackInfo.isRollback && (
             <>
               <span aria-hidden="true">·</span>

@@ -98,6 +98,7 @@
 - **「读到这里」不能顺手清掉未读。** 记录章节定位时若推进了 `last_read_revision_id`，点一下大纲就会瞬间清掉全部「上次读后有改动」的高亮。来源：`src/stores/useWorkspaceStore.tsx`。
 - **脏数据不要决定默认视图。** 一条 2013 年的事件让迷你月历默认停在十三年前。默认定位取最新活跃月份。来源：`src/components/CalendarSidePanels.tsx`。
 - **随机文件名会进截图。** 截图基线用临时目录的随机后缀作为工作区名，曾让同一页面跨跑差异 2.4%。来源：`scripts/visual-baseline.mjs`。
+- **判断材料新鲜度的时间要在首屏可见。** 从「待拍板」点进证据原文时，文件头只有标题、版本与状态，文档日期与采集时刻只藏在折叠的「溯源」面板和版本轴弹层里，用户看不到文章时间、无法判断材料是否过期。现在文件头常驻文档时间胶囊：`source_time`（文档日期）优先，无记载时显式写「采集于」回退 `observed_at`；摘要占位行的 `source_time` 是最早版本时间，不得冒充当前版日期。来源：2026-11-25 用户报告；`src/components/reader/readerChromeSections.tsx` 的 `buildReaderDocTimeView`，`test/reader-doc-time-01.test.ts`。
 
 ## 做对了的例子
 
