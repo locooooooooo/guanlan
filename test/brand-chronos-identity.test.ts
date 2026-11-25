@@ -286,4 +286,29 @@ test('窗口标题、元数据、安装包描述、中英文 README 与 1024px �
   );
   assert.ok(generator.includes('司辰翼漏银匣徽'));
   assert.equal(generator.includes('深蓝圆徽 + 三圈涟漪'), false);
+  assert.equal(generator.includes('public/assets/aistudio/'), false, '图标生成脚本不应再引用废弃的 aistudio 目录');
+});
+
+test('司辰立绘静态资源路径有效且无废弃设计稿 / u12 过程截图目录残留', () => {
+  const mascotSrc = readFileSync(
+    resolve(repoRoot, 'src/components/ChronosMascotNode.tsx'),
+    'utf8'
+  );
+  const match = mascotSrc.match(/const MASCOT_SRC\s*=\s*'([^']+)'/);
+  assert.ok(match, 'ChronosMascotNode.tsx 应声明 MASCOT_SRC 静态资源路径');
+  const assetUrl = match[1];
+  assert.equal(assetUrl.includes('aistudio'), false, '司辰立绘不应留在 aistudio 导出稿路径下');
+  const assetDiskPath = resolve(repoRoot, 'public', assetUrl.replace(/^\/+/, ''));
+  assert.ok(existsSync(assetDiskPath), `MASCOT_SRC 指向的静态资源不存在：${assetDiskPath}`);
+
+  assert.equal(
+    existsSync(resolve(repoRoot, 'public/assets/aistudio')),
+    false,
+    '废弃设计稿目录 public/assets/aistudio 不应残留'
+  );
+  assert.equal(
+    existsSync(resolve(repoRoot, 'scripts/visual-baseline/u12')),
+    false,
+    '废弃过程截图目录 scripts/visual-baseline/u12 不应残留'
+  );
 });

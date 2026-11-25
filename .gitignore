@@ -1,13 +1,14 @@
 node_modules/
 build/
 dist/
+dist-release/
 coverage/
 .DS_Store
 *.log
 .env*
 !.env.example
-# AI Studio 构建产物
-.aistudio/
+# 编码智能体本地会话目录
+.zcode/
 
 # Rust 服务（native/）本地产物与测试夹具
 native/target/
@@ -19,5 +20,5 @@ native/testdata/bench/
 native/testdata/expected/
 native/testdata/identity-vectors.json
 
-# 设计走查会话截图（可用走查流程重新采集）
-.design-review/
+# 视觉基线比对失败临时截图（visual-baseline.mjs compare --keep 生成）
+scripts/.visual-fail/

@@ -128,9 +128,7 @@
   - 测试在系统临时目录里留下目录，从不清理。Rust 测试的 `guanlan-core-*`、`guanlan-svc-*` 一类（六个文件、十五处），以及 Node 测试 `test/v04-events-query.test.ts`，它每次运行留下 5 个 `guanlan-evq-*`。建立这套规范时，本机 `%TEMP%` 里有 22565 个 `guanlan-*` 目录、58498 个文件、约 4.8 GB。
   - `npm run gate` 的每一步没有超时。某一步卡住时门禁会一直等着，既不失败也不提示；CI 的 cargo 步骤有超时。建立这套规范时，有一轮门禁在 `npm test` 停了十多分钟，同一个测试文件单独跑 20 次没有复现，原因没有查清。
   - 身份数字向量测试里使用了历史本机样本路径（`native/crates/guanlan-core/src/domain/mod.rs`）；改路径会改变向量的值，要连向量一起重新生成。
-  - 没有任何地方引用的资源：`scripts/visual-baseline/u12/` 下的截图、`public/assets/aistudio/` 下的一张图片。
-  - `package.json` 没有 `description`、`license`、`repository`、`engines`；`clean` 脚本删的 `server.js` 并不存在。
+  - `package.json` 没有 `description`、`license`、`repository`、`engines`。
   - 安装包没有代码签名，首次运行会有系统的未知发布者提示。
   - 视觉基线 PNG（`scripts/visual-baseline/`）自开源首快照 `7e0b5fa` 之后没有重拍，其间已有 11 个提交动过前端源码。`node scripts/visual-baseline.mjs compare` 现在对全部 27 个镜头报未声明差异并以退出码 1 结束，没有改动的星图、日历、阅读器也一样，像素比对已经不能当作回归依据；同一轮运行里的 Console 门禁（0 error / 0 warning）与 SSOT 断言仍然有效。按新界面重拍之前，需要有人确认新的外观。
-  - 仓库根下常驻两个未跟踪目录：`.zcode/`（编码智能体的工作区计划）与 `dist-release/`（安装包产物的暂存目录）。两者都没有写进 `.gitignore`，`git status` 里一直是未跟踪项，一次 `git add -A` 就会把它们带进提交。
   - 安装包脚本直接启动 `cargo`，不像门禁脚本那样到 `~/.cargo/bin` 去找：cargo 不在 `PATH` 上时（非交互 shell 常常如此），`node scripts/build-windows-installer.mjs` 建完 `dist/` 之后以 `ENOENT` 退出。

@@ -52,7 +52,7 @@
  *   node scripts/visual-baseline.mjs compare          # 与基线逐像素比对，超差退出码 1
  *   node scripts/visual-baseline.mjs compare --keep   # 同时把当前截图留存在 .visual-fail/ 供排查
  *
- * 基线落盘：scripts/visual-baseline/*.png（入库，随结构重构轮更新）。
+ * 基线落盘：scripts/visual-baseline/*.png（入库，按需重拍更新）。
  */
 
 import assert from 'node:assert/strict';
@@ -1641,11 +1641,11 @@ async function makeDiffContext() {
 let TMP = null;
 
 async function withTmp() {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'guanlan-u12-visual-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'guanlan-visual-'));
   // 工作区根路径必须逐次运行完全一致：检查器「完整路径」等 UI 文案直接展示根路径，
   // mkdtemp 的随机后缀会进截图（reader-inspector 曾因此跨跑差异 2.4%）。Chrome
   // profile / dataDir 不进画面，留在随机 base 下即可；固定 ws 目录先清后建。
-  const wsDir = path.join(os.tmpdir(), 'guanlan-u12-ws');
+  const wsDir = path.join(os.tmpdir(), 'guanlan-visual-ws');
   fs.rmSync(wsDir, { recursive: true, force: true });
   fs.mkdirSync(wsDir, { recursive: true });
   TMP = {

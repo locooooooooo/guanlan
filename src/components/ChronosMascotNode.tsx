@@ -18,7 +18,7 @@ interface ChronosMascotNodeProps {
   caption?: string;
 }
 
-const MASCOT_SRC = '/assets/aistudio/image_85bd7b05.png';
+const MASCOT_SRC = '/assets/chronos-mascot.png';
 
 /**
  * Strips the contiguous white background (including inner pockets like the crescent staff arc)

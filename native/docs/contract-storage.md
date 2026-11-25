@@ -706,7 +706,7 @@ seed-fixture 示例值（含 `BOM与图纸联动方案`）。既有键 `extract_
 ### 5.6 纯日期：不补午夜、不做时区换算
 
 - 正文自述日期抽取（`derive.ts:339-364`）：候选依次为 front matter `date|updated|created` 行（`344-349`）、`文档日期：YYYY-MM-DD`（`350-351`）、正文前 1200 字符内首个 ISO 日期（`352-353`）；引号剥离后按 `^(\d{4})-(\d{2})-(\d{2})` 前缀匹配（`356-357`）。
-- 命中即返回**纯日期字符串** `YYYY-MM-DD`，`precision = 'day'`，`source = 'document_self'`——「只有日期：保留到天，不补零点时刻」（`derive.ts:359-360`）。因此 `document_self` 来源的 `occurred_at` 当前恒为纯日期；即使原文带时刻也会被截断为日期（见 §8 待确认 6）。
+- 命中即返回**纯日期字符串** `YYYY-MM-DD`，`precision = 'day'`，`source = 'document_self'`——「只有日期：保留到天，不补零点时刻」（`derive.ts:359-360`）。因此 `document_self` 来源的 `occurred_at` 当前恒为纯日期；即使原文带时刻也会被截断为日期（见 §7 第 4 条）。
 - 无候选 → `null / 'unknown' / null`，由 mtime 兜底（`derive.ts:363` + `reconcile.ts:359-363`）。
 - 全程不做时区换算、不补 `T00:00:00`：基线卡发生时间也是 `observedAt.slice(0,10)` 纯日期，precision `'day'`、source `'collector'`（`reconcile.ts:512-514`）；事件文案显式声明「未补零点时刻」。读取端按精度分组展示，日级事项归日期组。
 

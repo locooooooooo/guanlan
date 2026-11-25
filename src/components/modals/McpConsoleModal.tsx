@@ -236,7 +236,7 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          {/* 8 Standard Tools Selector——采用 ModeTabs（工具选择切换下方参数/响应面板，
+          {/* 8 Standard Tools Selector——采用 Tabs（工具选择切换下方参数/响应面板，
               标线为界；每卡 inputs 预览行收敛为选中工具的单行 inputs，信息不丢失） */}
           <div className="space-y-1.5">
             <Tabs
