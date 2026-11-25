@@ -70,6 +70,8 @@ interface TopHeaderProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
   searchHits: SearchHit[];
+  /** 命中是否被顶栏上限截断（true 时明确标注「未列全」，不冒充全部结果） */
+  searchHitsTruncated?: boolean;
   onSelectSearchHit: (hit: SearchHit) => void;
   unreadFilesCount: number;
   contextBasketCount: number;
@@ -155,6 +157,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   searchQuery,
   onSearchChange,
   searchHits,
+  searchHitsTruncated,
   onSelectSearchHit,
   unreadFilesCount,
   contextBasketCount,
@@ -913,10 +916,17 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                       <strong className="font-mono tabular-nums text-[color:var(--accent-violet-ink)]">
                         {searchHits.length}
                       </strong>{' '}
-                      处
+                      处{searchHitsTruncated ? '（已截断）' : ''}
                     </span>
                     {/* 索引代际信息由「?」帮助浮层展示，此处不重复打印调试键值对 */}
                   </div>
+
+                  {searchHitsTruncated && (
+                    <div className="px-3.5 py-2 text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)] bg-muted/30">
+                      仅列出前 {searchHits.length} 条命中。缩小关键词，或按 Ctrl+K
+                      走全库检索查看其余结果。
+                    </div>
+                  )}
 
                   {searchHits.length === 0 ? (
                     <div className="p-4 text-center text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-soft)]">

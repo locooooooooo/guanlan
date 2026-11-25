@@ -47,6 +47,7 @@ function AppContent() {
     searchQuery,
     setSearchQuery,
     searchHits,
+    searchHitsTruncated,
     handleSelectSearchHit,
     unreadFilesCount,
     contextPointers,
@@ -97,6 +98,7 @@ function AppContent() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         searchHits={searchHits}
+        searchHitsTruncated={searchHitsTruncated}
         onSelectSearchHit={handleSelectSearchHit}
         unreadFilesCount={unreadFilesCount}        contextBasketCount={contextPointers.length}
         eventCount={workspaceSummary?.counts.events || 0}

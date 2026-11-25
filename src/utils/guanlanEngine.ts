@@ -99,7 +99,12 @@ export function searchWorkspace(
    * T01：/scan 去 MD 内联后的正文回退缓存（revision_id → 正文）。
    * 镜像 ReaderView.tsx:157-188 的按需回退模式：currentRev.markdownContent 缺失时查缓存。
    */
-  contentCache?: Record<string, string>
+  contentCache?: Record<string, string>,
+  /**
+   * 全局命中上限：超过即停止扫描（顶栏快速检索用它守住万级命中；
+   * 未传 = 不设限，保持既有调用方语义）。
+   */
+  limit?: number
 ): SearchHit[] {
   const rawQuery = query.trim();
   if (!rawQuery) return [];
@@ -121,6 +126,9 @@ export function searchWorkspace(
   };
 
   for (const file of files) {
+    if (limit !== undefined && hits.length > limit) {
+      break;
+    }
     if (options?.format && options.format !== 'all' && file.format !== options.format) continue;
     if (options?.folder && options.folder !== 'all' && file.folder !== options.folder) continue;
     if (options?.role && options.role !== 'all' && file.role !== options.role) continue;
@@ -289,6 +297,35 @@ export function searchWorkspace(
   }
 
   return hits;
+}
+
+/**
+ * 顶栏快速检索的全局命中上限。
+ *
+ * 顶栏扫的是客户端已缓存的全部文件与已并入的正文；短词在数万文件上可以命中
+ * 上万条，之前没有总上限，列表逐条渲染直接卡住。上限只截断「展示」，命中本身
+ * 仍按既有逐文件逻辑产出；`truncated` 让界面明说「未列全」，不拿截断后的
+ * 空集冒充「没有命中」。
+ */
+export const TOPBAR_SEARCH_LIMIT = 100;
+
+export interface WorkspaceSearchResult {
+  hits: SearchHit[];
+  truncated: boolean;
+}
+
+export function searchWorkspaceCapped(
+  files: FileRecord[],
+  query: string,
+  limit: number = TOPBAR_SEARCH_LIMIT
+): WorkspaceSearchResult {
+  // 多取一条用来判断「后面还有」：不额外扫全表，命中上限即停止
+  const probe = searchWorkspace(files, query, undefined, undefined, limit);
+  const truncated = probe.length > limit;
+  return {
+    hits: truncated ? probe.slice(0, limit) : probe,
+    truncated,
+  };
 }
 
 /**

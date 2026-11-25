@@ -33,7 +33,7 @@ import {
 import {
   formatContextForAgent,
   hasUnreadChanges,
-  searchWorkspace,
+  searchWorkspaceCapped,
   SearchHit,
 } from '../utils/guanlanEngine';
 import {
@@ -2331,11 +2331,14 @@ export function useWorkspaceStore() {
     return () => window.clearTimeout(timer);
   }, [searchQuery]);
 
-  const searchHits = useMemo(() => {
-    // 顶栏快速检索基于已取回的本地数据（文件名/路径/标题 + 已并入缓存的正文）；
-    // 全库全文检索由命令面板经 /api/v1/search 有界检索端点承接
-    return searchWorkspace(files, debouncedSearchQuery);
-  }, [files, debouncedSearchQuery]);
+  // 顶栏快速检索基于已取回的本地数据（文件名/路径/标题 + 已并入缓存的正文）；
+  // 全库全文检索由命令面板经 /api/v1/search 有界检索端点承接。
+  // 命中总数有上限（TOPBAR_SEARCH_LIMIT），超出时界面写明「未列全」。
+  const searchResult = useMemo(
+    () => searchWorkspaceCapped(files, debouncedSearchQuery),
+    [files, debouncedSearchQuery]
+  );
+  const searchHits = searchResult.hits;
 
   const unreadFilesCount = useMemo(() => {
     return files.filter((f) => hasUnreadChanges(f, readingStates[f.file_id]).isUnread)
@@ -4987,7 +4990,7 @@ export function useWorkspaceStore() {
     handlePaletteOpenFile, handlePaletteLocate, handlePaletteAddToBasket, handlePaletteAction,
     // 派生数据
     unreadFilesCount, contextPointers, setContextPointers,
-    searchHits, recentItems, activeFile, packageList, activePackage,
+    searchHits, searchHitsTruncated: searchResult.truncated, recentItems, activeFile, packageList, activePackage,
     stateOverviewIndex, activeInitiative, agentContextPreset, presetPointers, recommendedMounts,
     focusedContextFileId: focusedContextTarget.fileId,
     confirmedDecisionLines, pendingBlockerLines, referenceMetaOf, contextSessionCheckpointId,
