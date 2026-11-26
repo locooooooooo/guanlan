@@ -124,7 +124,6 @@ pub fn revision_preview_tx(
             kind,
         )
     } else if format_token == "pdf" {
-        // PDF 页级文本摘要（预览主体仍走原版 PDF 流，摘要只补充状态与页统计）
         let rec = crate::query::pdf::load_pdf_extract_for_revision(store, &rev);
         (
             None,
@@ -157,7 +156,6 @@ pub fn revision_preview_tx(
         )
         .map_err(internal_sql)?;
 
-    // 最近 24 个版本（按 seq DESC；多取 1 条用来算末位条目相对于上一版的 delta_bytes）
     const HISTORY_CAP: usize = 24;
     let mut stmt = conn
         .prepare("SELECT * FROM revisions WHERE file_id = ? ORDER BY seq DESC LIMIT ?")
@@ -290,7 +288,6 @@ fn trim_incomplete_utf8_tail(buf: &[u8]) -> usize {
     if len == 0 {
         return 0;
     }
-    // 从末尾向前最多看 4 字节，找到最后一个首字节检查其期望长度
     let check_from = len.saturating_sub(4);
     for idx in (check_from..len).rev() {
         let b = buf[idx];
@@ -460,7 +457,6 @@ fn parse_jpeg_dimensions(bytes: &[u8]) -> Option<ImagePreviewMeta> {
             continue;
         }
         if marker == 0xDA {
-            // SOS（Start of Scan）：帧头已过
             break;
         }
         if pos + 2 > bytes.len() {
@@ -605,46 +601,26 @@ pub fn format_hex_head(bytes: &[u8]) -> String {
         .join(" ")
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-/thumbnail 逐行流式下采样引擎（纯函数，供服务层缩略端点调用）
-
-实现说明：
-- PNG（8-bit / color_type 0 灰度、2 RGB、6 RGBA / 非隔行）逐行解码——unfilter
-  只依赖前一行（prev_row + cur_row 两行常量内存），按输出行 box 平均后即弃，
-  绝不物化整幅像素（对比整图解码常驻 O(W×H×ch)，本引擎 O(row×ch)）；
-- JPEG 不在本引擎范围（DCT 域解码非零依赖可实现）：`downsample_png_rows` 仅处理
-  PNG，调用方对 JPEG 诚实回退原始字节流，绝不拿「伪缩略」冒充降采样产物；
-- 重新编码走同一 PNG 容器（flate2 zlib + 手写 CRC-32，零新依赖），filter=0 行。
-══════════════════════════════════════════════════════════════════════════ */
-
-/// PNG 下采样产物（字节 + 实际尺寸；格式恒 PNG 8-bit 同色型）
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)] // 预留给服务层 /thumbnail 端点调用；目前由单元测试覆盖
+#[allow(dead_code)]
 pub struct DownsampledPng {
     pub bytes: Vec<u8>,
     pub width: u32,
     pub height: u32,
 }
 
-/// PNG 下采样失败原因（诚实拒绝，绝不出「伪缩略」）
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)] // 预留给服务层 /thumbnail 端点调用；目前由单元测试覆盖
+#[allow(dead_code)]
 pub enum DownsampleError {
-    /// 魔数不是 PNG
     NotPng,
-    /// PNG 结构损坏（截断/缺 IHDR/缺 IDAT/CRC 不校验但长度非法）
     Corrupt(&'static str),
-    /// 位深/色型/隔行超出本引擎支持面（调用方诚实回退原始流）
     Unsupported,
-    /// 目标尺寸非法（0 或大于源尺寸——本引擎只做下采样）
     BadTargetSize,
 }
 
-/// PNG 签名
 #[allow(dead_code)]
 const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
-/// CRC-32（ISO-HDLC，PNG chunk 校验用；零依赖手写查表）
 #[allow(dead_code)]
 fn crc32(data: &[u8]) -> u32 {
     let mut table = [0u32; 256];
@@ -679,15 +655,14 @@ fn write_chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
 #[allow(dead_code)]
 fn channels_of(color_type: u8) -> Option<usize> {
     match color_type {
-        0 => Some(1), // 灰度
-        2 => Some(3), // RGB
-        4 => Some(2), // 灰度+alpha（支持面内，处理同 RGBA 逐通道）
-        6 => Some(4), // RGBA
-        _ => None,    // 1/3/5/7（调色板等）不在引擎支持面
+        0 => Some(1),
+        2 => Some(3),
+        4 => Some(2),
+        6 => Some(4),
+        _ => None,
     }
 }
 
-/// Paeth 预测器（PNG filter type 4）
 #[allow(dead_code)]
 fn paeth(a: u8, b: u8, c: u8) -> u8 {
     let p = i32::from(a) + i32::from(b) - i32::from(c);
@@ -703,7 +678,6 @@ fn paeth(a: u8, b: u8, c: u8) -> u8 {
     }
 }
 
-/// 对单行做 unfilter（filters 0..=4）。`bpp` 为字节/像素（通道数，8-bit）。
 #[allow(dead_code)]
 fn unfilter_row(
     filter: u8,
@@ -742,10 +716,7 @@ fn unfilter_row(
     Ok(())
 }
 
-/// PNG 逐行流式下采样：8-bit（灰度/RGB/Gray+Alpha/RGBA）、非隔行。
-/// 内存 O(行×通道)：unfilter 只持 prev/cur 两行 + 一个输出行累加器（u64 和），
-/// 与源图像总像素量无关——「逐行流式」的结构保证（单测锁定行为正确性）。
-#[allow(dead_code)] // 预留给服务层 /thumbnail 端点调用；目前由单元测试覆盖
+#[allow(dead_code)]
 pub fn downsample_png_rows(
     source: &[u8],
     target_w: u32,
@@ -754,7 +725,6 @@ pub fn downsample_png_rows(
     if source.len() < 8 || source[..8] != PNG_SIGNATURE {
         return Err(DownsampleError::NotPng);
     }
-    // 扫 chunk：收集 IHDR 与全部 IDAT 载荷
     let mut pos = 8usize;
     let mut ihdr: Option<[u8; 13]> = None;
     let mut idat: Vec<u8> = Vec::new();
@@ -791,7 +761,7 @@ pub fn downsample_png_rows(
             }
             _ => {}
         }
-        pos = data_end + 4; // 跳过 chunk CRC
+        pos = data_end + 4;
     }
     let ihdr = ihdr.ok_or(DownsampleError::Corrupt("缺 IHDR"))?;
     if !saw_iend {
@@ -813,8 +783,6 @@ pub fn downsample_png_rows(
         return Err(DownsampleError::BadTargetSize);
     }
 
-    // inflate（整流缓冲 = 行流式解码的最小必要缓冲；decompressed 总量本身即图像
-    // 原始体积，逐行消费后即弃——持有它的只是 zlib 解码器的输入，不是像素工作集）
     use std::io::Read;
     let mut decoder = flate2::read::ZlibDecoder::new(&idat[..]);
     let mut compressed_plane: Vec<u8> = Vec::new();
@@ -823,23 +791,19 @@ pub fn downsample_png_rows(
         .map_err(|_| DownsampleError::Corrupt("IDAT zlib 解码失败"))?;
 
     let stride = src_w as usize * channels;
-    let bpp = channels; // 8-bit 下 bytes-per-pixel == channels
-                        // 逐行消费 compressed_plane（filtered 行流），按输出行 box 平均
+    let bpp = channels;
     let mut prev_row: Vec<u8> = vec![0; stride];
     let mut cur_row: Vec<u8> = vec![0; stride];
-    // 输出行累加器：每通道 u64 和 + 计数
     let mut acc: Vec<u64> = vec![0; target_w as usize * channels];
-    // 每输出列的盒内像素计数（rows×cols）：denom 必须与该列实际累加的源像素数一致，
-    // 否则 4x2→2x1 这类「列盒≠全列宽」场景均值错（初版 acc_cnt 只数行，已修正）
     let mut col_cnt: Vec<u64> = vec![0; target_w as usize];
-    let row_bytes = stride + 1; // filter 字节 + 行数据
+    let row_bytes = stride + 1;
     let tw = target_w as usize;
     let th = target_h as usize;
     let mut out_rows: Vec<Vec<u8>> = Vec::with_capacity(th);
     let mut next_out = 0usize;
     let flush_row = |acc: &Vec<u64>, col_cnt: &[u64], out_rows: &mut Vec<Vec<u8>>| {
         let mut row = Vec::with_capacity(tw * channels + 1);
-        row.push(0u8); // filter=0
+        row.push(0u8);
         for (x, cell) in acc.iter().enumerate() {
             let denom = col_cnt[x / channels].max(1) as f64;
             row.push(((*cell as f64) / denom).round() as u8);
@@ -854,10 +818,8 @@ pub fn downsample_png_rows(
         let filter = compressed_plane[base];
         cur_row.copy_from_slice(&compressed_plane[base + 1..base + 1 + stride]);
         unfilter_row(filter, &mut cur_row, &prev_row, bpp)?;
-        // 目标输出行 = 源行 × th ÷ sh（盒式映射，逐行顺序命中）
         let out_idx = src_y * th / src_h as usize;
         if out_idx != next_out {
-            // 跨入新输出行：冲刷上一行
             flush_row(&acc, &col_cnt, &mut out_rows);
             next_out = out_idx;
             for cell in acc.iter_mut() {
@@ -868,7 +830,6 @@ pub fn downsample_png_rows(
             }
         }
         for x in 0..tw {
-            // 输出列 = 源列 × tw ÷ sw；同一输出列的源列全落入该列盒
             let sx0 = x * src_w as usize / tw;
             let sx1 = (x + 1) * src_w as usize / tw;
             let sx1 = sx1.max(sx0 + 1);
@@ -887,17 +848,16 @@ pub fn downsample_png_rows(
         return Err(DownsampleError::Corrupt("输出行数不符"));
     }
 
-    // 重编码 PNG：IHDR（同色型 8-bit 非隔行）+ IDAT（zlib，filter=0 每行）+ IEND
     let mut out: Vec<u8> = Vec::new();
     out.extend_from_slice(&PNG_SIGNATURE);
     let mut ihdr_out = Vec::with_capacity(13);
     ihdr_out.extend_from_slice(&target_w.to_be_bytes());
     ihdr_out.extend_from_slice(&target_h.to_be_bytes());
-    ihdr_out.push(8); // bit depth
+    ihdr_out.push(8);
     ihdr_out.push(color_type);
-    ihdr_out.push(0); // compression: deflate
-    ihdr_out.push(0); // filter: adaptive(0 per row)
-    ihdr_out.push(0); // interlace: none
+    ihdr_out.push(0);
+    ihdr_out.push(0);
+    ihdr_out.push(0);
     write_chunk(&mut out, b"IHDR", &ihdr_out);
     let mut plane: Vec<u8> = Vec::with_capacity(th * (tw * channels + 1));
     for row in &out_rows {
@@ -921,7 +881,6 @@ mod tests {
 
     #[test]
     fn parses_png_gif_bmp_webp_jpeg_svg_dimensions() {
-        // PNG 1280x720
         let mut png = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
         png.extend_from_slice(&[0, 0, 0, 13, b'I', b'H', b'D', b'R']);
         png.extend_from_slice(&1280u32.to_be_bytes());
@@ -934,7 +893,6 @@ mod tests {
             })
         );
 
-        // GIF 320x240
         let mut gif = b"GIF89a".to_vec();
         gif.extend_from_slice(&320u16.to_le_bytes());
         gif.extend_from_slice(&240u16.to_le_bytes());
@@ -946,7 +904,6 @@ mod tests {
             })
         );
 
-        // WebP VP8X 800x600
         let mut webp = b"RIFF\x00\x00\x00\x00WEBPVP8X".to_vec();
         webp.extend_from_slice(&[0u8; 8]);
         let w = 800u32 - 1;
@@ -967,7 +924,6 @@ mod tests {
             })
         );
 
-        // JPEG SOF0 640x480
         let jpeg = vec![
             0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x04, 0x00, 0x00, 0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x01,
             0xE0, 0x02, 0x80, 0x03, 0x01, 0x11, 0x00,
@@ -980,7 +936,6 @@ mod tests {
             })
         );
 
-        // SVG viewBox
         let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 512"></svg>"#;
         assert_eq!(
             inspect_image_dimensions(svg, "svg"),
@@ -995,14 +950,12 @@ mod tests {
     fn slices_utf8_cleanly_at_multibyte_boundaries() {
         let s = "观澜QuickLook预览";
         let bytes = s.as_bytes();
-        // '观' (0..3), '澜' (3..6) -> 截断到 4 字节（落进 '澜' 中间）时应干净回退到 "观"
         let (text, start, byte_len, lines) = slice_utf8_bounded(&bytes[..4], 0, false);
         assert_eq!(text, "观");
         assert_eq!(start, 0);
         assert_eq!(byte_len, 3);
         assert_eq!(lines, 1);
 
-        // 从 offset=4 开始读余下字节，跳过 '澜' 的残余续字节，直出 "QuickLook预览"
         let (rest, skipped, rest_len, _) = slice_utf8_bounded(&bytes[4..], 4, true);
         assert_eq!(rest, "QuickLook预览");
         assert_eq!(skipped, 2);
@@ -1016,10 +969,6 @@ mod tests {
         assert_eq!(detect_magic_signature(b"abcd"), None);
     }
 
-    /* ═══ PNG 逐行流式下采样 ═══ */
-
-    /// 测试夹具：用生产编码路径（write_chunk + zlib）构造一张 filter 全 0 的 PNG。
-    /// 每像素 = f(x, y, ch)，供 box 平均的精确断言。
     fn build_fixture_png(
         w: u32,
         h: u32,
@@ -1030,7 +979,7 @@ mod tests {
         let stride = w as usize * channels;
         let mut plane = Vec::with_capacity(h as usize * (stride + 1));
         for y in 0..h {
-            plane.push(0u8); // filter=0
+            plane.push(0u8);
             for x in 0..w {
                 for c in 0..channels {
                     plane.push(pixel(x, y, c));
@@ -1058,7 +1007,6 @@ mod tests {
     }
 
     fn decode_out_rows(out: &DownsampledPng, color_type: u8) -> Vec<Vec<u8>> {
-        // 用本引擎同款解析读回产物：结构合法（IHDR 尺寸正确）+ 行像素可重放
         let bytes = &out.bytes;
         assert_eq!(&bytes[..8], &PNG_SIGNATURE);
         let mut pos = 8usize;
@@ -1106,7 +1054,6 @@ mod tests {
 
     #[test]
     fn downsample_png_rgb_4x2_to_2x1_box_average_exact() {
-        // 像素 (x,y,R,G,B) = (x*10, y*100, 7)。2x1 输出的 R = 全 4 列平均。
         let png = build_fixture_png(4, 2, 2, |x, y, c| match c {
             0 => (x * 10) as u8,
             1 => (y * 100) as u8,
@@ -1116,8 +1063,6 @@ mod tests {
         assert_eq!((out.width, out.height), (2, 1));
         let rows = decode_out_rows(&out, 2);
         assert_eq!(rows.len(), 1);
-        // interleaved 行：[R0,G0,B0,R1,G1,B1]。列盒 [0..2) R 均值=(0+10)/2=5、
-        // [2..4)=(20+30)/2=25；G 随 y（row0=0,row1=100）→ 盒均值 50；B 恒 7
         assert_eq!(rows[0][0], 5);
         assert_eq!(rows[0][1], 50);
         assert_eq!(rows[0][2], 7);
@@ -1128,9 +1073,6 @@ mod tests {
 
     #[test]
     fn downsample_png_identity_size_preserves_pixels() {
-        // 目标=源尺寸：逐行 unfilter 后原样重排（round-trip 保真，filter≠0 路径经
-        // 多个 filter 类型夹具覆盖——这里用含渐变的行触发 Sub/Up 的编码端虽全 0 filter，
-        // unfilter 恒等路径仍锁「同尺寸不丢像素」契约）
         let png = build_fixture_png(3, 2, 6, |x, y, c| {
             ((x * 31 + y * 17 + (c as u32) * 7) % 256) as u8
         });
@@ -1148,9 +1090,6 @@ mod tests {
 
     #[test]
     fn downsample_png_nontrivial_filters_survive() {
-        // 用「横向渐变行 + 纵向阶梯行」夹具走 2:1 下采样，验证 Sub/Up 类邻域语义在
-        // 引擎 unfilter 后仍产出确定性 box 平均（本夹具 fixture 全 0 filter，
-        // 邻域语义由 unfilter_row 单元覆盖：用引擎内部函数直测 filter 1..=4）。
         let prev = vec![5u8; 6];
         let mut filtered_sub = vec![10u8; 6];
         unfilter_row(1, &mut filtered_sub, &prev, 3).unwrap();
@@ -1160,8 +1099,6 @@ mod tests {
         assert_eq!(filtered_up, vec![10u8; 6]);
         let mut filtered_avg = vec![3u8; 6];
         unfilter_row(3, &mut filtered_avg, &prev, 3).unwrap();
-        // bpp=3：i=0..3 均无 left（i<bpp → left=0）→ (0+5)/2=2 → 3+2=5；
-        // i=3..6 left=cur[i-3]=5 → (5+5)/2=5 → 3+5=8
         assert_eq!(filtered_avg[0], 5);
         assert_eq!(filtered_avg[1], 5);
         assert_eq!(filtered_avg[2], 5);
@@ -1172,19 +1109,16 @@ mod tests {
     }
 
     fn _paeth_self_check() -> bool {
-        // Paeth 经典用例：a=10,b=12,c=13 → p=9，最近=a(10) → 返回 a
         paeth(10, 12, 13) == 10 && paeth(0, 0, 0) == 0
     }
 
     #[test]
     fn downsample_png_rejects_honestly() {
         let png = build_fixture_png(4, 4, 2, |_, _, _| 9);
-        // 非 PNG
         assert_eq!(
             downsample_png_rows(b"not a png", 2, 2),
             Err(DownsampleError::NotPng)
         );
-        // 目标尺寸非法：0 与放大
         assert_eq!(
             downsample_png_rows(&png, 0, 2),
             Err(DownsampleError::BadTargetSize)
@@ -1193,27 +1127,24 @@ mod tests {
             downsample_png_rows(&png, 8, 4),
             Err(DownsampleError::BadTargetSize)
         );
-        // 不支持面：bit_depth 16 / 隔行 / 调色板（色型 3）
         let mut ihdr16 = build_fixture_png(4, 4, 2, |_, _, _| 9);
-        // IHDR 在签名后：len(4)+kind(4)+data(13) → data[8]=bit_depth 偏移 8+8+8=24
         ihdr16[24] = 16;
         assert_eq!(
             downsample_png_rows(&ihdr16, 2, 2),
             Err(DownsampleError::Unsupported)
         );
         let mut ihdr_il = build_fixture_png(4, 4, 2, |_, _, _| 9);
-        ihdr_il[24 + 4] = 1; // interlace 偏移 = 16+12
+        ihdr_il[24 + 4] = 1;
         assert_eq!(
             downsample_png_rows(&ihdr_il, 2, 2),
             Err(DownsampleError::Unsupported)
         );
         let mut png_pal = build_fixture_png(4, 4, 2, |_, _, _| 0);
-        png_pal[16 + 9] = 3; // IHDR 色型字节改写为 3（调色板，引擎支持面外）
+        png_pal[16 + 9] = 3;
         assert_eq!(
             downsample_png_rows(&png_pal, 2, 2),
             Err(DownsampleError::Unsupported)
         );
-        // 截断：砍掉尾部（IEND/IDAT 残缺）→ 诚实 Corrupt（行流截断）
         let truncated = &png[..png.len() - 6];
         assert!(matches!(
             downsample_png_rows(truncated, 2, 2),
@@ -1223,19 +1154,14 @@ mod tests {
 
     #[test]
     fn downsample_png_grayscale_8x8_to_2x2_and_bounded_rows() {
-        // 灰度 8x8：像素 = (x+y)。2x2 盒平均 = 各象限均值。
         let png = build_fixture_png(8, 8, 0, |x, y, _| ((x + y) % 256) as u8);
         let out = downsample_png_rows(&png, 2, 2).unwrap();
         let rows = decode_out_rows(&out, 0);
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].len(), 2);
-        // 左上象限：x,y ∈0..4，均值 = mean(x)+mean(y) = 1.5+1.5 = 3
         assert_eq!(rows[0][0], 3);
-        // 右上：mean_x(4..8)=5.5 + mean_y(0..4)=1.5 = 7.0 → 7
         assert_eq!(rows[0][1], 7);
-        // 左下：1.5 + 5.5 = 7.0 → 7
         assert_eq!(rows[1][0], 7);
-        // 右下：5.5 + 5.5 = 11.0 → 11
         assert_eq!(rows[1][1], 11);
     }
 }

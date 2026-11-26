@@ -12,12 +12,6 @@ import {
 import type { FileRecord, ReadingState } from '../types/guanlan';
 import type { ArtifactStateView } from '../services/apiTypes';
 
-/**
- * 增量聚光灯纯函数引擎行为锁定：
- * 核心不变量：①「首次收录（未读新件）」与「读后变更」绝不混同（红线护栏）；
- * ② 三类读后真实变化（新增版本/新挂起决定/Agent 新草案）按时间逐条排序且确定性；
- * ③ 降亮度只打在「已读且未变」节点；④ J/K 守卫与循环步进。
- */
 
 const NOW = Date.parse('2026-11-21T12:00:00+08:00');
 
@@ -121,8 +115,8 @@ test('聚光灯：读后有更新（新增版本）命中且有基线；当前�
   const items = derive({
     files: [changed, untouched],
     readingStates: {
-      a: reading({ fileId: 'a', baseline: 'rev_a_v1' }), // 基线 v1 → 当前 v3：读后变更
-      b: reading({ fileId: 'b' }), // 基线 = 当前：已读未变
+      a: reading({ fileId: 'a', baseline: 'rev_a_v1' }),
+      b: reading({ fileId: 'b' }),
     },
   });
   assert.equal(items.length, 1);
@@ -139,12 +133,10 @@ test('停机条件护栏：never_read（未读新件/首次收录）绝不进变
   const fresh = file({ fileId: 'fresh', currentRev: 'rev_fresh_v2', title: '丙' });
   const items = derive({
     files: [fresh],
-    readingStates: { fresh: reading({ fileId: 'fresh', baseline: null }) }, // 从未读过
+    readingStates: { fresh: reading({ fileId: 'fresh', baseline: null }) },
     artifacts: [artifact({ fileId: 'fresh', pending_p1: 2 })],
     drafts: { fresh: '2026-11-20T13:00:00+08:00' },
   });
-  // 即便同时挂着待拍板与 Agent 草案，无阅读基线就一概不算「读后变化」——
-  // 首次收录与读后变更严禁混同
   assert.equal(items.length, 0);
 });
 
@@ -158,7 +150,6 @@ test('聚光灯：新挂起决定 = 有基线且 pending_p0+p1>0，时间取 las
   assert.equal(items.length, 1);
   assert.equal(items[0].kind, 'pending_decision');
   assert.equal(items[0].atMs, Date.parse('2026-11-20T12:00:00+08:00'));
-  // pending 全零不算
   const none = derive({
     files: [f],
     readingStates: { d: reading({ fileId: 'd' }) },
@@ -193,7 +184,7 @@ test('聚光灯排序：按时间新→旧，无时间诚实排后；同类同�
     drafts: {
       early: '2026-11-20T08:00:00+08:00',
       late: '2026-11-21T09:00:00+08:00',
-      noTime: 'not-a-date', // 非法时间 → null → 排后
+      noTime: 'not-a-date',
     },
   });
   assert.deepEqual(
@@ -205,7 +196,6 @@ test('聚光灯排序：按时间新→旧，无时间诚实排后；同类同�
     ],
     '新→旧，无时间排最后'
   );
-  // 确定性：两次调用逐项全等
   const again = derive({
     files: [early, late, noTime],
     readingStates: {
@@ -223,7 +213,7 @@ test('聚光灯排序：按时间新→旧，无时间诚实排后；同类同�
 });
 
 test('聚光灯摘要：M = 处数（同类多文件、同文件多类各自成条）', () => {
-  const dual = file({ fileId: 'dual', currentRev: 'rev_dual_v3', title: '双' }); // 新版本 + 挂草案 = 2 处
+  const dual = file({ fileId: 'dual', currentRev: 'rev_dual_v3', title: '双' });
   const single = file({ fileId: 's', title: '单' });
   const items = derive({
     files: [dual, single],
@@ -241,10 +231,10 @@ test('聚光灯摘要：M = 处数（同类多文件、同文件多类各自成�
 });
 
 test('聚光灯降亮度：已读未变 → 降；未读新件/命中变化 → 不降（骨架绝不吞行动信号）', () => {
-  const dimmedFile = file({ fileId: 'dim', title: '旧' }); // 已读且未变
-  const freshFile = file({ fileId: 'fresh', title: '新件' }); // 从未读过
+  const dimmedFile = file({ fileId: 'dim', title: '旧' });
+  const freshFile = file({ fileId: 'fresh', title: '新件' });
   const changedFile = file({ fileId: 'chg', currentRev: 'rev_chg_v3', title: '新版本' });
-  const decidedFile = file({ fileId: 'dec', title: '拍板' }); // 已读未变版本但挂待拍板
+  const decidedFile = file({ fileId: 'dec', title: '拍板' });
   const items = derive({
     files: [dimmedFile, freshFile, changedFile, decidedFile],
     readingStates: {

@@ -1,26 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { isFolderMoveBlocked } from '../utils/sidebarTree';
 
-/**
- * 左栏目录树内拖拽整理 Hook（参考 quiet-md 的 sidebar_drag/sidebar_drop 交互手感）。
- *
- * 职责边界：本 Hook 只承载**拖拽 UI 状态机**（谁在拖、悬停谁、自动展开计时、
- * 边缘自动滚屏、落地微反馈）与**防成环拦截**；真正的跨目录移动 IO 由宿主
- * （LeftSidebar → App 接线）在 onDropMove 回调里直连文件移动接口 `/move` 完成——
- * file_id / 版本链 / 阅读进度 100% 不断链由服务端身份保真语义保证。
- *
- * 交互约定：
- * - 「拖入目标文件夹」：目标行高亮 + 悬停折叠目录 450ms 自动展开 + 释放落地微反馈；
- * - 「行间落点」仅目录行是合法目标（文件行不吸掷）；拖向自身当前所在目录
- *   （无变化落点）100% 拦截，不高亮、不吸掷、drop 拒绝；
- * - 指针靠近滚动区上/下 24px 边缘时按帧自动滚屏（drag 全程 rAF 常驻，dragend 收敛）。
- */
 
 /** 悬停多少毫秒后自动展开折叠目录。 */
 export const AUTO_EXPAND_DELAY_MS = 450;
 /** 距滚动区上/下边缘多少像素内触发自动滚屏。 */
 export const AUTO_SCROLL_EDGE_PX = 24;
-/** 自动滚屏每帧步长（px）。 */
 const AUTO_SCROLL_STEP_PX = 9;
 /** 落地微反馈高亮持续（ms）。 */
 export const DROP_FLASH_MS = 900;
@@ -31,30 +16,19 @@ export const SIDEBAR_DRAG_MIME = 'application/x-guanlan-file-move';
 export const SIDEBAR_FOLDER_DRAG_MIME = 'application/x-guanlan-folder-move';
 
 export interface SidebarTreeDragOptions {
-  /** 悬停 450ms 后展开折叠目录（宿主接入 expandedFolders）。 */
   onAutoExpand: (folderPath: string) => void;
-  /** 滚动容器（树滚动区）；用于边缘自动滚屏。 */
   scrollContainerRef: RefObject<HTMLElement | null>;
-  /** 释放落点（文件）：直连文件移动接口 /move（宿主接线；有引用时宿主转确认弹窗）。 */
   onDropMove: (fileId: string, targetDir: string) => void;
-  /** 释放落点（文件夹）：直连 /api/v1/folders/move（防成环拦截后回调）。 */
   onDropMoveFolder?: (folderPath: string, targetParentDir: string) => void;
-  /** 拖拽是否启用（未接线移动能力时整组拖拽关闭）。 */
   enabled?: boolean;
 }
 
 export interface SidebarTreeDragState {
-  /** 正在拖拽的 file_id（null＝非文件拖拽中）。 */
   draggingFileId: string | null;
-  /** 正在拖拽的文件夹路径（null＝非文件夹拖拽中）。 */
   draggingFolderPath: string | null;
-  /** 是否正处于任一树内拖拽中。 */
   isDragging: boolean;
-  /** 被拖文件当前所在目录（防成环判定基准；''＝根）。 */
   draggingFromDir: string | null;
-  /** 当前合法悬停目标目录（''＝根；null＝不在合法目标上）。 */
   dropTargetDir: string | null;
-  /** 刚落地成功的目录（微反馈窗口内；宿主渲染闪烁高亮）。 */
   dropFlashDir: string | null;
 }
 
@@ -72,23 +46,14 @@ export function isMoveBlockedBySelfDrag(fromDir: string | null, targetDir: strin
 }
 
 export interface SidebarTreeDragApi extends SidebarTreeDragState {
-  /** 文件行 dragstart（宿主置 draggable）。 */
   beginDrag: (event: React.DragEvent, file: { file_id: string; folder: string }) => void;
-  /** 文件夹行 dragstart（宿主置 draggable）。 */
   beginFolderDrag: (event: React.DragEvent, folderPath: string) => void;
-  /** 目录行 dragover：高亮 + 450ms 自动展开计时 + 边缘滚屏坐标更新。 */
   handleFolderDragOver: (event: React.DragEvent, folderPath: string) => void;
-  /** 目录行 dragleave：清高亮与自动展开计时。 */
   handleFolderDragLeave: (event: React.DragEvent, folderPath: string) => void;
-  /** 目录行 drop：防成环拦截后回调 onDropMove / onDropMoveFolder；成功记微反馈。 */
   handleFolderDrop: (event: React.DragEvent, folderPath: string) => void;
-  /** dragend：全部收敛（计数器、rAF、状态）。 */
   endDrag: () => void;
-  /** 目录行是否为当前合法落点（宿主染目标高亮）。 */
   isDropTarget: (folderPath: string) => boolean;
-  /** 目录行是否被防成环拦截（宿主可用 title 提示）。 */
   isDropBlocked: (folderPath: string) => boolean;
-  /** 目录行是否处于落地微反馈窗口（宿主染闪烁）。 */
   isDropFlash: (folderPath: string) => boolean;
 }
 
@@ -124,7 +89,6 @@ export function useSidebarTreeDrag(options: SidebarTreeDragOptions): SidebarTree
     }
   }, []);
 
-  // 拖拽全程 rAF 循环：靠近容器上/下 24px 边缘按帧滚屏（quiet-md 手感）
   useEffect(() => {
     if (!isDragging) {
       stopScrollLoop();
@@ -181,16 +145,13 @@ export function useSidebarTreeDrag(options: SidebarTreeDragOptions): SidebarTree
   const beginDrag = useCallback(
     (event: React.DragEvent, file: { file_id: string; folder: string }) => {
       if (!enabled) return;
-      // 拒绝文本/链接默认拖拽语义；自体 MIME 校验（drop 端只认本 MIME）
       event.dataTransfer.effectAllowed = 'move';
       try {
         event.dataTransfer.setData(SIDEBAR_DRAG_MIME, file.file_id);
       } catch {
-        /* 某些 WebView 对自定义 MIME 受限时退化为仅内部状态判定 */
       }
       setDraggingFolderPath(null);
       setDraggingFileId(file.file_id);
-      // FileRecord.folder 与 LeftSidebar FolderNode.path 同一口径（'.' → '' 根）
       const fromDir = file.folder === '.' ? '' : file.folder;
       setDraggingFromDir(fromDir);
     },
@@ -204,7 +165,6 @@ export function useSidebarTreeDrag(options: SidebarTreeDragOptions): SidebarTree
       try {
         event.dataTransfer.setData(SIDEBAR_FOLDER_DRAG_MIME, folderPath);
       } catch {
-        /* WebView 受限时退化为内部状态判定 */
       }
       setDraggingFileId(null);
       setDraggingFromDir(null);
@@ -217,11 +177,10 @@ export function useSidebarTreeDrag(options: SidebarTreeDragOptions): SidebarTree
     (event: React.DragEvent, folderPath: string) => {
       if (!isDragging) return;
       if (isTargetBlocked(folderPath)) return;
-      event.preventDefault(); // 允许 drop
+      event.preventDefault();
       event.dataTransfer.dropEffect = 'move';
       lastPointerRef.current = { x: event.clientX, y: event.clientY };
       setDropTargetDir(folderPath);
-      // 悬停同一折叠目录累计 450ms 自动展开（根目录 '' 无需展开）
       if (folderPath && hoverPathRef.current !== folderPath) {
         clearHoverTimer();
         hoverPathRef.current = folderPath;
@@ -264,7 +223,6 @@ export function useSidebarTreeDrag(options: SidebarTreeDragOptions): SidebarTree
         return;
       }
 
-      // 落地微反馈：目标行短促高亮
       setDropFlashDir(folderPath);
       if (flashTimerRef.current !== null) window.clearTimeout(flashTimerRef.current);
       flashTimerRef.current = window.setTimeout(() => {

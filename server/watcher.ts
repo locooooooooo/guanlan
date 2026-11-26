@@ -1,10 +1,3 @@
-/**
- * 观澜 Node 对拍基线 —— 文件监听与增量对账
- *
- * 文件监听负责触发复核；启动对账、手动重扫和周期性核验负责恢复遗漏。
- * Node 的 fs.watch 在不同平台有差异（Windows 目录移动有限制），
- * 因此监听只作为「触发核验」的信号，不作为审计日志；真正的版本判定仍由 reconcile 做。
- */
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,24 +9,19 @@ export interface WatchChange {
   newEvents: number;
   newRevisions: number;
   generation: number;
-  /** 触发核验的路径（仅用于提示，不作为事实） */
   paths: string[];
 }
 
 export interface WorkspaceWatcherOptions {
   rootPath: string;
-  /** 目录级防抖：写文件常触发多次事件 */
   debounceMs?: number;
-  /** 两次监听核验之间的最小间隔（保护大工作区不被扫描风暴拖垮） */
   minIntervalMs?: number;
-  /** 核验函数：必须返回本次对账摘要 */
   reconcile: () => {
     scanned: number;
     newEvents: number;
     newRevisions: number;
     generation: number;
   };
-  /** 忽略的目录名 */
   ignoredDirs?: string[];
 }
 
@@ -53,7 +41,6 @@ export class WorkspaceWatcher extends EventEmitter {
     const root = path.resolve(this.options.rootPath);
     if (!fs.existsSync(root)) return false;
     try {
-      // recursive 在 Windows 与 macOS 可用；Linux 上抛错则退化为不监听
       this.watcher = fs.watch(root, { recursive: true }, (eventType, filename) => {
         if (!filename) return;
         const rel = String(filename).replace(/\\/g, '/');
@@ -62,7 +49,6 @@ export class WorkspaceWatcher extends EventEmitter {
         this.schedule();
       });
       this.watcher.on('error', () => {
-        // 监听失败不影响对账：定时/手动重扫仍可恢复遗漏
         this.emit('watch-error', new Error('fs.watch 监听不可用'));
       });
       return true;
@@ -93,12 +79,10 @@ export class WorkspaceWatcher extends EventEmitter {
     const minInterval = this.options.minIntervalMs ?? 8000;
     const sinceLast = Date.now() - this.lastRunAt;
     if (sinceLast < minInterval) {
-      // 距上次核验太近：合并为一次延后核验
       this.timer = setTimeout(() => void this.flush(), minInterval - sinceLast);
       return;
     }
     if (this.running) {
-      // 上一轮核验未完成：排队一次，不并发跑对账
       this.queued = true;
       return;
     }
@@ -163,7 +147,6 @@ export class ChangeBroadcaster {
       try {
         client.end();
       } catch {
-        /* 已断开 */
       }
     }
     this.clients.clear();

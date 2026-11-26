@@ -1,18 +1,3 @@
-/**
- * 阅读器锚点批注层。
- *
- * 组成：
- * · ReaderAnnotationComposer —— 批注撰写卡（保存批注 / 一键转 [P1 - 待确认] 决定项）。
- *   MD 转决定项走桌面壳 save_workspace_file CAS 桥（显式点击，冲突诚实拒绝）；
- *   SVG/PDF 转决定项只落本地证据表（停机红线：绝不改用户原始 SVG/PDF 字节）。
- * · ReaderAnnotationDrawer —— 当前版本的批注清单（定位=跳转+闪烁；删除；已转徽标）。
- * · SvgAnnotationOverlay —— SVG 图像容器上的框选叠加层（保存区域恒百分比定位，
- *   与缩放无关；拖拽区域在容器坐标内计算，pointer capture；绝不触碰 SVG 源字节）。
- * · PdfPageAnnotations —— 页级文字批注 chips（当前页）。
- *
- * SSR 纪律：纯受控组件，全部状态经 props 注入；pointer 交互仅客户端触发；
- * 关闭态零 DOM 输出，不扰动正常阅读态布局。
- */
 
 import React, { useRef, useState } from 'react';
 import { Check, Loader2, MapPin, StickyNote, Trash2, X } from 'lucide-react';
@@ -20,14 +5,11 @@ import { Button } from '../ui/primitives';
 import { formatAnnotationLocatorLabel, svgRegionStyle } from '../../utils/readerAnnotations';
 import type { ReaderAnnotation } from '../../utils/readerAnnotations';
 
-/* ═══════════════════ 批注撰写卡 ═══════════════════ */
 
 export interface AnnotationComposerProps {
   open: boolean;
-  /** 锚点人话标签（L42 / 框选区（12%, 34%）/ 第 3 页） */
   anchorLabel: string;
   paperLightMode: boolean;
-  /** 一键转决定项可用性（MD 无桌面壳桥 / 版本哈希未就绪时诚实禁用） */
   convertAvailable: boolean;
   convertDisabledReason?: string;
   busy: boolean;
@@ -127,7 +109,6 @@ export function ReaderAnnotationComposer({
   );
 }
 
-/* ═══════════════════ 批注清单抽屉 ═══════════════════ */
 
 export interface AnnotationDrawerProps {
   open: boolean;
@@ -229,13 +210,11 @@ export function ReaderAnnotationDrawer({
   );
 }
 
-/* ═══════════════════ SVG 框选叠加层 ═══════════════════ */
 
 export interface SvgAnnotationOverlayProps {
   annotations: ReaderAnnotation[];
   annotateMode: boolean;
   paperLightMode: boolean;
-  /** 反向定位闪烁的批注 id（决定/清单跳转到达时短暂高亮该区域） */
   flashAnnotationId: string | null;
   onRegionSelected: (region: { fx: number; fy: number; fw: number; fh: number }) => void;
 }
@@ -354,7 +333,6 @@ export function SvgAnnotationOverlay({
   );
 }
 
-/* ═══════════════════ PDF 页内批注 chips ═══════════════════ */
 
 export interface PdfPageAnnotationsProps {
   annotations: ReaderAnnotation[];

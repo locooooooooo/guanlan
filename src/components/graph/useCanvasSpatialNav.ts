@@ -1,16 +1,3 @@
-/**
- * 星图画布 Alt+方向键空间漫游——画布侧接线 Hook（挂载于 useGraphCanvasController）。
- *
- * 沿引用/因果连线进行空间漫游（与线性时间轴 J/K 遍历互补）。
- * 几何判定全在纯函数 utils/canvasSpatialNav（邻接 + 方向锥选邻）；本 Hook 负责：
- *  - window keydown 监听 Alt+方向键（Ctrl/Meta 组合不认；编辑面/浮层让路同全局护栏）；
- *  - 候选节点 = 事件卡（subAgentCards）+ 左侧来源卡 + 任务包富卡（packageGroupLayouts
- *    内渲染槽位），全部自带 zoom 层世界中心坐标——与渲染几何同源，不把富卡压成 (0,0)；
- *  - 跳转 = 同步选中态（事件卡/富卡各自落对应 state + onSelectFile 右栏联动）+
- *    applyProgrammaticZoom 居中（遵循 prefers-reduced-motion 动态静默降级 durationMs=0）。
- *
- * 无选中卡 / 无连线邻居 / 方向锥内无候选时静默（无路可走时不随机跳转无关卡）。
- */
 import { useEffect, useRef } from 'react';
 import {
   buildSpatialAdjacency,
@@ -38,26 +25,21 @@ import { RICH_CARD_W } from '../canvas/RichDocPreviewCard';
 export interface CanvasNavCard {
   id: string;
   fileId: string;
-  /** zoom 层用户空间中心坐标（与渲染卡片几何同源）。 */
   x: number;
   y: number;
   kind: 'event' | 'rich' | 'source';
   revisionId?: string;
-  /** true = 位于折叠扇出箱的第 3 张及以后，跳转前自动展开扇出组。 */
   hiddenInFold?: boolean;
 }
 
 export interface UseCanvasSpatialNavOptions {
   enabled: boolean;
   relations: readonly RelationEdge[];
-  /** 可漫游卡（带 zoom 层中心坐标），渲染同源顺序。 */
   cards: readonly CanvasNavCard[];
   selectedNodeId: string;
   selectedRichDocFileId: string | null;
   selectedFileId: string;
-  /** 选中同步（由 controller 按 card.kind 写 selectedCanvasNodeId / selectedRichDocFileId + onSelectFile）。 */
   onSelectCard: (card: CanvasNavCard) => void;
-  /** 目标居中运镜（durationMs 已经 effectiveMotionDurationMs 降级）。 */
   centerOn: (card: CanvasNavCard, durationMs: number) => void;
 }
 
@@ -172,7 +154,7 @@ export function useCanvasSpatialNav({
         neighborFileIds,
         direction,
       });
-      if (!next) return; // 锥内无连线邻居：诚实无路可走，不跳不相干的卡
+      if (!next) return;
       event.preventDefault();
       const nextCard = navCards.find((c) => c.id === next.id);
       if (!nextCard) return;

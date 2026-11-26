@@ -68,9 +68,7 @@ function directionVector(direction: SpatialDirection): { dx: number; dy: number 
 
 export interface PickSpatialNeighborInput {
   currentNode: SpatialNavNode;
-  /** 全部可漫游节点（含当前节点；函数内部排除）。 */
   nodes: readonly SpatialNavNode[];
-  /** 当前文件沿连线的邻居 fileId 集合（buildSpatialAdjacency 查表结果；空 = 无连线）。 */
   neighborFileIds: ReadonlySet<string>;
   direction: SpatialDirection;
 }
@@ -95,9 +93,8 @@ export function pickSpatialNeighbor(input: PickSpatialNeighborInput): SpatialNav
     const len = Math.hypot(dx, dy);
     if (len <= 0) continue;
     const cos = (dx * axis.dx + dy * axis.dy) / len;
-    if (cos < halfCos) continue; // 锥外：方向不符，跳过
+    if (cos < halfCos) continue;
     const angleDeg = (Math.acos(Math.min(1, Math.max(-1, cos))) * 180) / Math.PI;
-    // 主键=方向偏离角（度），副键=距离（像素/1000 折算），末键=id 字典序（确定性）
     const score = angleDeg + len / 1000;
     const isBetter =
       score < bestScore ||

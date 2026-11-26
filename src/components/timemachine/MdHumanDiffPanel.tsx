@@ -22,7 +22,6 @@ export type MdDiffPanelMode = 'human' | 'source';
 export interface MdHumanDiffPanelProps {
   result: MdHumanDiffResult;
   mode: MdDiffPanelMode;
-  /** 点击章节/决定/待办/代码行时跳转到新版对应行（宿主接 onRead 行级直达） */
   onJumpLine?: (line: number) => void;
 }
 
@@ -36,9 +35,7 @@ const CHANGE_COLOR: Record<string, string> = {
   removed: 'var(--cv-del)',
 };
 
-/** 源码行模式：unchanged 连续段超过该长度折叠为省略行（DOM 有界护栏） */
 const SOURCE_COLLAPSE_RUN = 10;
-/** 关键增删段渲染窗口数上限（超预算文档的聚簇可能有几十个；窗口列表有界） */
 const MAX_SEGMENT_WINDOWS = 40;
 
 export function MdHumanDiffPanel({ result, mode, onJumpLine }: MdHumanDiffPanelProps) {
@@ -52,7 +49,6 @@ export function MdHumanDiffPanel({ result, mode, onJumpLine }: MdHumanDiffPanelP
   );
 }
 
-// ---------- 标题结构 ----------
 
 function OutlineBlock({ outline, onJumpLine }: { outline: OutlineRow[]; onJumpLine?: (line: number) => void }) {
   const [showUnchanged, setShowUnchanged] = useState(false);
@@ -126,7 +122,6 @@ function OutlineBlock({ outline, onJumpLine }: { outline: OutlineRow[]; onJumpLi
   );
 }
 
-// ---------- 决定 / 待办变化 ----------
 
 function ElementChangesBlock({ result, onJumpLine }: { result: MdHumanDiffResult; onJumpLine?: (line: number) => void }) {
   const decisions = result.decisionChanges;
@@ -208,7 +203,6 @@ function TodoRow({ change, onJumpLine }: { change: TodoChange; onJumpLine?: (lin
   );
 }
 
-// ---------- 关键增删段 ----------
 
 function KeySegmentsBlock({ result }: { result: MdHumanDiffResult }) {
   const { lineDiff } = result;
@@ -289,15 +283,12 @@ function RowLine({ row }: { row: DiffRow }) {
   );
 }
 
-// ---------- 源码行 Diff（MD 源码模式与纯文本/代码时光机共用） ----------
 
 export interface LineDiffViewProps {
   lineDiff: LineDiffResult;
-  /** 仅换行符（CRLF/LF）差异但规范化后逐行一致时展示诚实说明 */
   lineEndingOnly?: boolean;
   onJumpLine?: (line: number) => void;
   ariaLabel?: string;
-  /** MD 源码模式保留 data-machine-md-source，文本/源码格式传 'text' 挂 data-machine-text-diff */
   variant?: 'md' | 'text';
 }
 
@@ -359,7 +350,6 @@ type RenderItem =
   | { kind: 'rows'; rows: DiffRow[] }
   | { kind: 'collapsed'; count: number; fromLine: number; toLine: number };
 
-/** 连续 unchanged 段 > SOURCE_COLLAPSE_RUN 行 → 保留首尾各 3 行 + 省略行（DOM 有界） */
 function collapseUnchangedRuns(rows: DiffRow[]): RenderItem[] {
   const items: RenderItem[] = [];
   let run: DiffRow[] = [];

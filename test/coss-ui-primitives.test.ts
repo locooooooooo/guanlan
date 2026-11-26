@@ -1,12 +1,3 @@
-/**
- * coss.com/ui 原语基座、全局明暗令牌与 appThemeStore 契约测试
- *
- * 覆盖：
- * 1. cn() 样式合并与 Tailwind 冲突消解；
- * 2. appThemeStore 三态解析（light / dark / system）、订阅通知与同值短路；
- * 3. 基础 11 个 coss 原语 SSR 渲染、data-slot 槽位契约、Base UI useRender 多态与 reduced-motion；
- * 4. src/index.css 的 @theme inline、:root/.dark 语义令牌完备性与 reduced-motion 停帧覆盖。
- */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -80,7 +71,6 @@ test('appThemeStore：三态解析纯函数、订阅通知与同值短路', () =
     events.push([getAppThemeMode(), getResolvedAppTheme()]);
   });
 
-  // 初始默认 light
   assert.equal(getAppThemeMode(), 'light');
   assert.equal(getResolvedAppTheme(), 'light');
 
@@ -88,7 +78,6 @@ test('appThemeStore：三态解析纯函数、订阅通知与同值短路', () =
   assert.equal(getAppThemeMode(), 'dark');
   assert.equal(getResolvedAppTheme(), 'dark');
 
-  // 同值再次 apply 短路不重复通知
   applyAppTheme('dark', false);
   assert.equal(events.length, 1);
 
@@ -97,7 +86,6 @@ test('appThemeStore：三态解析纯函数、订阅通知与同值短路', () =
   assert.equal(events.length, 2);
 
   off();
-  // 还原默认 light 且退订后不再收到通知
   applyAppTheme('light', false);
   assert.equal(events.length, 2);
   assert.equal(getAppThemeMode(), 'light');
@@ -150,7 +138,6 @@ test('Badge / Kbd / Separator / Spinner / Skeleton 原语 SSR 契约', () => {
   assert.ok(skelHtml.includes('glx-skeleton'));
   assert.ok(skelHtml.includes('aria-hidden="true"'));
 
-  // 确认 GlassSkeleton 经统一入口可直引无回归
   const glassHtml = renderToStaticMarkup(createElement(GlassSkeleton, { lines: 2 }));
   assert.ok(glassHtml.includes('data-glass-skeleton=""'));
 });

@@ -26,22 +26,7 @@ import {
   type StatementDetailDTO,
 } from '../src/services/workspaceClient';
 
-/**
- * decision-resolve-01：Inline 拍板闭环。
- *
- * 覆盖：
- * - 卡点块解析：[P0/P1/P2 - 待确认] 标记 + 标准字段行 + 围栏字面量不识别
- *   + 已定案块 + 组合优先级（blocking 语义）；
- * - 「可选方案/推荐理由」预设选项提取（章节列表 / 行内标签 / 推荐理由不进选项）；
- * - 拍板载荷组装（trim、空可选省略键、范围+日期合并）；
- * - 确认人/角色本机记忆（node 无 window 安全降级 + 去重上限）；
- * - statement ↔ 区块行号匹配；阻塞清零判定；
- * - 契约 C 全链（本地 http 桩）：恒 202 → job 轮询 → report.writeback 三分支
- *   （cas_ok=true / cas_ok=false 存草案 / 任务失败）+ 409 CONFLICT（archived 主体）
- *   + 轮询超时 JOB_POLL_TIMEOUT。
- */
 
-// ---------- http 桩（workspace-client-v1 同款起桩纪律） ----------
 
 type Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => void;
 
@@ -70,7 +55,6 @@ async function startStub(
   };
 }
 
-// ---------- 夹具 ----------
 
 const DECISION_DOC = [
   '# 03-待确认事项',
@@ -114,7 +98,6 @@ function blockAtLine(blocks: DecisionBlock[], line: number): DecisionBlock {
   return b;
 }
 
-// ---------- 解析 ----------
 
 describe('parseDecisionBlocks 卡点块解析', () => {
   const blocks = parseDecisionBlocks(DECISION_DOC);
@@ -171,7 +154,6 @@ describe('parseDecisionBlocks 卡点块解析', () => {
   });
 });
 
-// ---------- 可选方案提取 ----------
 
 describe('extractDecisionOptions 可选方案/推荐理由', () => {
   test('章节列表收集 + 去重；推荐理由行不进选项', () => {
@@ -196,7 +178,6 @@ describe('extractDecisionOptions 可选方案/推荐理由', () => {
   });
 });
 
-// ---------- 载荷组装 ----------
 
 describe('buildDecisionResolvePayload 契约 C 载荷', () => {
   test('全字段：范围+日期合并进 effective_scope、date 独立透传、空 note 省略', () => {
@@ -243,7 +224,6 @@ describe('buildDecisionResolvePayload 契约 C 载荷', () => {
   });
 });
 
-// ---------- 本机记忆 ----------
 
 describe('确认人/角色本机记忆（无成员数据源，偏差登记）', () => {
   test('node 无 window 环境：load 返回空记忆、remember 只更新内存副本不炸', () => {
@@ -251,7 +231,6 @@ describe('确认人/角色本机记忆（无成员数据源，偏差登记）', 
     assert.deepEqual(memory, { confirmers: [], roles: [] });
     const next = rememberDecisionIdentity(memory, '架构组', '负责人');
     assert.deepEqual(next, { confirmers: ['架构组'], roles: ['负责人'] });
-    // 原记忆不被改写（纯函数语义）
     assert.deepEqual(memory, { confirmers: [], roles: [] });
   });
 
@@ -263,13 +242,11 @@ describe('确认人/角色本机记忆（无成员数据源，偏差登记）', 
     memory = rememberDecisionIdentity(memory, '用户3', '负责人');
     assert.equal(memory.confirmers[0], '用户3');
     assert.equal(memory.confirmers.filter((c) => c === '用户3').length, 1);
-    // 空白值不入列
     const noBlank = rememberDecisionIdentity(memory, '  ', '');
     assert.deepEqual(noBlank.confirmers, memory.confirmers);
   });
 });
 
-// ---------- 陈述匹配与清零判定 ----------
 
 const STATEMENTS: StatementDetailDTO[] = [
   {
@@ -332,7 +309,6 @@ describe('matchStatementToBlock 与阻塞清零', () => {
   });
 });
 
-// ---------- 契约 C 全链（恒 202 → job 轮询 → report 分支） ----------
 
 describe('拍板回写全链（http 桩）', () => {
   test('cas_ok=true 分支：202 → completed → report.writeback 落 new_revision_id', async () => {
@@ -370,7 +346,6 @@ describe('拍板回写全链（http 桩）', () => {
         decision: '方案A：两阶段状态锁',
         confirmer: '架构组',
       });
-      // 恒 202：受理即返回，无 409 路径
       assert.equal(accepted.ok, true);
       assert.equal(accepted.status, 202);
       assert.equal(accepted.data.decision_id, 'dec_1');

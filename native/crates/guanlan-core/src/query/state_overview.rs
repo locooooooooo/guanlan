@@ -23,14 +23,12 @@ pub fn state_overview(
     initiative_id: Option<&str>,
 ) -> Result<StateOverview, GuanlanError> {
     if store.schema_version()? < 2 {
-        // schema 版本低于 2 的旧库尚无状态投影表，返回空投影（首轮 reconcile 后有数）
         return Ok(StateOverview::default());
     }
     let conn = store.conn();
 
     let mut initiatives: Vec<InitiativeOverview> = Vec::new();
     {
-        // 统一用可选绑定：? IS NULL OR initiative_id = ?（Option<&str> 绑 NULL）
         let mut stmt = conn
             .prepare(
                 "SELECT * FROM initiatives WHERE workspace_id = ?
@@ -64,7 +62,6 @@ pub fn state_overview(
 
     let mut artifacts: Vec<ArtifactOverview> = Vec::new();
     {
-        // files 内连接：file_id 复用 files 主键，files 行缺失视为已回收
         let mut stmt = conn
             .prepare(
                 "SELECT a.*, f.current_path, f.title
@@ -116,7 +113,6 @@ mod tests {
     use super::*;
     use crate::test_support::{cleanup_dir, FixtureDb};
 
-    /// v0/v1 库（新表未建）：投影为空而非报错
     #[test]
     fn pre_v2_database_returns_empty_overview() {
         let fixture = FixtureDb::new("state-overview-empty");

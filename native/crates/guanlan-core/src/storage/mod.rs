@@ -50,8 +50,6 @@ pub struct FileRow {
     pub role: String,
     pub first_observed_at: String,
     pub last_observed_at: String,
-    // 列声明 INTEGER，但 node:sqlite 写入的是 fs.stat 的 mtimeMs（带小数，落库为 REAL）。
-    // 真实库 2709 行里 2679 行是 REAL，读取必须按浮点兼容两种存储类型。
     pub last_mtime_ms: f64,
     pub last_revision_id: Option<String>,
     pub status: String,
@@ -131,8 +129,6 @@ pub struct EdgeRow {
     pub locator_end: Option<i64>,
     pub reason: String,
 }
-
-// ---------- schema v2 新表行结构（contract-storage.md §4.3） ----------
 
 /// initiatives 行（专项；阶段/状态 wire 词见
 /// `crate::index::state_machine`）
@@ -264,8 +260,6 @@ pub struct JobRunRow {
     pub updated_at: String,
 }
 
-// ---------- 行映射（列名与 WorkspaceStore.ts 的 SELECT * 逐字一致） ----------
-
 pub(crate) fn workspace_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRecord> {
     Ok(WorkspaceRecord {
         workspace_id: row.get("workspace_id")?,
@@ -367,8 +361,6 @@ pub(crate) fn edge_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<EdgeRow> {
         reason: row.get("reason")?,
     })
 }
-
-// ---------- schema v2 新表行映射（列名与 §4.3 DDL 逐字一致） ----------
 
 pub(crate) fn initiative_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<InitiativeRow> {
     Ok(InitiativeRow {
@@ -508,9 +500,7 @@ pub struct ReadonlyStore {
     conn: Connection,
     data_dir: PathBuf,
     blobs_dir: PathBuf,
-    /// 认领到的 workspace_id（行内容每次请求现读，见 [`Self::workspace`]）
     workspace: Option<String>,
-    /// 认领时的 root_path 原始串（panic 后重建连接需重新认领工作区）
     root_path: Option<String>,
 }
 
@@ -532,8 +522,6 @@ impl ReadonlyStore {
         let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(
             |e| GuanlanError::Internal(format!("打开只读库失败 {}: {e}", db_path.display())),
         )?;
-        // 连接级 PRAGMA（契约 §1.2 中不落盘的两条）：busy_timeout=5000、foreign_keys=ON。
-        // journal_mode=WAL 属写操作，只读连接不执行——WAL 模式沿用库文件既有状态。
         conn.busy_timeout(Duration::from_millis(5000))
             .map_err(|e| GuanlanError::Internal(format!("设置 busy_timeout 失败: {e}")))?;
         conn.pragma_update(None, "foreign_keys", 1)
@@ -595,9 +583,7 @@ impl ReadonlyStore {
         };
         match row {
             Some(row) => {
-                // 只缓存认领到的 workspace_id；行内容每次请求现读（见 workspace()）
                 self.workspace = Some(row.workspace_id.clone());
-                // 留下 root_path 供 reopen 重新认领
                 self.root_path = Some(root_path.to_owned());
                 Ok(row)
             }
@@ -662,7 +648,6 @@ impl ReadonlyStore {
         Self::read_schema_version(&self.conn)
     }
 
-    /// schema 版本门禁（高版本只读门禁：旧实现若不能理解新结构，禁止盲写或错误解析）
     fn validate_schema_version(conn: &Connection) -> Result<(), GuanlanError> {
         let version = Self::read_schema_version(conn)?;
         if version > migration::CURRENT_SCHEMA_VERSION {
@@ -684,8 +669,6 @@ impl ReadonlyStore {
         conn.query_row("PRAGMA user_version", [], |row| row.get(0))
             .map_err(|e| GuanlanError::Internal(format!("读取 PRAGMA user_version 失败: {e}")))
     }
-
-    // ---------- 路径与定位（契约 §3.2/§3.3） ----------
 
     /// 数据目录（`<dataDir>/index.db` 与 `<dataDir>/blobs/` 的父目录）
     pub fn data_dir(&self) -> &Path {
@@ -749,13 +732,9 @@ impl ReadonlyStore {
         Ok((self.blob_path_for(&rev.content_hash)?, rev))
     }
 
-    // ---------- 行查询（供 query/application 模块复用） ----------
-
     pub(crate) fn conn(&self) -> &Connection {
         &self.conn
     }
-
-    // ---------- 查询执行通道支持（有界查询通道，隔离读连接并传递取消） ----------
 
     /// 安装查询取消守护：SQLite progress handler 每条 VM 指令回调一次 `check`，
     /// 返回 `true` 即打断当前语句执行（执行层在请求断开/执行超时时置位）。
@@ -861,7 +840,6 @@ impl ReadonlyStore {
         }
     }
 
-    /// 每工作区当前最大事件 seq（WorkspaceStore.ts:657-662）
     pub(crate) fn max_event_seq(&self, workspace_id: &str) -> Result<i64, GuanlanError> {
         self.conn
             .query_row(
@@ -872,7 +850,6 @@ impl ReadonlyStore {
             .map_err(internal_sql)
     }
 
-    /// hasBaseline（WorkspaceStore.ts:374-379）
     pub(crate) fn has_baseline(&self, workspace_id: &str) -> Result<bool, GuanlanError> {
         let n: i64 = self
             .conn
@@ -885,9 +862,6 @@ impl ReadonlyStore {
         Ok(n > 0)
     }
 
-    /// 统计口径（契约 §1.4 既有怪癖，WorkspaceStore.ts:766-779）：
-    /// files/events/statements/edges 按 workspace_id 过滤，
-    /// revisions 与 blobs 是全表计数（无 WHERE）。
     pub(crate) fn counts(
         &self,
         workspace_id: &str,
@@ -928,19 +902,10 @@ impl ReadonlyStore {
         })
     }
 
-    /// 只读侧事务形态：短读事务（BEGIN DEFERRED … COMMIT/ROLLBACK）。
-    ///
-    /// 契约 §1.1 要求 bootstrap「在一个短读快照内生成」：DEFERRED 读事务把多条
-    /// SELECT 固定在同一一致性视图上，防止并发写入者穿插提交。只读连接上的
-    /// DEFERRED 事务只持共享锁，不产生任何写行为（契约 §4-1 只读边界不变；
-    /// 事务结束 COMMIT 不落盘——读事务无内容可提交）。
     pub(crate) fn read_txn<T>(
         &self,
         f: impl FnOnce(&Connection) -> Result<T, GuanlanError>,
     ) -> Result<T, GuanlanError> {
-        // RAII 事务——守卫在 Drop 时若仍未提交则 ROLLBACK，
-        // 覆盖「正常返回 / Err 返回 / panic unwind」三条路径（防止 panic 时
-        // BEGIN 已开、事务永不结束，导致后续查询被钉在旧快照上或阻碍 checkpoint）
         let mut guard = ReadTxnGuard::begin(&self.conn)?;
         let value = f(&self.conn)?;
         guard.commit()?;
@@ -1001,18 +966,11 @@ impl ReadonlyStore {
     }
 }
 
-/// RAII 读事务守卫。
-///
-/// 只有显式 `commit()` 成功后才置 `done`；Err 返回、panic unwind、提前 drop 都会
-/// 走到 `Drop` 的 ROLLBACK。回滚失败无法从 Drop 里抛错，因此记入 [`TXN_POISONED`]，
-/// 由执行器在归池前检查——脏连接退出复用（走 `ReadonlyStore::reopen`）。
 pub(crate) struct ReadTxnGuard<'c> {
     conn: &'c Connection,
     done: bool,
 }
 
-/// 事务清理失败 / panic 中断过的标记（进程级）。
-/// 执行器归池前检查并清位：置位期间不把连接放回池，改为重建。
 pub(crate) static TXN_POISONED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
@@ -1029,7 +987,6 @@ impl<'c> ReadTxnGuard<'c> {
                 Ok(())
             }
             Err(e) => {
-                // 提交失败：让 Drop 尝试回滚；回滚也失败则标记脏连接
                 self.rollback_or_mark();
                 self.done = true;
                 Err(internal_sql(e))
@@ -1047,14 +1004,12 @@ impl<'c> ReadTxnGuard<'c> {
 impl Drop for ReadTxnGuard<'_> {
     fn drop(&mut self) {
         if !self.done {
-            // 正常 Err 路径或 panic unwind：回滚并释放读快照
             self.rollback_or_mark();
             self.done = true;
         }
     }
 }
 
-/// 递归累加目录下常规文件字节总和（只看 `metadata().len()`，不打开文件内容）。
 fn dir_files_bytes(dir: &Path) -> u64 {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return 0;
@@ -1078,13 +1033,10 @@ pub fn take_txn_poisoned() -> bool {
     TXN_POISONED.swap(false, std::sync::atomic::Ordering::SeqCst)
 }
 
-/// content_hash 形态校验：64 位 ASCII 十六进制（大小写均收）。
-/// 只做形态校验，不做内容摘要复核——快照本身的可读性由读取路径的门禁判定。
 pub(crate) fn is_valid_content_hash(hash: &str) -> bool {
     hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
-/// 错误信息里回显 hash 的安全截断（避免把异常字节/超长串整个打进日志）
 fn redact_hash(hash: &str) -> String {
     let shown: String = hash.chars().take(16).collect();
     if hash.chars().count() > 16 {
@@ -1098,8 +1050,6 @@ fn redact_hash(hash: &str) -> String {
 pub fn internal_sql(e: rusqlite::Error) -> GuanlanError {
     GuanlanError::Internal(format!("SQL 错误: {e}"))
 }
-
-// ---------- 数据目录定位（契约 §3.1 [逐字兼容]） ----------
 
 /// 显式 dataDir 缺省时的目录解析（WorkspaceStore.ts:269-274）：
 /// ```text
@@ -1143,8 +1093,6 @@ pub fn default_data_dir(root_path: &str) -> Result<PathBuf, GuanlanError> {
     )
 }
 
-/// os.homedir()（Windows）的近似：USERPROFILE → HOMEDRIVE+HOMEPATH → None。
-/// 只在 LOCALAPPDATA 缺失的异常环境下被使用。
 fn home_dir() -> Option<PathBuf> {
     if let Ok(profile) = std::env::var("USERPROFILE") {
         if !profile.is_empty() {
@@ -1170,8 +1118,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
-    /// schema 门禁（契约 §1.3/§4-1）：未知版本拒绝打开，不迁移不写入。
-    /// 当前最高支持版本为 v2（§4.3），未知版本用 3 验证。
     #[test]
     fn readonly_open_rejects_unknown_schema_version() {
         let fixture = FixtureDb::new("schema-gate");
@@ -1188,8 +1134,6 @@ mod tests {
         cleanup(&fixture.dir);
     }
 
-    /// 旧 Node 库 user_version 恒为 0（契约 §1.3），版本 1 与版本 2（§4.3）为
-    /// Rust 写入侧支持的版本：三者都放行
     #[test]
     fn readonly_open_accepts_versions_0_and_1_and_2() {
         let fixture = FixtureDb::new("schema-accept");
@@ -1221,7 +1165,6 @@ mod tests {
         cleanup(&fixture2.dir);
     }
 
-    /// 缺库文件直接失败（只读打开已有数据，不建库）
     #[test]
     fn open_missing_db_fails() {
         let dir = std::env::temp_dir().join(format!("guanlan-core-missing-{}", std::process::id()));
@@ -1231,15 +1174,12 @@ mod tests {
         cleanup(&dir);
     }
 
-    /// 数据目录解析顺序（契约 §3.1 [逐字兼容]）：
-    /// GUANLAN_DATA_DIR 整体替换 base → LOCALAPPDATA → homedir\AppData\Local 兜底
     #[test]
     fn default_data_dir_resolution_order() {
         let root = r"D:\notebooks\demo";
         let root_key = crate::domain::root_key_of(root).expect("rootKey");
         let home = Path::new(r"C:\Users\测试用户");
 
-        // 1) GUANLAN_DATA_DIR 优先且整体替换（含 Guanlan/workspaces 段不追加）
         let env = |k: &str| match k {
             "GUANLAN_DATA_DIR" => Some(r"C:\obsidian-data".to_owned()),
             "LOCALAPPDATA" => Some(r"C:\Users\测试用户\AppData\Local".to_owned()),
@@ -1252,7 +1192,6 @@ mod tests {
             "GUANLAN_DATA_DIR 应整体替换 base"
         );
 
-        // 2) 无 GUANLAN_DATA_DIR → LOCALAPPDATA/Guanlan/workspaces/<rootKey>
         let env = |k: &str| match k {
             "LOCALAPPDATA" => Some(r"C:\Users\测试用户\AppData\Local".to_owned()),
             _ => None,
@@ -1265,7 +1204,6 @@ mod tests {
             ))
         );
 
-        // 3) LOCALAPPDATA 也缺 → homedir\AppData\Local 兜底（WorkspaceStore.ts:270-272）
         let env = |_k: &str| -> Option<String> { None };
         let dir = default_data_dir_with(root, &env, Some(home)).expect("解析失败");
         assert_eq!(
@@ -1276,8 +1214,6 @@ mod tests {
         );
     }
 
-    /// 快照定位（契约 §3.2）：blobs/<hash 前 2 位>/<完整 hash>；
-    /// 按 revision_id / file_id 两条定位路径；缺失主体按 NOT_FOUND 报错
     #[test]
     fn snapshot_location_by_revision_and_file() {
         let fixture = FixtureDb::new("snapshot-locate");
@@ -1329,7 +1265,6 @@ mod tests {
             "NOT_FOUND",
         );
 
-        // 无 last_revision_id 的文件定位不到当前版快照
         let file2 = fixture.file(&ws_id, "f_norev", "b.md", "md", "方案", "active", None);
         assert_code(
             store.snapshot_path_for_file(&file2).map(|_| ()),
@@ -1338,8 +1273,6 @@ mod tests {
         cleanup(&fixture.dir);
     }
 
-    /// files.last_mtime_ms 真实库以 REAL 为主（node:sqlite 写入 fs.stat 的带小数 mtimeMs），
-    /// 声明的 INTEGER 列内两种存储类型并存：读取必须都兼容（回归：真实库 bootstrap 曾因此 500）
     #[test]
     fn file_row_reads_real_and_integer_mtime() {
         let fixture = FixtureDb::new("mtime-real");

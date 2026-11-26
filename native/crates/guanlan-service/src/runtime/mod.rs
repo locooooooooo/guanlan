@@ -19,12 +19,7 @@ use sha2::{Digest, Sha256};
 
 use guanlan_core::error::GuanlanError;
 
-/// 服务锁文件名（位于数据目录内：`<dataDir>/service.lock`）。
-/// 锁目标是文件上的一段字节区间（OS 级锁），文件本身只承载诊断信息
-/// （进程号/取得时间），**占用判定完全不依赖其内容**——即便进程崩溃留下
-/// 残留文件，重启实例仍能正常取得锁。
 pub(crate) const LOCK_FILE_NAME: &str = "service.lock";
-/// 诊断侧车文件（Windows 排他锁会阻止另一进程读 `service.lock`，诊断信息落独立只读文件）
 pub(crate) const LOCK_INFO_FILE_NAME: &str = "service.lock.info";
 
 /// 同工作区 OS 级排他锁。持有期间（整个服务进程生命周期）其他实例
@@ -34,11 +29,10 @@ pub(crate) const LOCK_INFO_FILE_NAME: &str = "service.lock.info";
 /// 与被杀死）由操作系统关闭句柄释放锁——这正是「不能只靠 PID 文件」的差别。
 pub struct WorkspaceLock {
     file: std::fs::File,
-    #[allow(dead_code)] // 诊断与测试断言用（锁定目标可观测）
+    #[allow(dead_code)]
     path: PathBuf,
 }
 
-/// Debug 手工实现（File 无 Debug；只报路径不暴露句柄），供 expect_err 断言
 impl std::fmt::Debug for WorkspaceLock {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WorkspaceLock")
@@ -57,7 +51,6 @@ impl WorkspaceLock {
 
 impl Drop for WorkspaceLock {
     fn drop(&mut self) {
-        // 释放失败不掩盖业务错误：句柄关闭时内核会兜底释放
         let _ = self.file.unlock();
         if let Some(dir) = self.path.parent() {
             let _ = std::fs::remove_file(dir.join(LOCK_INFO_FILE_NAME));
@@ -65,7 +58,6 @@ impl Drop for WorkspaceLock {
     }
 }
 
-/// Windows `ERROR_LOCK_VIOLATION`（33）：锁区间已被他人持有
 const ERROR_LOCK_VIOLATION: i32 = 33;
 
 /// 对数据目录取得同工作区排他锁。
@@ -92,7 +84,6 @@ pub fn acquire_workspace_lock(data_dir: &Path) -> Result<WorkspaceLock, GuanlanE
         .map_err(|e| {
             GuanlanError::Internal(format!("无法打开服务锁文件 {}：{e}", path.display()))
         })?;
-    // 立即失败的独占锁：拿不到说明另一实例正在占用同一工作区
     if let Err(e) = file.try_lock_exclusive() {
         let occupied = e.kind() == std::io::ErrorKind::WouldBlock
             || e.raw_os_error() == Some(ERROR_LOCK_VIOLATION);
@@ -102,8 +93,6 @@ pub fn acquire_workspace_lock(data_dir: &Path) -> Result<WorkspaceLock, GuanlanE
             GuanlanError::Internal(format!("获取服务锁失败 {}：{e}", path.display()))
         });
     }
-    // 写入诊断信息（非占用判定依据，见 LOCK_FILE_NAME 注释）；
-    // 运行信息只落 stderr 与 stdout 端点行，不在此处写 index.db（见 main.rs）。
     let pid_line = format!(
         "pid={}\nacquired_at_epoch_ms={}\n",
         std::process::id(),
@@ -114,7 +103,6 @@ pub fn acquire_workspace_lock(data_dir: &Path) -> Result<WorkspaceLock, GuanlanE
     Ok(WorkspaceLock { file, path })
 }
 
-/// 覆写锁文件诊断内容（先置长度为 0；失败静默，诊断信息非关键路径）
 fn reset_and_write(file: &std::fs::File, content: &str) -> std::io::Result<()> {
     use std::io::{Seek, SeekFrom, Write};
     let mut f = file;
@@ -130,12 +118,6 @@ fn now_epoch_ms() -> u128 {
         .unwrap_or(0)
 }
 
-/// dist 静态资源目录解析（发布时由 Rust 服务提供 dist）。
-///
-/// 解析顺序：`GUANLAN_DIST_DIR` 环境变量（显式指定）→ 可执行文件同级的
-/// `dist/`。返回的目录**存在且是目录**才返回 Some；http 层据此决定是否
-/// 挂载静态资源（契约要求「dist 目录存在才挂」）。开发期由 Vite 提供前端，
-/// 该解析通常返回 None，静态层不参与。
 pub(crate) fn resolve_dist_dir() -> Option<PathBuf> {
     if let Ok(env_dir) = std::env::var("GUANLAN_DIST_DIR") {
         if !env_dir.is_empty() {
@@ -171,7 +153,6 @@ mod tests {
     use super::*;
     use guanlan_core::error::GuanlanError;
 
-    /// 独占锁语义：同一数据目录，第二个实例立即失败并给出 ROOT_IN_USE（契约 §0.2）
     #[test]
     fn second_instance_gets_root_in_use() {
         let dir = std::env::temp_dir().join(format!(
@@ -189,7 +170,6 @@ mod tests {
             GuanlanError::RootInUse => {}
             other => panic!("应报 ROOT_IN_USE，实际 {other:?}"),
         }
-        // 错误包络语义：wire 码与 HTTP 状态（409）逐字对齐契约 §0.2
         assert_eq!(second.code(), "ROOT_IN_USE");
         assert_eq!(second.http_status(), 409);
         let envelope = second.to_envelope(None);
@@ -200,7 +180,6 @@ mod tests {
             "包络应含错误码：{json}"
         );
 
-        // 释放后（模拟首实例退出）新实例可立即取得锁——证明占用不依赖残留文件
         drop(first);
         let third = acquire_workspace_lock(&dir).expect("释放后应可重新取得锁");
         drop(third);
@@ -208,8 +187,6 @@ mod tests {
         std::fs::remove_dir_all(&dir).expect("清理临时目录");
     }
 
-    /// 实例身份：同一 (root, port) 两次生成都落在 inst_ 前缀 + 16 hex 形状
-    /// （纳秒时钟参与，值不必不同；形状与长度必须稳定，契约 §1.2）
     #[test]
     fn instance_id_shape_is_stable() {
         let root = Path::new("H:\\demo");
@@ -220,7 +197,6 @@ mod tests {
         assert_eq!(again.len(), id.len());
     }
 
-    /// dist 解析：不存在返回 None；环境变量指向存在目录时优先
     #[test]
     fn resolve_dist_dir_by_env() {
         let dir = std::env::temp_dir().join(format!(
@@ -236,8 +212,6 @@ mod tests {
         std::fs::remove_dir_all(&dir).expect("清理");
     }
 }
-
-// ===== SSE 通知中枢（contract-query-api.md §2.2：hello/workspace-change/心跳）=====
 
 /// 计算工作区根目录的稳定 16 位 hex 身份键（与存储层 `default_data_dir` 同源）。
 pub fn workspace_root_key(root: &str) -> Result<String, GuanlanError> {

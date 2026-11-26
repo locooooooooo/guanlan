@@ -1,13 +1,3 @@
-/**
- * Ctrl+K 命令面板——结果组装纯函数（零 React 依赖，node:test 可单测）。
- *
- * 双层刷新口径（每敲击至结果列表刷新 <50ms）：
- *   - 本地层（同步）：files 全量摘要（App 已在内存）按关键词做路径/标题子串过滤 +
- *     语法过滤（@日期/type:/status:待拍板/in:事项）——每敲击即时刷新；
- *   - 全文层（异步并入）：服务端 `GET /api/v1/search` 的正文级命中在防抖后到达，
- *     按 score 优先、file_id 去重合并——列表先出本地结果，全文命中随后并入。
- *   空查询：最近浏览 Top 20（readingStates.updated_at 排序）+ 常驻动作行。
- */
 
 import type { ArtifactStateView, InitiativeStateView, SearchHitDto } from '../services/apiTypes';
 import {
@@ -36,30 +26,21 @@ export interface PaletteFileLite {
 /** 面板条目（文件 / 动作 / 提示行统一模型） */
 export interface PaletteItem {
   kind: 'file' | 'action';
-  /** 稳定 key（列表渲染与键盘选中） */
   key: string;
   title: string;
   subtitle?: string;
   format?: string;
-  /** 服务端 matchStrategy（四态；文件名本地命中为 filename_match） */
   matchStrategy?: string;
-  /** full_text | svg_text | pdf_page_text | office_structured | filename_only | decision */
   coverage?: string;
   fileId?: string;
   revisionId?: string;
   relativePath?: string;
-  /** 命中行原文（服务端 snippet；高亮在组件层按关键词切分段） */
   snippetText?: string;
-  /** 待拍板数（artifact pending_p0+p1；仅文件条目携带） */
   pendingDecisions?: number;
-  /** 命中来源挂载工作区（跨项目命中携带；主区命中缺省） */
   sourceWorkspace?: { name: string; rootKey: string };
-  /** 多项目并存：命中来自其他受管项目时携带，Enter 直接零重启切焦点并打开完整阅读器 */
   projectId?: string;
   projectName?: string;
-  /** 动作 id（kind=action） */
   actionId?: 'jump-today' | 'open-basket' | 'locate-root' | 'switch-workspace' | 'mount-workspace';
-  /** 动作参数（switch-workspace 的 root 等） */
   payload?: string;
   score: number;
 }
@@ -82,20 +63,16 @@ export function localFileHits(
     if (file.status && file.status !== 'active') continue;
     const artifact = artifactByFile.get(file.file_id);
     const pending = (artifact?.pending_p0 ?? 0) + (artifact?.pending_p1 ?? 0);
-    // ① 语法过滤（先于关键词，便宜且筛除面大）
     if (query.types.length && !query.types.includes(file.format)) continue;
     if (query.pendingDecisionOnly && pending <= 0) continue;
     if (dayFrom && dayTo && file.last_observed_at) {
-      // YYYY-MM-DD 字典序即时间序（同日归属按本地日口径）；缺 last_observed_at 不过滤
       const day = localDayOf(new Date(file.last_observed_at));
       if (day < dayFrom || day > dayTo) continue;
     }
-    // ② 关键词过滤（路径/标题子串；正文级命中由服务端层补充）
     const kw = query.keyword;
     if (kw && !matchesKeyword(file.relative_path, kw) && !matchesKeyword(file.title, kw)) {
       continue;
     }
-    // 排序微调：有阅读记录的文件略靠前（recency 越新越靠前）
     const recency = readingRecency(readingStates[file.file_id]);
     const score = recency > 0 ? 40 + Math.min(10, Math.floor(recency / 86400000)) : 40;
     items.push({
@@ -114,7 +91,6 @@ export function localFileHits(
     });
     if (items.length >= limit * 2) break;
   }
-  // 同分按路径字典序稳定排序（不做复杂打分——搜索主排序来自服务端层）
   items.sort((a, b) => b.score - a.score || a.subtitle!.localeCompare(b.subtitle!));
   return items.slice(0, limit);
 }
@@ -250,7 +226,6 @@ export function assemblePaletteResults(input: {
   files: PaletteFileLite[];
   readingStates: Record<string, ReadingState | undefined>;
   serverItems: PaletteItem[];
-  /** 挂载区跨库层（带 sourceWorkspace 来源徽标；无在线挂载时为空） */
   crossItems?: PaletteItem[];
   initiatives: InitiativeStateView[];
   artifacts: ArtifactStateView[];
@@ -259,11 +234,9 @@ export function assemblePaletteResults(input: {
 }): PaletteItem[] {
   const { query, files, readingStates, serverItems, crossItems = [], limit } = input;
   if (!query.keyword && !query.types.length && !query.pendingDecisionOnly && !query.dateFrom && !query.initiativeQuery) {
-    // 空态：最近浏览 Top 20 + 常驻动作
     return [...recentViewedItems(files, readingStates, 20), ...builtinActions(input.recentWorkspaces)];
   }
 
-  // in: 事项过滤：把命中该事项的 artifacts file_id 集合作为白名单
   let whitelist: Set<string> | null = null;
   if (query.initiativeQuery) {
     const nameById = new Map<string, string>();

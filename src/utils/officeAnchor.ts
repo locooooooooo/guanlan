@@ -1,14 +1,9 @@
-/**
- * Office（`.docx` / `.xlsx`）证据锚点解析、单元格区间命中与跳转辅助纯函数。
- */
 
 import type { DecisionAssertion, DecisionSourceEvidence, OfficeEvidenceAnchor } from '../types/guanlan';
 import { isStructuredOfficeFormat } from './formatMeta';
 
 export interface ParsedOfficeHref {
-  /** 去掉 `#fragment` 后的路径部分 */
   pathWithoutFragment: string;
-  /** 若链接指向受支持的 `.xlsx#Sheet!Range` 或 `.docx#para=N`，返回结构化锚点 */
   anchor?: OfficeEvidenceAnchor;
 }
 
@@ -153,7 +148,6 @@ export function parseOfficeLinkHref(hrefRaw: string): ParsedOfficeHref {
   try {
     if (decoded.includes('%')) decoded = decodeURIComponent(decoded);
   } catch {
-    /* 保留原串 */
   }
   const hashIdx = decoded.indexOf('#');
   if (hashIdx < 0) {
@@ -189,7 +183,6 @@ export function parseOfficeLinkHref(hrefRaw: string): ParsedOfficeHref {
     };
   }
 
-  // .docx / .docm / .dotx
   const paraToken = fragment
     .replace(/^para[:=]/i, '')
     .replace(/^p=/i, '')

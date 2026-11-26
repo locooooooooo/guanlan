@@ -7,18 +7,14 @@ import { documentEvents, findDocumentEvent, orderedEvents, type DocumentEvent } 
 import { documentLinks } from '../utils/documentLinks';
 import { fetchRevisionContent } from '../services/workspaceClient';
 import type { FileRecord } from '../types/guanlan';
-// 下钻视图只显核心文件名，完整路径进 title
 import { basenameOf } from '../utils/documentIdentity';
 import { isTimeMachineFormat } from '../utils/formatMeta';
-// css 装载放在 App.tsx：node --test/tsx 测试链无法直接加载 .css 扩展名
-// （凡 import 本组件的测试链同受影响）；本组件由 App 舷窗常驻渲染，时序恒先于首帧
 
 export interface EventFrame {
   fileId: string;
   revisionId: string;
   line?: number;
   name: string;
-  /** 从工程事件下钻时保留事件 ID（面包屑与返回定位用） */
   eventId?: string;
 }
 type Props = Omit<GraphCanvasViewProps, 'onExploreFile'> & {
@@ -45,11 +41,6 @@ export function KnowledgeGraph({ visible, root, trail, setTrail, onReadEvidence,
   useEffect(() => {
     if (!visible || !trail.length) return;
     const escape = (event: KeyboardEvent) => {
-      // Esc 仲裁让位：存在打开的可见浮层（FilterDropdown/顶栏帮助浮层等，data-esc-layer="open"
-      // 标记）时直接 return，不 stopImmediatePropagation——浮层自己的 document bubble
-      // 关闭路径（stopPropagation 收尾）得以执行，避免 capture 层吞掉浮层的 Esc
-      // 导致「下拉不关反而把不可见的事件链静默弹掉一层」。守卫并入 Escape 短路链，
-      // 非 Esc 按键不做 DOM 查询。
       if (event.key !== 'Escape' || document.querySelector('[role="dialog"]') ||
           document.querySelector('[data-esc-layer="open"]') ||
           (event.target instanceof Element && event.target.closest('input, textarea, [contenteditable="true"]'))) return;
@@ -61,7 +52,6 @@ export function KnowledgeGraph({ visible, root, trail, setTrail, onReadEvidence,
   }, [visible, trail]);
   return <>
     <div className={trail.length ? 'hidden' : 'flex h-full w-full flex-1 min-h-0'}>
-      {/* 把宿主可见性透传给画布——隐藏时停止渲染与昂贵派生（组件仍挂载保状态） */}
       <GraphCanvasView {...graph} visible={visible} onExploreFile={(id, revisionId, eventId) => {
         const file = graph.files.find(f => f.file_id === id);
         if (file) go(file, undefined, file.title, revisionId ?? file.current_revision_id, eventId);
@@ -107,7 +97,6 @@ export function EventLevel({ active, frame, trail, root, file, graph, onGo, onBa
     if (!active || file.format !== 'md' || frame.line === undefined || content !== undefined || !rev || error) return;
     let cancelled = false;
     (async () => {
-      // 按版本读取快照，历史版本不会拿磁盘当前内容冒充
       const result = await fetchRevisionContent(frame.revisionId);
       if (!result.ok) {
         throw Error(
@@ -176,9 +165,6 @@ export function EventLevel({ active, frame, trail, root, file, graph, onGo, onBa
   const dated = entries.length > 0 && entries.every(e => e.date && /^\d{4}-/.test(e.date)) ||
     entries.length > 0 && entries.every(e => e.date && /^\d{1,2}:/.test(e.date));
   const offset = page * PAGE_SIZE;
-  // depth-1 文档下钻——MD、多模态格式（SVG/CSV/TSV/XLSX）与全部第一档 UTF-8 文本/源码
-  // 格式（如 .mjs/.ts/.py/.json/.txt）统一走文档版本时光机（版本轴 + 按格式分派的对比侧面板）；
-  // 章节下钻（frame.line 有值）与非时光机格式（PDF/位图/二进制等）走三栏事件图谱
   if (isTimeMachineFormat(file.format) && frame.line === undefined) {
     return <DocumentTimeMachineView active={active} file={file} frame={frame} trail={trail}
       root={root} files={graph.files} relations={graph.relations} decisions={graph.decisions}
@@ -219,7 +205,6 @@ export function EventLevel({ active, frame, trail, root, file, graph, onGo, onBa
         </div>}
       </div>
       <aside className="event-panel event-inspector" aria-label="事件依据">
-        {/* P1-1 提示文本治理：改用户语言，与画布检视器现役中文（GraphCanvasView「已选中 · 层级」）逐字对齐；mono 小字形态保留 */}
         <small>已选中 · 层级 {trail.length}</small>
         <h2>{focus?.title ?? file.title}</h2>
         <div className="event-location" title={file.relative_path}>{basenameOf(file.relative_path)}</div>

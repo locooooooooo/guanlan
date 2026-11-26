@@ -1,19 +1,3 @@
-/**
- * 阅读器首屏渲染预算——纯函数 + 轻量性能测量，供 ReaderView 与单测共用。
- *
- * 首屏目标：点击打开任意本地 Markdown 文档（含首次打开与
- * 切换文档）时无「正在向智能体请求正文」阻塞遮罩，首屏渲染耗时 < 300ms。
- *
- * 两层职责：
- *  - resolveReaderBodyPhase：首屏框架（标题/工具栏/纸面）与正文读取态解耦——
- *    正文未内联且仍在读取时只切换纸面内 loading，不阻塞 shell；判定顺序与
- *    ReaderView 既有三元逐字一致（错误优先于 loading，正文内联优先于两者）。
- *  - recordReaderFirstScreenSample：记录「一次文档打开的首屏渲染耗时」，超过
- *    300ms 预算时由调用方告警；同时写入 performance mark/measure，便于 DevTools
- *    与 E2E 复测。模块内只保留最后一次样本，不参与 React 状态，不触发重渲染。
- *
- * 纪律：纯函数模块——禁 import .css / React；性能 API 缺失时回退 Date.now()。
- */
 
 /** 首屏渲染预算（300ms） */
 export const READER_FIRST_SCREEN_BUDGET_MS = 300;
@@ -28,11 +12,8 @@ export type ReaderBodyPhase = 'error' | 'loading' | 'article';
  *  ③ 其余 → article（内联正文 / 已取回正文 / 首帧尚未发起请求的空纸面）。
  */
 export function resolveReaderBodyPhase(input: {
-  /** 当前版本是否内联了正文（空串按未内联处理，与既有条件逐字一致） */
   hasInlineContent: boolean;
-  /** 当前 contentKey 是否已有读取错误 */
   hasError: boolean;
-  /** 当前 contentKey 是否请求挂起 */
   pending: boolean;
 }): ReaderBodyPhase {
   if (!input.hasInlineContent && input.hasError) return 'error';
@@ -44,11 +25,8 @@ export function resolveReaderBodyPhase(input: {
 export interface ReaderFirstScreenSample {
   fileId: string;
   revisionId: string;
-  /** 从 ReaderView 本次 screenKey 首次渲染到提交后 effect 的耗时（ms） */
   elapsedMs: number;
-  /** 是否在 300ms 首屏预算内 */
   withinBudget: boolean;
-  /** 首屏提交时正文是否仍需异步读取（true = shell 先到、正文后到） */
   contentPending: boolean;
 }
 
@@ -93,7 +71,6 @@ export function recordReaderFirstScreenSample(input: {
         'guanlan:reader-first-screen:end'
       );
     } catch {
-      /* 旧浏览器/受限环境不支持 mark options 时静默：样本本身仍可用 */
     }
   }
   return sample;

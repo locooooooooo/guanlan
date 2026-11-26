@@ -22,7 +22,6 @@ pub const MIN_MEMBERS: usize = 2;
 /// 候选簇成员上限（显式链接链式传染的保险丝；超限簇本轮弃置）
 pub const MAX_MEMBERS: usize = 24;
 
-// ---------- 信号位掩码（wire：signal_mask 十六进制位） ----------
 pub const SIG_DIR_PREFIX: u32 = 0x01;
 pub const SIG_LINK: u32 = 0x02;
 pub const SIG_SAME_STEM: u32 = 0x04;
@@ -81,18 +80,14 @@ pub struct CandidateCluster {
     pub members: Vec<CandidateMember>,
 }
 
-// ---------- 文件名主干提取 ----------
-
 /// 文件名主干：去扩展名 → 去两位编号前缀（`01-`）→ 去尾部版本/变体段
 /// （`-v2` / `_final` / `-架构` / `-3`）。返回小写规范形，供 S1/S3 比对。
 pub fn stem_of(file_name: &str) -> String {
-    // 去扩展名（点开头文件名视为无扩展名，Node `path.extname` 口径）
     let no_ext = match file_name.rfind('.') {
         Some(0) | None => file_name,
         Some(idx) => &file_name[..idx],
     };
     let mut stem = no_ext.trim().to_ascii_lowercase();
-    // 去两位数字编号前缀（`01-方案` / `07-交付`）
     let bytes = stem.as_bytes();
     if bytes.len() >= 3
         && bytes[0].is_ascii_digit()
@@ -101,7 +96,6 @@ pub fn stem_of(file_name: &str) -> String {
     {
         stem = stem[3..].to_owned();
     }
-    // 去尾部变体段（`-架构` / `_v2` / `-final` / `-3`；至少保留 1 字符主干）
     if stem.chars().count() > 1 {
         if let Some(idx) = stem.rfind(['-', '_']) {
             if idx > 0 {
@@ -129,12 +123,9 @@ pub fn stem_of(file_name: &str) -> String {
     stem
 }
 
-/// 活跃时刻差（分钟；mtime 毫秒差）
 fn minutes_between(a_ms: i64, b_ms: i64) -> i64 {
     (a_ms - b_ms).abs() / 60_000
 }
-
-// ---------- 并查集 ----------
 
 struct UnionFind {
     parent: Vec<usize>,
@@ -161,8 +152,6 @@ impl UnionFind {
     }
 }
 
-// ---------- 主入口 ----------
-
 /// 编织候选簇。`keys` 为簇键哈希函数（注入 `stable_key`，保持 domain 身份纪律单一出口）。
 pub fn weave_candidates(
     files: &[WeaverFile],
@@ -180,7 +169,6 @@ pub fn weave_candidates(
         .map(|(i, f)| (f.file_id.as_str(), i))
         .collect();
 
-    // 用户剔除对（规范化：小 id 在前）；命中即剪——"误聚项剔除后重扫不反弹"
     let is_cut = |a: usize, b: usize| -> bool {
         let (x, y) = (&files[a].file_id, &files[b].file_id);
         if x <= y {
@@ -190,11 +178,9 @@ pub fn weave_candidates(
         }
     };
 
-    // 邻接表：节点对 → 信号证据（多信号共边保留全部证据）
     let mut link_signals: Vec<Vec<MemberSignal>> = vec![Vec::new(); n];
     let mut uf = UnionFind::new(n);
 
-    // S2 显式链接
     for edge in edges {
         if let (Some(&a), Some(&b)) = (
             index_of.get(edge.source_file_id.as_str()),
@@ -215,7 +201,6 @@ pub fn weave_candidates(
         }
     }
 
-    // S3 同名主干（含同目录同名主干；跨目录同主干是主场景）
     let mut stems: HashMap<String, Vec<usize>> = HashMap::new();
     for (i, file) in files.iter().enumerate() {
         let name = file
@@ -244,7 +229,6 @@ pub fn weave_candidates(
         }
     }
 
-    // S4 会话共现（mtime 排序后滑动相邻窗口；被剪对不连）
     let mut by_time: Vec<usize> = (0..n).collect();
     by_time.sort_by_key(|&i| files[i].activity_ms.unwrap_or(i64::MAX));
     for w in by_time.windows(2) {
@@ -265,7 +249,6 @@ pub fn weave_candidates(
         }
     }
 
-    // S5 Agent 批次
     let mut batches: HashMap<&str, Vec<usize>> = HashMap::new();
     for (i, file) in files.iter().enumerate() {
         if let Some(batch) = file.batch_id.as_deref() {
@@ -289,7 +272,6 @@ pub fn weave_candidates(
         }
     }
 
-    // 分量聚合
     let mut components: HashMap<usize, Vec<usize>> = HashMap::new();
     for i in 0..n {
         components.entry(uf.find(i)).or_default().push(i);
@@ -299,7 +281,6 @@ pub fn weave_candidates(
         .into_values()
         .filter(|members| members.len() >= MIN_MEMBERS && members.len() <= MAX_MEMBERS)
         .map(|members| {
-            // S1 目录前缀：分量内同目录组的公共主干前缀证据
             let mut dir_signals: HashMap<&str, Vec<usize>> = HashMap::new();
             for &i in &members {
                 let dir = files[i].path.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
@@ -309,7 +290,6 @@ pub fn weave_candidates(
                 if group.len() < MIN_MEMBERS {
                     continue;
                 }
-                // 组内主干公共前缀（≥2 字符）才记 S1
                 let stems: Vec<String> = group
                     .iter()
                     .map(|&i| {
@@ -332,13 +312,11 @@ pub fn weave_candidates(
                 }
             }
 
-            // 成员信号汇总 + 掩码与得分
             let mut signal_mask = 0u32;
             let mut members_out: Vec<CandidateMember> = Vec::new();
             let mut link_edge_count = 0usize;
             for &i in &members {
                 let mut signals = link_signals[i].clone();
-                // 去重（同信号同 detail 只留一条）
                 signals.sort_by(|a, b| a.signal.cmp(b.signal).then(a.detail.cmp(&b.detail)));
                 signals.dedup();
                 for s in &signals {
@@ -364,7 +342,6 @@ pub fn weave_candidates(
             let score =
                 (kinds * 18 + members_out.len() as u32 * 5 + link_edge_count as u32 * 3).min(100);
 
-            // 标题：簇内最长文件名主干（去扩展名的原名；等长取字典序最小，稳定可复现）
             let title = members
                 .iter()
                 .map(|&i| {
@@ -382,7 +359,6 @@ pub fn weave_candidates(
                 .unwrap_or("未命名事项")
                 .to_owned();
 
-            // 主理由：按权重挑最强信号的人话描述
             let reason_summary = if signal_mask & SIG_AGENT_BATCH != 0 {
                 "同一智能体批次产出，命中批次共现信号".to_owned()
             } else if signal_mask & SIG_LINK != 0 {
@@ -428,7 +404,6 @@ fn common_prefix(stems: &[String]) -> String {
     'outer: for (ci, ch) in first.char_indices() {
         for other in &stems[1..] {
             match other.get(ci..) {
-                // 其余串在同一字节位仍是字符边界且含同字符才延续前缀
                 Some(rest) if rest.starts_with(ch) => {}
                 _ => break 'outer,
             }
@@ -472,13 +447,12 @@ mod tests {
         assert_eq!(stem_of("方案-架构.svg"), "方案");
         assert_eq!(stem_of("方案.md"), "方案");
         assert_eq!(stem_of("BOM_v2.xlsx"), "bom");
-        assert_eq!(stem_of("Q01-决策记录.md"), "q01-决策记录"); // 编号-标题分隔符保留（Q01 家族靠 S1 目录前缀聚合）
+        assert_eq!(stem_of("Q01-决策记录.md"), "q01-决策记录");
         assert_eq!(stem_of("回执-3.docx"), "回执");
     }
 
     #[test]
     fn scattered_across_four_dirs_cluster_via_stem_and_session() {
-        // 验收口径：散落 4 个目录的同一专项文件自动聚合
         let files = vec![
             file("f1", "方案/总体/登录方案.md", Some(1_742_700_000_000)),
             file("f2", "设计/图纸/登录方案-架构.svg", Some(1_742_700_720_000)),
@@ -492,7 +466,6 @@ mod tests {
                 "需求/提案/登录方案-需求蓝图.md",
                 Some(1_742_700_000_000 + 2_460_000),
             ),
-            // 干扰项：无关文件不进簇
             file("f9", "随记/周报.md", Some(1_742_700_000_000 - 3_600_000)),
         ];
         let clusters = weave_candidates(&files, &[], |s| format!("k_{s}"), &no_cuts());
@@ -505,7 +478,6 @@ mod tests {
             .iter()
             .find(|c| c.members.len() == 4)
             .expect("存在 4 成员簇");
-        // 理由胶囊：每成员都有可解释信号（非黑盒）
         for member in &cluster.members {
             assert!(
                 !member.signals.is_empty(),
@@ -514,7 +486,7 @@ mod tests {
             );
             assert!(member.signals.iter().any(|s| s.signal == "same_stem"));
         }
-        assert_eq!(cluster.title, "登录方案-需求蓝图"); // 最长主干；等长取字典序小（确定性）
+        assert_eq!(cluster.title, "登录方案-需求蓝图");
         assert!(cluster.score > 0);
     }
 
@@ -584,7 +556,6 @@ mod tests {
 
     #[test]
     fn excluded_pair_cuts_member_out_and_rescan_does_not_rebound() {
-        // 验收口径："误聚项一键剔除后重扫不反弹"
         let files = vec![
             file("c1", "docs/登录方案.md", Some(1_742_700_000_000)),
             file(
@@ -598,7 +569,6 @@ mod tests {
                 Some(1_742_700_000_000 + 1_200_000),
             ),
         ];
-        // 规范化对（小 id 在前，与编排层写入一致）
         let cuts = std::collections::HashSet::from([
             ("c1".to_owned(), "c3".to_owned()),
             ("c2".to_owned(), "c3".to_owned()),

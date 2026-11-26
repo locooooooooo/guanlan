@@ -1,26 +1,4 @@
 #!/usr/bin/env node
-/**
- * 观澜发版预检 —— release.yml 的第一步，也可以在本地随时跑。
- *
- * 检查三组东西。任一项不过就以非零码退出，并且一次列出全部问题，不是只报第一个：
- * 1. 版本号一致（默认检查）。版本号散落在多处，升版本时漏改一处就会发出对不上的包：
- *    package.json、package-lock.json、native/Cargo.toml、native/Cargo.lock、
- *    tauri.conf.json，以及几处写死的版本字面量（构建身份的兜底值与断言版本的测试）。
- * 2. 标签（给了 --tag 时）：标签必须等于 v<版本>；给了 --require-on-main 时，标签所指的
- *    提交必须是 origin/main 的祖先。
- * 3. 构建产物（给了 --assets <目录> 时）：NSIS 安装包、MSI 安装包、命令行 guanlan.exe、
- *    SHA256SUMS 四个文件都在、都不为空，校验和与文件内容一致。
- *
- * 用法（在仓库根目录执行）：
- *   node scripts/release-preflight.mjs                                      # 只查版本号
- *   node scripts/release-preflight.mjs --tag v1.2.3 --require-on-main
- *   node scripts/release-preflight.mjs --assets dist-release
- *
- * 退出码：0 全部通过；1 有检查项不过；2 参数不合法。
- *
- * 版本号收集与产物核对两个函数导出给 test/release-preflight.test.ts，所以版本号是否一致
- * 也在 npm test 里被守着；被导入时不执行预检。
- */
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -31,7 +9,6 @@ import { fileURLToPath } from 'node:url';
 const SCRIPT = fileURLToPath(import.meta.url);
 const REPO = path.resolve(path.dirname(SCRIPT), '..');
 const SEMVER = /^\d+\.\d+\.\d+$/;
-/** 发布只支持这一个目标；产物文件名与 release.yml 暂存产物时用的名字必须一致。 */
 const TARGET = 'x86_64-pc-windows-msvc';
 
 const USAGE = `观澜发版预检
@@ -46,7 +23,6 @@ const USAGE = `观澜发版预检
   -h, --help          显示这份用法
 `;
 
-// ---------- 参数 ----------
 
 /** 解析参数；不合法时抛错。 */
 export function parseArgs(args) {
@@ -66,7 +42,6 @@ export function parseArgs(args) {
   return options;
 }
 
-// ---------- 可被测试的函数 ----------
 
 const read = (rel) => fs.readFileSync(path.join(REPO, rel), 'utf8');
 const lineOf = (text, index) => text.slice(0, index).split('\n').length;
@@ -84,7 +59,6 @@ export function collectVersions() {
   const cargoLock = read('native/Cargo.lock');
   const buildInfo = read('src/utils/appBuildInfo.ts');
 
-  // [workspace.package] 段落：从该行起到下一个段落标题之间
   const workspaceBlock = cargoToml.split('[workspace.package]')[1]?.split(/\r?\n(?=\[)/)[0] ?? '';
 
   const sources = [
@@ -93,7 +67,6 @@ export function collectVersions() {
     { where: 'package-lock.json packages[""]', version: lock.packages?.['']?.version },
     { where: 'native/Cargo.toml [workspace.package]', version: workspaceBlock.match(/version\s*=\s*"([^"]+)"/)?.[1] },
     { where: 'native/crates/guanlan-desktop/tauri.conf.json', version: tauri.version },
-    // 构建身份在没有 Vite define 时的兜底值，测试会断言它
     { where: 'src/utils/appBuildInfo.ts', version: buildInfo.match(/resolvedVersion =[\s\S]*?:\s*'([^']+)'/)?.[1] },
   ];
   for (const crate of ['guanlan-core', 'guanlan-service', 'guanlan-desktop']) {
@@ -102,7 +75,6 @@ export function collectVersions() {
       version: cargoLock.match(new RegExp(`name = "${crate}"\\r?\\nversion = "([^"]+)"`))?.[1],
     });
   }
-  // 其余写死的 x.y.z 字面量必须全是当前版本：构建配置的兜底值，以及断言版本的测试与脚本
   for (const rel of ['vite.config.ts', 'test/v12-release-parity.test.ts', 'scripts/visual-baseline.mjs']) {
     const text = read(rel);
     for (const match of text.matchAll(/'(\d+\.\d+\.\d+)'/g)) {
@@ -183,7 +155,6 @@ export function checkAssets(dir, version) {
   return { passed, problems };
 }
 
-// ---------- 主流程 ----------
 
 function git(...args) {
   const out = spawnSync('git', args, { cwd: REPO, encoding: 'utf8' });
@@ -208,7 +179,6 @@ function main() {
   const problems = [];
   const notes = [];
 
-  // 1. 版本号
   let version = null;
   try {
     const collected = collectVersions();
@@ -227,7 +197,6 @@ function main() {
     problems.push(`读版本号时出错：${error.message}`);
   }
 
-  // 2. 标签
   if (options.tag !== null) {
     const expected = `v${version}`;
     if (options.tag === expected) passed.push(`标签 ${options.tag} 等于 v${version}`);
@@ -252,7 +221,6 @@ function main() {
     }
   }
 
-  // 3. 构建产物
   if (options.assets !== null) {
     if (typeof version !== 'string' || !SEMVER.test(version)) {
       problems.push('版本号读不出来，无法核对构建产物');
@@ -270,7 +238,6 @@ function main() {
   return problems.length === 0 ? 0 : 1;
 }
 
-// 只有被直接执行时才跑预检；被测试文件导入时不跑。
 const invokedDirectly =
   process.argv[1] !== undefined &&
   fs.existsSync(process.argv[1]) &&

@@ -109,7 +109,6 @@ export function useFileOps({
         }
 
         const resp = result.data;
-        // 标记版本/别名详情待重拉，让时间线与详情抽屉马上看到新路径别名与文件操作事件
         detailLoadedIdsRef.current.delete(resp.file_id);
 
         if (resp.operation === 'file_trashed') {
@@ -134,7 +133,6 @@ export function useFileOps({
         setModalRequest(null);
         setServerError(null);
         onMutationSuccess(resp, describeFileMutationSuccess(resp));
-        // 返回结果供宿主接线判断是否需要跟进确认制引用路径修复（成功后才写引用）
         return true;
       } finally {
         setSubmitting(false);

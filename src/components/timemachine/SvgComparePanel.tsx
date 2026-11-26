@@ -27,7 +27,6 @@ export interface SvgComparePanelProps {
   newLabel: string;
 }
 
-/** 改动图元清单最多渲染条数（DOM 有界；其余以「还有 N 处」诚实提示） */
 const MAX_CHANGE_ROWS = 24;
 
 function svgDataUri(raw: string): string {
@@ -48,7 +47,7 @@ export function SvgComparePanel({ oldSvg, newSvg, diff, oldLabel, newLabel }: Sv
 
   const aspectPct = diff.ok && diff.units && diff.units.width > 0
     ? (diff.units.height / diff.units.width) * 100
-    : 75; // 无坐标系兜底 4:3
+    : 75;
 
   const onTrackPointerMove = (clientX: number) => {
     const rect = trackRef.current?.getBoundingClientRect();
@@ -63,7 +62,6 @@ export function SvgComparePanel({ oldSvg, newSvg, diff, oldLabel, newLabel }: Sv
 
   return (
     <div className="space-y-2" data-machine-svg-compare="">
-      {/* 模式工具条 */}
       <div className="flex items-center gap-1.5">
         <button
           type="button"
@@ -107,7 +105,6 @@ export function SvgComparePanel({ oldSvg, newSvg, diff, oldLabel, newLabel }: Sv
         </label>
       </div>
 
-      {/* 图层舞台 */}
       <div
         ref={trackRef}
         className="relative select-none overflow-hidden rounded-lg border"
@@ -134,7 +131,6 @@ export function SvgComparePanel({ oldSvg, newSvg, diff, oldLabel, newLabel }: Sv
         }}
       >
         <div style={{ position: 'relative', width: '100%', paddingTop: `${aspectPct}%` }}>
-          {/* 基底层 */}
           <img
             src={topIsNew || mode === 'swipe' ? oldUri : newUri}
             alt={`${mode === 'swipe' ? '右半' : '底层'}：${oldLabel}`}
@@ -143,7 +139,6 @@ export function SvgComparePanel({ oldSvg, newSvg, diff, oldLabel, newLabel }: Sv
             style={{ objectFit: 'contain' }}
             data-machine-svg-layer={mode === 'swipe' ? 'old' : topIsNew ? 'old' : 'new'}
           />
-          {/* 上层（叠影半透明 / 擦除左侧裁切显新版） */}
           {mode === 'onion' ? (
             <img
               src={topIsNew ? newUri : oldUri}
@@ -164,7 +159,6 @@ export function SvgComparePanel({ oldSvg, newSvg, diff, oldLabel, newLabel }: Sv
             />
           )}
 
-          {/* 改动图元叠加框（units 已知才渲染几何框，绝不伪造定位） */}
           {outlinesOn && units && diff.ok && (
             <svg
               className="pointer-events-none absolute inset-0 h-full w-full"
@@ -188,7 +182,6 @@ export function SvgComparePanel({ oldSvg, newSvg, diff, oldLabel, newLabel }: Sv
             </svg>
           )}
 
-          {/* 擦除分隔线 */}
           {mode === 'swipe' && (
             <div
               className="pointer-events-none absolute inset-y-0 w-0.5"
@@ -203,7 +196,6 @@ export function SvgComparePanel({ oldSvg, newSvg, diff, oldLabel, newLabel }: Sv
               </span>
             </div>
           )}
-          {/* 来源角标 */}
           <span
             className="absolute left-1 top-1 rounded px-1 font-mono text-[9px]"
             style={{ background: 'color-mix(in srgb, var(--cv-add) 22%, var(--cv-card))', color: 'var(--cv-add)' }}
@@ -232,7 +224,6 @@ export function SvgComparePanel({ oldSvg, newSvg, diff, oldLabel, newLabel }: Sv
         </p>
       )}
 
-      {/* 改动清单 */}
       {changes.length === 0 ? (
         <p className="text-[11px]" style={{ color: 'var(--cv-ink-meta)' }}>两版图元无差异（外观等价）。</p>
       ) : (

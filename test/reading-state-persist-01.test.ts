@@ -6,13 +6,6 @@ import { fileURLToPath } from 'node:url';
 import { createCoalescedPersist, type CoalescedTimer } from '../src/utils/coalescedPersist';
 import { READING_STATE_PERSIST_DEBOUNCE_MS } from '../src/utils/readingStateStore';
 
-/**
- * 阅读状态落盘合批：
- *
- * 背景：`readingStates` 每次变化都整表 `JSON.stringify` 写 localStorage；滚动进度
- * 也在改这张表，几万条记录时主线程在滚动路径上被同步序列化占满。合批只推迟写入
- * 时机，最终状态仍会落盘（尾沿 / 页面隐藏 / 切换工作区）。
- */
 
 function fakeTimer(): CoalescedTimer & {
   fire(): void;

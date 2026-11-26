@@ -1,13 +1,3 @@
-/**
- * 智能体上下文三入口默认包 + 双模导出单元测试。
- *
- * - 三入口意图推导与默认包（典型工作区已选 ≥2）；
- * - 推荐挂载 reason 词表与确定性排序（本文引用 > 同专项引用 > 命名关联）；
- * - 模式 A <guanlan_context> 结构（objective/confirmed_decisions/pending_blockers
- *   count/reference_files count/writeback_protocol）；
- * - 模式 B guanlan-mcp/v1 载荷形状（uri/hash 前 16 位/4 工具/guardrails）；
- * - mcp.json 模板（GUANLAN_ENDPOINT + serve --port 提示）。
- */
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -27,7 +17,6 @@ import {
   WRITEBACK_PROTOCOL_TEXT,
 } from '../src/utils/agentContextExport';
 
-// ---------- 夹具（04-智能体代码 / BOM与图纸联动方案） ----------
 
 const PKG_04: PresetPackageInfo = {
   id: '04-智能体代码',
@@ -91,7 +80,6 @@ describe('buildAgentContextPreset 三入口默认包（已选 ≥2）', () => {
       relations: [],
     });
     assert.equal(preset.intent, 'document');
-    // 1. 当前文档 full；2. 包核心（readme_04）summary；3. 包域未决（todo_03/bom_doc）decisions_only
     assert.deepEqual(preset.items, [
       { fileId: 'bom_doc', granularity: 'full' },
       { fileId: 'readme_04', granularity: 'summary' },
@@ -109,13 +97,9 @@ describe('buildAgentContextPreset 三入口默认包（已选 ≥2）', () => {
     });
     assert.equal(preset.intent, 'initiative');
     const granularities = new Map(preset.items.map((it) => [it.fileId, it.granularity]));
-    // 定版摘要（阅读顺序前 6）
     assert.equal(granularities.get('readme_04'), 'summary');
-    // bom_doc 同时命中定版摘要与未决事项 → 粒度优先级取高档（decisions_only > summary）
     assert.equal(granularities.get('bom_doc'), 'decisions_only');
-    // 当前阶段全量正文
     assert.equal(granularities.get('impl_doc'), 'full');
-    // 全部未决
     assert.equal(granularities.get('todo_03'), 'decisions_only');
     assert.equal(preset.meetsAc04, true);
   });
@@ -128,7 +112,6 @@ describe('buildAgentContextPreset 三入口默认包（已选 ≥2）', () => {
       unresolvedDecisions: DECISIONS,
     });
     assert.equal(preset.intent, 'global');
-    // Top-3 = PKG_04(11-18) > PKG_08(11-17) > PKG_IDLE(无活动垫底)——仅三个包时 IDLE 也在列
     assert.deepEqual(preset.items, [
       { fileId: 'readme_04', granularity: 'summary' },
       { fileId: 'readme_08', granularity: 'summary' },
@@ -136,7 +119,6 @@ describe('buildAgentContextPreset 三入口默认包（已选 ≥2）', () => {
       { fileId: 'todo_03', granularity: 'decisions_only' },
       { fileId: 'bom_doc', granularity: 'decisions_only' },
     ]);
-    // 全局汇总只收阻塞项（isBlocking=true）：dec_3（field_map，非阻塞）不进
     assert.ok(!preset.items.some((it) => it.fileId === 'field_map'));
   });
 
@@ -155,7 +137,6 @@ describe('buildAgentContextPreset 三入口默认包（已选 ≥2）', () => {
       packages: [PKG_04, PKG_08, PKG_IDLE, hotFourth],
       unresolvedDecisions: [],
     });
-    // PKG_04 > PKG_08 > 09-热点包(11-16) > PKG_IDLE(无活动)——IDLE 被挤出
     assert.deepEqual(
       preset.items.map((it) => it.fileId),
       ['readme_04', 'readme_08', 'hot_doc']
@@ -181,11 +162,11 @@ describe('buildAgentContextPreset 三入口默认包（已选 ≥2）', () => {
       packages: [PKG_04, PKG_08, PKG_IDLE],
       unresolvedDecisions: [],
       relations: [
-        { sourceFileId: 'bom_doc', targetFileId: 'readme_04' }, // 已在默认包（核心摘要）→ 排除
-        { sourceFileId: 'bom_doc', targetFileId: 'field_map' }, // 出边跨包 → 本文引用
-        { sourceFileId: 'idle_doc', targetFileId: 'bom_doc' }, // 入边 → 同包？idle_doc 不在包 → 命名关联
-        { sourceFileId: 'impl_doc', targetFileId: 'bom_doc' }, // 入边、同包 → 同专项引用
-        { sourceFileId: 'bom_doc', targetFileId: 'todo_03' }, // 出边（本测例无未决→todo_03 不在默认包）→ 本文引用
+        { sourceFileId: 'bom_doc', targetFileId: 'readme_04' },
+        { sourceFileId: 'bom_doc', targetFileId: 'field_map' },
+        { sourceFileId: 'idle_doc', targetFileId: 'bom_doc' },
+        { sourceFileId: 'impl_doc', targetFileId: 'bom_doc' },
+        { sourceFileId: 'bom_doc', targetFileId: 'todo_03' },
       ],
     });
     assert.deepEqual(
@@ -301,7 +282,6 @@ describe('模式 B：guanlan-mcp/v1 载荷与 mcp.json', () => {
     assert.ok(config.includes(`"GUANLAN_ENDPOINT": "${GUANLAN_MCP_DEFAULT_ENDPOINT}"`));
     assert.equal(GUANLAN_MCP_DEFAULT_ENDPOINT, 'http://127.0.0.1:39120');
     assert.ok(config.includes('serve --port 39120'));
-    // 自定义端点可注入（用户显式指定时以权威 stdout 值为准）
     const custom = buildMcpJsonConfig('http://127.0.0.1:50000');
     assert.ok(custom.includes('"GUANLAN_ENDPOINT": "http://127.0.0.1:50000"'));
   });

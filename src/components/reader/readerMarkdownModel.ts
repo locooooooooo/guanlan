@@ -1,9 +1,3 @@
-/**
- * 阅读器 Markdown 行模型层（纯函数，零 React 依赖）：
- * 提供来源行锚点定位与就近回退、链接解析索引及 Markdown 行模型（buildMarkdownBlocks）。
- * 消费方为 useReaderController（行为层）与 readerSections（渲染层）；
- * 测试兼容再导出保留在 ReaderView.tsx。
- */
 
 import type { FileRecord, OfficeEvidenceAnchor, PdfEvidenceAnchor } from '../../types/guanlan';
 import { parseOfficeLinkHref, resolveMarkdownFileTarget } from '../../utils/officeAnchor';
@@ -79,22 +73,6 @@ export function collectRenderedSourceLineAnchors(root: {
   return Array.from(seen).sort((a, b) => a - b);
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   markdown 行模型层（纯数据，无 React 元素）
-
-   背景：避免每次渲染全量重跑「markdownContent → JSX」解析（长文 + 多链接时
-   开销高，且隐藏保活时也会触发），将解析阶段抽为纯函数层：
-
-   · buildMarkdownBlocks（只依赖 markdownContent 与链接索引）产出行模型
-     MarkdownBlock[]，组件内 useMemo 缓存；sourceLine 高亮 / activeSectionId /
-     showLineNumbers / paperLightMode 等易变输入一律不进模型，留在渲染期叠加
-     （className/参数计算），易变态抖动不再触发重新解析。
-   · 链接目标在模型期一次解析完（resolveMarkdownHref），渲染期只消费解析结果，
-     表格单元格、任务项、引用、无序/有序列表与段落共用同一套解析口径。
-   · 保持 data-event-source-line 锚点粒度（围栏/表格整块只挂起始行、
-     表格正文行挂 tr 行）、wrapLine 行锚 div、键方案（seg-N 与 href-偏移）一致；
-     pickNearestSourceLineAnchor 与 formatSourceLineFallbackNotice 保持模块级导出供单测调用。
-   ══════════════════════════════════════════════════════════════════════════ */
 
 /**
  * 链接解析索引（useMemo(files) 构建）：记录 relative_path → 首个精确匹配
@@ -103,11 +81,8 @@ export function collectRenderedSourceLineAnchors(root: {
 export interface MarkdownLinkIndex {
   files: FileRecord[];
   sourceFilePath: string;
-  /** relative_path 精确匹配表：exact 命中走 Map O(1)（重复路径只记首个，保「files 顺序」语义） */
   exactPath: Map<string, FileRecord>;
-  /** 首个 exact 命中的序次：证明「无更早 endsWith 抢占」只需扫它之前的区间 */
   firstExactIdx: Map<string, number>;
-  /** href → 解析结果缓存（含 null=解析失败）：同一 href 全会话只线性扫一次 */
   resolveCache: Map<
     string,
     { file: FileRecord; officeAnchor?: OfficeEvidenceAnchor; pdfAnchor?: PdfEvidenceAnchor } | null
@@ -133,7 +108,6 @@ export function resolveMarkdownHref(
   const exactIdx = index.firstExactIdx.get(lookup);
   let resolvedFile: FileRecord | null;
   if (exactIdx === undefined) {
-    // 无 exact 命中：旧 find 谓词只剩 endsWith，保持原序首个
     resolvedFile = index.files.find((f) => f.relative_path.endsWith(lookup)) ?? null;
   } else {
     const exactHit = index.exactPath.get(lookup);
@@ -146,7 +120,6 @@ export function resolveMarkdownHref(
     }
   }
 
-  // `.pdf#page=N` 链接在无 Office 锚点时补解 PDF 页码锚点
   const pdfParsed = parsed.anchor ? null : parsePdfLinkHref(href);
 
   let out: {
@@ -161,7 +134,6 @@ export function resolveMarkdownHref(
       }
     : null;
 
-  // 若含 `../` 等相对目录未能被 endsWith 匹配，按当前源文件路径解析工作区路径
   if (!out && (href.includes('/') || href.includes('#'))) {
     const relHit = resolveMarkdownFileTarget(href, index.sourceFilePath, index.files);
     if (relHit) {
@@ -287,7 +259,6 @@ export type MarkdownBlock =
       kind: 'table';
       line: number;
       headerCells: string[];
-      /** 正文行：line=<tr> 行锚（跳过分隔行），cells=每格的链接分段 */
       rows: Array<{ line: number; cells: LinkPart[][] }>;
       excerpt: string;
     }
@@ -318,7 +289,6 @@ export function buildMarkdownBlocks(
     const lineNum = i + 1;
     const trimmed = line.trim();
 
-    // Group fenced code block
     if (trimmed.startsWith('```')) {
       const codeStart = lineNum;
       const codeLines: string[] = [];
@@ -327,7 +297,7 @@ export function buildMarkdownBlocks(
         codeLines.push(rawLines[i]);
         i++;
       }
-      i++; // skip closing fence
+      i++;
       blocks.push({
         kind: 'code',
         line: codeStart,
@@ -337,7 +307,6 @@ export function buildMarkdownBlocks(
       continue;
     }
 
-    // Group consecutive markdown table rows (| ... |)
     if (trimmed.startsWith('|')) {
       const tableStart = lineNum;
       const tableRawRows: string[] = [];
@@ -375,7 +344,6 @@ export function buildMarkdownBlocks(
     }
 
     if (!trimmed) {
-      // 空行不再渲染占位元素：段距统一由段落自身的 my-[0.9em] 提供
       i++;
       continue;
     }
@@ -414,7 +382,6 @@ export function buildMarkdownBlocks(
       continue;
     }
 
-    // 引用块：删 "> " 前缀成块渲染（赤陶左线），内容仍走行内渲染
     if (trimmed.startsWith('> ')) {
       const quoteText = trimmed.slice(2);
       blocks.push({
@@ -427,14 +394,12 @@ export function buildMarkdownBlocks(
       continue;
     }
 
-    // 分隔线：hairline
     if (trimmed === '---') {
       blocks.push({ kind: 'hr', line: lineNum });
       i++;
       continue;
     }
 
-    // 无序列表：每行独立悬挂缩进项（保持逐行行号锚点）
     if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
       const itemText = trimmed.slice(2);
       blocks.push({
@@ -447,7 +412,6 @@ export function buildMarkdownBlocks(
       continue;
     }
 
-    // 有序列表：bullet 用原文序号
     const orderedMatch = /^(\d+)\. (.+)$/.exec(trimmed);
     if (orderedMatch) {
       blocks.push({
@@ -464,7 +428,6 @@ export function buildMarkdownBlocks(
     blocks.push({
       kind: 'p',
       line: lineNum,
-      // 段落渲染原始行（非 trimmed）——与旧 renderMarkdownLineWithLinks(line, …) 同参
       parts: buildLinkParts(line, linkIndex),
       excerpt: trimmed,
     });

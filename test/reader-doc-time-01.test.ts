@@ -8,16 +8,6 @@ import { buildReaderDocTimeView } from '../src/components/reader/readerChromeSec
 import type { FileRecord } from '../src/types/guanlan';
 import { localDay } from '../src/utils/timeFormat';
 
-/**
- * 阅读器文件头文档时间 —— 契约测试。
- *
- * 事故：从「待拍板」点一行证据原文进入阅读器后，主行只有标题/版本/状态，
- * 文档日期与采集时刻只藏在右侧「溯源」面板与版本轴弹层里，首屏看不到文章时间，
- * 无法判断材料新鲜度。锁死三条口径：
- *  ① source_time（文档日期）优先，且按本地日历日呈现（不 slice UTC 串）；
- *  ② source_time 缺失/坏值时回退 observed_at，文案显式写「采集于」，不冒充文章日期；
- *  ③ 胶囊进入阅读器文件头首屏 DOM，从任何入口（含待拍板）打开都看得到。
- */
 
 function makeFile(sourceTime: string | undefined): FileRecord {
   return {
@@ -79,7 +69,6 @@ test('文档时间：source_time 优先，按本地日历日呈现且不掺采�
   assert.match(declared.title, /source_time/, '悬浮说明标注 source_time');
   assert.match(declared.title, /observed_at/, '悬浮说明同时给出采集口径，不合并');
 
-  // 含时刻的 ISO 必须走本地日历日（纯日期原样保留，跨时区不靠 slice 截断）。
   const iso = '2026-11-24T23:30:00Z';
   const withTime = buildReaderDocTimeView(iso, '2026-11-25T02:00:00.000Z');
   assert.equal(withTime.basis, 'source_time');
@@ -98,7 +87,6 @@ test('文档时间：source_time 缺失或坏值时如实回退采集时刻，�
   const garbage = buildReaderDocTimeView('not-a-date', '2026-11-25T02:00:00.000Z');
   assert.equal(garbage.basis, 'observed_at', '坏日期不冒充文档日期');
 
-  // 摘要占位版本行的 source_time 是最早版本时间，不得冒充当前版文档日期。
   const placeholder = buildReaderDocTimeView('2026-11-01', '2026-11-25T02:00:00.000Z', false);
   assert.equal(placeholder.basis, 'observed_at', '占位行回退采集时刻');
   assert.doesNotMatch(placeholder.label, /2026-11-01/, '占位行不得直出最早版本日期');

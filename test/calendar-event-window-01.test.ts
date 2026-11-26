@@ -9,20 +9,13 @@ import {
   calendarWindowEventQuery,
 } from '../src/utils/calendarEventWindow';
 
-/**
- * 日历事件取数窗口：
- *
- * 背景：进入日历曾沿事件游标自动续拉到没有下一页。5.6 万文件的工作区里那是
- * 数千次请求，每页都并进累计事件表并重渲整棵树。现在只取最近 90 天的一页
- * （≤200 条）；更早历史由列表态的「加载更多」显式触发。
- */
 
 function readSrc(path: string): string {
   return readFileSync(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8');
 }
 
 test('日历窗口恰好覆盖 90 个本地日，只取一页', () => {
-  const q = calendarWindowEventQuery(new Date(2026, 10, 25)); // 2026-11-25（本地）
+  const q = calendarWindowEventQuery(new Date(2026, 10, 25));
   assert.equal(q.to, '2026-11-25');
   assert.equal(q.from, '2026-08-28', '含首尾共 90 天');
   assert.equal(q.limit, CALENDAR_EVENT_PAGE_LIMIT);

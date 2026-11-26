@@ -91,11 +91,9 @@ pub fn apply_decision_writeback(
         .ok_or_else(|| GuanlanError::NotFound(format!("未找到文件 {}", statement.file_id)))?;
     let rel_path = file.current_path.clone();
 
-    // archived 主体守卫：已归档专项同步拒绝，不执行回写
     ensure_not_archived(writer, &statement.file_id)?;
 
     let workspace = writer.workspace()?;
-    // 沙箱守卫：严格限制在授权工作区目录内，禁止路径逃逸或符号链接越界写入
     let disk_path =
         crate::storage::sandbox::resolve_workspace_file_in_jail(&workspace.root_path, &rel_path)?;
     let disk_bytes = std::fs::read(&disk_path).map_err(|e| {
@@ -109,9 +107,7 @@ pub fn apply_decision_writeback(
     })?;
     let expected_hash = latest.content_hash.clone();
 
-    // ---------- CAS 乐观锁：磁盘内容必须与最新版本一致 ----------
     if disk_hash != expected_hash {
-        // 待写入内容 = 拍板后的形态（草案存「我们想写的内容」，供人机比对合并）
         let resolved = render_resolved_content(&disk_content, &statement, input);
         let resolved_hash = sha256_hex(resolved.as_bytes());
         let snapshot_rel = writer.write_snapshot_bytes(resolved.as_bytes(), &resolved_hash)?;
@@ -192,9 +188,7 @@ pub fn apply_decision_writeback(
         });
     }
 
-    // ---------- 第 1 步：原位替换 ----------
     if statement.status == "已确认" {
-        // 已拍板复述：内容不会变化，不重写文件、不造新版本（幂等重试口径）
         return Ok(WritebackOutcome {
             cas_ok: true,
             file_changed: false,
@@ -209,7 +203,6 @@ pub fn apply_decision_writeback(
     let resolved = render_resolved_content(&disk_content, &statement, input);
     let resolved_hash = sha256_hex(resolved.as_bytes());
     if resolved == disk_content {
-        // 没有任何占位符可替换（块形态缺失）：如实报告，不造假新版本
         return Ok(WritebackOutcome {
             cas_ok: true,
             file_changed: false,
@@ -223,7 +216,6 @@ pub fn apply_decision_writeback(
     }
     write_workspace_file_atomic(&disk_path, resolved.as_bytes(), &resolved_hash)?;
 
-    // ---------- 单路径对账：新版本→陈述→决策事件→状态机重算 ----------
     let options = ReconcileOptions {
         observed_at: Some(clock::now_iso()),
         ..ReconcileOptions::default()
@@ -234,7 +226,6 @@ pub fn apply_decision_writeback(
         .filter(|row| row.content_hash == resolved_hash)
         .map(|row| row.revision_id);
 
-    // ---------- decision_writeback 事件（subject_id=业务原 decision_id） ----------
     let now = clock::now_iso();
     let payload = json_object(&[
         ("decision_id", json_string(&decision_id)),
@@ -302,7 +293,6 @@ pub fn apply_decision_writeback(
         Ok(())
     })?;
 
-    // 回写重算后读取该文件所属专项最新状态，确认未决扣减与下游解锁
     let initiative_id = writer
         .get_artifact_state(&statement.file_id)?
         .and_then(|row| row.initiative_id);
@@ -351,7 +341,6 @@ pub fn ensure_not_archived(writer: &Writer, file_id: &str) -> Result<(), Guanlan
     Ok(())
 }
 
-/// 拍板后的内容形态：状态词变更 + 占位符替换 + front matter revision+1
 fn render_resolved_content(
     content: &str,
     statement: &StatementRow,
@@ -367,7 +356,6 @@ fn render_resolved_content(
         front_matter: Regex::new(r"(?s)^---\r?\n(.*?)\r?\n---").expect("front matter"),
         revision_line: Regex::new(r"(?m)^revision:\s*(\d+)\s*$").expect("revision 行"),
     });
-    // P0/P1/P2 各自独立编译缓存，避免进程内先处理某一级后锁定其他级别
     static MARKER_CACHE: OnceLock<[Regex; 3]> = OnceLock::new();
     let markers = MARKER_CACHE.get_or_init(|| {
         [
@@ -418,7 +406,6 @@ fn render_resolved_content(
     for (index, line) in lines.iter().enumerate() {
         let mut line: String = (*line).to_owned();
         if index >= start && index < end {
-            // 状态词：块标记优先（[P1 - 待确认] → [P1 - 已确认]）
             if let Some(marker) = &marker {
                 let replacement = format!("[{priority} - 已确认]");
                 let after = marker
@@ -435,7 +422,6 @@ fn render_resolved_content(
             if after != line {
                 line = after;
             }
-            // 占位符：决定/确认人/角色/生效范围与日期（仅替换下划线占位，保留字段前缀）
             let after = pat
                 .decision
                 .replace(
@@ -469,7 +455,6 @@ fn render_resolved_content(
     }
     let mut resolved = out.join("\n");
 
-    // front matter revision+1：仅当存在 front matter 且含 revision 行时递增
     if pat.front_matter.is_match(&resolved) {
         if let Some(captures) = pat.revision_line.captures(&resolved) {
             let current: u64 = captures
@@ -486,12 +471,10 @@ fn render_resolved_content(
     resolved
 }
 
-/// regex 替换串的 `$` 转义（拍板文本里出现 `$` 时不被当作引用组）
 fn escape_replacement(text: &str) -> String {
     text.replace('$', "$$")
 }
 
-/// 块级替换正则集（编译一次）
 struct BlockResolver {
     status_pending: Regex,
     decision: Regex,
@@ -502,8 +485,6 @@ struct BlockResolver {
     revision_line: Regex,
 }
 
-/// 工作区文件原子写入（writer.rs:982-1014 模式）：临时文件 → 重读校验 →
-/// 同目录原子改名。校验失败删除临时文件并报错，绝不留下半成品。
 fn write_workspace_file_atomic(
     target: &std::path::Path,
     content: &[u8],
@@ -614,7 +595,6 @@ mod tests {
         let ws = TempWorkspace::new("ok");
         let (mut writer, _rel) = seed(&ws);
 
-        // 找到卡点块陈述（回写目标）
         let workspace_id = writer.workspace().expect("ws").workspace_id;
         let statements = writer.list_statements(&workspace_id).expect("查陈述");
         let target = statements
@@ -629,7 +609,6 @@ mod tests {
         assert!(outcome.file_changed, "内容变化必须有新版本");
         let new_revision = outcome.new_revision_id.expect("新版本");
 
-        // 文件内容：状态词 + 占位符 + frontmatter revision 全部就位
         let content = std::fs::read_to_string(ws.root.join("01-演示专项/03-待确认事项.md"))
             .expect("读回写后文件");
         assert!(content.contains("[P1 - 已确认]"), "状态词变更：{content}");
@@ -647,7 +626,6 @@ mod tests {
             "frontmatter revision+1：{content}"
         );
 
-        // 新版本与新陈述（已确认）落库
         let revision = writer
             .get_revision(&new_revision)
             .expect("查版本")
@@ -660,7 +638,6 @@ mod tests {
                 .any(|row| row.revision_id == new_revision && row.status == "已确认"),
             "回写后版本应有已确认陈述"
         );
-        // decision_writeback 事件
         let events = writer
             .list_events_of_subject(&workspace_id, &outcome.decision_id, &["decision_writeback"])
             .expect("查事件");
@@ -681,7 +658,6 @@ mod tests {
             .statement_id
             .clone();
 
-        // 外部写入改了磁盘（CAS 前提被破坏）
         ws.write(
             &rel,
             "---\nrevision: 1\n---\n\n# 03-待确认事项\n\n外部修改\n",
@@ -694,7 +670,6 @@ mod tests {
         assert_eq!(conflict.expected_content_hash.len(), 64);
         assert_ne!(conflict.expected_content_hash, conflict.disk_content_hash);
 
-        // 草案分支 + proposal_raised 事件；工作区文件未被覆盖
         let drafts = writer
             .list_revision_drafts(&workspace_id, None, Some("proposed"))
             .expect("查草案");
@@ -729,7 +704,6 @@ mod tests {
         let first = apply_decision_writeback(&mut writer, &input_of(&target)).expect("首次回写");
         assert!(first.file_changed);
 
-        // 对已确认陈述重复回写：无新版本、无第二次 decision_writeback 事件
         let again_statement = writer
             .statements_of_revision(&first.new_revision_id.expect("新版本"))
             .expect("查新陈述");

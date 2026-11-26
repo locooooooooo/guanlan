@@ -21,42 +21,27 @@ use crate::query::cursor::{
 use crate::query::{EventDaysQuery, EventGranularity, EventOrder, EventQuery};
 use crate::storage::{internal_sql, ReadonlyStore};
 
-/// 决策事件的格式回填表达式（queries.ts:201）：决策事件（revision_id 为空）经
-/// r→f 联表后格式必为 null，从 payload 的 file_id 回填来源文件格式。
 const FORMAT_EXPR: &str = "COALESCE(f.format, df.format)";
 
-/// 桶内决定样本上限：与 samples 独立——一个桶可能有几十个决定，
-/// 不再无界塞进嵌套集合；超出时 decision_total/decisions_truncated 如实标注，
-/// 客户端可经有界分页的 /api/v1/events 继续读该桶。
 const EVENT_DAY_DECISION_CAP: i64 = 20;
 
-/// 窗口统计缓存条目：total_in_window + undated_count
 #[derive(Debug, Clone)]
 struct WindowStats {
     total_in_window: u64,
     undated_count: u64,
 }
 
-/// 窗口统计缓存键与映射类型（独立别名避免复杂返回类型内联）
 type WindowStatsCacheKey = (String, i64, i64, String);
 type WindowStatsCache =
     std::sync::Mutex<std::collections::HashMap<WindowStatsCacheKey, WindowStats>>;
 
-/// 窗口统计缓存容量（窗口×筛选并存上限；超出按插入序逐最旧）
 const WINDOW_STATS_CACHE_CAPACITY: usize = 64;
 
-/// 窗口统计缓存：`(ws_id, generation, snapshot_max_seq, 筛选指纹) → 统计`。
-/// 事件只增不改且新事件不进已签发窗口（seq <= snap），同代际同窗口同筛选下
-/// 统计恒定，可安全复用。
 fn window_stats_cache() -> &'static WindowStatsCache {
     static CACHE: std::sync::OnceLock<WindowStatsCache> = std::sync::OnceLock::new();
     CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
 }
 
-/// 事件窗口过滤构建器（queries.ts:138-171 eventWindowFilter 逐字对齐）：
-/// 页查询与窗口计数（total_in_window）共用同一份条件。
-/// `snap_bound` 为 None 时省略 seq 上界（首页 `snap == current_max` 时
-/// 上界恒真且会让查询规划器放弃排序表达式索引；一致性由 `read_txn` 快照保证）。
 fn event_window_filter(
     workspace_id: &str,
     query: &EventQuery,
@@ -102,9 +87,6 @@ fn event_window_filter(
 
 /// 事件分页（契约 §1.4：queryEvents 映射，绑定筛选指纹与 snapshot_max_seq）
 pub fn query_events(store: &ReadonlyStore, query: &EventQuery) -> Result<EventPage, GuanlanError> {
-    // max_event_seq / 页查询 / 窗口统计固定在同一 DEFERRED 读快照内
-    // （契约 §0.3-1 snapshot 语义的正确性前提，也为首页省略空转 seq 上界提供
-    // 一致性保证）；只读连接上不产生任何写行为（契约 §4-1 边界不变）。
     store.read_txn(|_conn| query_events_tx(store, query))
 }
 
@@ -125,17 +107,12 @@ pub fn query_events_tx(
         Some(raw) if !raw.is_empty() => Some(decode_event_cursor(raw)?),
         _ => None,
     };
-    // snapshot_max_seq 绑定（契约 §0.3-1）：续页沿用签发时的快照，新事件不进窗口
     let snap = cursor.as_ref().map_or(current_max, |c| c.snap);
     if let Some(c) = &cursor {
         if c.fp != fp {
-            // 游标绑定筛选不一致 → 返回 CURSOR_STALE（契约 §0.2）
             return Err(cursor_stale_fingerprint());
         }
     }
-    // seq 上界仅在真正收紧窗口时下发（续页 snap < current_max）；
-    // 首页 snap==current_max 时上界恒真，省略后查询规划器才能选用排序表达式
-    // 索引（idx_events_ws_occurred_sort / idx_events_ws_observed_sort）避免整窗排序。
     let snap_bound = (snap < current_max).then_some(snap);
 
     let sort_expr = if observed {
@@ -143,7 +120,6 @@ pub fn query_events_tx(
     } else {
         "COALESCE(e.occurred_at, '')".to_owned()
     };
-    // 窗口按本地日历日归属（纯日期短路，含时刻 ISO 按 localtime 取日）
     let date_expr = if observed {
         local_day_expr("e.observed_at")
     } else {
@@ -152,7 +128,6 @@ pub fn query_events_tx(
 
     let (mut clauses, mut params) = event_window_filter(ws_id, query, snap_bound, &date_expr);
     if let Some(c) = &cursor {
-        // 键集分页条件（queries.ts:204-207）：(sort, seq) < (k, s)
         clauses.push(format!(
             "({sort_expr} < ? OR ({sort_expr} = ? AND e.seq < ?))"
         ));
@@ -224,10 +199,6 @@ pub fn query_events_tx(
         None
     };
 
-    // 窗口统计（不含游标条件）：与页查询共用过滤构建器（queries.ts:257-273）。
-    // 窗口总数按稳定快照（snapshot_max_seq）与筛选指纹（fp）缓存复用：
-    // 同代际内事件只增不改、新事件不进已签发窗口（seq <= snap），同窗口同
-    // 筛选的续页不再重复做与窗口总量成正比的统计。
     let window_stats = {
         let key = (
             ws_id.to_owned(),
@@ -258,7 +229,6 @@ pub fn query_events_tx(
                         r.get(0)
                     })
                     .map_err(internal_sql)?;
-                // 「日期待考 N」与当前类型筛选同口径（与 queries.ts 一致）
                 let mut undated_clauses: Vec<String> = vec![
                     "e.workspace_id = ?".to_owned(),
                     "e.occurred_at IS NULL".to_owned(),
@@ -292,7 +262,6 @@ pub fn query_events_tx(
                         .lock()
                         .unwrap_or_else(|p| p.into_inner());
                     if cache.len() >= WINDOW_STATS_CACHE_CAPACITY && !cache.contains_key(&key) {
-                        // 插入序逐最旧（会话级缓存；容量覆盖多窗口/多筛选并存）
                         if let Some(oldest) = cache.keys().next().cloned() {
                             cache.remove(&oldest);
                         }
@@ -324,7 +293,6 @@ pub fn query_events_tx(
         items,
         total_in_window: total_in_window.max(0) as u64,
         undated_count: undated_count.max(0) as u64,
-        // newer_count（queries.ts:310）：首屏后新增事件数，驱动「有新变化」提示
         newer_count: (current_max - snap).max(0) as u64,
     })
 }
@@ -340,7 +308,6 @@ pub fn event_time_range(store: &ReadonlyStore) -> Result<EventTimeRangeResponse,
     })
 }
 
-/// 时间范围内部实现（bootstrap 复用；不带响应壳）
 pub(crate) fn event_time_range_inner(
     conn: &Connection,
     workspace_id: &str,
@@ -368,11 +335,6 @@ pub(crate) fn event_time_range_inner(
     .map_err(internal_sql)
 }
 
-/// 桶键表达式（queries.ts:451-457 eventDayBucketExpr 逐字对齐）：
-/// - day = YYYY-MM-DD（本地日历日）；month = YYYY-MM；
-/// - week = 该日所在周的周一（先回退 6 天再前进到最近的周一）；
-/// - occurred 口径锚定 occurred_at（空桶=日期待考）；observed 锚定 observed_at；
-/// - 纯日期不参与时区换算；空串经 date() 返回 NULL，用 COALESCE 兜回空串桶。
 fn event_day_bucket_expr(order: EventOrder, granularity: EventGranularity) -> String {
     let anchor = if order == EventOrder::Observed {
         "e.observed_at"
@@ -408,8 +370,6 @@ pub fn query_event_days_tx(
     let observed = order == EventOrder::Observed;
     let granularity = query.granularity;
     let bucket = event_day_bucket_expr(order, granularity);
-    // from/to 窗口恒按「本地日」过滤（与 /events 的 dateExpr 口径一致），
-    // 聚合桶粒度只影响分组键（queries.ts:469-470）
     let day_expr = local_day_expr(if observed {
         "e.observed_at"
     } else {
@@ -448,15 +408,6 @@ pub fn query_event_days_tx(
         clauses.join(" AND ")
     );
 
-    // ── 先确定返回桶，再只为这些桶富化样本/详情 ──
-    //
-    // 先取返回桶集合再按桶下界聚合，避免请求少量桶时对全窗口做无界聚合与样本分区：
-    //   ① 一次扫描拿 total / 有日期的桶数 / 待考事件数（全范围计数单独统计）；
-    //   ② 再取 top N+1 个桶键（N=limit_days）→ 得到返回集合与 hidden_days；
-    //   ③ 桶×种类×格式、决策、样本三类查询都加 `d = '' OR d >= min_key` 下界，
-    //      窗口函数只分区返回桶的行（样本不再按全窗口分区）。
-
-    // ① 全范围计数（保 total / hidden_days / undated 语义）
     let totals_sql = format!(
         "SELECT COUNT(*) AS total, \
                 COUNT(DISTINCT CASE WHEN {bucket} <> '' THEN {bucket} END) AS dated_buckets, \
@@ -473,7 +424,6 @@ pub fn query_event_days_tx(
         })
         .map_err(internal_sql)?;
 
-    // ② 取返回桶（多取 1 个用于判定 hidden_days，不依赖额外 COUNT）
     let keys_sql = format!(
         "SELECT {bucket} AS d {base} AND {bucket} <> '' \
          GROUP BY d ORDER BY d DESC LIMIT ?"
@@ -493,20 +443,16 @@ pub fn query_event_days_tx(
         dated_keys.truncate(limit_days as usize);
     }
     let hidden_days = (dated_bucket_total.max(0) as u64).saturating_sub(dated_keys.len() as u64);
-    // 返回桶的最小键：后续富化查询的统一下界（桶键为 YYYY-MM-DD/YYYY-MM，字典序即时序）
     let min_key = dated_keys.last().cloned();
 
-    // ③ 只为返回桶（+ 待考桶）富化；min_key 缺失且无待考 → 直接返回空结果
     let mut group_map: std::collections::HashMap<String, EventDayGroup> =
         std::collections::HashMap::new();
 
     if let Some(min_key) = min_key.as_deref() {
-        // 富化过滤：待考桶恒参与（它不占 limit_days），日期桶只取 >= min_key
         let enrich_clause = format!("({bucket} = '' OR {bucket} >= ?)");
         let mut enrich_params = params.clone();
         enrich_params.push(sql_text(min_key));
 
-        // 3a) 桶 × 种类 × 格式计数
         let daily_sql = format!(
             "SELECT {bucket} AS d, e.kind AS kind, {FORMAT_EXPR} AS fmt, COUNT(*) AS n \
              {base} AND {enrich_clause} \
@@ -535,7 +481,6 @@ pub fn query_event_days_tx(
             }
         }
 
-        // 3b) 决策聚合（code/status 取组内 seq 最大那条事件）+ 独立上限
         let decision_sql = format!(
             "SELECT * FROM ( \
                SELECT grouped.d AS d, grouped.decision_id AS decision_id, \
@@ -586,8 +531,6 @@ pub fn query_event_days_tx(
             });
         }
 
-        // 3c) 每桶最新若干条样本（同桶优先决策与内容修改类，其余按入库序）；
-        //     窗口分区只看返回桶的行，不再按全窗口分区
         let sample_sql = format!(
             "SELECT * FROM ( \
                SELECT e.event_id, e.kind, e.headline, e.revision_id, e.occurred_at, e.occurred_precision, \
@@ -650,7 +593,6 @@ pub fn query_event_days_tx(
             g.samples.push(item);
         }
     } else if undated_events > 0 {
-        // 没有日期桶但有「日期待考」：仍需待考桶的分组与样本
         let mut enrich_params = params.clone();
         enrich_params.push(sql_text(""));
         let daily_sql = format!(
@@ -681,8 +623,6 @@ pub fn query_event_days_tx(
         }
     }
 
-    // 分组收尾（queries.ts:571-623）：空串桶 =「日期待考」，恒排最后。
-    // 返回桶已在上面确定，这里只按既有顺序取组，不再做全量 reduce。
     let total = total_events.max(0) as u64;
     let undated = group_map.remove("");
     let mut groups: Vec<EventDayGroup> = dated_keys
@@ -690,10 +630,8 @@ pub fn query_event_days_tx(
         .filter_map(|k| group_map.remove(k))
         .collect();
     for group in groups.iter_mut() {
-        // 决定样本截断标记（总数与样本数对比，不用额外查询）
         group.decisions_truncated = (group.decision_total as usize) > group.decisions.len();
     }
-    // 先取 count 再 move 组进 groups，避免为读取 count 而克隆整组数据
     let undated_count = match undated {
         Some(mut u) if u.count > 0 => {
             u.decisions_truncated = (u.decision_total as usize) > u.decisions.len();
@@ -723,7 +661,6 @@ pub fn query_event_days_tx(
     })
 }
 
-/// 取分组（queries.ts:572-579 ensureGroup 对齐）：不存在则建空组，date 记桶键
 fn ensure_group<'m>(
     map: &'m mut std::collections::HashMap<String, EventDayGroup>,
     date: &str,

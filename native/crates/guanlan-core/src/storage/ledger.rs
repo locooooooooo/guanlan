@@ -263,7 +263,6 @@ pub fn verify_decision_ledger_on_conn(
 
     let mut issues: Vec<LedgerAuditIssue> = Vec::new();
 
-    // 1. 读取全部链节点（按 chain_seq 严格递增）
     let mut stmt = conn
         .prepare(
             "SELECT chain_seq, event_id, event_kind, subject_id, revision_id,
@@ -294,7 +293,6 @@ pub fn verify_decision_ledger_on_conn(
     let mut verified_entries: usize = 0;
     let mut sealed_event_ids: HashSet<String> = HashSet::with_capacity(chain_rows.len());
 
-    // 2. 逐条核对链接连续性、链哈希与底层 events 表实时内容摘要
     for entry in &chain_rows {
         sealed_event_ids.insert(entry.event_id.clone());
         let mut entry_ok = true;
@@ -335,7 +333,6 @@ pub fn verify_decision_ledger_on_conn(
             });
         }
 
-        // 读取实时 events 行核对内容摘要
         let live_event: Option<LiveEventRow> = conn
             .query_row(
                 "SELECT workspace_id, event_id, kind, subject_kind, subject_id, revision_id,
@@ -409,7 +406,6 @@ pub fn verify_decision_ledger_on_conn(
                     });
                 }
 
-                // 若为 decision_writeback 且绑定了新版本，核验该修订行仍存在于 revisions 表
                 if entry.event_kind == "decision_writeback" {
                     if let Some(ref rev_id) = entry.revision_id {
                         let rev_exists: i64 = conn
@@ -442,7 +438,6 @@ pub fn verify_decision_ledger_on_conn(
         expected_prev = entry.chain_hash.clone();
     }
 
-    // 3. 核对 meta 链头锚点（防止同时截断链尾与事件尾）
     let meta_head_hash: Option<String> = conn
         .query_row(
             "SELECT value FROM meta WHERE key = ?",
@@ -490,7 +485,6 @@ pub fn verify_decision_ledger_on_conn(
         _ => {}
     }
 
-    // 4. 检测绕过账本链直接插入/伪造的关键决定事件
     let mut sealed_events_total: usize = 0;
     let first_sealed_event_seq: Option<i64> = conn
         .query_row(
@@ -632,7 +626,6 @@ mod tests {
         assert!(clean.ok, "完好账本应验证通过：{:?}", clean.issues);
         assert_eq!(clean.verified_entries, 2);
 
-        // 篡改模式 1：修改 events.detail
         conn.execute(
             "UPDATE events SET detail = '决定通过方案B（被篡改）' WHERE event_id = 'evt_1'",
             [],
@@ -645,7 +638,6 @@ mod tests {
             .iter()
             .any(|i| i.code == "event_content_tampered"));
 
-        // 还原事件，测试篡改模式 2：绕过账本伪造未封存事件
         conn.execute(
             "UPDATE events SET detail = '决定通过方案A' WHERE event_id = 'evt_1'",
             [],
@@ -667,7 +659,6 @@ mod tests {
             .any(|i| i.code == "unsealed_decision_event"
                 && i.event_id.as_deref() == Some("evt_forged")));
 
-        // 清理伪造行，测试篡改模式 3：截断链尾（链尾与 meta 锚点冲突）
         conn.execute("DELETE FROM events WHERE event_id = 'evt_forged'", [])
             .unwrap();
         conn.execute(

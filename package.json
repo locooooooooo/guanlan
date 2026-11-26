@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit",
+    "lint": "tsc --noEmit && node scripts/lint-comments.mjs",
     "test": "tsx --test --test-concurrency=4 \"test/*.test.ts\" \"src/utils/*.test.ts\" \"src/hooks/*.test.ts\"",
     "gate": "node scripts/gate.mjs",
     "gate:full": "node scripts/gate.mjs --full",

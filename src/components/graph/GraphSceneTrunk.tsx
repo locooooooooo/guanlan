@@ -1,19 +1,10 @@
-/**
- * Scene 主干层 · GraphSceneTrunk：
- * 承载四泳道主干、主干里程碑刻度（含 X-Ray 扫线宿主）、来源连线、主干→扇出连接线与泳道计数胶囊。
- * 数据一律来自 controller ctx；d3 zoom/drag effect 仍在控制器（按 data-node-id /
- * .d3-draggable-node 类选择器跨子组件查询，保持稳定 DOM 结构）。
- */
 import React from 'react';
 import { ChronosMascotNode } from '../ChronosMascotNode';
 import PackageGroupFrame, { PACKAGE_GROUP_FRAME_H } from '../canvas/PackageGroupFrame';
 import RichDocPreviewCard from '../canvas/RichDocPreviewCard';
 import { cleanDisplayText } from '../../utils/displayText';
-// Trunk 的两处连线消费点统一走 computeBoundEdgeRoute（./edgeRouting）
 import { hasUnreadChanges, unreadStatusLabel } from '../../utils/guanlanEngine';
-// 绑定路由入口：走廊无障碍时保留贝塞尔曲线，命中卡片本体时切换为带呼吸间距的正交圆角避障路由
 import { computeBoundEdgeRoute } from './edgeRouting';
-// 视口裁剪纯函数（Scene 层消费挂载判定与连接线判定）
 import { shouldDrawGroupConnector } from '../../utils/canvasViewport';
 import {
   artifactStageBadgeText,
@@ -71,7 +62,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
     accumulationRibbonPath,
     activeTickY,
     isTimeFlowPlaying,
-    // 避障障碍清单（与渲染口径同源，见 controller graphObstacleRects）
     graphObstacleRects,
     TRUNK_AXIS_TOP,
     TRUNK_AXIS_BOTTOM,
@@ -122,7 +112,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
   } = ctx;
   return (
     <>
-        {/* 2.8 时光累积沉淀轮廓带：自底端「时光起点」向顶端「今日」渐次舒展，表达时间流逝化作文档积累 */}
         {accumulationRibbonPath && (
           <g data-testid="trunk-accumulation-ribbon" pointerEvents="none">
             <path
@@ -137,11 +126,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
           </g>
         )}
 
-        {/* 3. Central 4-Lane River Trunk（四根光束对应四个文档分类泳道，
-            主干+泳道恒渲染——时间轴本体不随布局消失，详情框仅在 xray 下显示）。
-            泳道色取自 --cv-lane-* 令牌（见 LANE_COLORS）；stroke 走 style 形态
-            （SVG 表现属性不解析 var()）；光束/传导/流星/光点统一挂 .cv-stream-glow 类，
-            按暗档/浅档主题分别应用常规发光与柔光滤镜。 */}
         <g className="animate-river-pulse">
           <path
             d={d3RiverStrands.md}
@@ -176,7 +160,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
             className="cv-stream-glow"
           />
 
-          {/* Streaming Dashed Flow Overlay + High-Speed River Shooting Star Comets */}
           {liveFlowEnabled && lodGates.liveFlow && (
             <>
               <path
@@ -233,12 +216,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
           )}
         </g>
 
-        {/* 3.5 Trunk Milestones（全画布唯一日期刻度，画在泳道之上）
-            trunkTicks 降序（index 0 = 最新一天 = 轴顶，向下越旧），
-            逐刻度一枚发光里程碑节点贴日期文本；有事件日实心光点（大小∝事件数），
-            空档日暗淡空心小点，「更早 N 天/周/月」截断在最底端虚线短横且不可点击。
-            层内同时承载泳道光点（某天某分类有更新即亮对应色光点）与 X-Ray 扫线宿主。
-            渲染序列经 dedupeTicksByDate 去重，保证同日期在主干轴上至多出现一次。 */}
         <g data-testid="trunk-milestones">
           {scene.hasRealEvents &&
             (() => {
@@ -248,15 +225,12 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
                 const n = trunkTicks.length;
                 const y = milestoneY(i, n, TRUNK_AXIS_TOP, TRUNK_AXIS_BOTTOM);
                 const active = scene.activeDate === tick.date;
-                // 1.2：每日期只允许 1 个唯一锚点文字——该日期已有左侧日期汇总卡承载时，
-                // 主干不再重复标注（此前同一 MM-DD 在主干 + 日期卡各写一次）
                 const showLabel =
                   tick.isGap ||
                   trunkTickShowsLabel(i, rulerLabelStep, tick.date, navigatorDateSet);
                 const tickAggregated = Boolean(tick.granularity && tick.granularity !== 'day');
                 const tickDisplayLabel = formatTrunkTickLabel(tick, latestYear, rulerLabelStep);
 
-                // 逐日选中/再点取消；周/月聚合刻度下钻到日；截断/空档刻度无操作
                 const clickTick = (e: React.MouseEvent) => {
                   e.stopPropagation();
                   if (tick.isTruncation || tick.isGap) return;
@@ -277,8 +251,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
                   .map(([kind, c]) => `${kind}×${c}`)
                   .join(' ');
 
-                // 泳道光点：该刻度 formats 计数>0 的每个分类在其泳道亮一枚光点；
-                // 三格式之和的余量（未判定事件：决策/读取问题等工作区级）落蓝泳道
                 const laneDots: Array<{ lane: LaneKey; count: number }> = [];
                 if (tick.hasEvents) {
                   let knownShare = 0;
@@ -294,7 +266,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
                   }
                 }
 
-                {/* 连续长空档断层标记：标签置于主干左侧留白区，绝不被右侧展开框遮挡 */}
                 if (tick.isGap) {
                   return (
                     <g key={`milestone-${tick.date}`} className="d3-no-pan">
@@ -323,8 +294,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
                   );
                 }
 
-                {/* 「更早 N 天/周/月」截断提示刻度——超出取数窗口的更早历史折叠于主干最底端并明示，
-                    不可点击、不承载日期；切到更粗粒度可整段回看 */}
                 if (tick.isTruncation) {
                   return (
                     <g key={`milestone-${tick.date}`} className="d3-no-pan">
@@ -353,8 +322,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
                 }
 
                 const accumPt = trunkAccumulation[i];
-                // 每日文档结晶刻度条绘制在主干左肩（朝向司辰沙漏一侧，宽 5..13px → x: trunkX-22..trunkX-9），
-                // 既呼应「沙漏流沙化作文档结晶」，又让右侧刻度日期（trunkX+12..450）彻底避让扇出框左缘（452）
                 const strataWidth =
                   tick.hasEvents && accumPt
                     ? Math.round(5 + 8 * accumPt.strataIntensity)
@@ -400,11 +367,9 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
                         titleKinds ? ` · ${titleKinds}` : ''
                       }${tickAggregated ? ' · 点击下钻到日' : ''}`}
                     </title>
-                    {/* 命中热区（覆盖节点+结晶刻度+贴节点日期文本） */}
                     <rect x={trunkX - 14} y={y - 9} width="186" height="18" fill="transparent" />
                     {tick.hasEvents ? (
                       <>
-                        {/* 激活日司辰聚焦光环：标识司辰此刻定格的时间刻度 */}
                         {active && (
                           <>
                             <circle
@@ -425,7 +390,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
                             />
                           </>
                         )}
-                        {/* 有事件日：实心发光节点，半径随当日事件数增大；activeDate 亮橙 */}
                         <circle
                           cx={trunkX}
                           cy={y}
@@ -433,7 +397,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
                           style={{ fill: active ? 'var(--cv-lane-md)' : 'var(--cv-ink)' }}
                           className="cv-stream-glow"
                         />
-                        {/* 每日文档结晶刻度条（按格式泳道分段着色，直观呈现每日沉淀厚度） */}
                         {strataSegments.length > 0 && (
                           <g data-testid={active ? 'trunk-active-strata' : undefined}>
                             {strataSegments.map((seg) => (
@@ -452,7 +415,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
                         )}
                       </>
                     ) : (
-                      // 空档日：钟表微刻度 + 暗淡空心小点，表达时光静静流逝
                       <>
                         <line
                           x1={trunkX - 4.5}
@@ -474,7 +436,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
                         />
                       </>
                     )}
-                    {/* 泳道光点（点击同里程碑） */}
                     {laneDots.map((dot) => (
                       <circle
                         key={dot.lane}
@@ -485,7 +446,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
                         className="cv-stream-glow"
                       />
                     ))}
-                    {/* 贴节点日期文本（让位结晶刻度；最新一天恒标注；跨年补年份杜绝假重复） */}
                     {showLabel && (
                       <text
                         x={labelX}
@@ -503,8 +463,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
               });
             })()}
 
-          {/* Animated Geek X-Ray Laser Sweep：宿主改挂里程碑层，沿主干自上而下扫过
-              （keyframes 纵向平移 520px 不变，仍由 xrayLaserEnabled 门控） */}
           {xrayLaserEnabled && lodGates.laser && (
             <g className="animate-laser-sweep">
               <line
@@ -526,7 +484,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
           )}
         </g>
 
-        {/* 4. Dynamic Bezier Edges from Left Sources -> Trunk / Main Hub with Streaming Animation */}
         {leftSourceNodes.map((src, idx) => {
           if (!isNodeVisibleByCategory(src.badge)) return null;
           const pos = resolveLeftSourcePos(src);
@@ -546,8 +503,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
             canvasLayoutMode === 'xray'
               ? { x: trunkX - 4, y: src.targetTrunkY }
               : { x: mainHubPos.x + 74, y: mainHubPos.y + 38 };
-          // 左侧日期卡 → 时间主干：排除司辰立绘自身矩形，让流光丝线从司辰神座背后丝滑汇聚入时间河，
-          // 避免折出僵硬的工业直角框包住左侧日期卡（立绘浮于连线之上，视觉更空灵流畅）
           const sourceEdgeObstacles = graphObstacleRects.filter((o) => o.id !== 'chronos_deity');
           const edgeRoute = computeBoundEdgeRoute({
             from: fromPt,
@@ -601,16 +556,9 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
           );
         })}
 
-        {/* 5. Single Trunk → Fan-Out Connector（单线收敛：
-            仅绘制一根自激活日主干刻度指向详情框左缘中点的连接线；
-            未选中=弱白线；选中日期刻度 / 事件卡 = 橙色定向电流脉冲：
-            .anim-pulse-flow 跑 stroke-dashoffset 0→-24（dasharray 6 18 正好一轮 24），
-            外加一层柔光 drop-shadow 呼吸（SMIL opacity，不新增 CSS keyframes） */}
         {(() => {
           const hasSelectedCard = subAgentCards.some((c) => c.id === selectedCanvasNodeId);
-          // 3.1：选中主干上的某一天（activeDate）或选中事件卡，都点亮这条主干→详情框电流
           const pulseOn = hasSelectedCard || Boolean(scene.activeDate);
-          // 锚定当前激活日真实刻度 y（点击历史日或时光流转时，主干→右侧文档的能量束随司辰同频移动）
           const connectorFromY = activeTickY ?? TRUNK_AXIS_TOP;
           const connectorRoute = computeBoundEdgeRoute({
             from: { x: trunkX + 4, y: connectorFromY },
@@ -630,7 +578,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
               />
               {pulseOn && (
                 <>
-                  {/* 柔光层：只动 opacity（合成器），静态 drop-shadow 负责「发光」质感 */}
                   <path
                     d={connectorPath}
                     fill="none"
@@ -667,7 +614,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
           );
         })()}
 
-        {/* 6. 时光方向微锚点与轴脊呼吸光点（置于主干右缘留白位，绝不压过中央时间河光束） */}
         {canvasLayoutMode === 'xray' && scene.hasRealEvents && (
           <g pointerEvents="none">
             <circle
@@ -680,7 +626,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
               opacity="0.55"
               className="animate-sonar-ripple"
             />
-            {/* 「此刻 · 最新沉淀」上移留足 22px 呼吸间距，不贴压脊顶刻度与波纹 */}
             <text
               x={trunkX + 18}
               y={TRUNK_AXIS_TOP - 22}
@@ -703,7 +648,6 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
               opacity="0.45"
               className="animate-sonar-ripple"
             />
-            {/* 「时光起点」齐平锚点上移至安全区，避免被底部浮坞压盖 */}
             <text
               x={trunkX + 18}
               y={TRUNK_AXIS_BOTTOM - 2}

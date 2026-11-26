@@ -9,13 +9,10 @@ import {
 } from '../services/workspaceClient';
 
 export interface InitiativeCandidatePanelProps {
-  /** 采纳成功后回调（App 侧刷新 state-overview；缺省依赖 SSE 联动） */
   onAdopted?: () => void;
-  /** 成员点击跳转（缺省仅展示） */
   onOpenFile?: (fileId: string) => void;
 }
 
-/** 信号位掩码 → 徽标文案 */
 const SIGNAL_LABELS: Array<{ bit: number; label: string }> = [
   { bit: 0x10, label: 'Agent 批次' },
   { bit: 0x08, label: '会话共现' },
@@ -56,7 +53,6 @@ export const InitiativeCandidatePanel: React.FC<InitiativeCandidatePanelProps> =
     return () => controller.abort();
   }, [reload]);
 
-  /** 提交 202 任务后延迟重拉（写线程完成后 SSE 也会驱动刷新，这里兜底） */
   const act = useCallback(
     async (
       id: string,

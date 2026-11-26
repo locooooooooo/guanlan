@@ -1,16 +1,9 @@
-/**
- * Scene 背景层 · GraphSceneBackdrop：
- * 承载 defs 渐变/滤镜、流星雨星闪层、布局星轨、主干左上固定文字组与司辰传导线。
- * 数据一律来自 controller ctx；d3 zoom/drag effect 仍在控制器（按 data-node-id /
- * .d3-draggable-node 类选择器跨子组件查询，保持稳定 DOM 结构）。
- */
 import React from 'react';
 import { ChronosMascotNode } from '../ChronosMascotNode';
 import PackageGroupFrame, { PACKAGE_GROUP_FRAME_H } from '../canvas/PackageGroupFrame';
 import RichDocPreviewCard from '../canvas/RichDocPreviewCard';
 import { cleanDisplayText } from '../../utils/displayText';
 import { computeDynamicEdgePath, hasUnreadChanges, unreadStatusLabel } from '../../utils/guanlanEngine';
-// 视口裁剪纯函数（Scene 层消费挂载判定与连接线判定）
 import { shouldDrawGroupConnector } from '../../utils/canvasViewport';
 import {
   artifactStageBadgeText,
@@ -121,9 +114,6 @@ export function GraphSceneBackdrop({ ctx }: { ctx: GraphCanvasCtx }) {
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
-        {/* 浅档柔光滤镜：泳道光束在白底上强发光易糊化。
-            光束经 .cv-stream-glow 类按主题引用（index.css），暗档沿用 d3-stream-glow，
-            浅档切换为本柔光滤镜（stdDeviation 保持常量不变）。 */}
         <filter id="d3-stream-glow-soft" x="-40%" y="-40%" width="180%" height="180%">
           <feGaussianBlur stdDeviation="1.2" result="blur" />
           <feMerge>
@@ -131,20 +121,17 @@ export function GraphSceneBackdrop({ ctx }: { ctx: GraphCanvasCtx }) {
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
-        {/* 司辰悬停光环渐变（供 ChronosMascotNode 引用） */}
         <linearGradient id="chronos-halo-grad" x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%" style={{ stopColor: 'var(--cv-brand)' }} stopOpacity="0.95" />
           <stop offset="50%" style={{ stopColor: 'var(--cv-brand-hover)' }} stopOpacity="0.75" />
           <stop offset="100%" style={{ stopColor: 'var(--cv-brand)' }} stopOpacity="0.9" />
         </linearGradient>
-        {/* 四根泳道光束直接使用语义令牌纯色 + d3-stream-glow（见泳道渲染与 LANE_COLORS） */}
         <linearGradient id="xray-laser-grad" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" style={{ stopColor: 'var(--cv-brand)' }} stopOpacity="0" />
           <stop offset="25%" style={{ stopColor: 'var(--cv-brand)' }} stopOpacity="0.65" />
           <stop offset="65%" style={{ stopColor: 'var(--cv-lav)' }} stopOpacity="0.75" />
           <stop offset="100%" style={{ stopColor: 'var(--cv-lav)' }} stopOpacity="0" />
         </linearGradient>
-        {/* Shooting Star (流星) Tapered Tail Gradients */}
         <linearGradient id="meteor-tail-terracotta" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" style={{ stopColor: 'var(--cv-ink)' }} stopOpacity="1" />
           <stop offset="18%" style={{ stopColor: 'var(--cv-brand)' }} stopOpacity="0.9" />
@@ -163,7 +150,6 @@ export function GraphSceneBackdrop({ ctx }: { ctx: GraphCanvasCtx }) {
           <stop offset="60%" style={{ stopColor: 'var(--cv-brand)' }} stopOpacity="0.32" />
           <stop offset="100%" style={{ stopColor: 'var(--cv-amber)' }} stopOpacity="0" />
         </linearGradient>
-        {/* Oriented Conduit Comet Tail Gradients (head at x=0, tail trailing to -x) */}
         <linearGradient id="comet-conduit-terracotta" x1="100%" y1="0%" x2="0%" y2="0%">
           <stop offset="0%" style={{ stopColor: 'var(--cv-ink)' }} stopOpacity="1" />
           <stop offset="30%" style={{ stopColor: 'var(--cv-brand)' }} stopOpacity="0.9" />
@@ -179,7 +165,6 @@ export function GraphSceneBackdrop({ ctx }: { ctx: GraphCanvasCtx }) {
           <stop offset="30%" style={{ stopColor: 'var(--cv-amber)' }} stopOpacity="0.92" />
           <stop offset="100%" style={{ stopColor: 'var(--cv-amber)' }} stopOpacity="0" />
         </linearGradient>
-        {/* 司辰时光沉淀渐变：顶端「今日」温润流金 → 中段柔紫 → 底部「时光起点」微蓝薄雾 */}
         <linearGradient id="chronos-accumulation-grad" x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%" style={{ stopColor: 'var(--cv-lane-md)' }} stopOpacity="0.28" />
           <stop offset="48%" style={{ stopColor: 'var(--cv-lav)' }} stopOpacity="0.18" />
@@ -187,18 +172,11 @@ export function GraphSceneBackdrop({ ctx }: { ctx: GraphCanvasCtx }) {
         </linearGradient>
       </defs>
 
-      {/* D3 Zoomable & Pannable Group
-          perf：transform 属性去 React 托管——挂载时由 useLayoutEffect 写一次初始变换，
-          之后只由 zoom 事件帧内直写；若保留 JSX 绑定，zoomTransform state 虽只在
-          gesture end 更新，但其他 state（选中/悬浮/开关）触发的整树重渲都会用旧值
-          抹掉命令式写入，画布瞬间跳回上一次落定位 */}
-        {/* 0A. Deep-Space Twinkling Constellation & Shooting Star Shower (流星雨动画层) */}
         {meteorShowerEnabled && lodGates.meteors && (
           <g
             data-testid="shooting-stars-layer"
             className="pointer-events-none cv-ambient-stars"
           >
-            {/* Ambient Twinkling Constellation Stars */}
             {[
               { cx: 145, cy: 62, r: 1.4, color: 'var(--cv-amber)', delay: '0s' },
               { cx: 288, cy: 84, r: 1.6, color: 'var(--cv-lav)', delay: '0.9s' },
@@ -227,7 +205,6 @@ export function GraphSceneBackdrop({ ctx }: { ctx: GraphCanvasCtx }) {
               </g>
             ))}
 
-            {/* 5 Continuous Diagonal Celestial Shooting Stars (流星) */}
             {[
               {
                 id: 'meteor-1',
@@ -285,13 +262,11 @@ export function GraphSceneBackdrop({ ctx }: { ctx: GraphCanvasCtx }) {
                 transform={`translate(${m.x}, ${m.y}) rotate(${m.angle})`}
               >
                 <g className={m.cls}>
-                  {/* Outer Tapered Glowing Meteor Wake */}
                   <polygon
                     points={`0,0 ${m.tailLen},-3.2 ${m.tailLen},3.2`}
                     fill={m.grad}
                     opacity="0.88"
                   />
-                  {/* High-Intensity Core Streak */}
                   <line
                     x1="0"
                     y1="0"
@@ -301,11 +276,9 @@ export function GraphSceneBackdrop({ ctx }: { ctx: GraphCanvasCtx }) {
                     strokeWidth="1.8"
                     strokeLinecap="round"
                   />
-                  {/* Trailing Ionization Sparks */}
                   <circle cx="24" cy="-1.8" r="1.1" style={{ fill: m.accent }} opacity="0.85" />
                   <circle cx="48" cy="1.6" r="0.9" style={{ fill: 'var(--cv-ink)' }} opacity="0.75" />
                   <circle cx="76" cy="-1.2" r="0.8" style={{ fill: m.accent }} opacity="0.6" />
-                  {/* 4-Point Celestial Star Flare at Meteor Head */}
                   <path
                     d="M -7,0 L 7,0 M 0,-7 L 0,7"
                     style={{ stroke: 'var(--cv-ink)' }}
@@ -322,7 +295,6 @@ export function GraphSceneBackdrop({ ctx }: { ctx: GraphCanvasCtx }) {
               </g>
             ))}
 
-            {/* Interactive Time-Warp Meteor Burst when clicking Chronos or Meteor button */}
             {meteorBurstKey > 0 && (
               <g key={`meteor-burst-${meteorBurstKey}`}>
                 {[
@@ -361,7 +333,6 @@ export function GraphSceneBackdrop({ ctx }: { ctx: GraphCanvasCtx }) {
             )}
           </g>
         )}
-        {/* 0. D3 Radial Orbit Rings when in 'radial' or 'force' geek modes */}
         {canvasLayoutMode !== 'xray' && (
           <g transform={`translate(${mainHubPos.x + 75}, ${mainHubPos.y + 38})`}>
             <circle
@@ -383,16 +354,12 @@ export function GraphSceneBackdrop({ ctx }: { ctx: GraphCanvasCtx }) {
           </g>
         )}
 
-        {/* 1. "open in reader ->" + Minimalist Geek Telemetry Waveform
-            锚定主干左上（trunkX-170, TRUNK_META_TEXT_Y=10），平移钳制保证其屏幕位置绝不进左侧 Sources 面板；
-            y=10 让第二行基线（28）位于主卡顶部（32）之上，保证文字与主卡零重叠。 */}
         <g
           className="d3-no-pan cursor-pointer"
           data-trunk-open-reader-chip=""
           transform={`translate(${trunkX + FIXED_TEXT_TRUNK_DX}, ${TRUNK_META_TEXT_Y})`}
           onClick={() => openFileReader((activeFileRecord?.file_id || ''))}
         >
-          {/* 顶部「打开阅读器 →」锚定胶囊徽标（保持 TRUNK_META_TEXT_Y=10 零重叠基线） */}
           <rect
             x="-6"
             y="-12"
@@ -429,12 +396,8 @@ export function GraphSceneBackdrop({ ctx }: { ctx: GraphCanvasCtx }) {
           </text>
         </g>
 
-        {/* 标尺粒度切换（月/周/日）位于 GraphTopBar 分段胶囊控件，画布左上不再悬浮零散字符 */}
 
-        {/* 2.5 Temporal Energy Conduits from Chronos (God of Time) -> Timeline & River
-            随司辰显隐同步切换（收起时不绘制指向空位的悬空导线） */}
         <g style={{ display: chronosSliderOpen ? undefined : 'none' }}>
-          {/* Staff Gem -> Timeline Scrubber */}
           <path
             d={chronosConduits.staffToTimeline}
             fill="none"
@@ -443,7 +406,6 @@ export function GraphSceneBackdrop({ ctx }: { ctx: GraphCanvasCtx }) {
             strokeDasharray="4 6"
             className="animate-dash-flow"
           />
-          {/* Hourglass -> Central Version River */}
           <path
             d={chronosConduits.hourglassToRiver}
             fill="none"

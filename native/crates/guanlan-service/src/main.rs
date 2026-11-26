@@ -35,7 +35,6 @@ async fn main() {
     }
 }
 
-/// `guanlan storage <verify|export|diag> --root <目录> [--out <路径>] [--json]`
 fn run_storage(args: &[String]) {
     let Some(sub) = args.first().map(String::as_str) else {
         eprintln!("storage 子命令需要 verify | export | diag\n{USAGE}");
@@ -158,7 +157,6 @@ fn run_storage(args: &[String]) {
     }
 }
 
-/// `guanlan capsule inspect <胶囊目录> [--json]` —— 校验并打印离线事项资料胶囊摘要与完整性状态
 fn run_capsule(args: &[String]) {
     if args.first().map(String::as_str) != Some("inspect") {
         eprintln!("capsule 子命令当前支持: inspect <胶囊目录> [--json]\n{USAGE}");
@@ -218,13 +216,6 @@ fn run_capsule(args: &[String]) {
     }
 }
 
-/// 只读安全与防篡改账本诊断命令 `guanlan audit --root <目录> [--json]`。
-///
-/// 零写库副作用（`ReadonlyStore::open`），同时核验：
-/// 1. `decision_ledger_chain` 关键决定防篡改哈希链（内容篡改、链节点删改、绕过伪造、链尾截断）；
-/// 2. 工作区全部活跃 `files.current_path` 权限沙箱边界（路径逃逸、符号链接越界）。
-///
-/// 检出任意篡改或越界违规时返回退出码 3；全绿返回 0。
 fn run_audit(args: &[String]) {
     let mut root: Option<String> = None;
     let mut json_output = false;
@@ -311,10 +302,8 @@ fn run_audit(args: &[String]) {
     }
 }
 
-/// 跑一轮整库对账：打开（或创建）持久库 → 采集 → 对账 → 写版本/事件/证据。
 fn run_scan(args: &[String]) {
     let mut root: Option<String> = None;
-    // 支持多次传入 --initiative-dir <名>，幂等追加到 meta.initiative_dirs
     let mut initiative_dirs: Vec<String> = Vec::new();
     let mut index = 0;
     while index < args.len() {
@@ -345,8 +334,6 @@ fn run_scan(args: &[String]) {
         Ok(writer) => writer,
         Err(error) => fail_with_envelope(&error),
     };
-    // 同工作区排他锁：手动扫描与服务实例不能同时写同一个库
-    // （OS 级排他锁，进程退出由内核自动释放）
     let data_dir = match guanlan_core::storage::default_data_dir(&root) {
         Ok(dir) => dir,
         Err(error) => fail_with_envelope(&error),
@@ -355,8 +342,6 @@ fn run_scan(args: &[String]) {
         Ok(lock) => lock,
         Err(error) => fail_with_envelope(&error),
     };
-    // 先登记专项目录（幂等覆盖 meta.initiative_dirs），再对账
-    // ——新识别规则在本轮即生效
     if !initiative_dirs.is_empty() {
         let mut existing = writer.initiative_dirs().unwrap_or_default();
         for dir in &initiative_dirs {
@@ -427,8 +412,6 @@ fn run_scan(args: &[String]) {
     );
 }
 
-/// 启动失败：输出一行统一错误包络 JSON（契约 §0.2 结构）到 stderr 后退出。
-/// 退出码 1；错误码在包络 code 字段（如 ROOT_IN_USE/NOT_FOUND）供启动器识别。
 fn fail_with_envelope(err: &GuanlanError) -> ! {
     let envelope = err.to_envelope(None);
     let line = serde_json::to_string(&envelope).unwrap_or_else(|_| {
@@ -441,11 +424,10 @@ fn fail_with_envelope(err: &GuanlanError) -> ! {
     std::process::exit(1);
 }
 
-/// 解析并运行 `guanlan serve`（启动流程见 lib.rs）。
 async fn run_serve(args: &[String]) {
     let mut root: Option<String> = None;
-    let mut port: u16 = 0; // 缺省随机端口：绑定 0 由内核分配
-    let mut watch = false; // 显式开启后台增量索引
+    let mut port: u16 = 0;
+    let mut watch = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -483,9 +465,7 @@ async fn run_serve(args: &[String]) {
     let service: RunningService = match guanlan_service::start_readonly_service(ServeConfig {
         root,
         port,
-        // CLI 同源访问（Vite 代理 / 直接 curl）不需要 CORS
         cors_desktop: false,
-        // 缺省只读（契约 §4-3「打开已有数据零扫描」）；--watch 才启动 watcher 与启动对账
         background_index: watch,
     })
     .await
@@ -494,8 +474,6 @@ async fn run_serve(args: &[String]) {
         Err(e) => fail_with_envelope(&e),
     };
 
-    // 运行信息（数据目录、实例身份与接口版本）走 stderr，启动阶段不写 index.db
-    // （契约 contract-storage.md §4-1）；stdout 只保留一行端点行，供 CLI/启动器逐行解析。
     eprintln!(
         "guanlan serve data_dir={} instance_id={} api_version=v1",
         service.data_dir.display(),

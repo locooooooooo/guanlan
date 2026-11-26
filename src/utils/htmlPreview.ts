@@ -17,13 +17,9 @@ export const MAX_INLINE_HTML_ASSET_BYTES = 512 * 1024;
 export const MAX_INLINE_HTML_ASSET_COUNT = 8;
 
 export interface HtmlFeatureSummary {
-  /** 是否包含 <script> 标签或内联事件处理器 */
   hasScript: boolean;
-  /** 是否包含 <canvas>（常见于 2D/3D 绘制、图表、WebGL） */
   hasCanvasOrWebgl: boolean;
-  /** 是否包含 <script type="module" src="...">（需完整本地目录或服务运行） */
   hasExternalModuleScript: boolean;
-  /** 检测到的外部 http(s):// / // 资源地址（不含普通 <a href> 超链接） */
   externalUrls: string[];
 }
 
@@ -37,19 +33,12 @@ export interface LocalInlineAssetTarget {
 }
 
 export interface HtmlSandboxOptions {
-  /** 是否允许沙盒内执行脚本（始终不含 allow-same-origin） */
   allowScripts: boolean;
-  /** 是否允许加载外部 HTTPS 资源（如 CDN 样式/脚本/字体/图片） */
   allowExternalHttps: boolean;
-  /** 当前 HTML 文件的工作区相对路径（仅当前最新版本传入，用于解析相对资源） */
   relativePath?: string;
-  /** 工作区文件表（仅当前最新版本传入，用于解析相对图片与辅助资源） */
   workspaceFiles?: readonly FileRecord[];
-  /** 将 revision_id 转为可读 raw URL（默认需为绝对 URL 或经 fallbackOrigin 补全） */
   resolveRevisionRawUrl?: (revisionId: string) => string;
-  /** 当 resolveRevisionRawUrl 返回相对路径（同源浏览器模式）时用于拼成绝对 URL 的 origin */
   fallbackOrigin?: string;
-  /** 已预取的同工作区文本资源正文（key 为归一化小写相对路径，供内联本地 CSS / 经典 JS） */
   inlinedAssets?: Readonly<Record<string, string>>;
 }
 
@@ -67,10 +56,6 @@ interface HtmlSegment {
   text: string;
 }
 
-/**
- * 线性 O(n) 切分 HTML 为普通标记、注释、<script> 与 <style> 四类片段，
- * 确保标记重写不会误伤脚本字符串或注释文本。
- */
 function scanHtmlSegments(html: string): HtmlSegment[] {
   const segments: HtmlSegment[] = [];
   const lower = html.toLowerCase();
@@ -198,12 +183,11 @@ export function resolveRelativeAssetPath(
   try {
     cleaned = decodeURIComponent(cleaned);
   } catch {
-    // 保留原样继续解析
   }
 
   const baseNorm = normalizeWorkspacePath(htmlRelativePath);
   const baseParts = baseNorm.split('/');
-  baseParts.pop(); // 去掉当前 HTML 文件名，仅留所在目录
+  baseParts.pop();
 
   const relParts = cleaned.replace(/\\/g, '/').split('/');
   const resolved = [...baseParts];
@@ -318,7 +302,6 @@ export function inspectHtmlFeatures(rawHtml: string): HtmlFeatureSummary {
       continue;
     }
 
-    // markup 片段
     if (/<canvas(?:[\s/>]|$)/i.test(seg.text)) {
       hasCanvasOrWebgl = true;
     }
@@ -447,7 +430,6 @@ function extractRevisionPrefixForCsp(absoluteUrl: string): string | null {
 
 function injectMetaIntoHead(html: string, metaTag: string): string {
   const segments = scanHtmlSegments(html);
-  // 1) 在未进入 <body> / <script> 之前查找真实的 <head ...>
   let offset = 0;
   for (const seg of segments) {
     if (seg.kind === 'comment') {
@@ -472,7 +454,6 @@ function injectMetaIntoHead(html: string, metaTag: string): string {
     offset += seg.text.length;
   }
 
-  // 2) HTML 片段（无 <html>/<head>）：补齐标准 HTML5 壳并置入 CSP
   return `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n${metaTag}\n</head>\n<body>\n${html}\n</body>\n</html>`;
 }
 
@@ -526,7 +507,6 @@ export function buildHtmlSandboxDocument(
       continue;
     }
 
-    // markup 片段：移除 <base>、内联相对 <link rel="stylesheet">、重写相对 <img/source src>
     let markup = seg.text.replace(/<base\b[^>]*>/gi, '');
 
     if (options.relativePath) {

@@ -1,15 +1,3 @@
-/**
- * 全站 coss 原语统一、全站明暗双态与实机穿帮清零单测集。
- *
- * 覆盖：
- * 1. buildPackageVisualFingerprint：近 14 天变更 Sparkline（零造数：安静包全 0 水平线、活跃包精确逐日计数）、
- *    格式构成彩带严格 MECE 守恒（∑count === docs.length）、清晰更新相对时间与去重防线；
- * 2. appThemeStore 三态轮换（light → dark → system → light）与持久化；
- * 3. TopHeader：coss Toolbar / Group / GroupSeparator / Kbd 紧凑编组 + 全站一键明暗切换按钮；
- * 4. MultiProjectOverviewStrip：coss Frame/Group 重构 + 全指标 whitespace-nowrap 根治「720 文\n件」折行；
- * 5. FeaturedFocusCards：双层决策卡上下零重叠分离（layer=0/layer=1 消除后卡漏出孤字）；
- * 6. TaskPackageGallery & HomeView：coss Frame/CardFrame + 真实数据指纹封面 + 「60 份」防截断。
- */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -121,7 +109,6 @@ function makeConfig(): WorkspaceConfig {
   };
 }
 
-// ===== 真实数据驱动微视觉指纹（零造数） =====
 
 test('buildPackageVisualFingerprint：近 14 天 Sparkline 精确计数、重复 revision 去重与安静包全 0 基线', () => {
   const anchorIso = '2026-11-23T12:00:00+08:00';
@@ -133,10 +120,8 @@ test('buildPackageVisualFingerprint：近 14 天 Sparkline 精确计数、重复
   const f1 = makeFile('f1', '01-方案文档/产品需求与任务包/A/spec.md', 'md', [
     { id: 'r1_3', v: 3, observedAt: '2026-11-23T09:10:00+08:00' },
     { id: 'r1_2', v: 2, observedAt: '2026-11-23T08:00:00+08:00' },
-    // 刻意重复同 revision_id 验证去重
     { id: 'r1_2', v: 2, observedAt: '2026-11-23T08:00:00+08:00' },
     { id: 'r1_1', v: 1, observedAt: '2026-11-15T14:00:00+08:00' },
-    // 超出 14 天窗口的旧版本不应落入 14 日计数
     { id: 'r1_0', v: 0, observedAt: '2026-10-01T10:00:00+08:00' },
   ]);
   const f2 = makeFile('f2', '01-方案文档/产品需求与任务包/A/arch.svg', 'svg', [
@@ -176,7 +161,6 @@ test('buildPackageVisualFingerprint：近 14 天 Sparkline 精确计数、重复
   assert.equal(fp.sparkline14d.counts[10], 1, '2026-11-20 应计 1 次');
   assert.equal(fp.sparkline14d.counts[5], 1, '2026-11-15 应计 1 次');
 
-  // 格式构成严格 MECE 守恒
   const sumCount = fp.formatSegments.reduce((acc, s) => acc + s.count, 0);
   const sumRatio = fp.formatSegments.reduce((acc, s) => acc + s.ratio, 0);
   assert.equal(sumCount, activePkg.docs.length, '格式段计数和必须严格等于 docs.length');
@@ -184,7 +168,6 @@ test('buildPackageVisualFingerprint：近 14 天 Sparkline 精确计数、重复
   assert.equal(fp.docCountLabel, '3 份');
   assert.ok(fp.updatedRelativeLabel.length > 0 && fp.updatedRelativeLabel !== '待更新');
 
-  // 远古安静包：近 14 天零改动 → 全 0 水平基线（严禁伪造波纹）
   const quietFile = makeFile('f_old', '01-方案文档/旧档/old.md', 'md', [
     { id: 'r_old', v: 1, observedAt: '2025-05-01T10:00:00+08:00' },
   ]);
@@ -212,7 +195,6 @@ test('buildPackageVisualFingerprint：近 14 天 Sparkline 精确计数、重复
   assert.ok(yValues.every((y) => y === SPARKLINE_VIEWBOX_H - 2), '全 0 序列必须平贴底线，零假波动');
 });
 
-// ===== 全站明暗主题三态轮换与 TopHeader coss Toolbar/Group 重排 =====
 
 test('appThemeStore 三态轮换（light→dark→system→light）与 TopHeader Toolbar/Group/Kbd 渲染', () => {
   assert.equal(nextAppThemeMode('light'), 'dark');
@@ -222,7 +204,6 @@ test('appThemeStore 三态轮换（light→dark→system→light）与 TopHeader
   assert.equal(appThemeModeLabel('dark'), '深色');
   assert.equal(appThemeModeLabel('system'), '跟随系统');
 
-  // 应用切换并验证立即生效（随后复原 light，避免污染后续测试）
   assert.equal(applyAppTheme('dark', false), 'dark');
   assert.equal(getAppThemeMode(), 'dark');
   assert.equal(getResolvedAppTheme(), 'dark');
@@ -269,10 +250,8 @@ test('appThemeStore 三态轮换（light→dark→system→light）与 TopHeader
   assert.ok(headerHtml.includes('data-slot="kbd"'), '检索提示应使用 coss Kbd 原语');
 });
 
-// ===== 首页 Frame/CardFrame + 多项目零折行 + 叠卡零孤字 + 专项指纹橱窗 =====
 
 test('MultiProjectOverviewStrip / FeaturedFocusCards / TaskPackageGallery / HomeView 结构与防穿帮验收', () => {
-  // 1. 多项目工作台：coss Frame + 全指标 whitespace-nowrap（根治 720 文\n件）
   const mpHtml = renderToStaticMarkup(
     React.createElement(MultiProjectOverviewStrip, {
       overview: null,
@@ -326,7 +305,6 @@ test('MultiProjectOverviewStrip / FeaturedFocusCards / TaskPackageGallery / Home
     '待拍板计数必须强制 whitespace-nowrap'
   );
 
-  // 2. FeaturedFocusCards：双层决策卡上下分离零重叠（layer=0 top-0.5 h=70 / layer=1 bottom-0.5 h=44）
   const fcHtml = renderToStaticMarkup(
     React.createElement(FeaturedFocusCards, {
       decisionItems: [
@@ -350,7 +328,6 @@ test('MultiProjectOverviewStrip / FeaturedFocusCards / TaskPackageGallery / Home
   assert.ok(fcHtml.includes('data-featured-mini-layer="1"'));
   assert.ok(fcHtml.includes('h-[70px]') && fcHtml.includes('h-[44px]'), '上下分离微卡高度和=114px < 120px 舞台高度，零重叠零孤字');
 
-  // 3. TaskPackageGallery：coss Frame + CardFrame + 真实数据指纹（Sparkline + 格式彩带）+ 「60 份」不截断
   const f1 = makeFile('f1', '01-方案文档/产品需求与任务包/A/spec.md', 'md', [
     { id: 'r1', v: 2, observedAt: '2026-11-23T09:00:00+08:00' },
   ]);
@@ -398,7 +375,6 @@ test('MultiProjectOverviewStrip / FeaturedFocusCards / TaskPackageGallery / Home
   assert.ok(galleryHtml.includes('data-fingerprint-segment="code"'));
   assert.ok(galleryHtml.includes('60 份'), '60 份计数必须完整展示，杜绝 60... 截断');
 
-  // 4. HomeView：整体接入 Frame + CardFrame
   const homeHtml = renderToStaticMarkup(
     React.createElement(HomeView, {
       files: [f1, f2],
@@ -420,10 +396,8 @@ test('MultiProjectOverviewStrip / FeaturedFocusCards / TaskPackageGallery / Home
   assert.ok(homeHtml.includes('data-slot="card-frame"'));
 });
 
-// ===== CommandPanel 双栏 L4A 富预览、零 f_ 裸哈希、Sheet (inset) 嵌套栈与 ModalsAndDrawers 拆解 =====
 
 test('CommandPalette：零 f_/rev_ 裸哈希泄露 + L4A 摘要与大纲派生 + 无摘要优雅回退 + CommandPanel/Kbd 双栏渲染', () => {
-  // 1. 内部裸哈希识别与净化
   assert.equal(isOpaqueInternalHash('f_0114325c93a8b7c6'), true);
   assert.equal(isOpaqueInternalHash('rev_aabbccdd11223344'), true);
   assert.equal(isOpaqueInternalHash('0123456789abcdef01234567'), true);
@@ -434,7 +408,6 @@ test('CommandPalette：零 f_/rev_ 裸哈希泄露 + L4A 摘要与大纲派生 +
     '架构方案 终稿'
   );
 
-  // 2. 带完整 FileRecord（含 L4A 摘要与 Markdown 大纲）的富预览模型
   const richFile: FileRecord = {
     ...makeFile('f_0114325c93a8b7c6', '01-方案文档/核心架构/观澜v1.2架构总纲.md', 'md', [
       { id: 'rev_aabbccdd11223344', v: 4, observedAt: '2026-11-23T09:30:00+08:00' },
@@ -480,7 +453,6 @@ test('CommandPalette：零 f_/rev_ 裸哈希泄露 + L4A 摘要与大纲派生 +
   assert.ok(richModel.packageName && richModel.packageName.length > 0);
   assert.equal(richModel.snippetFallback, null, '已有 L4A 摘要时不渲染空回退提示');
 
-  // 3. 无 L4A 摘要且无全文 snippet 时优雅回退
   const bareFile = makeFile('f_deadbeef99887766', 'docs/notes.txt', 'txt', [
     { id: 'rev_deadbeef11223344', v: 1, observedAt: '2026-11-23T08:00:00+08:00' },
   ]);
@@ -500,7 +472,6 @@ test('CommandPalette：零 f_/rev_ 裸哈希泄露 + L4A 摘要与大纲派生 +
   assert.equal(bareModel.l4aSummary, null);
   assert.ok(bareModel.snippetFallback && bareModel.snippetFallback.includes('本地索引命中'), '无摘要时必须诚实优雅回退');
 
-  // 4. SSR 渲染 CommandPalette：内亮板 CommandPanel + Kbd + 零裸哈希泄露 + 时光机按钮
   const paletteHtml = renderToStaticMarkup(
     React.createElement(CommandPalette, {
       isOpen: true,
@@ -527,7 +498,6 @@ test('CommandPalette：零 f_/rev_ 裸哈希泄露 + L4A 摘要与大纲派生 +
 });
 
 test('ModalsAndDrawers 巨石拆解(<120行) + 分栏设置弹窗 + Sheet (inset) & --nested-dialogs 全浮层栈', () => {
-  // 1. ModalsAndDrawers.tsx 行数严格 < 120 且导出向后兼容
   const facadeSrc = readFileSync(
     new URL('../src/components/ModalsAndDrawers.tsx', import.meta.url),
     'utf8'
@@ -539,7 +509,6 @@ test('ModalsAndDrawers 巨石拆解(<120行) + 分栏设置弹窗 + Sheet (inset
   assert.equal(typeof AgentContextDrawer, 'function');
   assert.equal(SETTINGS_TABS.length, 5, '设置弹窗应拆为 5 大垂直分栏');
 
-  // 2. WorkspaceSettingsModal：垂直 Tabs + Frame 表单 + 静默目录治理页
   const settingsHtml = renderToStaticMarkup(
     React.createElement(WorkspaceSettingsModal, {
       isOpen: true,
@@ -558,7 +527,6 @@ test('ModalsAndDrawers 巨石拆解(<120行) + 分栏设置弹窗 + Sheet (inset
   assert.ok(settingsHtml.includes('工作区') && settingsHtml.includes('降噪与忽略') && settingsHtml.includes('关于观澜'));
   assert.ok(settingsHtml.includes('04-智能体代码/node_modules_bak'), '降噪分栏应列出已静默目录');
 
-  // 3. ReviewBoardDrawer / FileTimelineDrawer / AgentContextDrawer：统一 coss Sheet (inset) + Empty 三卡空态
   const reviewHtml = renderToStaticMarkup(
     React.createElement(ReviewBoardDrawer, {
       isOpen: true,
@@ -624,7 +592,6 @@ test('ModalsAndDrawers 巨石拆解(<120行) + 分栏设置弹窗 + Sheet (inset
   assert.ok(agentDrawerHtml.includes('data-sheet-variant="inset"'), 'AgentContextDrawer 应采用 Sheet inset 材质');
   assert.ok(agentDrawerHtml.includes('data-slot="empty"'), 'AgentContextDrawer 空态应接入 coss Empty');
 
-  // 4. QuickPreviewModal & ContextCapsuleModal：--nested-dialogs 嵌套景深锚点
   const f1 = makeFile('f1', 'docs/demo.md', 'md', [
     { id: 'r1', v: 1, observedAt: '2026-11-23T10:00:00+08:00' },
   ]);
@@ -652,10 +619,8 @@ test('ModalsAndDrawers 巨石拆解(<120行) + 分栏设置弹窗 + Sheet (inset
   assert.ok(capsuleHtml.includes('data-dialog-nested-stack=""'), 'ContextCapsuleModal 应挂载嵌套景深栈锚点');
 });
 
-// ===== 全景列表司辰时光流、资产库概览折叠护栏与星图/时光机/阅读器实机精修 =====
 
 test('TimelineView 司辰时光流：按日 Frame 聚组 + Toolbar/SegmentedControl + 「在星图定位此日」直跳', () => {
-  // 1. 纯函数按日聚组（保序不重排 + 精确事件计和 + undated 分流）
   const buckets = groupTimelineRenderItemsByDay(
     [
       { id: 'e1', day: '2026-11-23', count: 1 },
@@ -673,7 +638,6 @@ test('TimelineView 司辰时光流：按日 Frame 聚组 + Toolbar/SegmentedCont
   assert.equal(buckets[2].day, 'undated');
   assert.equal(buckets[2].label, '日期待考');
 
-  // 2. SSR 渲染：coss Frame + Toolbar + SegmentedControl + 一键星图定位此日 + 守住核心文档开关
   const f1 = makeFile('f1', '01-方案文档/架构/spec.md', 'md', [
     { id: 'r1', v: 2, observedAt: '2026-11-23T09:15:00+08:00' },
   ]);
@@ -716,7 +680,6 @@ test('TimelineView 司辰时光流：按日 Frame 聚组 + Toolbar/SegmentedCont
   assert.ok(html.includes('data-timeline-jump-starmap="2026-11-23"'), '应提供一键「在星图定位此日」直跳入口');
   assert.ok(html.includes('data-testid="core-only-toggle"'), '必须守住「仅看核心文档」开关');
 
-  // 3. 空态走 coss Empty
   const emptyHtml = renderToStaticMarkup(
     React.createElement(TimelineView, {
       events: [],
@@ -734,7 +697,6 @@ test('TimelineView 司辰时光流：按日 Frame 聚组 + Toolbar/SegmentedCont
 });
 
 test('AtlasView 资产库概览：超大目录代表件折叠 60fps 护栏 + CardFrame 数据指纹 + Toolbar 模式切换', () => {
-  // 1. 纯函数代表件折叠：优先未读，其次最新 observedAt，严格截断到 ATLAS_LARGE_FOLDER_CAP=12
   assert.equal(ATLAS_LARGE_FOLDER_CAP, 12);
   const rawItems = Array.from({ length: 30 }, (_, i) => ({
     id: `item_${i}`,
@@ -752,7 +714,6 @@ test('AtlasView 资产库概览：超大目录代表件折叠 60fps 护栏 + Car
   assert.equal(expanded.visible.length, 30);
   assert.equal(expanded.hiddenCount, 0);
 
-  // 2. SSR 渲染：CardFrame + 数据指纹彩带 + 展开剩余 18 份按钮 + Toolbar + 紧凑网格/画布导览切换
   const bigFolderFiles: FileRecord[] = Array.from({ length: 30 }, (_, i) =>
     makeFile(`big_${i}`, `src/components/Comp${i}.${i % 3 === 0 ? 'md' : 'ts'}`, i % 3 === 0 ? 'md' : 'ts', [
       { id: `rev_big_${i}`, v: 1, observedAt: '2026-11-23T10:00:00+08:00' },
@@ -776,7 +737,6 @@ test('AtlasView 资产库概览：超大目录代表件折叠 60fps 护栏 + Car
 });
 
 test('时光机 ≥360px 防截断 + 星图首尾安全区/预览卡 + 阅读器 Toolbar/Group 与全局明暗同步', () => {
-  // 1. 时光机防右缘截断护栏（守住 ≥360px 宽、xMinYMid 避让、Toolbar/SegmentedControl 语义与 overflow:hidden）
   const tmSrc = readFileSync(
     new URL('../src/components/DocumentTimeMachineView.tsx', import.meta.url),
     'utf8'
@@ -789,14 +749,12 @@ test('时光机 ≥360px 防截断 + 星图首尾安全区/预览卡 + 阅读器
     new URL('../src/components/eventGraph.css', import.meta.url),
     'utf8'
   );
-  // 统一右侧检查/对比栏已从悬浮覆盖升级为独立网格列（画布居中且 ≥420px，零压盖截断）
   assert.ok(tmSrc.includes('preserveAspectRatio="xMidYMid meet"') && tmSrc.includes('data-machine-unified-inspector=""'));
   assert.ok(tmSrc.includes('data-slot="toolbar"') && tmSrc.includes('data-slot="segmented-control"'));
   assert.ok(diffPaneSrc.includes('calc(100% - 360px)'), 'DiffSidePane 必须为左栏版本链保留 ≥360px 可视宽度');
   assert.ok(egCss.includes('minmax(420px, 1fr)'), 'eventGraph.css 必须锁定版本链列 ≥420px（超越原 360px 底线）');
   assert.ok(egCss.includes('box-sizing: border-box; overflow: hidden;'));
 
-  // 2. 星图 4 处版面精修锚点
   const trunkSrc = readFileSync(
     new URL('../src/components/graph/GraphSceneTrunk.tsx', import.meta.url),
     'utf8'
@@ -814,13 +772,11 @@ test('时光机 ≥360px 防截断 + 星图首尾安全区/预览卡 + 阅读器
   assert.ok(trunkSrc.includes('y={TRUNK_AXIS_BOTTOM - 2}'), '「时光起点」应抬离底部浮坞安全区');
   assert.ok(overlaySrc.includes('data-slot="preview-card"'), '星图节点悬停速览应接入 PreviewCard 语义');
 
-  // 3. 阅读器 Toolbar/Group 与全站明暗主题平滑衔接
   const f1 = makeFile('f_reader', 'docs/v09.md', 'md', [
     { id: 'r_reader', v: 1, observedAt: '2026-11-23T10:00:00+08:00' },
   ]);
   f1.revisions[0].markdownContent = '# 示例标题\n\n测试正文。';
 
-  // 全局暗夜模式下，阅读器首帧自动落入暗夜阅读纸
   applyAppTheme('dark', false);
   const darkReaderHtml = renderToStaticMarkup(
     React.createElement(ReaderView, {
@@ -848,7 +804,6 @@ test('时光机 ≥360px 防截断 + 星图首尾安全区/预览卡 + 阅读器
   assert.ok(darkReaderHtml.includes('data-slot="group"'), '阅读器操作组应换装 coss Group');
   assert.ok(darkReaderHtml.includes('切换到纸面浅色'), '全站暗夜模式下阅读器应自动同步至暗夜阅读纸');
 
-  // 切回浅色模式复原状态
   applyAppTheme('light', false);
   const lightReaderHtml = renderToStaticMarkup(
     React.createElement(ReaderView, {

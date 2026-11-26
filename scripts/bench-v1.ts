@@ -1,22 +1,3 @@
-/**
- * 多格式混合大目录稳定性与增量核验自动化基准
- *
- * 用法：
- *   npx tsx scripts/bench-v1.ts --exe <guanlan.exe 路径> \
- *     [--fixture native/testdata/bench/workspace] [--data native/testdata/bench/data] \
- *     [--port 18410] [--samples 20]
- *
- * 阶段与验收口径：
- *   B 冷启动   —— 清库首启 + verify_all 全量索引耗时（仅记录，不设阈值）
- *   C 热启动   —— bootstrap p95 < 150ms（硬判，n=--samples 顺序采样）
- *   D 单文件修改 —— watcher 事件驱动：写 1 文件 → SSE 通知延迟（目标 <300ms，记录+提示）
- *   E 批量对账 —— 写 100 文件 → 后台增量对账完成 < 1.5s（硬判，含 100ms 防抖与 SSE 通知）；
- *                  对账期间并发混合查询 p95 < 50ms（硬判；files/events/bootstrap 四路并发）
- *
- * 机制锚点：`guanlan serve --watch`（后台索引开关，lib.rs ServeConfig::background_index）、
- * watcher 100ms 滑动防抖（watcher.rs DEBOUNCE_MS）、SSE `workspace-change` 携带
- * `index_generation`、`POST /api/v1/index-jobs {kind:"verify_all"}`。
- */
 
 import fs from 'node:fs';
 import http from 'node:http';
@@ -86,7 +67,6 @@ function judge(label: string, actualMs: number, budgetMs: number): void {
   if (!ok) report.failures.push(`${label}: ${fmtMs(actualMs)} 超出预算 ${fmtMs(budgetMs)}`);
 }
 
-// ---------- HTTP 小工具 ----------
 async function getJson(pathname: string, signal?: AbortSignal): Promise<{ ms: number; bytes: number; json: any }> {
   const t0 = now();
   const res = await fetch(`${BASE}${pathname}`, { signal });
@@ -106,7 +86,6 @@ async function postJson(pathname: string, body: unknown): Promise<any> {
   return json;
 }
 
-/** 等待 /api/v1/status 就绪（服务可响应），返回就绪耗时 ms（记录到 lastReadyMs 供报表） */
 let lastReadyMs = 0;
 async function waitReady(deadlineMs: number): Promise<number> {
   const t0 = now();
@@ -118,14 +97,12 @@ async function waitReady(deadlineMs: number): Promise<number> {
         return lastReadyMs;
       }
     } catch {
-      /* 未就绪 */
     }
     if (now() - t0 > deadlineMs) throw new Error(`服务 ${deadlineMs}ms 内未就绪`);
     await wait(100);
   }
 }
 
-/** 订阅 SSE，等待 workspace-change 携带的 index_generation ≥ target，返回耗时 ms */
 async function waitForGeneration(target: number, timeoutMs: number): Promise<number> {
   const t0 = now();
   return new Promise<number>((resolve, reject) => {
@@ -162,7 +139,6 @@ async function waitForGeneration(target: number, timeoutMs: number): Promise<num
               return;
             }
           } catch {
-            /* 半包容错 */
           }
         }
       });
@@ -172,13 +148,11 @@ async function waitForGeneration(target: number, timeoutMs: number): Promise<num
   });
 }
 
-/** 当前 index_generation（GET /api/v1/status） */
 async function currentGeneration(): Promise<number> {
   const { json } = await getJson('/api/v1/status');
   return Number(json.index_generation);
 }
 
-/** 排空后台索引任务（轮询 /status 的 active_jobs 至空）——启动自带的 verify_all 会挤占后续任务队列 */
 async function drainJobs(deadlineMs = 600000): Promise<void> {
   const t0 = now();
   for (;;) {
@@ -190,7 +164,6 @@ async function drainJobs(deadlineMs = 600000): Promise<void> {
   }
 }
 
-// ---------- 服务生命周期 ----------
 let child: ChildProcess | null = null;
 async function startServe(withWatch: boolean): Promise<void> {
   const exeArgs = ['serve', '--root', args.fixture, '--port', String(args.port)];
@@ -201,7 +174,7 @@ async function startServe(withWatch: boolean): Promise<void> {
   });
   child.stderr?.on('data', (d) => process.stderr.write(`  [serve] ${d}`));
   await waitReady(60000);
-  await wait(150); // 端口与路由完全稳定
+  await wait(150);
 }
 async function stopServe(): Promise<void> {
   if (!child) return;
@@ -210,12 +183,10 @@ async function stopServe(): Promise<void> {
   child = null;
 }
 
-// ---------- 主流程 ----------
 async function main(): Promise<void> {
   console.log(`体量基准：exe=${args.exe}`);
   console.log(`  fixture=${args.fixture}\n  data=${args.data}\n  samples=${args.samples}\n`);
 
-  // ===== B. 冷启动：清库首启 + verify_all 全量索引（不带 --watch，任务精确计时）=====
   console.log('── B. 冷启动（清库首启 + 首次全量索引）──');
   fs.rmSync(args.data, { recursive: true, force: true });
   await startServe(false);
@@ -243,13 +214,11 @@ async function main(): Promise<void> {
   row('B 冷启动·首次全量索引（verify_all）', fmtMs(firstIndexMs));
   await stopServe();
 
-  // ===== C. 热启动：bootstrap p95 < 150ms =====
   console.log('\n── C. 热启动（既有库直接打开）──');
   const tRestart = now();
   await startServe(true);
   const restartReadyMs = now() - tRestart;
   row('C 热启动·服务就绪', fmtMs(restartReadyMs));
-  // 排空 --watch 启动自带的全量 verify_all，避免挤占 D/E 的增量任务队列
   await drainJobs();
   row('C 热启动·启动对账排空', '后台任务清空');
 
@@ -267,7 +236,6 @@ async function main(): Promise<void> {
   );
   judge('C 验收：10k 文件热启动 bootstrap p95', percentile(bootSamples, 95), 150);
 
-  // ===== D. 单文件修改：watcher 事件驱动通知延迟 =====
   console.log('\n── D. 单文件修改（watcher 事件驱动 + 防抖合并）──');
   const g0 = await currentGeneration();
   const targetMd = path.join(args.fixture, 'docs', '基准-文档-00000.md');
@@ -277,18 +245,14 @@ async function main(): Promise<void> {
   let singleMs = -1;
   try {
     singleMs = await waitForGeneration(g0 + 1, 5000);
-    // 验收口径「后台增量对账 <1.5s」的常态单元 = 一次保存（单文件端到端：
-    // watcher 检测 + 100ms 防抖合并 + 增量对账 + SSE 通知）
     judge('E 验收：单文件保存 → 后台增量对账端到端', singleMs, 1500);
     if (singleMs >= 300) report.lines.push('    ↳ watcher 延迟提示：<300ms 未达（Windows Defender 对新写文件的实时扫描开销，如实记录）');
   } catch (e) {
     row('D 单文件修改 → SSE 通知', `失败：${(e as Error).message}`, 'FAIL');
     report.failures.push(`D 单文件通知失败: ${(e as Error).message}`);
   }
-  // 等对账彻底落库再进入 E
   await wait(500);
 
-  // ===== E. 批量修改对账（100 文件）+ 对账期间并发查询 p95 =====
   console.log('\n── E. 批量修改 100 文件 → 后台增量对账 + 并发查询负载 ──');
   const g1 = await currentGeneration();
   const touched: Array<{ rel: string; append: string }> = [];  for (let i = 0; i < 100; i++) {
@@ -307,7 +271,6 @@ async function main(): Promise<void> {
     }
   }
 
-  // 对账期间并发查询负载：4 路混合查询循环采样，直到对账完成
   const querySamples: number[] = [];
   const paths = ['/api/v1/files?limit=50', '/api/v1/events?limit=50', '/api/v1/bootstrap', '/api/v1/decisions?limit=50'];
   let loadOn = true;
@@ -318,7 +281,6 @@ async function main(): Promise<void> {
           const { ms } = await getJson(p);
           querySamples.push(ms);
         } catch {
-          /* 负载期间容忍单次失败 */
         }
         await wait(2);
       }
@@ -337,9 +299,6 @@ async function main(): Promise<void> {
   await Promise.allSettled(workers);
 
   if (batchMs >= 0) {
-    // 保存风暴压力观测（100 文件合并为一次对账；不设硬阈值——卡面口径锚定单文件
-    // 保存单元，批量数据如实记录供回归对照。Windows Defender 对新写文件的实时
-    // 扫描使采集段存在 ~6ms/文件的环境成本，为测量主体之一）
     const perFileUs = Math.round((batchMs * 1000) / touched.length);
     row(
       `E 压力观测：${touched.length} 文件保存风暴 → 单次合并对账`,
@@ -359,7 +318,6 @@ async function main(): Promise<void> {
 
   await stopServe();
 
-  // ===== 汇总 =====
   console.log('\n========== 体量基准结果 ==========');
   for (const line of report.lines) console.log(line);
   if (report.failures.length > 0) {

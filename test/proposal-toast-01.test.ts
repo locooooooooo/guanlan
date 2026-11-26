@@ -1,11 +1,3 @@
-/**
- * proposal-toast-01：回写通知条（双向回写闭环）。
- *
- * - 标题文案单一出口（proposalToastTitle）：「智能体已提交《…》修订草案」；
- *   版本标签仅在可判定时缀后缀（受理初判无版本信息——不造 v(N+1)，偏差登记）；
- * - notice.kinds 路由词表（契约 J）：'proposal' → 通知条；其余 kinds 不触发；
- * - 组件文件仅 react/lucide/primitives 依赖（无 .css），node --test 可直引。
- */
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -29,7 +21,6 @@ describe('proposalToastTitle 文案单一出口', () => {
 });
 
 describe('SSE notice kinds 路由（契约 J）', () => {
-  /** App 订阅回调的路由判定（与 App.tsx 内联逻辑同口径的纯描述） */
   function isProposalNotice(notice: WorkspaceChangeNotice): boolean {
     return notice.type === 'workspace-change' && !!notice.kinds?.includes('proposal');
   }

@@ -1,8 +1,3 @@
-/**
- * 阅读器锚点批注纯函数层单测（src/utils/readerAnnotations.ts）。
- * 锁定契约：本地证据表按版本哈希绑定 / 有界上限丢最旧如实计数 / 框选区域归一
- * 与退化拒绝 / 决定块插入逐字节不动既有行 / 插入点推算。
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -43,7 +38,6 @@ test('版本哈希绑定：同文件不同 sha 互不可见', () => {
   assert.equal(annotationsOfVersion(store, 'f1', 'sha-a').length, 1);
   assert.equal(annotationsOfVersion(store, 'f1', 'sha-b').length, 1);
   assert.equal(annotationsOfVersion(store, 'f1', 'sha-a')[0].id, 'a1');
-  // 空哈希（摘要占位行）永不挂批注
   assert.equal(annotationsOfVersion(store, 'f1', '').length, 0);
   assert.equal(annotationVersionKey('f1', 'sha-a'), 'f1::sha-a');
 });
@@ -59,7 +53,7 @@ test('有界上限：超出丢最旧且如实计数，未超不丢', () => {
   assert.equal(overflow.dropped, 1);
   const list = annotationsOfVersion(overflow.store, 'f1', 'sha');
   assert.equal(list.length, ANNOTATIONS_PER_VERSION_CAP);
-  assert.equal(list[0].id, 'n1'); // 最旧被淘汰
+  assert.equal(list[0].id, 'n1');
   assert.equal(list[list.length - 1].id, 'new');
 });
 
@@ -81,7 +75,7 @@ test('损坏存储：非法条目剔除、非对象/数组输入重建空表', (
 
 test('删除幂等与已转标记', () => {
   let store = upsertAnnotation(emptyAnnotationStore(), 'f1', 'sha', mdAnn('a1')).store;
-  assert.equal(removeAnnotation(store, 'f1', 'sha', 'nope'), store); // 幂等原样
+  assert.equal(removeAnnotation(store, 'f1', 'sha', 'nope'), store);
   store = removeAnnotation(store, 'f1', 'sha', 'a1');
   assert.equal(annotationsOfVersion(store, 'f1', 'sha').length, 0);
   store = upsertAnnotation(emptyAnnotationStore(), 'f1', 'sha', mdAnn('a1')).store;
@@ -102,8 +96,8 @@ test('note 归一：换行折叠/截断；id 同毫秒不撞', () => {
 test('SVG 框选区域：任意方向归一、越界 clamp、退化拒绝', () => {
   assert.deepEqual(normalizeSvgRegion(0.8, 0.9, 0.2, 0.4), { fx: 0.2, fy: 0.4, fw: 0.6, fh: 0.5 });
   assert.deepEqual(normalizeSvgRegion(-1, -1, 2, 0.5), { fx: 0, fy: 0, fw: 1, fh: 0.5 });
-  assert.equal(normalizeSvgRegion(0.5, 0.5, 0.5, 0.5), null); // 零面积
-  assert.equal(normalizeSvgRegion(0, 0, 0.005, 0.5), null); // 低于阈值误触
+  assert.equal(normalizeSvgRegion(0.5, 0.5, 0.5, 0.5), null);
+  assert.equal(normalizeSvgRegion(0, 0, 0.005, 0.5), null);
   const style = svgRegionStyle({ fx: 0.1, fy: 0.25, fw: 0.3, fh: 0.5 });
   assert.deepEqual(style, { left: '10.000%', top: '25.000%', width: '30.000%', height: '50.000%' });
 });
@@ -132,14 +126,12 @@ test('决定块插入：既有行逐字节不动、块可被标记正则识别�
   if (!ins.ok) return;
   const before = md.split('\n');
   const after = ins.newContent.split('\n');
-  // 既有行逐字节不动（只在插入点后追加 3 行）
   assert.deepEqual(after.slice(0, 2), before.slice(0, 2));
   assert.deepEqual(after.slice(5), before.slice(2));
   assert.equal(ins.insertedLines, 3);
   assert.match(after[2], /^- \[P1 - 待确认\] 这里的口径需要复核$/);
   assert.equal(after[3], '决定：这里的口径需要复核');
   assert.equal(after[4], '来源：观澜本地批注 · L2');
-  // 空 note：入口已拦截纯空批注，本层按锚点标签兜底（标题/决定字段一致）
   const fallback = buildDecisionBlockInsertion({
     markdownContent: md,
     afterLine: 2,
@@ -167,7 +159,6 @@ test('决定块插入：文末追加带空行分隔；锚点标签兜底标题',
     ins.newContent,
     ['只有一行', '', '- [P1 - 待确认] 批注转决定（框选区（12%, 34%））', '决定：批注转决定（框选区（12%, 34%））', '来源：观澜本地批注 · 框选区（12%, 34%）'].join('\n')
   );
-  // 空文档不产前置空行
   const empty = buildDecisionBlockInsertion({
     markdownContent: '',
     afterLine: 0,

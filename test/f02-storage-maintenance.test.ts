@@ -48,7 +48,6 @@ describe('全量开放导出、决定证据铁律保护 GC 与 SHA-256 完整性
       }),
       false
     );
-    // 参数漂移后旧预演失效
     assert.equal(
       canExecuteStorageGc({
         dryRunReport: dry,
@@ -59,7 +58,6 @@ describe('全量开放导出、决定证据铁律保护 GC 与 SHA-256 完整性
       }),
       false
     );
-    // 无可清理项不允许误触执行
     assert.equal(
       canExecuteStorageGc({
         dryRunReport: sampleDryRun({
@@ -74,7 +72,6 @@ describe('全量开放导出、决定证据铁律保护 GC 与 SHA-256 完整性
       }),
       false
     );
-    // 匹配当前参数且有可清理项才放行
     assert.equal(
       canExecuteStorageGc({
         dryRunReport: dry,

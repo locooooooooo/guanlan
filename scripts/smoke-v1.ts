@@ -29,7 +29,6 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 
-// ---------- 路径与参数 ----------
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.resolve(SCRIPT_DIR, '..');
@@ -70,29 +69,16 @@ function parseArgs(argv: string[]): Args {
   return args;
 }
 
-/**
- * 夹具根归一：seed-fixture.ts 把工作区落在 <夹具目录>/workspace（WS_ROOT）。
- * 调用方传 testdata/fixture（父目录，其下并列 workspace/ 与 data/）或直接传工作区根
- * 两种形式都接受；以「传入目录下存在 workspace/ 子目录」判定，命中则取子目录为 --root，
- * 保证 Rust 端 root_key 认领与期望产物记录的 root_path（= WS_ROOT）一致。
- */
 function resolveFixtureRoot(fixtureArg: string): string {
   const withWorkspace = path.join(fixtureArg, 'workspace');
   return fs.existsSync(withWorkspace) ? withWorkspace : fixtureArg;
 }
 
-/**
- * 工作区数据目录解析（契约 contract-storage.md §3.1，WorkspaceStore.ts:267-274 同口径）：
- * GUANLAN_DATA_DIR 只是 base，其下还须挂 rootKeyOf(root) 子目录才是 index.db/blobs 所在。
- * rootKey = sha256(path.resolve(root)) 前 16 位 hex（contract-storage.md §2.3）。
- * 本脚本刻意不 import guanlan/server 实现，故按同一公式本地重算。
- */
 function workspaceDataDir(dataBase: string, fixtureRoot: string): string {
   const rootKey = createHash('sha256').update(path.resolve(fixtureRoot)).digest('hex').slice(0, 16);
   return path.join(dataBase, rootKey);
 }
 
-// ---------- 深比对：对象按键集合比（无序），数组按序；差异以 $.path 定位 ----------
 
 interface Diff {
   at: string;
@@ -101,9 +87,7 @@ interface Diff {
 }
 
 interface CompareOpts {
-  /** 返回 true 的路径按无序集合比对数组元素（如 days 组内 decisions，Node 端无排序保证） */
   unorderedAt?: (at: string) => boolean;
-  /** 跳过比对的键（如首页包络里的 next_cursor，只另行验型） */
   skipKey?: (at: string, key: string) => boolean;
 }
 
@@ -159,9 +143,7 @@ function deepCompare(expected: unknown, actual: unknown, at: string, diffs: Diff
   }
 }
 
-// ---------- 查询串组装 ----------
 
-/** 把期望文件里记录的 query 对象转查询串；kinds 数组按契约用逗号连接，undated=true 记 1 */
 function buildQuery(params: Record<string, unknown>): string {
   const sp = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -178,7 +160,6 @@ function buildQuery(params: Record<string, unknown>): string {
   return s ? `?${s}` : '';
 }
 
-// ---------- HTTP 封装与断言记录 ----------
 
 interface ApiResponse {
   status: number;
@@ -203,7 +184,6 @@ class Smoke {
     return { status: res.status, contentType, json: null, bytes: Buffer.from(await res.arrayBuffer()) };
   }
 
-  /** POST JSON（用于 index-jobs 提交与 search/rebuild） */
   async post(pathAndQuery: string, body: unknown): Promise<ApiResponse> {
     const res = await fetch(this.endpoint + pathAndQuery, {
       method: 'POST',
@@ -218,7 +198,6 @@ class Smoke {
     return { status: res.status, contentType, json: null, bytes: Buffer.from(await res.arrayBuffer()) };
   }
 
-  /** 轮询任务到终态（用于 verify_all 建检索索引 / rebuild 自愈；20s 封顶） */
   async waitJob(jobId: string): Promise<string> {
     for (let i = 0; i < 200; i++) {
       const res = await this.get('/api/v1/jobs/' + jobId);
@@ -232,7 +211,6 @@ class Smoke {
     return 'timeout';
   }
 
-  /** 单点断言：条件不成立记一条差异 */
   expect(checkId: string, cond: boolean, at: string, expected: string, actual: string): void {
     if (!cond) this.diff(checkId, { at, expected, actual });
   }
@@ -242,7 +220,6 @@ class Smoke {
     this.diffsByCheck.get(checkId)!.push(d);
   }
 
-  /** 两值深比对并落差异 */
   compare(checkId: string, expected: unknown, actual: unknown, at: string, opts: CompareOpts = {}): void {
     const diffs: Diff[] = [];
     deepCompare(expected, actual, at, diffs, opts);
@@ -255,7 +232,6 @@ class Smoke {
   }
 }
 
-/** 等待 stdout 的 GUANLAN_ENDPOINT 行（main.rs:90 约定）；超时带 stderr 尾巴报错 */
 function waitForEndpoint(child: ChildProcess, timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
     let out = '';
@@ -275,7 +251,6 @@ function waitForEndpoint(child: ChildProcess, timeoutMs: number): Promise<string
     child.stdout?.on('data', onStdout);
     child.stderr?.on('data', (chunk: Buffer) => {
       err += chunk.toString('utf-8');
-      // 运行诊断走 stderr（main.rs 约定），转发到本进程 stderr，不污染 stdout 解析
       process.stderr.write('[guanlan] ' + chunk.toString('utf-8'));
     });
     child.on('exit', (code) => {
@@ -285,7 +260,6 @@ function waitForEndpoint(child: ChildProcess, timeoutMs: number): Promise<string
   });
 }
 
-// ---------- 通用游标遍历：小页距逼出多页；校验 ok/has_more/next_cursor 链自洽 ----------
 
 interface PageEnvelope {
   ok?: boolean;
@@ -308,7 +282,6 @@ async function walkPages(
   basePath: string,
   params: Record<string, unknown>,
   limit: number,
-  /** 分页数组键：files/events/decisions 为 items；版本链端点为 revisions（§1.7） */
   itemsKey: 'items' | 'revisions' = 'items',
   maxPages = 500
 ): Promise<WalkResult> {
@@ -358,7 +331,6 @@ async function walkPages(
   return { pages, items };
 }
 
-// ---------- 检查登记与期望产物类型 ----------
 
 const checkResults: Array<{ id: string; title: string }> = [];
 function checkOf(id: string, title: string): string {
@@ -440,10 +412,8 @@ interface CheckContext {
   dataDir: string;
 }
 
-// ---------- 全部检查 ----------
 
 async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
-  // ---------- C1 status（§1.2）：可比字段深比 + 实例字段存在性 ----------
   {
     const id = checkOf('status', 'GET /api/v1/status 与 expected/status.json 一致');
     const res = await smoke.get('/api/v1/status');
@@ -451,7 +421,6 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
     const body = res.json as Record<string, unknown> | null;
     if (body && res.status === 200) {
       smoke.expect(id, body.ok === true, '$.ok', 'true', show(body.ok));
-      // 实例字段：Node 端产不出（expected/status.json 无此三键），只验存在与取值
       smoke.expect(id, typeof body.instance_id === 'string' && (body.instance_id as string).length > 0, '$.instance_id', '非空字符串', show(body.instance_id));
       smoke.expect(id, body.api_version === 'v1', '$.api_version', '"v1"', show(body.api_version));
       smoke.expect(id, typeof body.schema_version === 'number', '$.schema_version', 'number', show(body.schema_version));
@@ -461,7 +430,6 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
     }
   }
 
-  // ---------- C2 bootstrap（§1.1）：整包深比（config/time_range 等沿用现有 wire 命名） ----------
   {
     const id = checkOf('bootstrap', 'GET /api/v1/bootstrap 与 expected/bootstrap.json 一致');
     const res = await smoke.get('/api/v1/bootstrap?days_limit=120&days_samples=6&events_limit=50&files_page_size=100');
@@ -469,7 +437,6 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
     const body = res.json as Record<string, unknown> | null;
     if (body && res.status === 200) {
       smoke.expect(id, body.ok === true, '$.ok', 'true', show(body.ok));
-      // SSOT 增量字段：服务端全库未决待拍板总数须与 expected/decisions.json 未决计数完全一致
       const expectedUnresolved = ctx.decisionsExp.items.filter(
         (d) => d.status !== '已确认' && d.status !== '已归档' && d.status !== '已废弃'
       ).length;
@@ -486,7 +453,6 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
     }
   }
 
-  // ---------- C3 files：全页遍历（limit=20）无重漏 + 四类筛选子集 ----------
   {
     const id = checkOf('files-pagination', 'GET /api/v1/files 全页遍历无重漏 + 与 expected/files.json 一致');
     const walk = await walkPages(smoke, id, '/api/v1/files', {}, 20);
@@ -499,8 +465,6 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
     smoke.expect(id, first?.snapshot_generation === ctx.filesExp.snapshot_generation, '$.snapshot_generation', String(ctx.filesExp.snapshot_generation), show(first?.snapshot_generation));
   }
 
-  // files 筛选子集：期望子集由 files.json 按契约语义本地推导
-  // （§1.3：dir=目录前缀含子目录、format/matter 精确匹配、q=标题或路径 LIKE）
   const filterCases: Array<{ label: string; params: Record<string, unknown>; pred: (item: Record<string, unknown>) => boolean }> = [
     { label: 'dir=docs', params: { dir: 'docs' }, pred: (i) => String(i.relative_path).startsWith('docs/') },
     { label: 'dir=docs/方案', params: { dir: 'docs/方案' }, pred: (i) => String(i.relative_path).startsWith('docs/方案/') },
@@ -520,7 +484,6 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
     smoke.expect(id, walk.pages[0]?.total_matched === expectedItems.length, '$.total_matched', String(expectedItems.length), show(walk.pages[0]?.total_matched));
   }
 
-  // ---------- C4 events：罐装查询组全页遍历（发生/采集口径、kinds/format/undated/窗口/q） ----------
   for (const set of ctx.eventsSets) {
     const id = checkOf(`events:${set.name}`, `GET /api/v1/events ${set.name} 全页遍历一致`);
     const walk = await walkPages(smoke, id, '/api/v1/events', set.query, set.traversal_limit);
@@ -531,12 +494,10 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
     smoke.expect(id, first?.undated_count === set.undated_count, '$.undated_count', String(set.undated_count), show(first?.undated_count));
     smoke.compare(id, set.window, first?.window, '$.window');
     smoke.expect(id, first?.index_generation === ctx.meta.index_generation, '$.index_generation', String(ctx.meta.index_generation), show(first?.index_generation));
-    // 夹具静态：任何一页出现 newer_count > 0 都说明服务动了夹具（只读打开不重扫）
     const last = walk.pages[walk.pages.length - 1];
     smoke.expect(id, last?.newer_count === 0, '$.newer_count', '0（夹具静态）', show(last?.newer_count));
   }
 
-  // 首页包络（默认 limit=50）整包深比；next_cursor 值依赖签发时刻，只验型
   {
     const id = checkOf('events:first-page-envelope', 'GET /api/v1/events?limit=50 首页包络逐字段一致');
     const res = await smoke.get('/api/v1/events?limit=50');
@@ -553,12 +514,8 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
     }
   }
 
-  // ---------- C5 游标失效：指纹不符与损坏游标 → CURSOR_STALE（v1；旧 Node 为 INDEX_STALE/静默首页） ----------
   {
     const id = checkOf('events:cursor-stale', '游标指纹不符 / 损坏游标 → 409 CURSOR_STALE');
-    // 构造一：真实游标 + 换 kinds 重放（指纹含 kinds，queries.ts:83-98；v1 码表 §0.2）。
-    // 首页取罐装集合 kinds=appeared（期望 events-kinds-appeared.json）；重放换 kinds=modified
-    // —— v1 的指纹校验先于任何查询执行（queries.ts:189-195 先于 SQL），故无需该筛选拥有数据。
     const page1 = await smoke.get('/api/v1/events?kinds=appeared&limit=5');
     const p1 = page1.json as PageEnvelope | null;
     if (p1?.next_cursor && typeof p1.next_cursor === 'string') {
@@ -571,7 +528,6 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
     } else {
       smoke.expect(id, false, '$.next_cursor(构造前置)', '首页应返回游标', show(p1?.next_cursor));
     }
-    // 构造二：不可解码 / 可解码但缺字段的游标（v1 显式 409；旧 Node 静默按首页处理，queries.ts:186-187）
     for (const [label, cursor] of [
       ['不可解码', ctx.errorsExp.cursor_stale.corrupt_cursor],
       ['缺字段', ctx.errorsExp.cursor_stale.empty_object_cursor],
@@ -581,26 +537,22 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
       const code = (res.json as { code?: string } | null)?.code;
       smoke.expect(id, code === ctx.errorsExp.cursor_stale.expected.code, `$.code(${label}游标)`, ctx.errorsExp.cursor_stale.expected.code, show(code));
     }
-    // files 端点同样绑游标（§1.3 snapshot_generation 语义）
     const resFiles = await smoke.get(`/api/v1/files?limit=5&cursor=${encodeURIComponent(ctx.errorsExp.cursor_stale.corrupt_cursor)}`);
     smoke.expect(id, resFiles.status === 409, '$.http_status(files 坏游标)', '409', String(resFiles.status));
     smoke.note(id, `旧 Node 实现对照（非本轮断言）：指纹不符 → ${ctx.errorsExp.cursor_stale.legacy_node_behavior.code}；坏游标 → 静默首页（queries.ts:186-195）`);
   }
 
-  // ---------- C6 events/days（§1.5）：六组聚合整结果比对（组内 decisions 无序集合） ----------
   for (const set of ctx.daysSets) {
     const id = checkOf(`days:${set.name}`, `GET /api/v1/events/days ${set.name} 一致`);
     const res = await smoke.get('/api/v1/events/days' + buildQuery(set.query));
     smoke.expect(id, res.status === 200, '$.http_status', '200', String(res.status));
     if (res.json && res.status === 200) {
       smoke.compare(id, set.result, res.json, '$', {
-        // queries.ts:518-541 组内 decisions 数组无排序保证 → 集合比对（见 _field-map.json tolerances）
         unorderedAt: (at) => /\.groups\[\d+\]\.decisions$/.test(at),
       });
     }
   }
 
-  // ---------- C7 events/range（§1.6） ----------
   {
     const id = checkOf('range', 'GET /api/v1/events/range 与期望一致');
     const res = await smoke.get('/api/v1/events/range');
@@ -608,13 +560,11 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
     if (res.json && res.status === 200) smoke.compare(id, ctx.rangeExp, res.json, '$');
   }
 
-  // ---------- C8 版本链：A→B→A 三版两份内容 + history 整包一致（§1.7） ----------
   {
     const id = checkOf('revisions:rollback-aba', '回滚目标版本链 A→B→A：三版两份内容 + 与 expected 一致');
     const rb = ctx.meta.key_files.rollback;
     const history = ctx.revisionsExp.histories[rb.file_id];
     const walk = await walkPages(smoke, id, `/api/v1/files/${rb.file_id}/revisions`, { order: 'seq_asc', include: 'events,statements,edges' }, 2, 'revisions');
-    // 分页只切 revisions 数组；file/events/statements/edges 属整包部分
     smoke.compare(id, history.revisions, walk.items, '$.revisions');
     const first = walk.pages[0];
     smoke.compare(id, history.file, first?.file, '$.file');
@@ -631,13 +581,11 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
       smoke.expect(id, walk.items[1].prev_revision_id === walk.items[0].revision_id, '$.revisions[1].prev_revision_id', String(walk.items[0].revision_id), show(walk.items[1].prev_revision_id));
       smoke.expect(id, walk.items[2].prev_revision_id === walk.items[1].revision_id, '$.revisions[2].prev_revision_id', String(walk.items[1].revision_id), show(walk.items[2].prev_revision_id));
     }
-    // 缺失文件的链仍可读（logo.svg 已 missing，但历史不删）
     if (ctx.meta.key_files.logo_missing) {
       const resMissing = await smoke.get(`/api/v1/files/${ctx.meta.key_files.logo_missing.file_id}/revisions?order=seq_asc`);
       smoke.expect(id, resMissing.status === 200, '$.http_status(missing 文件链)', '200（missing 不影响历史读取）', String(resMissing.status));
     }
   }
-  // 其余关键文件的 history 整包比对（Q01 两版决策链 + svg 两版）
   for (const key of ['q01_decision', 'svg_diagram'] as const) {
     const kf = ctx.meta.key_files[key];
     const id = checkOf(`revisions:${key}`, `GET /api/v1/files/{id}/revisions ${kf.relative_path} 整包一致`);
@@ -648,7 +596,6 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
     smoke.compare(id, history.events, walk.pages[0]?.events, '$.events');
   }
 
-  // ---------- C9 revision content：字节与 blobs 快照文件一致（md/svg/pdf 各一，§1.8） ----------
   for (const kind of ['md', 'svg', 'pdf'] as const) {
     const sample = ctx.contentExp[kind];
     const id = checkOf(`content:${kind}`, `GET /api/v1/revisions/{id}/content ${kind} 与快照文件字节一致`);
@@ -658,7 +605,6 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
     const blobBytes = blobExists ? fs.readFileSync(blobPath) : Buffer.alloc(0);
 
     if (kind === 'pdf') {
-      // pdf 默认走 JSON 包络 + raw_url（§1.8），raw=1 才是字节
       const res = await smoke.get(`/api/v1/revisions/${sample.revision_id}/content`);
       smoke.expect(id, res.status === 200, '$.http_status', '200', String(res.status));
       const body = res.json as Record<string, unknown> | null;
@@ -676,32 +622,27 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
       smoke.expect(id, body?.ok === true, '$.ok', 'true', show(body?.ok));
       smoke.expect(id, body?.format === sample.format, '$.format', show(sample.format), show(body?.format));
       smoke.expect(id, body?.revision_id === sample.revision_id, '$.revision_id', sample.revision_id, show(body?.revision_id));
-      // 字节口径：HTTP text 的 UTF-8 字节必须与 blobs 快照文件完全一致
       const textBytes = Buffer.from(body?.text ?? '', 'utf-8');
       smoke.expect(id, textBytes.equals(blobBytes), '$.text 字节', `与快照文件一致（${blobBytes.length} 字节）`, `${textBytes.length} 字节`);
       smoke.expect(id, body?.text === sample.text, '$.text 内容', show((sample.text ?? '').slice(0, 60) + '…'), show((body?.text ?? '').slice(0, 60) + '…'));
     }
   }
 
-  // ---------- C10 decisions（§1.9）：分页遍历 + status/code 筛选 ----------
   {
     const id = checkOf('decisions', 'GET /api/v1/decisions 全页遍历 + 筛选与期望一致');
     const walk = await walkPages(smoke, id, '/api/v1/decisions', {}, 3);
     smoke.compare(id, ctx.decisionsExp.items, walk.items, '$.items');
     smoke.expect(id, walk.pages[0]?.index_generation === ctx.decisionsExp.index_generation, '$.index_generation', String(ctx.decisionsExp.index_generation), show(walk.pages[0]?.index_generation));
-    // status 精确筛选：待确认在前（project.ts:428-429 排序），已确认在后
     for (const st of ['待确认', '已确认'] as const) {
       const expectedItems = ctx.decisionsExp.items.filter((d) => d.status === st);
       const w = await walkPages(smoke, id, '/api/v1/decisions', { status: st }, 2);
       smoke.compare(id, expectedItems, w.items, `$.items(status=${st})`);
     }
-    // code 精确筛选：Q01 恰一条（已确认）
     const codeItems = ctx.decisionsExp.items.filter((d) => d.code === 'Q01');
     const wCode = await walkPages(smoke, id, '/api/v1/decisions', { code: 'Q01' }, 10);
     smoke.compare(id, codeItems, wCode.items, '$.items(code=Q01)');
   }
 
-  // ---------- C11 错误包络：NOT_FOUND（§0.2） ----------
   {
     const id = checkOf('errors:not-found', '不存在主体 → 404 { ok:false, code:"NOT_FOUND" }');
     const nf = ctx.errorsExp.not_found;
@@ -717,10 +658,6 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
     smoke.expect(id, (resRev.json as { ok?: boolean } | null)?.ok === false, '$.ok(版本)', 'false', show((resRev.json as { ok?: boolean } | null)?.ok));
   }
 
-  // ---------- 混合倒排检索（契约 §2.4）----------
-  // 用 POST /api/v1/search/rebuild 建检索索引（**零污染**：只写派生表与 search_* meta，
-  // 不跑 reconcile——不 touch last_scan_at/last_observed_at，不推进 index_generation，
-  // 因此可重复执行且不影响前面的 golden 比对）。置于全部 golden 比对之后。
   {
     const idPre = checkOf('search:rebuild', 'search/rebuild 建索引（零污染） + search_state=ready');
     const sub = await smoke.post('/api/v1/search/rebuild', {});
@@ -805,17 +742,14 @@ async function runAllChecks(smoke: Smoke, ctx: CheckContext): Promise<void> {
   }
 }
 
-// ---------- 主流程 ----------
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
 
-  // 前置：夹具与期望产物齐备（否则指引先跑 seed-fixture）
   if (!fs.existsSync(args.exe)) {
     console.error(`--exe 不存在：${args.exe}`);
     process.exit(2);
   }
-  // 夹具根归一：兼容传父目录（testdata/fixture）与直接传工作区根两种形式
   const fixtureRoot = resolveFixtureRoot(args.fixture);
   if (!fs.existsSync(fixtureRoot)) {
     console.error(`夹具工作区不存在：${fixtureRoot}\n先运行：node node_modules/tsx/dist/cli.mjs scripts/seed-fixture.ts`);
@@ -843,7 +777,6 @@ async function main(): Promise<void> {
     eventsSets: [],
     daysSets: [],
     eventsFirstPageExp: readJson('events-first-page.json'),
-    // blobs 定位与服务端同口径：GUANLAN_DATA_DIR 之下还有 rootKey 子目录（§3.1）
     dataDir: workspaceDataDir(args.data, fixtureRoot),
   };
   for (const f of fs.readdirSync(EXPECTED_DIR).sort()) {
@@ -852,9 +785,6 @@ async function main(): Promise<void> {
     if (/^days-/.test(f)) ctx.daysSets.push(readJson(f));
   }
 
-  // 启动服务：guanlan serve --root <夹具>；数据目录经 GUANLAN_DATA_DIR 传入（WorkspaceStore.ts:272 兼容）。
-  // 自测辅助：--exe 允许指向 .mjs/.js 脚本（用当前 node 运行），便于用 mock
-  // 服务自测本脚本全链路；正常用法仍是 Rust 二进制。
   const isScript = /\.(mjs|cjs|js)$/i.test(args.exe);
   const launcher = isScript ? process.execPath : args.exe;
   const exeArgs = [...(isScript ? [args.exe] : []), 'serve', '--root', fixtureRoot, ...(args.port ? ['--port', String(args.port)] : [])];
@@ -882,7 +812,6 @@ async function main(): Promise<void> {
     }
   }
 
-  // ---------- 汇总与非零退出 ----------
   console.log('\n========== 冒烟结果 ==========');
   let failedCount = 0;
   for (const c of checkResults) {
@@ -896,7 +825,7 @@ async function main(): Promise<void> {
     if (diffs.length > 12) console.log(`      …另有 ${diffs.length - 12} 条差异略`);
     for (const note of smoke.notesByCheck.get(c.id) ?? []) console.log(`      注: ${note}`);
   }
-  if (process.exitCode === 1) return; // 启动/执行层失败已置非零
+  if (process.exitCode === 1) return;
   if (failedCount) {
     console.log(`\n冒烟失败：${failedCount}/${checkResults.length} 项检查有差异 → 非零退出`);
     process.exitCode = 1;

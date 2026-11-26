@@ -2,10 +2,6 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import type * as React from 'react';
 import { cn } from '../../lib/cn';
 
-/**
- * 观澜 · Empty 空态原语（对齐 coss.com/ui 标志性三卡微倾扇形叠影图标栈）。
- * 统一全站零搜索命中、空目录、零待拍板、空证据篮等无数据诚实空态。
- */
 const emptyMediaVariants = cva(
   'flex shrink-0 items-center justify-center [&_svg]:pointer-events-none [&_svg]:shrink-0',
   {

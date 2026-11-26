@@ -12,7 +12,6 @@ import {
 import type { FileRecord, ReadingState } from '../types/guanlan';
 import type { ArtifactStateView } from '../services/apiTypes';
 
-/** 五类智能视图成员/计数同源守恒单测。 */
 
 const NOW = Date.parse('2026-11-21T12:00:00+08:00');
 
@@ -89,14 +88,13 @@ test('SMART_VIEWS：五类视图清单齐备且 ID 类型守卫成立', () => {
 
 test('读后有更新：有基线且当前版更新才计入；never_read / up_to_date 不算', () => {
   const files = [
-    file({ fileId: 'read_stale', current_revision_id: 'rev2' }), // 基线 rev1 ≠ rev2 → updated
+    file({ fileId: 'read_stale', current_revision_id: 'rev2' }),
     file({ fileId: 'never_opened' }),
     file({ fileId: 'up_to_date', current_revision_id: 'rev1' }),
   ];
   const readingStates: Record<string, ReadingState> = {
     read_stale: reading({ fileId: 'read_stale', last_read_revision_id: 'rev1' }),
     up_to_date: reading({ fileId: 'up_to_date', last_read_revision_id: 'rev1' }),
-    // never_opened 无阅读态
   };
   const result = computeSmartViewFiles({
     files,

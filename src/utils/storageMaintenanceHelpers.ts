@@ -1,6 +1,3 @@
-/**
- * 存储瘦身（铁律保护 GC）、SHA-256 完整性核验、全量开放导出与脱敏诊断包纯函数助手。
- */
 
 import type { BlobIntegrityReport, StorageGcResponse } from '../services/apiTypes';
 

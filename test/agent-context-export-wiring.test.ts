@@ -1,11 +1,3 @@
-/**
- * 智能体上下文双模导出「抽屉真实装配」接线测试。
- *
- * 纯函数层（agent-context-preset.test.ts）已锁定默认包与模板；本文件锁定
- * AgentContextDrawer 实际调用 buildGuanlanContextMarkdown /
- * buildMcpPayload 时是否传齐 initiative / versionLabel / stateLabel /
- * sessionCheckpointId，而不是只传 path+granularityLabel。
- */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
@@ -100,7 +92,6 @@ test('上下文导出模式 B：session_checkpoint_id / initiative / context_bun
 
 test('上下文导出接线：抽屉传齐字段，App 提供 initiative/sessionCheckpoint/referenceMeta', () => {
   const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8');
-  // 拆解 ModalsAndDrawers 后，AgentContextDrawer 实现位于 components/modals/AgentContextDrawer.tsx
   const drawer = [
     '../src/components/ModalsAndDrawers.tsx',
     '../src/components/modals/AgentContextDrawer.tsx',
@@ -117,7 +108,6 @@ test('上下文导出接线：抽屉传齐字段，App 提供 initiative/session
     assert.ok(drawer.includes(token), `AgentContextDrawer 缺 ${token}`);
   }
 
-  // 拆层后 App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
   const app = ['../src/App.tsx', '../src/stores/useWorkspaceStore.tsx', '../src/components/app/AppModalsStack.tsx']
     .map((p) => read(p))
     .join(String.fromCharCode(10))

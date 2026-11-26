@@ -76,7 +76,6 @@ pub struct DiffResult {
 pub fn lcs_lines(baseline: &[&str], target: &[&str]) -> Vec<DiffLine> {
     let n = baseline.len();
     let m = target.len();
-    // DP 表：n*m ≤ 2000*2000 = 4e6 u32 = 16MB 上限，一次性分配可接受
     let mut table = vec![0u32; (n + 1) * (m + 1)];
     let width = m + 1;
     for i in (0..n).rev() {
@@ -136,7 +135,6 @@ pub fn summary_metrics(
     ]
 }
 
-/// 单项组装（count≤0 时 sign=-1，否则 +1；count=0 仍给出条目，前端展示 0）
 fn metric(label: &str, count: i64) -> DiffMetric {
     DiffMetric {
         label: label.to_owned(),
@@ -145,8 +143,6 @@ fn metric(label: &str, count: i64) -> DiffMetric {
     }
 }
 
-/// 未决阻塞级事项数（decision 最新状态口径：同 decision_id 取最新 observed_at
-/// 的陈述——与 record_decision_events 的聚合一致）
 fn blocking_pending(statements: &[StatementRow]) -> u32 {
     let mut latest: std::collections::HashMap<String, &StatementRow> =
         std::collections::HashMap::new();
@@ -263,9 +259,6 @@ pub fn compute_diff(
     }
 }
 
-/// 把 LCS 序列按标题区块分组（标题 = 区块首行所在的大纲标题，确定性）；
-/// 无标题的行归「（文档头部）」。区块内行数超预算时按 [`SECTION_PAGE_LINES`]
-/// 切片（分块 cursor 由调用方编码）。
 fn group_sections(lines: &[DiffLine]) -> Vec<DiffSection> {
     let mut sections: Vec<DiffSection> = Vec::new();
     let mut current_title = "（文档头部）".to_owned();
@@ -281,7 +274,6 @@ fn group_sections(lines: &[DiffLine]) -> Vec<DiffSection> {
     for line in lines {
         let is_heading = line.text().trim_start().starts_with('#');
         if is_heading {
-            // 新标题：先把当前区块收起来（空区块跳过）
             if !current.lines.is_empty() {
                 sections.push(std::mem::replace(
                     &mut current,
@@ -293,7 +285,6 @@ fn group_sections(lines: &[DiffLine]) -> Vec<DiffSection> {
                     },
                 ));
             } else if !is_first {
-                // 空区块被标题替换：保持起始行号推进
             }
             current_title = line
                 .text()
@@ -368,16 +359,13 @@ mod tests {
     fn lcs_marks_add_del_same() {
         let lines = lcs_lines(&["a", "b", "c"], &["a", "x", "b", "c", "d"]);
         let kinds: Vec<&str> = lines.iter().map(DiffLine::type_str).collect();
-        // a 匹配；x 插入；b/c 匹配；d 插入（LCS=a,b,c，无删除）
         assert_eq!(kinds, vec!["same", "add", "same", "same", "add"]);
     }
 
     #[test]
     fn summary_metrics_counts_three_items() {
-        // 新增交付项：目标多 2 个勾选
         let baseline = "- [x] A\n- [ ] B\n";
         let target = "- [x] A\n- [x] B\n- [x] C\n- [x] D\n";
-        // 关闭未决：基线 P0+P1 各一 → 目标 P0 已确认
         let base_stmts = vec![
             statement("S1", "ns", "待确认", "P1", 1, 2, "2026-01-01"),
             statement("S2", "接口", "待确认", "P0", 3, 4, "2026-01-01"),
@@ -425,7 +413,6 @@ mod tests {
             .items
             .iter()
             .any(|item| item.label == "修改接口契约" && item.count == 0));
-        // 区块按标题分组
         let titles: Vec<&str> = result.sections.iter().map(|s| s.title.as_str()).collect();
         assert!(titles.contains(&"标题"));
         assert!(titles.contains(&"二"));

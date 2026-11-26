@@ -1,13 +1,3 @@
-/**
- * Token 预算感知组装器与零冷启动交接前端契约单测。
- *
- * 覆盖：
- *  1. 停机红线护栏：密钥/环境变量脱敏器（PEM/API Key/Bearer/URL 密码/.env 路径拦截）与零误杀；
- *  2. 四档注入粒度（全文 / 仅大纲与结论 / 仅变更 Diff / 仅元数据路径）字符与 Token 预算递减；
- *  3. 本机三大宿主（ZCode / Claude Code / Cursor）.mcp.json 零冷启动生成与无损合并（绝不混入环境变量）；
- *  4. AgentContextDrawer SSR：预览区与服务端 POST /api/v1/context（同 MCP get_context_bundle）逐字节同源一致，
- *     展示四档粒度切换钮、实时字符+Token 预算、上游规范引用片段、脱敏护栏提示与三宿主配置入口。
- */
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import React from 'react';
@@ -128,7 +118,6 @@ describe('三大宿主 .mcp.json 零冷启动生成与无损合并', () => {
     assert.deepEqual(Object.keys(claudeCfg.mcpServers.guanlan.env), ['GUANLAN_ENDPOINT']);
     assert.equal(claudeCfg.mcpServers.guanlan.env.GUANLAN_ENDPOINT, 'http://127.0.0.1:42000');
 
-    // 无损合并既有宿主配置，不丢其他 MCP server
     const merged = mergeMcpHostConfigJson(
       JSON.stringify({ mcpServers: { existing: { command: 'npx', args: ['-y', 'demo'] } } }),
       'cursor',
@@ -142,7 +131,6 @@ describe('三大宿主 .mcp.json 零冷启动生成与无损合并', () => {
       assert.equal(parsed.mcpServers.guanlan.command, 'guanlan');
     }
 
-    // 停机护栏：拒绝非回环地址与损坏 JSON
     assert.equal(normalizeLoopbackEndpoint('https://remote.example:443'), null);
     const badRemote = mergeMcpHostConfigJson(null, 'zcode', 'https://remote.example:443');
     assert.equal(badRemote.ok, false);
@@ -282,7 +270,6 @@ describe('AgentContextDrawer 服务端逐字节同源与四档粒度 UI', () => 
       })
     );
 
-    // 1. 服务端同源标记 + 预览区逐字节对齐（HTML 实体反转义校验）
     assert.ok(html.includes('data-context-source-parity="server"'));
     assert.ok(html.includes('与 MCP get_context_bundle 逐字节一致'));
     const preMatch = /<pre[^>]*data-context-export-preview=""[^>]*>([\s\S]*?)<\/pre>/.exec(html);
@@ -294,7 +281,6 @@ describe('AgentContextDrawer 服务端逐字节同源与四档粒度 UI', () => 
       .replace(/&amp;/g, '&');
     assert.equal(decodedPreview, serverCanonicalMarkdown, '预览区内容必须与服务端/MCP 逐字节一致');
 
-    // 2. 四档粒度按钮全部渲染
     assert.ok(html.includes('data-context-granularity="0:full"'));
     assert.ok(html.includes('data-context-granularity="0:summary"'));
     assert.ok(html.includes('data-context-granularity="0:diff_only"'));
@@ -303,7 +289,6 @@ describe('AgentContextDrawer 服务端逐字节同源与四档粒度 UI', () => 
     assert.ok(html.includes('仅变更 Diff'));
     assert.ok(html.includes('仅元数据路径'));
 
-    // 3. 上游规范片段、实时字符/Token 预算、脱敏护栏提示、三大宿主选项
     assert.ok(html.includes('data-context-upstream-snippets'));
     assert.ok(html.includes('02-上下文引擎/01-系统架构规范.md'));
     assert.ok(html.includes('338 字符'));

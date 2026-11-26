@@ -44,28 +44,17 @@ export interface CommandPaletteProps {
   isOpen: boolean;
   query: string;
   items: PaletteItem[];
-  /** 全文层加载中（本地层已即时刷新，微进度提示） */
   searching: boolean;
   onQueryChange: (q: string) => void;
   onClose: () => void;
-  /** Enter：打开文件（阅读器） */
   onOpenFile: (item: PaletteItem) => void;
-  /** Shift+Enter：打开文件版本时光机 */
   onOpenTimeMachine?: (item: PaletteItem) => void;
-  /** Ctrl+Enter：定位所在目录（资源管理器高亮） */
   onLocate: (item: PaletteItem) => void;
-  /** Tab：加入上下文（证据）篮 */
   onAddToBasket: (item: PaletteItem) => void;
-  /** kind=action 条目执行（跳今天 / 证据篮 / 切换工作区 / 定位根目录） */
   onRunAction: (item: PaletteItem) => void;
-  /** 内存文件全量索引（零 IO 同步派生版本号 vN·最新 / L4A 摘要 / 大纲 / 更新时刻，避免裸哈希） */
   files?: FileRecord[];
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   纯函数层（无 DOM 依赖，node:test 直测；语法胶囊解析与右预览派生抽为纯函数，
-   便于单元测试直接导入组件模块导出面）
-   ═══════════════════════════════════════════════════════════════════════════ */
 
 /** 语法 token 意图分类（keyword = 普通检索词） */
 export type PaletteTokenKind = 'date' | 'type' | 'status' | 'in' | 'keyword';
@@ -73,13 +62,9 @@ export type PaletteTokenKind = 'date' | 'type' | 'status' | 'in' | 'keyword';
 /** 输入框右侧微标签的语法 token 模型：原文 / 偏移 / 解析成败（诚实标注） */
 export interface PaletteToken {
   kind: PaletteTokenKind;
-  /** 原文 token（含 @ / 前缀，保留用户输入大小写） */
   text: string;
-  /** 在原始查询字符串中的起始偏移（一键移除的定位依据） */
   start: number;
-  /** 是否被现行语法口径接受（未收录的 @词 / status 值为 false，诚实回退关键词） */
   parsed: boolean;
-  /** 解析值：date=YYYY-MM-DD / type=小写格式 / status=待拍板 / in=事项名 / keyword=原文 */
   value?: string;
 }
 
@@ -176,7 +161,6 @@ export function paletteTokenTone(kind: PaletteTokenKind, value?: string): Palett
   return 'neutral';
 }
 
-/** 色调 → 文字色（浅玻璃 AA 深档，index.css 六色双层 -text 出口） */
 const TONE_TEXT: Record<PaletteTokenTone, string> = {
   blueprint: 'var(--stage-ink-blueprint-text)',
   plan: 'var(--stage-ink-plan-text)',
@@ -186,7 +170,6 @@ const TONE_TEXT: Record<PaletteTokenTone, string> = {
   neutral: 'var(--ink-soft)',
 };
 
-/** 色调 → 图形色（tint 底/描边 color-mix 原值；neutral 不着色相只做次文灰） */
 const TONE_GRAPHIC: Record<PaletteTokenTone, string> = {
   blueprint: 'var(--stage-ink-blueprint)',
   plan: 'var(--stage-ink-plan)',
@@ -198,13 +181,10 @@ const TONE_GRAPHIC: Record<PaletteTokenTone, string> = {
 
 /** 快捷语法胶囊（输入栏下方常驻单行；token 即点击补全进查询的原文） */
 export interface PaletteGrammarSuggestion {
-  /** 胶囊展示文本 */
   label: string;
-  /** 点击补全进查询的 token（再点同 token 即移除） */
   token: string;
   kind: 'date' | 'status' | 'type';
   tone: Exclude<PaletteTokenTone, 'neutral'>;
-  /** 悬停自解释（降低语法记忆成本） */
   hint: string;
 }
 
@@ -309,32 +289,21 @@ const MATCH_STRATEGY_LABELS: Record<string, string> = {
 export interface PalettePreviewModel {
   isAction: boolean;
   title: string;
-  /** 完整路径（relativePath 优先，subtitle 兜底，净除 f_ 裸哈希） */
   path: string | null;
   formatBadge: string;
-  /** 当前版本短码（兼容字段：revisionId 截断展示） */
   revisionShort: string | null;
-  /** 人类可读版本徽标（如「v4 · 最新」，隐藏 f_/rev_ 裸哈希） */
   humanVersionLabel: string | null;
-  /** 所属专项名（taskPackageOf 真实派生） */
   packageName: string | null;
-  /** 更新相对时刻（observed_at 真实派生） */
   updatedLabel: string | null;
-  /** 已排空的 L4A 摘要或核心结论首句（无则 null 优雅回退） */
   l4aSummary: string | null;
-  /** 文档大纲条目（最多 4 项，来自正文 Markdown 标题） */
   outlineHeadings: string[];
   pendingDecisions: number;
-  /** SVG 微缩图地址（仅 svg 格式且有 revisionId；懒加载 URL 直拼，选中变化零 fetch） */
   thumbnailUrl: string | null;
-  /** 命中正文高亮分段（snippetText 存在时；≤2 行 / 200 字窗口口径与列表一致） */
   snippet: SnippetResult | null;
-  /** 无正文摘要时的诚实说明（本地层命中不带 snippet） */
   snippetFallback: string | null;
   coverageLabel: string | null;
   matchStrategyLabel: string | null;
   sourceWorkspace: { name: string; rootKey: string } | null;
-  /** 快捷动作提示（Enter 打开 / Ctrl+Enter 定位 / Tab 入证据篮；动作条目为 Enter 执行） */
   hints: string[];
 }
 
@@ -417,16 +386,12 @@ export function palettePreviewModel(
   };
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   展示组件
-   ═══════════════════════════════════════════════════════════════════════════ */
 
 function formatBadge(format?: string): string {
   if (!format) return '–';
   return format.toUpperCase();
 }
 
-/** 摘要高亮渲染（≤2 行窗口；line-clamp 兜底 CSS 双保险） */
 function SnippetView({ text, query }: { text: string; query: string }): React.ReactElement {
   const snippet = useMemo(() => buildSnippet(text, query), [text, query]);
   return (
@@ -449,7 +414,6 @@ function SnippetView({ text, query }: { text: string; query: string }): React.Re
   );
 }
 
-/** 输入框右侧语法 Token 彩色微标签（点 × 一键移除；未识别诚实标注） */
 function TokenChip({
   token,
   onRemove,
@@ -494,7 +458,6 @@ function TokenChip({
   );
 }
 
-/** 右实时富预览窗（lg ≥1024px 双栏 40% 列）：版本号 / 专项 / 更新时刻 / L4A 摘要 / 大纲 / 缩略图 / 一键快捷动作 */
 function PreviewPane({
   model,
   item,
@@ -551,7 +514,6 @@ function PreviewPane({
         ) : null}
       </div>
 
-      {/* 所属专项与最近更新时刻元信息条 */}
       {(model.packageName || model.updatedLabel) && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
           {model.packageName ? (
@@ -583,7 +545,6 @@ function PreviewPane({
         />
       ) : null}
 
-      {/* 已排空的文档摘要卡（无摘要时优雅回退，不造数） */}
       {model.l4aSummary ? (
         <div
           data-command-palette-l4a-summary="true"
@@ -599,7 +560,6 @@ function PreviewPane({
         </div>
       ) : null}
 
-      {/* 文档大纲条目（最多 4 项） */}
       {model.outlineHeadings.length > 0 ? (
         <div data-command-palette-outline="true" className="space-y-1">
           <div className="text-[10px] font-medium tracking-wider text-muted-foreground">文档大纲</div>
@@ -650,7 +610,6 @@ function PreviewPane({
         </div>
       ) : null}
 
-      {/* 一键快捷动作按钮 + 键位提示 */}
       <div
         data-command-palette-preview-hints="true"
         className="mt-auto space-y-2 border-t border-border/75 pt-2.5"
@@ -713,7 +672,6 @@ export function CommandPalette(props: CommandPaletteProps): React.ReactElement |
     return map;
   }, [files]);
 
-  // 打开即聚焦（呼出 <16ms 的可输入口径）；查询变化时重置选中到首项
   useEffect(() => {
     if (isOpen) {
       inputRef.current?.focus();
@@ -725,14 +683,12 @@ export function CommandPalette(props: CommandPaletteProps): React.ReactElement |
     setSelectedIndex(0);
   }, [items]);
 
-  // 键盘连续上下选择时选中行始终可见（零遮挡：block:'nearest'）
   useEffect(() => {
     if (!isOpen || !listRef.current) return;
     const el = listRef.current.querySelector<HTMLElement>('[data-selected="true"]');
     el?.scrollIntoView({ block: 'nearest' });
   }, [selectedIndex, isOpen]);
 
-  // 输入框右侧语法 token 微标签 + 右预览窗 L4A 富预览模型（纯内存同步派生，零 IO）
   const syntaxTokens = useMemo(
     () => (isOpen ? parsePaletteTokens(query).filter((t) => t.kind !== 'keyword') : []),
     [isOpen, query]
@@ -781,7 +737,6 @@ export function CommandPalette(props: CommandPaletteProps): React.ReactElement |
         return;
       }
       if (e.ctrlKey || e.metaKey) {
-        // Ctrl+Enter：定位所在目录（文件条目 → 资源管理器高亮；动作条目按执行处理）
         if (item.kind === 'file') props.onLocate(item);
         else props.onRunAction(item);
         return;
@@ -814,9 +769,7 @@ export function CommandPalette(props: CommandPaletteProps): React.ReactElement |
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* coss Command 外灰槽 + 内亮板 CommandPanel 双栏富预览台 */}
       <div className="glass-pop glx-popover-in flex w-[min(680px,92vw)] flex-col overflow-hidden rounded-2xl border border-border bg-muted/90 dark:bg-popover/95 p-1.5 shadow-2xl lg:w-[min(1040px,92vw)]">
-        {/* 外灰槽顶部：搜索框 + Token 微标签 + 常驻语法胶囊行 */}
         <div className="px-3 pb-2.5 pt-2">
           <div className="flex items-center gap-2">
             <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -847,7 +800,6 @@ export function CommandPalette(props: CommandPaletteProps): React.ReactElement |
               </div>
             ) : null}
           </div>
-          {/* 快捷语法胶囊（常驻单行；点击即补全 → 再点即移除，走 onQueryChange 正常纪律） */}
           <div
             className="mt-2 flex flex-wrap items-center gap-1.5"
             data-command-palette-grammar="true"
@@ -885,7 +837,6 @@ export function CommandPalette(props: CommandPaletteProps): React.ReactElement |
           </div>
         </div>
 
-        {/* 内亮板 CommandPanel：lg ≥1024px 左结果列表 60%（ScrollArea） + 右实时富预览 40% */}
         <CommandPanel className="flex flex-col overflow-hidden lg:flex-row">
           <ScrollArea scrollFade className="max-h-[52vh] w-full lg:w-[60%] lg:shrink-0">
             <div
@@ -990,7 +941,6 @@ export function CommandPalette(props: CommandPaletteProps): React.ReactElement |
             </div>
           </ScrollArea>
 
-          {/* 右实时富预览窗：随选中实时展示版本/专项/更新时刻/L4A摘要/大纲/缩略图/快捷动作 */}
           <aside
             data-command-palette-preview="true"
             aria-label="命中预览"
@@ -1027,7 +977,6 @@ export function CommandPalette(props: CommandPaletteProps): React.ReactElement |
           </aside>
         </CommandPanel>
 
-        {/* 外灰槽底栏：coss CommandFooter + Kbd 键位提示 */}
         <CommandFooter className="border-t-0 bg-transparent px-3 py-2 text-[11px]">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="inline-flex items-center gap-1">

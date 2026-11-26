@@ -1,6 +1,3 @@
-/**
- * 存量降噪、智能中段省略、>= 15 高密边界、批量已读基线与撤销还原、LeftSidebar coss 升级单测
- */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -93,16 +90,14 @@ function makeFile(
 }
 
 test('formatMiddleEllipsisName 覆盖中英文、带扩展名、短文件名与同前缀差异保留', () => {
-  // 短文件名原样返回
   assert.equal(formatMiddleEllipsisName('README.md', 0, 22), 'README.md');
   assert.equal(formatMiddleEllipsisName('架构设计说明.md', 0, 22), '架构设计说明.md');
 
-  // 真实 5500+ 同前缀长 SVG 文件名：必须保留后缀差异词与扩展名，避免全列撞成同一前缀
   const names = [
     '2D与3D绘制预览优化方案-v1.svg',
     '2D与3D绘制预览优化方案-v2.svg',
     '2D与3D绘制预览优化方案-final.svg',
-    'README.md', // 异类兄弟不应干扰同簇前缀识别
+    'README.md',
   ];
   const prefixMap = computeSiblingSharedPrefixMap(names);
   assert.ok(
@@ -127,13 +122,11 @@ test('formatMiddleEllipsisName 覆盖中英文、带扩展名、短文件名与�
   assert.notEqual(outV1, outV2, '同前缀不同版本的省略结果必须清晰可区分');
   assert.ok(Array.from(outV1).length <= 14, `省略后字符数应不超过 maxChars=14，实际：${Array.from(outV1).length}`);
 
-  // 英文长文件名带扩展名
   const en = formatMiddleEllipsisName('architecture-migration-proposal-phase-2-revised.tsx', 31, 22);
   assert.ok(en.endsWith('.tsx'), `英文文件应保留扩展名，实际：${en}`);
   assert.ok(en.includes('…'));
   assert.ok(Array.from(en).length <= 22);
 
-  // 无扩展名中文长标题（无共享前缀）
   const cnNoExt = formatMiddleEllipsisName('面向万级工作区文件治理的全链路性能基准分析报告终版', 0, 16);
   assert.ok(cnNoExt.includes('…'));
   assert.ok(Array.from(cnNoExt).length <= 16);
@@ -190,11 +183,9 @@ test('批量确立已读基线不伪造 scrollPercent、不丢收藏批注、撤
     { file_id: 'f2', last_read_revision_id: 'r2_v1', updated_at: '2026-11-23T09:00:00Z' },
   ]);
 
-  // 两份均变为已读基线最新
   assert.equal(hasUnreadChanges(f1, next.f1).isUnread, false);
   assert.equal(hasUnreadChanges(f2, next.f2).isUnread, false);
 
-  // f1 原有进度/收藏/批注完好保留；f2 绝不伪造 scrollPercent，且标记 baselineOnly
   assert.equal(next.f1.scrollPercent, 48);
   assert.equal(next.f1.bookmarked, true);
   assert.equal(next.f1.personalNote, '重要批注');
@@ -203,19 +194,16 @@ test('批量确立已读基线不伪造 scrollPercent、不丢收藏批注、撤
   assert.equal(next.f2.baselineOnly, true);
   assert.equal(next.f2.updated_at, '', '不污染最近浏览排序');
 
-  // 后续仅 f2 产生新版本 r2_v2 -> 仅 f2 重新亮起未读
   const f2Updated = makeFile('f2', '从未读过', '01-方案', 'r2_v2');
   assert.equal(hasUnreadChanges(f1, next.f1).isUnread, false);
   assert.equal(hasUnreadChanges(f2Updated, next.f2).isUnread, true);
   assert.equal(hasUnreadChanges(f2Updated, next.f2).reason, 'updated_since_last_read');
 
-  // 撤销还原：100% 回到原状（f1 回到 r1_v1，f2 彻底删除键）
   const restored = restoreReadingStatesSnapshot(next, previousSnapshot);
   assert.equal(restored.f1?.last_read_revision_id, 'r1_v1');
   assert.equal(restored.f1?.bookmarked, true);
   assert.equal(restored.f2, undefined, '原未读文件撤销后应完全恢复未读（无残留键）');
 
-  // mergeServerReadingStates 合并验证
   const merged = mergeServerReadingStates(initial, [
     { file_id: 'f1', last_read_revision_id: 'r1_v2', updated_at: '2026-11-23T09:00:00Z' },
     { file_id: 'f2', last_read_revision_id: 'r2_v1', updated_at: '2026-11-23T09:00:00Z' },
@@ -280,7 +268,6 @@ test('LeftSidebar 渲染 coss SegmentedControl / ScrollArea / 确立已读基线
   assert.ok(menuHtml.includes('本目录全部标为已读'));
 });
 
-// ===== 5,500+ 高密日历 CardFrame 重构、零碰撞分流、四档窗口、域过滤守恒与空月归档 =====
 
 function makeDatedFile(
   id: string,
@@ -314,22 +301,17 @@ test('resolveCalendarSlotMode 四档列宽零碰撞分流与 15 天连续百文�
   assert.equal(CALENDAR_WINDOW_SHORT, 30);
   assert.equal(CALENDAR_WINDOW_DEFAULT, 90);
 
-  // ≤3 份一律 pills
   assert.equal(resolveCalendarSlotMode(22, 1, true), 'pills');
   assert.equal(resolveCalendarSlotMode(22, 3, true), 'pills');
-  // 极窄 90 天宽窗 (<= 13px) → heat_dot
   assert.equal(resolveCalendarSlotMode(CALENDAR_SLOT_HEAT_DOT_MAX_PX, 100, true), 'heat_dot');
   assert.equal(resolveCalendarSlotMode(7.3, 152, false), 'heat_dot');
-  // 连续 15 天百文日在 30 天(22px) / 14 天(47px) → 确定性退化为 compact_heat（绝不撞车）
   assert.equal(resolveCalendarSlotMode(22, 100, true), 'compact_heat');
   assert.equal(resolveCalendarSlotMode(47, 100, true), 'compact_heat');
   assert.equal(resolveCalendarSlotMode(CALENDAR_SLOT_PILLS_CHIP_MIN_PX - 1, 36, true), 'compact_heat');
-  // 宽列（近 7 天 ~94px）或无 2 日内邻槽的孤立槽 → pills_with_chip
   assert.equal(resolveCalendarSlotMode(CALENDAR_SLOT_PILLS_CHIP_MIN_PX, 100, true), 'pills_with_chip');
   assert.equal(resolveCalendarSlotMode(94, 100, true), 'pills_with_chip');
   assert.equal(resolveCalendarSlotMode(22, 7, false), 'pills_with_chip');
 
-  // 真实 15 天连续每天 100 份文件（1,500 份）在默认 30 天窗口渲染：全部转为紧凑热力格（99+），零宽芯片撞车
   const files15Days: FileRecord[] = [];
   for (let d = 8; d <= 22; d += 1) {
     const day = `2026-11-${String(d).padStart(2, '0')}`;
@@ -354,7 +336,6 @@ test('resolveCalendarSlotMode 四档列宽零碰撞分流与 15 天连续百文�
   const compactMatches = html.match(/data-slot-compact="100"/g) ?? [];
   assert.equal(compactMatches.length, 15, '连续 15 天百文日必须 100% 退化为 15 枚居中紧凑热力格');
   assert.ok(!html.includes('>+100</button>'), '连续百文日不得出现必然撞车的 +100 宽芯片');
-  // 事件刻度位于 sticky bottom-0 栈内，防止被下方摘要条裁切
   const stickyIdx = html.indexOf('sticky bottom-0');
   const eventsRowIdx = html.indexOf('data-cal-row="__events__"');
   assert.ok(stickyIdx > 0 && eventsRowIdx > stickyIdx, '事件刻度行应纳入 sticky bottom-0 栈顶，杜绝裁切');
@@ -406,9 +387,9 @@ test('域过滤 SSOT 严格满足 MECE 计数守恒（all === business + code）
 test('迷你热力月历超 12 个连续空月折叠为「更早归档」胶囊，消除「跳过 149 个空月」噪音', () => {
   const partitioned = partitionCalendarDensityMonths([
     { month: '2026-11' },
-    { month: '2026-10' }, // 0 空月：不折叠
-    { month: '2026-03' }, // 6 空月 (<= 12)：不折叠
-    { month: '2013-10' }, // 148 空月 (> 12)：插入「更早归档」胶囊
+    { month: '2026-10' },
+    { month: '2026-03' },
+    { month: '2013-10' },
   ]);
   assert.equal(partitioned.hasAncientGap, true);
   assert.equal(partitioned.ancientGapCount, 1);
@@ -420,7 +401,6 @@ test('迷你热力月历超 12 个连续空月折叠为「更早归档」胶囊�
     assert.ok(gap.label.includes('更早归档'));
   }
 
-  // 渲染验证：存在 149+ 空月跨度时，可见文案展示「含更早归档」+ 胶囊，不展示刺眼的「· 跳过 156 个空月」正文
   const sideHtml = renderToStaticMarkup(
     React.createElement(CalendarSidePanels, {
       files: [makeDatedFile('a', '2026-11-20')],
@@ -438,12 +418,8 @@ test('迷你热力月历超 12 个连续空月折叠为「更早归档」胶囊�
   assert.ok(!sideHtml.includes('· 跳过 156 个空月'), '消除「· 跳过 156 个空月」可见文本噪音');
 });
 
-// =========================================================================
-// 目录级静默与忽略治理 UI + 左栏 InputGroup 快筛、三态排序与 PreviewCard 速览
-// =========================================================================
 
 test('目录静默清单同源过滤一致性（星图/日历/列表 + EventPage + EventDays + 嵌套子目录继承）', () => {
-  // 工作区私有存储键独立隔离（不向业务目录写磁盘文件）
   assert.equal(mutedFoldersStorageKey('ws_alpha'), 'guanlan.mutedFolders.v1.ws_alpha');
   assert.notEqual(mutedFoldersStorageKey('ws_alpha'), mutedFoldersStorageKey('ws_beta'));
 
@@ -464,11 +440,9 @@ test('目录静默清单同源过滤一致性（星图/日历/列表 + EventPage
     makeEvent('e_code_root', 'f_code_root', '2026-11-23'),
     makeEvent('e_code_nested', 'f_code_nested', '2026-11-22'),
     makeEvent('e_keep_sibling', 'f_keep_sibling', '2026-11-22'),
-    // 工作区基线事件（无关联 file_id）应保留
     makeEvent('e_ws_base', '', '2026-11-20'),
   ];
 
-  // 星图 / 日历同源过滤
   const filtered = filterOutMutedFolders(files, events, muted);
   assert.equal(filtered.mutedFileCount, 2);
   assert.deepEqual(
@@ -482,7 +456,6 @@ test('目录静默清单同源过滤一致性（星图/日历/列表 + EventPage
   assert.equal(isFileInMutedFolder(files[2], muted), true);
   assert.equal(isFileInMutedFolder(files[3], muted), false);
 
-  // 列表分页 EventPage 同源过滤（静默 + 资产域联合）
   const mockPage: EventPage = {
     ok: true,
     index_generation: 1,
@@ -561,7 +534,6 @@ test('目录静默清单同源过滤一致性（星图/日历/列表 + EventPage
     '列表分页 EventPage 应与星图/日历执行完全一致的静默目录排除'
   );
 
-  // 星图日桶 EventDaysResult 同源过滤
   const mockDays: EventDaysResult = {
     ok: true,
     index_generation: 1,
@@ -645,7 +617,6 @@ test('目录静默清单同源过滤一致性（星图/日历/列表 + EventPage
     '全样本均属静默目录的日期桶应从星图与日历桶中干净剔除'
   );
 
-  // 取消静默后完整还原
   const restored = toggleMutedFolderList(muted, '04-智能体代码');
   assert.deepEqual(restored, []);
 });
@@ -670,14 +641,12 @@ test('目录三态排序（name / active7d / unread）确定性与子树指标�
     ['01-归档', '02-研发', '03-运营']
   );
 
-  // active7d：02-研发 通过子树聚合拿到 9，必须上浮至首位，其次 03-运营 (3)，最后 01-归档 (0)
   const byActive = sortFolderTreeNodes(nodes, 'active7d', metrics);
   assert.deepEqual(
     byActive.map((n) => n.name),
     ['02-研发', '03-运营', '01-归档']
   );
 
-  // unread：03-运营 (6) > 02-研发 (子树 2) > 01-归档 (1)
   const byUnread = sortFolderTreeNodes(nodes, 'unread', metrics);
   assert.deepEqual(
     byUnread.map((n) => n.name),
@@ -693,7 +662,6 @@ test('左栏即时快筛 + 关键词高亮切分 + 5,500 份文件单遍快筛�
     { text: '-v2.svg', hit: false },
   ]);
 
-  // 构造 5,500 份分布于 55 个子目录的真实量级工作区
   const bigFiles: FileRecord[] = [];
   for (let i = 0; i < 5500; i += 1) {
     const dir = `0${(i % 5) + 1}-专项/子组-${String(i % 11).padStart(2, '0')}`;
@@ -738,7 +706,6 @@ test('UI 渲染验收：左栏 InputGroup 快筛/三态排序/静默徽标与胶
   assert.ok(sidebarHtml.includes('已静默'), '左栏应显示「已静默」徽标');
   assert.ok(sidebarHtml.includes('data-muted-folders-pill="1"'), '左栏底缘应渲染「已静默 1 个目录」轻胶囊');
 
-  // 右键目录菜单：静默 / 取消静默
   const menuMuteHtml = renderToStaticMarkup(
     React.createElement(FileContextMenu, {
       menu: { x: 120, y: 120, target: { kind: 'folder', relativePath: '04-智能体代码', title: '04-智能体代码' } },
@@ -772,7 +739,6 @@ test('UI 渲染验收：左栏 InputGroup 快筛/三态排序/静默徽标与胶
   );
   assert.ok(menuUnmuteHtml.includes('取消静默此目录'));
 
-  // 右检查器渲染双向引用卡无 SSR 报错（已接入 Base UI PreviewCardTrigger）
   const inspectorHtml = renderToStaticMarkup(
     React.createElement(RightInspector, {
       selectedFile: f1,

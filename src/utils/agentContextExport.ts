@@ -1,28 +1,11 @@
-/**
- * 智能体上下文双模导出（纯函数层）。
- *
- *  - 模式 A：结构化 <guanlan_context> 提示词清单（含 objective / confirmed_decisions /
- *    pending_blockers(count) / reference_files(count) / writeback_protocol）；
- *  - 模式 B：guanlan-mcp/v1 MCP 载荷（含 session_checkpoint_id /
- *    workspace_root / initiative / context_bundle(uri=guanlan://<path>，hash=
- *    sha256:<前16>) / allowed_mcp_tools / guardrails）；
- *  - mcp.json 配置模板（MCP 连接自检的「一键复制」产物）。
- *
- * 纪律：纯函数（node --test 直跑）；在线时优先以服务端 POST /api/v1/context 响应为导出源，
- * 本层是其离线降级实现——双模结构与服务端 DTO 词表逐字对齐。
- */
 
 import type { ContextMcpPayload, McpHostTarget } from '../services/apiTypes';
 import { sanitizeContextText } from './contextSanitizer';
 
-// ================= 模式 A：Markdown 提示词清单 =================
 
 export interface GuanlanContextDecisionLine {
-  /** 'P1' | 'P0' … */
   priority: string;
-  /** 库内状态词（已确认/待确认…） */
   statusLabel: string;
-  /** 决定/问题正文 */
   text: string;
   confirmer?: string | null;
   effectiveDate?: string | null;
@@ -32,13 +15,11 @@ export interface GuanlanContextBlockerLine {
   priority: string;
   statusLabel: string;
   text: string;
-  /** `相对路径#L42` 形态的文件锚点 */
   fileRef?: string | null;
 }
 
 export interface GuanlanContextReferenceLine {
   path: string;
-  /** 注入粒度标识（兼容既有 全文/摘要/引用 及四档语义词） */
   granularityLabel: '全文' | '摘要' | '引用' | '仅大纲与结论' | '仅变更 Diff' | '仅元数据路径';
   versionLabel?: string | null;
   stateLabel?: string | null;
@@ -47,7 +28,6 @@ export interface GuanlanContextReferenceLine {
 export interface GuanlanContextMarkdownInput {
   workspaceRoot: string;
   initiative?: { name: string; stage: string } | null;
-  /** 目标段（缺省用默认话术） */
   objective?: string;
   confirmedDecisions: readonly GuanlanContextDecisionLine[];
   pendingBlockers: readonly GuanlanContextBlockerLine[];
@@ -127,11 +107,9 @@ export function buildGuanlanContextMarkdown(input: GuanlanContextMarkdownInput):
     '  </writeback_protocol>',
     '</guanlan_context>',
   ].join('\n');
-  // 停机红线护栏：离线降级路径同样强制脱敏，绝不混入密钥/环境变量
   return sanitizeContextText(raw).text;
 }
 
-// ================= 模式 B：guanlan-mcp/v1 载荷（JSON） =================
 
 /** 允许的 MCP 工具面（四工具，顺序固定） */
 export const GUANLAN_MCP_ALLOWED_TOOLS: readonly string[] = [
@@ -142,12 +120,9 @@ export const GUANLAN_MCP_ALLOWED_TOOLS: readonly string[] = [
 ];
 
 export interface McpBundleEntry {
-  /** 相对路径（载荷内转 guanlan://<path>） */
   path: string;
   granularity: string;
-  /** 'v2' 等版本标签 */
   versionLabel?: string | null;
-  /** 裸哈希（十六进制；载荷内取前 16 位拼 sha256: 前缀） */
   contentHash?: string | null;
 }
 
@@ -185,7 +160,6 @@ export function buildMcpPayload(input: McpPayloadInput): ContextMcpPayload {
   };
 }
 
-// ================= mcp.json 配置模板（连接自检一键复制） =================
 
 /** 默认约定端点（显式 serve --port 39120 时成立；缺省 serve 端口内核随机分配，
  *  权威值在启动 stdout 的 GUANLAN_ENDPOINT 行——代理不猜端口，模板允许用户改写） */
@@ -216,7 +190,6 @@ export function buildMcpJsonConfig(endpoint: string = GUANLAN_MCP_DEFAULT_ENDPOI
   );
 }
 
-// ================= 主流宿主 .mcp.json 零冷启动配置（ZCode / Claude Code / Cursor） =================
 
 export interface McpHostTargetMeta {
   id: McpHostTarget;
@@ -258,7 +231,6 @@ export function normalizeLoopbackEndpoint(raw?: string | null): string | null {
 }
 
 function buildGuanlanServerEntry(host: McpHostTarget, endpoint: string): Record<string, unknown> {
-  // 严格只放 GUANLAN_ENDPOINT，绝不注入任何宿主环境变量或本机密钥
   if (host === 'claude_code') {
     return {
       type: 'stdio',

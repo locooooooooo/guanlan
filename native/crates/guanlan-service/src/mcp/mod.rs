@@ -39,7 +39,6 @@ use serde_json::{json, Value};
 
 use guanlan_core::error::GuanlanError;
 
-/// 四个基础读写/检查点工具（固定顺序）+ 上下文包组装 + 全文检索（全量受路径沙箱护栏约束）
 pub(crate) const TOOL_NAMES: [&str; 6] = [
     "guanlan.read_artifact",
     "guanlan.propose_revision",
@@ -49,27 +48,17 @@ pub(crate) const TOOL_NAMES: [&str; 6] = [
     "guanlan.search_workspace",
 ];
 
-/// 单次 HTTP 代理响应体读取硬上限（16 MiB），防止异常大包击穿 MCP 代理进程内存
 const MCP_MAX_HTTP_RESPONSE_BYTES: u64 = 16 * 1024 * 1024;
-/// `guanlan.read_artifact` 返回文本有界截断上限（256 KiB），超限按 UTF-8 字符边界安全截断并显式标注
 const MCP_MAX_READ_TEXT_BYTES: usize = 256 * 1024;
 
-/// initialize 未回显客户端版本时的钉定协议版本
 const DEFAULT_PROTOCOL_VERSION: &str = "2024-11-05";
 
-/// 单请求读写超时（本地回环；job 轮询是多次独立请求，不是单请求长挂）
 const HTTP_TIMEOUT: Duration = Duration::from_secs(20);
-/// 连接超时（服务未启动时快速失败）
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
-/// 提交类工具（202 job）的有界轮询：300ms × 33 ≈ 10s 封顶
 const JOB_POLL_ATTEMPTS: u32 = 33;
 const JOB_POLL_INTERVAL: Duration = Duration::from_millis(300);
 
-// ================= 端点解析（不猜端口） =================
-
-/// `--endpoint <url>` 参数优先，其次 `GUANLAN_ENDPOINT` env（测试注入，不读进程环境）；
 /// 两者皆缺 → Err（调用方 stderr 包络 + 退出码 1）。仅接受 http://（本地回环口径；
-/// https 无 TLS 客户端实现，显式报错而非静默降级）。
 fn resolve_endpoint(args: &[String], env: Option<&str>) -> Result<String, GuanlanError> {
     let mut from_args: Option<String> = None;
     let mut i = 0;
@@ -100,7 +89,6 @@ fn resolve_endpoint(args: &[String], env: Option<&str>) -> Result<String, Guanla
         )));
     }
     let rest = &trimmed["http://".len()..];
-    // host:port（IPv4/localhost 口径；本地服务恒为 127.0.0.1 或 localhost）
     let (host, port) = match rest.rsplit_once(':') {
         Some((h, p)) => (h, p),
         None => {
@@ -117,9 +105,6 @@ fn resolve_endpoint(args: &[String], env: Option<&str>) -> Result<String, Guanla
     Ok(trimmed)
 }
 
-// ================= 最小 HTTP/1.1 客户端（手写，无新依赖） =================
-
-/// 代理发往服务的请求（method 限定已知集合故用 &'static str）
 #[derive(Debug, Clone)]
 pub(crate) struct McpHttpRequest {
     pub method: &'static str,
@@ -128,7 +113,6 @@ pub(crate) struct McpHttpRequest {
     pub body: Option<Value>,
 }
 
-/// 服务响应：status + 尽力 JSON（非 JSON 响应如 raw=1 纯文本落 `raw_text`）
 #[derive(Debug, Clone)]
 pub(crate) struct McpHttpResponse {
     pub status: u16,
@@ -142,7 +126,6 @@ impl McpHttpResponse {
         (200..300).contains(&self.status)
     }
 
-    /// 统一错误包络提取（契约 §0.2 {ok,code,error,detail}）→ 工具错误文案
     fn error_text(&self) -> String {
         let code = self.body.get("code").and_then(Value::as_str).unwrap_or("");
         let error = self.body.get("error").and_then(Value::as_str).unwrap_or("");
@@ -154,12 +137,10 @@ impl McpHttpResponse {
     }
 }
 
-/// 代理后端（HTTP 客户端与测试 mock 的共同接口）
 pub(crate) trait McpBackend {
     fn call(&self, req: McpHttpRequest) -> Result<McpHttpResponse, String>;
 }
 
-/// 阻塞式 HTTP 后端：每请求一条连接（Connection: close），读至对端关闭。
 struct HttpBackend {
     endpoint: String,
 }
@@ -236,7 +217,6 @@ impl McpBackend for HttpBackend {
     }
 }
 
-/// 解析 HTTP 响应字节：状态行 + 头 + 体（Content-Length 或 chunked 或读到 EOF）。
 fn parse_http_response(raw: &[u8]) -> Result<McpHttpResponse, String> {
     let body_start = find_header_end(raw).ok_or_else(|| "响应缺少头部分隔符".to_owned())?;
     let head = String::from_utf8_lossy(&raw[..body_start]).to_string();
@@ -280,7 +260,6 @@ fn parse_http_response(raw: &[u8]) -> Result<McpHttpResponse, String> {
     })
 }
 
-/// 定位 `\r\n\r\n`，返回体起始偏移（头部分隔符之后）
 fn find_header_end(raw: &[u8]) -> Option<usize> {
     let needle = b"\r\n\r\n";
     (0..=raw.len().saturating_sub(needle.len()))
@@ -288,7 +267,6 @@ fn find_header_end(raw: &[u8]) -> Option<usize> {
         .map(|i| i + 4)
 }
 
-/// chunked 解码（hex 长度行 + 数据 + CRLF，0 结尾）
 fn decode_chunked(mut body: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
     while let Some(line_end) = find_crlf(body) {
@@ -303,7 +281,6 @@ fn decode_chunked(mut body: &[u8]) -> Vec<u8> {
         }
         out.extend_from_slice(&body[..size]);
         body = &body[size..];
-        // 跳过 chunk 数据后的 CRLF
         if body.starts_with(b"\r\n") {
             body = &body[2..];
         }
@@ -314,8 +291,6 @@ fn decode_chunked(mut body: &[u8]) -> Vec<u8> {
 fn find_crlf(raw: &[u8]) -> Option<usize> {
     (0..raw.len().saturating_sub(1)).find(|&i| raw[i] == b'\r' && raw[i + 1] == b'\n')
 }
-
-// ================= JSON-RPC 2.0 over stdio（手写，无 SDK） =================
 
 /// `guanlan mcp` 子命令入口（main.rs 调用）：端点缺失 → stderr 包络 + 退出码 1；
 /// stdio 通道结束（EOF/写失败）以非零码退出。
@@ -342,8 +317,6 @@ pub fn run(args: &[String]) {
     }
 }
 
-/// stdio 主循环：逐行读 JSON-RPC 消息，有响应即写一行（行分隔 JSON 传输）。
-/// EOF（客户端断开）正常退出。stderr 只走诊断，不污染 stdout 协议面。
 pub(crate) fn serve_stdio<B: McpBackend>(backend: &B) -> std::io::Result<()> {
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
@@ -375,7 +348,6 @@ pub(crate) fn serve_stdio<B: McpBackend>(backend: &B) -> std::io::Result<()> {
     }
 }
 
-/// JSON-RPC 错误响应（id 原样回显；无法关联请求时 id=null）
 fn rpc_error(id: Value, code: i64, message: String) -> Value {
     json!({
         "jsonrpc": "2.0",
@@ -388,7 +360,6 @@ fn rpc_result(id: Value, result: Value) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "result": result })
 }
 
-/// 单条消息 → Option<响应>：请求有响应；通知（无 id）无响应；响应帧忽略。
 pub(crate) fn handle_message(msg: &Value, backend: &dyn McpBackend) -> Option<Value> {
     let obj = match msg.as_object() {
         Some(obj) => obj,
@@ -403,9 +374,7 @@ pub(crate) fn handle_message(msg: &Value, backend: &dyn McpBackend) -> Option<Va
     let method = obj.get("method").and_then(Value::as_str);
     let has_id = obj.contains_key("id");
     match (method, has_id) {
-        // 通知（无 id）：协议生命周期通知一律不回（MCP stdio 传输纪律）
         (Some(_), false) => None,
-        // 对端发来的响应帧（无 method 有 id）：本代理不主动发请求，忽略
         (None, true) => None,
         (None, false) => Some(rpc_error(
             Value::Null,
@@ -423,8 +392,6 @@ pub(crate) fn handle_message(msg: &Value, backend: &dyn McpBackend) -> Option<Va
 fn dispatch_request(method: &str, params: &Value, id: &Value, backend: &dyn McpBackend) -> Value {
     match method {
         "initialize" => {
-            // 回显客户端请求的 protocolVersion（stdio 逐行 JSON 传输与版本无关，
-            // 回显为最大兼容口径）；客户端未给 → 钉定默认
             let version = params
                 .get("protocolVersion")
                 .and_then(Value::as_str)
@@ -482,8 +449,6 @@ fn dispatch_request(method: &str, params: &Value, id: &Value, backend: &dyn McpB
         other => rpc_error(id.clone(), -32601, format!("未知方法「{other}」")),
     }
 }
-
-// ================= 工具定义（4 个基础工具 + 上下文包/检索扩展工具） =================
 
 fn tool_definitions() -> Vec<Value> {
     vec![
@@ -603,7 +568,6 @@ fn tool_definitions() -> Vec<Value> {
     ]
 }
 
-/// URL 单路径段安全校验（防止 revision_id / statement_id / file_id 夹带 `/`、`..`、控制字符注入 HTTP 路径）
 fn validate_identifier_segment(field: &str, raw: &str) -> Result<String, String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -624,7 +588,6 @@ fn validate_identifier_segment(field: &str, raw: &str) -> Result<String, String>
     Ok(trimmed.to_owned())
 }
 
-/// 按字节上限在 UTF-8 字符边界安全截断文本，返回 (截断后切片, 是否发生截断)
 fn truncate_utf8_bytes(text: &str, max_bytes: usize) -> (&str, bool) {
     if text.len() <= max_bytes {
         return (text, false);
@@ -636,10 +599,6 @@ fn truncate_utf8_bytes(text: &str, max_bytes: usize) -> (&str, bool) {
     (&text[..end], true)
 }
 
-// ================= 工具实现 =================
-
-/// 文件定位：file_id 直通（先检标识防 URL 穿越）；否则 path/uri（guanlan:// 前缀剥离 + 权限沙箱与敏感凭据拦截）
-/// 经 GET /api/v1/files?q= 精确匹配 relative_path。返回 (file_id, path, 当前版 id)。
 fn resolve_file(
     args: &Value,
     backend: &dyn McpBackend,
@@ -650,7 +609,6 @@ fn resolve_file(
         .filter(|s| !s.is_empty())
     {
         let clean_id = validate_identifier_segment("file_id", file_id)?;
-        // file_id 直通时当前版由提案端点受理侧权威校验；这里不带当前版语义
         return Ok((clean_id, String::new(), String::new()));
     }
     let raw_ref = args
@@ -661,7 +619,6 @@ fn resolve_file(
         .ok_or_else(|| "需要 file_id 或 path/uri 定位目标文件".to_owned())?
         .trim()
         .to_owned();
-    // 权限沙箱：在发出任何 HTTP 请求前阻断路径逃逸、绝对路径、UNC、编码穿越与敏感凭据文件
     let path = guanlan_core::storage::sandbox::validate_mcp_rel_path(&raw_ref)
         .map_err(|e| e.to_string())?;
     let response = backend.call(McpHttpRequest {
@@ -696,8 +653,6 @@ fn resolve_file(
     Ok((file_id, path, current))
 }
 
-/// 提交类 202 job 的有界轮询：GET /api/v1/jobs/{id} 至 completed/failed/cancelled。
-/// 超时返回 Err（代理侧如实报超时，不冒充终态）。
 fn poll_job_until_settled(backend: &dyn McpBackend, job_id: &str) -> Result<Value, String> {
     for _ in 0..JOB_POLL_ATTEMPTS {
         let response = backend.call(McpHttpRequest {
@@ -735,7 +690,6 @@ fn tool_read_artifact(args: &Value, backend: &dyn McpBackend) -> Result<Value, S
     let revision_id = match explicit_revision {
         Some(id) => validate_identifier_segment("revision_id", &id)?,
         None if !file_id.is_empty() && path.is_empty() => {
-            // file_id 直通：没有当前版语义，必须显式给 revision_id
             return Err(
                 "file_id 直通读正文需要 revision_id（或改用 path/uri 定位当前版）".to_owned(),
             );
@@ -750,7 +704,6 @@ fn tool_read_artifact(args: &Value, backend: &dyn McpBackend) -> Result<Value, S
         path: format!("/api/v1/revisions/{}/content", urlencode(&revision_id)),
         body: None,
     })?;
-    // 413 内联预算：回退 raw=1 纯文本（契约 §1.8），并按 MCP 文本预算上限安全截断
     if response.status == 413 {
         response = backend.call(McpHttpRequest {
             method: "GET",
@@ -795,7 +748,6 @@ fn tool_read_artifact(args: &Value, backend: &dyn McpBackend) -> Result<Value, S
         .unwrap_or_default()
         .to_owned();
     if format == "pdf" {
-        // PDF 不整读：raw_url 指引（契约 §1.8 v1 口径）
         let raw_url = response.body.get("raw_url").cloned().unwrap_or(Value::Null);
         return Ok(json!({
             "ok": true,
@@ -1034,7 +986,6 @@ fn tool_commit_checkpoint(args: &Value, backend: &dyn McpBackend) -> Result<Valu
     Ok(response.body)
 }
 
-/// `guanlan.get_context_bundle` — 转发至 POST /api/v1/context，与观澜前端预览/复制逐字节同源
 fn tool_get_context_bundle(args: &Value, backend: &dyn McpBackend) -> Result<Value, String> {
     let mut focus_file_id = args
         .get("focus_file_id")
@@ -1126,7 +1077,6 @@ fn tool_get_context_bundle(args: &Value, backend: &dyn McpBackend) -> Result<Val
     Ok(response.body)
 }
 
-/// `guanlan.search_workspace` — 全文/路径/编号有界检索（带路径沙箱校验与敏感凭据路径结果过滤）
 fn tool_search_workspace(args: &Value, backend: &dyn McpBackend) -> Result<Value, String> {
     let q = args
         .get("q")
@@ -1167,7 +1117,6 @@ fn tool_search_workspace(args: &Value, backend: &dyn McpBackend) -> Result<Value
     if !response.is_success() {
         return Err(response.error_text());
     }
-    // 敏感凭据路径二次兜底过滤（即使历史曾入库也绝不通过 MCP 透出）
     let mut body = response.body;
     if let Some(items) = body.get_mut("items").and_then(Value::as_array_mut) {
         items.retain(|item| {
@@ -1182,7 +1131,6 @@ fn tool_search_workspace(args: &Value, backend: &dyn McpBackend) -> Result<Value
     Ok(body)
 }
 
-/// query 百分号编码（路径含中文/空格；保留无保留字冲突的直通字符）
 fn urlencode(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for byte in text.bytes() {

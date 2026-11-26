@@ -1,19 +1,3 @@
-/**
- * 增量聚光灯条（司辰旁导航条）。
- *
- * 一键开启「增量聚光灯」：开启后画布上「上次离开前已读且未变」的节点退为低对比度
- * 背景骨架（GraphSceneCards 按 spotlight.dimmedFileIds 注入降亮度样式），仅高亮
- * 读后真实变化三类（新增版本 / 新挂起决定 / Agent 新草案）。
- *
- * 本组件承担两件事：
- *  1. 一键开关（aria-pressed 分段钮形制，与 GraphTopBar 既有钮同语言）；
- *  2. 开启后给出「共 M 处新变化 · 按时间逐条批阅（J/K 键）」导航条：
- *     J = 下一处、K = 上一处（循环），Enter/点击当前条 = 画布选中该节点（右栏联动）。
- *
- * 纪律：J/K 守卫（编辑面/浮层打开让路）走 readingSpotlight.shouldIgnoreSpotlightKeys
- * 纯函数；排序与三类派生在宿主 store（readingSpotlight.ts 纯函数单一出口），
- * 本组件不自行造数。关闭态仅渲染开关钮（导航条 null），undefined 时渲染 null。
- */
 
 import React, { useCallback, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Sun, X } from 'lucide-react';
@@ -25,17 +9,10 @@ import {
 } from '../../utils/readingSpotlight';
 import { formatLocalClock } from '../../utils/timeFormat';
 
-/** 键步进方向（stepSpotlightCursor 的 dir 契约）。 */
 type StepDir = 1 | -1;
 
 export interface GraphSpotlightBarProps {
   ctx: GraphCanvasCtx;
-  /**
-   * 渲染分段：
-   * - 'toggle'：仅顶栏紧凑开关钮（同时托管 J/K 键盘批阅监听），绝不撑宽顶栏；
-   * - 'nav'：开启后在画布顶部正中浮出的独立批阅微条；
-   * - 'both'（默认）：保留向后兼容的内联渲染。
-   */
   mode?: 'both' | 'toggle' | 'nav';
 }
 
@@ -48,7 +25,6 @@ export function GraphSpotlightBar({ ctx, mode = 'both' }: GraphSpotlightBarProps
   const onCursor = spotlight?.onCursor;
 
   const total = items.length;
-  // 游标对列表长度取模：数据刷新缩胀时永不越界（store 只存裸游标，消费侧归一）
   const cursor = total > 0 ? ((rawCursor % total) + total) % total : 0;
   const current = total > 0 ? items[cursor] : null;
 
@@ -60,7 +36,6 @@ export function GraphSpotlightBar({ ctx, mode = 'both' }: GraphSpotlightBarProps
     [onCursor, rawCursor, total]
   );
 
-  // J/K 键盘批阅只在 toggle / both 实例挂一次，避免 toggle+nav 同时挂载时触发两次步进
   const ownsKeyboard = mode !== 'nav';
   useEffect(() => {
     if (!ownsKeyboard || !visible || !enabled || total <= 0) return;
@@ -79,7 +54,6 @@ export function GraphSpotlightBar({ ctx, mode = 'both' }: GraphSpotlightBarProps
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [ownsKeyboard, visible, enabled, step, total]);
 
-  // 宿主未接线（老调用方/测试链）→ 整组件 null，绝不渲染无数据源的假开关
   if (!spotlight || !onToggle) return null;
 
   const navContent = enabled ? (

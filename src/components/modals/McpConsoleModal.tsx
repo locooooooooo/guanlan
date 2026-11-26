@@ -22,9 +22,6 @@ import { copyTextWithDesktopFallback } from "../../services/desktopBridge";
 import { safeStorageGet } from "../../utils/safeStorage";
 import { Button, IconButton, Tabs } from "../ui/primitives";
 
-/* ============================================================================
- * 1. MCP 8-Tool Contract Debugger Modal
- * ==========================================================================*/
 export interface McpConsoleModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -46,7 +43,6 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
 }) => {
   const [selectedTool, setSelectedTool] = useState<McpToolName>('overview');
   const [queryParam, setQueryParam] = useState<string>('决策');
-  // 不再预设演示样本 ID；默认选中当前文件列表的第一个文件
   const [fileIdParam, setFileIdParam] = useState<string>('');
   const [revisionIdParam, setRevisionIdParam] = useState<string>('');
   const [pathOverride, setPathOverride] = useState<string>('');
@@ -54,12 +50,9 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
   const [simulateStaleGen, setSimulateStaleGen] = useState<boolean>(false);
   const [simulateDiskDrift, setSimulateDiskHashDrift] = useState<boolean>(false);
 
-  // /scan 不再内联 MD 正文后，search/read/diff 工具的正文按需回退缓存（revision_id → 正文）。
-  // 镜像 ReaderView 的按需回退模式：先预取缺失正文，再喂给 executeMcpTool 的 contentCache。
   const [toolContentCache, setToolContentCache] = useState<Record<string, string>>({});
   const [toolFetchFailed, setToolFetchFailed] = useState<Record<string, boolean>>({});
 
-  // 注意：hooks 必须在提前 return 之前声明
   useEffect(() => {
     if (!isOpen) return;
     const missing: string[] = [];
@@ -72,17 +65,12 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
       missing.push(id);
     };
     if (selectedTool === 'search') {
-      // 不再执行全库批量预取正文——search 保持 guanlanEngine 本地计算，
-      // 仅基于已取回的数据（文件名/路径 + 已并入缓存的正文）；
-      // 全文检索由服务端 GET /api/v1/search 有界检索承接
     } else if (selectedTool === 'read' || selectedTool === 'diff') {
-      // read/diff 仅补「当前文件版本链范围」的正文（过渡通道允许范围）
       const target = files.find(
         (f) => f.file_id === (fileIdParam || files[0]?.file_id || '')
       );
       if (target && target.format === 'md') {
         if (selectedTool === 'diff') {
-          // diff 缺省窗口为 [第一版, 当前版]
           pushRevision(target, target.revisions[0]?.revision_id);
           pushRevision(target, target.current_revision_id);
         } else {
@@ -133,14 +121,9 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
 
   if (!isOpen) return null;
 
-  // 调试入口与 TopHeader 入口钮同键门控（guanlan.debug.mcp），
-  // 默认对用户隐藏，标题文案保留开发向表述。
-  // 开法：控制台执行 localStorage.setItem('guanlan.debug.mcp', '1') 后刷新。
   if (safeStorageGet('guanlan.debug.mcp') !== '1') return null;
 
-  // 渲染与调用统一走真实文件列表：fileIdParam 为空时回退到第一个文件，无文件则为空串
   const effectiveFileId = fileIdParam || files[0]?.file_id || '';
-  // 快照已淘汰的版本（snapshotAvailable === false）取自真实数据，用于演示 REVISION_UNAVAILABLE
   const evictedRevision = files
     .flatMap((f) =>
       f.revisions
@@ -201,7 +184,6 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
       simulateDiskHashDrift: simulateDiskDrift,
     },
     { config, files, events, decisions, relations },
-    // MD 正文不再内联——search/read/diff 经 contentCache 按需回退
     { contentCache: toolContentCache }
   );
 
@@ -236,8 +218,6 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          {/* 8 Standard Tools Selector——采用 Tabs（工具选择切换下方参数/响应面板，
-              标线为界；每卡 inputs 预览行收敛为选中工具的单行 inputs，信息不丢失） */}
           <div className="space-y-1.5">
             <Tabs
               ariaLabel="MCP 工具选择"
@@ -261,7 +241,6 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
             </div>
           </div>
 
-          {/* Preset Boundary Test Cases——辅助操作统一用 Button·secondary */}
           <div className="p-3.5 rounded-[var(--r-block)] border border-[color:var(--glass-hairline)] bg-white/60 space-y-2.5 text-xs">
             <div className="font-semibold text-[color:var(--ink-strong)]">
               一键验证标准错误类型与协议边界（stdout 仅输出协议消息，诊断输出到 stderr）：
@@ -340,7 +319,6 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
             </div>
           </div>
 
-          {/* Parameter Inputs */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
             <label className="space-y-1">
               <span className="text-[color:var(--ink-soft)]">目标 file_id / subject_id</span>
@@ -379,13 +357,11 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
             </label>
           </div>
 
-          {/* JSON Response Output */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs font-mono">
               <span className="text-[color:var(--ink-soft)]">
                 工具说明：{toolDescriptions[selectedTool].desc}
               </span>
-              {/* 状态字走语义 -text 深档（文字不直接使用图形高亮原值） */}
               <span
                 className={
                   response.ok

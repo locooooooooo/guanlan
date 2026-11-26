@@ -7,15 +7,6 @@ import { test } from 'node:test';
 import { reconcileWorkspace } from '../server/reconcile';
 import { WorkspaceStore } from '../server/WorkspaceStore';
 
-/**
- * 纵向对账场景验收条件：
- *   修改同一 MD 两次，重启后仍能打开三个版本。
- *   连续重扫不增加事件。
- *   仅变 mtime 不增加内容版本。
- *   A → B → A 可逐版回看。
- *
- * 纵向场景包含：一份修复方案、一张 SVG、一份 PDF。
- */
 
 const A_CONTENT = [
   '# 统一验收入口修复方案',
@@ -44,7 +35,7 @@ const B_CONTENT = A_CONTENT.replace(
   '## 已核实的原因\n启动脚本与候选发布进程各自记账；4.2 补充：release 清单与实际 PID 不一致。'
 );
 
-const C_CONTENT = A_CONTENT; // A → B → A 的第三次出现
+const C_CONTENT = A_CONTENT;
 
 const SVG_CONTENT = [
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120">',
@@ -108,7 +99,6 @@ test('第一轮纵向场景：基线 → 重扫 → 仅 mtime → 改两次 → 
   const { root, dataDir } = makeFixture();
   const mdRel = '01-方案文档/01-修复方案.md';
 
-  // ---------- 首次扫描：一张基线卡 + 有自述日期的材料各自入轴 ----------
   const scan1 = reconcileWorkspace(root, { dataDir, now: '2026-11-06T09:00:00.000Z' });
   const store1 = scan1.store;
   try {
@@ -119,8 +109,6 @@ test('第一轮纵向场景：基线 → 重扫 → 仅 mtime → 改两次 → 
     assert.equal(baseline.length, 1, '首次扫描只有一张基线卡');
     assert.match(baseline[0].headline, /首次纳入 3 份资料/);
 
-    // 修复方案正文写着「文档日期：2026-11-05」，以「文档自述日期」入轴；
-    // SVG / PDF 没有日期依据，只归基线卡
     const dated = events1.filter((e) => e.kind === 'appeared');
     assert.equal(dated.length, 1, '只有带自述日期的材料单独入轴');
     const mdFile = fileByPath(store1, mdRel);
@@ -129,7 +117,6 @@ test('第一轮纵向场景：基线 → 重扫 → 仅 mtime → 改两次 → 
     assert.equal(v1Rows[0].occurred_precision, 'day', '只有日期时保留到天，不补零点');
     assert.equal(v1Rows[0].occurred_source, 'document_self');
 
-    // 决策陈述入轴：Q02 首次出现记为「提出问题」
     const decisionEvents = events1.filter(
       (e) => e.kind === 'decision_raised' || e.kind === 'decision_changed'
     );
@@ -140,7 +127,6 @@ test('第一轮纵向场景：基线 → 重扫 → 仅 mtime → 改两次 → 
     assert.equal(v1Rows[0].prev_revision_id, null);
     assert.equal(textOfRevision(store1, v1Rows[0].revision_id), A_CONTENT, '基线版本正文应与原文一致');
 
-    // 基线时每个文件都有 v1
     const allFiles = store1.listFiles(scan1.report.workspaceId);
     assert.equal(allFiles.length, 3);
     for (const f of allFiles) assert.equal(versionsOf(store1, f.file_id).length, 1);
@@ -148,7 +134,6 @@ test('第一轮纵向场景：基线 → 重扫 → 仅 mtime → 改两次 → 
     store1.close();
   }
 
-  // ---------- 连续重扫：不增加事件、不增加版本 ----------
   const scan2 = reconcileWorkspace(root, { dataDir, now: '2026-11-06T09:05:00.000Z' });
   try {
     assert.equal(scan2.report.eventsInserted, 0, '重复扫描不应插入事件');
@@ -159,7 +144,6 @@ test('第一轮纵向场景：基线 → 重扫 → 仅 mtime → 改两次 → 
     scan2.store.close();
   }
 
-  // ---------- 仅修改 mtime，内容不变 ----------
   const mdFull = path.join(root, mdRel);
   fs.utimesSync(mdFull, new Date('2026-11-07T10:00:00Z'), new Date('2026-11-07T10:00:00Z'));
   const scan3 = reconcileWorkspace(root, { dataDir, now: '2026-11-07T10:01:00.000Z' });
@@ -173,7 +157,6 @@ test('第一轮纵向场景：基线 → 重扫 → 仅 mtime → 改两次 → 
     scan3.store.close();
   }
 
-  // ---------- 修改内容：B 版 ----------
   fs.writeFileSync(mdFull, B_CONTENT, 'utf-8');
   fs.utimesSync(mdFull, new Date('2026-11-08T11:00:00Z'), new Date('2026-11-08T11:00:00Z'));
   const scan4 = reconcileWorkspace(root, { dataDir, now: '2026-11-08T11:01:00.000Z' });
@@ -199,7 +182,6 @@ test('第一轮纵向场景：基线 → 重扫 → 仅 mtime → 改两次 → 
     scan4.store.close();
   }
 
-  // ---------- 恢复为 A 版（A → B → A） ----------
   fs.writeFileSync(mdFull, C_CONTENT, 'utf-8');
   fs.utimesSync(mdFull, new Date('2026-11-09T12:00:00Z'), new Date('2026-11-09T12:00:00Z'));
   const scan5 = reconcileWorkspace(root, { dataDir, now: '2026-11-09T12:01:00.000Z' });
@@ -225,7 +207,6 @@ test('第一轮纵向场景：基线 → 重扫 → 仅 mtime → 改两次 → 
     assert.equal(textOfRevision(store5, versions[1].revision_id), B_CONTENT);
     assert.equal(textOfRevision(store5, versions[2].revision_id), C_CONTENT);
 
-    // 决策陈述：每条来源陈述独立身份；同一问题在不同版本各自记录
     const stmts = store5.listStatements(scan5.report.workspaceId);
     const q02 = stmts.filter((s) => s.code === 'Q02');
     assert.ok(q02.length >= 2, 'v1 与 v3 都含 Q02 陈述');
@@ -235,7 +216,6 @@ test('第一轮纵向场景：基线 → 重扫 → 仅 mtime → 改两次 → 
     store5.close();
   }
 
-  // ---------- 重启：关闭后重开同一持久库，沿同一事件 ID 打开三个版本 ----------
   const reopened = new WorkspaceStore(dataDir);
   try {
     const md = fileByPath(reopened, mdRel);
@@ -253,7 +233,6 @@ test('第一轮纵向场景：基线 → 重扫 → 仅 mtime → 改两次 → 
     assert.equal(kinds.filter((k) => k === 'modified').length, 2);
     assert.equal(kinds.filter((k) => k === 'decision_raised').length, 1);
 
-    // 再扫一次仍不增加事件（重启后的重扫）
     const scanAgain = reconcileWorkspace(root, { dataDir, now: '2026-11-09T13:00:00.000Z' });
     try {
       assert.equal(scanAgain.report.eventsInserted, 0, '重启后重扫仍不应增加事件');
@@ -305,7 +284,6 @@ test('同一编号不同问题：陈述各自独立，不共用业务决定 ID',
     const q03 = stmts.filter((s) => s.code === 'Q03');
     assert.equal(q03.length, 1);
 
-    // 引用关系：无链接时不应凭空生成
     assert.equal(store.listEdges(report.workspaceId).length, 0);
   } finally {
     store.close();
@@ -328,7 +306,6 @@ test('已有引用绑定到来源版本；引用随来源版本演进时标注�
   const scan1 = reconcileWorkspace(root, { dataDir, now: '2026-11-06T09:00:00.000Z' });
   scan1.store.close();
 
-  // 图更新为 B：方案的旧版本仍应指向收录时看到的图版本
   fs.writeFileSync(
     path.join(root, 'assets', '图.svg'),
     SVG_CONTENT.replace('固定验收入口方案', '固定验收入口方案 · v2'),
@@ -396,7 +373,6 @@ test('决策入轴：提出 → 明确确认 → 同状态复述不重复记', (
     s1.store.close();
   }
 
-  // 明确改为「已确认」→ 新增一条状态转换事件
   fs.writeFileSync(filePath, docConfirmed, 'utf-8');
   fs.utimesSync(filePath, new Date('2026-11-05T10:00:00Z'), new Date('2026-11-05T10:00:00Z'));
   const s2 = reconcileWorkspace(root, { dataDir, now: '2026-11-05T10:01:00.000Z' });
@@ -409,7 +385,6 @@ test('决策入轴：提出 → 明确确认 → 同状态复述不重复记', (
     s2.store.close();
   }
 
-  // 新版本复述同一状态 → 只补来源证据，不新增事件
   fs.writeFileSync(filePath, docRestated, 'utf-8');
   fs.utimesSync(filePath, new Date('2026-11-06T10:00:00Z'), new Date('2026-11-06T10:00:00Z'));
   const s3 = reconcileWorkspace(root, { dataDir, now: '2026-11-06T10:01:00.000Z' });
@@ -424,7 +399,6 @@ test('决策入轴：提出 → 明确确认 → 同状态复述不重复记', (
     assert.equal(q02.length, 3, '每个版本的来源陈述都保留（三次版本）');
     assert.equal(new Set(q02.map((s) => s.decision_id)).size, 1, '同一问题归入同一业务决定');
 
-    // 历史陈述保留原状态，最新版本才是当前口径
     const revisions = s3.store.revisionsOfFile(fileByPath(s3.store, '待确认事项.md').file_id);
     const latestSeq = revisions[revisions.length - 1].seq;
     const latestRevisionId = revisions[revisions.length - 1].revision_id;

@@ -7,9 +7,6 @@ use crate::test_support::{cleanup_dir, open_store, FixtureDb};
 const H1: &str = "aa0000000000000000000000000000000000000000000000000000000000aaaa";
 const H2: &str = "bb0000000000000000000000000000000000000000000000000000000000bbbb";
 
-/// 夹具：dec_1 跨两个文件版本的三条陈述（旧版「待确认」→ 新版「已确认」），
-/// dec_2 单条「来源不一致」，dec_3「已否决」。dec_1 的主陈述必须取自
-/// 「来源文件最新版本观察时间」最新的一条（project.ts:356-367，不能比 per-file seq）。
 fn setup_decisions(tag: &str) -> (FixtureDb, String, crate::storage::ReadonlyStore) {
     let fixture = FixtureDb::new(tag);
     let root = fixture.root();
@@ -17,7 +14,6 @@ fn setup_decisions(tag: &str) -> (FixtureDb, String, crate::storage::ReadonlySto
     fixture.blob(H1, 5, 1);
     fixture.blob(H2, 7, 1);
 
-    // 文件 X：seq1（observed 01-01），文件 Y：seq1（observed 01-03，最新）
     fixture.file(&ws_id, "f_x", "docs/x.md", "md", "方案", "active", None);
     let rx = fixture.revision(
         &ws_id,
@@ -59,7 +55,6 @@ fn setup_decisions(tag: &str) -> (FixtureDb, String, crate::storage::ReadonlySto
         )
         .expect("回填失败");
 
-    // dec_1 / Q1：旧版待确认（01-01）→ 新版已确认（01-03，主陈述）
     fixture.statement(
         &ws_id,
         "st_old",
@@ -92,7 +87,6 @@ fn setup_decisions(tag: &str) -> (FixtureDb, String, crate::storage::ReadonlySto
         r#"{"confirmer":"评审会","impactBlocked":["发布"]}"#,
         "2026-01-03T00:00:00.000Z",
     );
-    // dec_2 / Q2：来源不一致
     fixture.statement(
         &ws_id,
         "st_conflict",
@@ -109,7 +103,6 @@ fn setup_decisions(tag: &str) -> (FixtureDb, String, crate::storage::ReadonlySto
         "{}",
         "2026-01-01T00:00:00.000Z",
     );
-    // dec_3 / Q3：已否决（其他秩）
     fixture.statement(
         &ws_id,
         "st_rejected",
@@ -127,7 +120,6 @@ fn setup_decisions(tag: &str) -> (FixtureDb, String, crate::storage::ReadonlySto
         "2026-01-01T00:00:00.000Z",
     );
 
-    // 引用边：可落文件 + unresolved
     fixture.edge(
         &ws_id,
         "e1",
@@ -163,8 +155,6 @@ fn setup_decisions(tag: &str) -> (FixtureDb, String, crate::storage::ReadonlySto
     (fixture, ws_id, store)
 }
 
-/// 归并主陈述取「来源文件最新版本观察时间」最新的一条；已确认且有 confirmer
-/// 时带 confirmationBasis（project.ts:356-421 逐字迁移）
 #[test]
 fn decisions_merge_primary_by_revision_observed_at() {
     let (fixture, _ws, store) = setup_decisions("dec-merge");
@@ -183,11 +173,9 @@ fn decisions_merge_primary_by_revision_observed_at() {
         "主陈述取自最新版本（f_y 01-03），不是旧版待确认"
     );
     assert_eq!(d1.evidences.len(), 2, "两条来源证据都在");
-    // evidences 按排序输出：主陈述（f_y）在前
     assert_eq!(d1.evidences[0].revision_id, "f_y_r1".to_string());
     assert_eq!(d1.evidences[0].claimed_status, "已确认");
     assert_eq!(d1.evidences[0].source_time.as_deref(), Some("2026-01-03"));
-    // confirmationBasis：已确认 + detail.confirmer（project.ts:411-421）
     let basis = d1.confirmation_basis.as_ref().expect("确认依据");
     assert_eq!(basis.confirmer, "评审会");
     assert_eq!(
@@ -196,9 +184,7 @@ fn decisions_merge_primary_by_revision_observed_at() {
     );
     assert_eq!(basis.line_range, (5, 5));
     assert!(basis.record_text.contains("已确认用 B 方案"));
-    // impact 从主陈述 detail_json
     assert_eq!(d1.impact_blocked, vec!["发布".to_owned()]);
-    // confirmer 回填到每条 evidence（project.ts:395 闭包捕获主陈述 detail）
     assert!(d1
         .evidences
         .iter()
@@ -206,8 +192,6 @@ fn decisions_merge_primary_by_revision_observed_at() {
     cleanup_dir(&fixture.dir);
 }
 
-/// 排序（project.ts:428-429）：来源不一致 < 待确认 < 已确认 < 其他，再按编号；
-/// 分页无重复无遗漏 + 代际/筛选绑定 CURSOR_STALE
 #[test]
 fn decisions_rank_order_pagination_and_binding() {
     let (fixture, ws_id, store) = setup_decisions("dec-rank");
@@ -219,7 +203,6 @@ fn decisions_rank_order_pagination_and_binding() {
         "来源不一致→已确认→其他（已否决属其他秩）"
     );
 
-    // 分页：每页 1 条，三轮取全
     let mut seen = Vec::new();
     let mut cursor = None;
     loop {
@@ -242,7 +225,6 @@ fn decisions_rank_order_pagination_and_binding() {
     }
     assert_eq!(seen, vec!["Q2", "Q1", "Q3"], "分页无重复无遗漏");
 
-    // 筛选：status 精确 / code 精确 / q 子串（question/namespace）
     let only = decisions(
         &store,
         &DecisionsQuery {
@@ -272,7 +254,6 @@ fn decisions_rank_order_pagination_and_binding() {
     .expect("关键字筛选失败");
     assert_eq!(by_q.total, 1, "何时发布？命中 Q2");
 
-    // 代际绑定：bump generation 后续页 CURSOR_STALE（契约 §1.9 可变列表）
     let first = decisions(
         &store,
         &DecisionsQuery {
@@ -302,7 +283,6 @@ fn decisions_rank_order_pagination_and_binding() {
     cleanup_dir(&fixture.dir);
 }
 
-/// 全量引用边（契约 §1.10）：过滤 unresolved、label 按 resolution、locator 两端齐备
 #[test]
 fn relations_filters_unresolved_and_labels() {
     let (fixture, _ws, store) = setup_decisions("dec-relations");
@@ -345,13 +325,10 @@ fn relations_filters_unresolved_and_labels() {
     cleanup_dir(&fixture.dir);
 }
 
-/// 两级投影的行为等价性：摘要投影选主陈述的口径必须与完整归并一致
-/// （版本观察时间优先、同时间比陈述观察时间、再比行号），且页外决定不构造证据。
 #[test]
 fn decision_summary_projection_matches_primary_selection() {
     let (fixture, _ws, store) = setup_decisions("decisions-projection");
 
-    // 全量页（limit 500）：主陈述取「版本观察时间最新」的 st_new（f_y 01-03 已确认）
     let all = decisions(
         &store,
         &DecisionsQuery {
@@ -380,7 +357,6 @@ fn decision_summary_projection_matches_primary_selection() {
     assert_eq!(old_ev.claimed_status, "待确认", "历史陈述的状态如实保留");
     assert_eq!(old_ev.relative_path, "docs/x.md", "来源路径由 SQL 关联给出");
 
-    // 单条分页（limit 1）：页外决定不构造证据——dec_2/dec_3 的证据不出现在响应里
     let page = decisions(
         &store,
         &DecisionsQuery {
@@ -400,7 +376,6 @@ fn decision_summary_projection_matches_primary_selection() {
         "页外决定的陈述不进入本页响应"
     );
 
-    // 续页：证据仍只属于本页决定，游标键集不重不漏
     let page2 = decisions(
         &store,
         &DecisionsQuery {
@@ -416,11 +391,9 @@ fn decision_summary_projection_matches_primary_selection() {
     cleanup_dir(&fixture.dir);
 }
 
-/// missing 文件或无版本行的陈述不能被简单过滤掉（证据不丢弃）
 #[test]
 fn decision_evidence_keeps_missing_files_and_history() {
     let (fixture, ws_id, store) = setup_decisions("decisions-missing");
-    // 追加一条所属文件已 missing 的陈述到 dec_2（同决定多来源）
     fixture.statement(
         &ws_id,
         "st_missing",

@@ -1,17 +1,3 @@
-/**
- * 智能体上下文三入口默认包「默认自动勾选」接线测试。
- *
- * 验收口径：从任意页面打开上下文清单抽屉时，默认上下文包应在
- * 抽屉首帧即已勾选（典型工作区已选 ≥2），不再要求用户先点「带入默认上下文」，
- * 也不再出现「一键复制上下文清单 (0 项已选)」。
- *
- * 覆盖：
- *  ① App 所有打开入口复用 openContextDrawer：先 handleMountPointers(presetPointers)
- *     再 setIsContextDrawerOpen(true)（同批提交，首帧即 N 项）；
- *  ② 抽屉自身兜底 useEffect（数据晚到/未来入口绕过 openContextDrawer 时补挂）；
- *  ③ 抽屉 SSR：默认包已挂载时显示「默认上下文已自动带入」且复制按钮计数为 N，
- *     不再是 0 项空态。
- */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
@@ -85,7 +71,6 @@ test('上下文抽屉 SSR：默认包已挂载时首帧显示已自动带入，�
 });
 
 test('上下文抽屉接线：所有打开入口先挂载默认包再打开抽屉；抽屉保留晚到补挂兜底', () => {
-  // 拆层后 App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
   const app = ['../src/App.tsx', '../src/stores/useWorkspaceStore.tsx', '../src/components/app/AppBanners.tsx', '../src/components/app/AppMainViews.tsx', '../src/components/app/AppLibraryStage.tsx', '../src/components/app/AppModalsStack.tsx']
     .map((p) => readFileSync(new URL(p, import.meta.url), 'utf8'))
     .join(String.fromCharCode(10))
@@ -106,7 +91,6 @@ test('上下文抽屉接线：所有打开入口先挂载默认包再打开抽�
     '所有打开入口（顶栏/证据篮/回写通知等）统一走 openContextDrawer'
   );
 
-  // 拆解 ModalsAndDrawers 后，AgentContextDrawer 实现位于 components/modals/AgentContextDrawer.tsx
   const drawer = [
     '../src/components/ModalsAndDrawers.tsx',
     '../src/components/modals/AgentContextDrawer.tsx',

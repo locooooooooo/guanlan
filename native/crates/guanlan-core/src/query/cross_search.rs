@@ -29,8 +29,6 @@ pub struct MountedSearchOutcome {
     pub response: Option<SearchResponse>,
 }
 
-// ===== 服务层挂载注册表的只读探针（SQL 留在 core；service 只编排）=====
-
 /// file_id 是否存在于该库（挂载区写拦截的溯源点查；主键点查 O(1)）
 pub fn file_exists(store: &ReadonlyStore, file_id: &str) -> Result<bool, GuanlanError> {
     store
@@ -179,7 +177,6 @@ pub fn merge_cross_search(
         let Some(resp) = outcome.response.as_ref() else {
             continue;
         };
-        // 挂载区命中：逐条补来源标注（工作区名 + 身份哈希）
         let source = crate::dto::SearchHitSource {
             workspace_id: format!("ws_{}", outcome.info.root_key),
             root_key: outcome.info.root_key.clone(),
@@ -195,7 +192,6 @@ pub fn merge_cross_search(
         }
     }
 
-    // 排序：score 降序 → file_id 升序 → locator 次序（与单库检索排序同源）
     all.sort_by(|a, b| {
         b.score
             .cmp(&a.score)
@@ -203,8 +199,6 @@ pub fn merge_cross_search(
             .then_with(|| locator_order(a).cmp(&locator_order(b)))
     });
 
-    // file_id 全局去重（同 id 主区优先——主区条目已在队首半区）；
-    // 去重后按 limit 收口
     let mut seen = std::collections::HashSet::new();
     all.retain(|hit| seen.insert(hit.file_id.clone()));
     all.truncate(limit);
@@ -222,7 +216,6 @@ pub fn merge_cross_search(
     }
 }
 
-/// 排序次键（与 query::search::locator_order 同口径；该函数私有，此处本地实现）
 fn locator_order(hit: &SearchHit) -> i64 {
     match &hit.locator {
         crate::dto::SearchLocator::Lines { start, .. } => *start,
@@ -283,7 +276,6 @@ mod tests {
         }
     }
 
-    /// 挂载区命中逐条携带来源标注（工作区名 + root_key 哈希）；主区命中不带
     #[test]
     fn mounted_hits_carry_source_annotation_primary_hits_do_not() {
         let primary = resp(vec![hit("f_main", 60)], 1, false);
@@ -308,7 +300,6 @@ mod tests {
         assert_eq!(src.workspace_id, "ws_rk_ref");
     }
 
-    /// 排序 score 降序 + file_id 全局去重（主区优先）+ total_matched 求和 + truncated 联合
     #[test]
     fn merge_orders_dedupes_and_unions_totals() {
         let primary = resp(vec![hit("f_a", 50), hit("f_dup", 10)], 2, false);
@@ -323,7 +314,6 @@ mod tests {
             },
         ];
         let merged = merge_cross_search(primary, mounted, 30);
-        // 去重：f_dup 主区保留（同 id 主区优先），f_a/f_b 依 score 排序
         let ids: Vec<&str> = merged.items.iter().map(|h| h.file_id.as_str()).collect();
         assert_eq!(ids, vec!["f_dup", "f_a", "f_b"]);
         assert_eq!(merged.total_matched, 4, "各来源命中文件数之和");
@@ -337,7 +327,6 @@ mod tests {
         assert_eq!(merged.index_generation, 7);
     }
 
-    /// limit 收口：合并去重后按 limit 截断；离线挂载零条目但计入 mounts
     #[test]
     fn limit_truncates_after_dedupe() {
         let primary = resp(vec![hit("f1", 100), hit("f2", 90), hit("f3", 80)], 3, false);

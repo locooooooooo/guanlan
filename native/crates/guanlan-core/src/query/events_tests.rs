@@ -6,9 +6,6 @@ use crate::query::{EventDaysQuery, EventGranularity, EventQuery};
 use crate::storage::ReadonlyStore;
 use crate::test_support::{assert_code, open_store, FixtureDb};
 
-/// 建一个带 N 条事件的工作区：occurred_at/observed_at 单调递增且可预测。
-/// i=0..n-1 → 日期从 2026-01-01 起逐日推进；偶数序号带时刻（UTC ISO），
-/// 奇数序号为纯日期（覆盖 localDayExpr 的两个分支）。
 fn setup_events(tag: &str, n: usize) -> (FixtureDb, String, ReadonlyStore) {
     let fixture = FixtureDb::new(tag);
     let root = fixture.root();
@@ -39,7 +36,6 @@ fn setup_events(tag: &str, n: usize) -> (FixtureDb, String, ReadonlyStore) {
     (fixture, ws_id, store)
 }
 
-/// 翻页无重复无遗漏（契约 §0.3-6/§1.4）：57 条 ÷ 每页 20 → 20+20+17
 #[test]
 fn events_pagination_no_duplicates_no_gaps() {
     let (fixture, _ws, store) = setup_events("events-paging", 57);
@@ -82,7 +78,6 @@ fn events_pagination_no_duplicates_no_gaps() {
     assert_eq!(seen.len(), 57);
     let unique: std::collections::HashSet<i64> = seen.iter().copied().collect();
     assert_eq!(unique.len(), 57, "翻页不得出现重复 seq");
-    // 排序键倒序：seq 单调递减（夹具的 occurred 互异，排序键无并列）
     let mut sorted_desc = seen.clone();
     sorted_desc.sort_by(|a, b| b.cmp(a));
     assert_eq!(seen, sorted_desc, "翻页拼接结果应保持排序键倒序");
@@ -98,8 +93,6 @@ fn events_pagination_no_duplicates_no_gaps() {
     crate::test_support::cleanup_dir(&fixture.dir);
 }
 
-/// 游标绑定快照（契约 §0.3-1/§1.4）：翻页期间新增事件不进入已打开窗口；
-/// newer_count 报告新增数；snapshot_max_seq 保持签发值
 #[test]
 fn events_cursor_binds_snapshot_max_seq() {
     let (fixture, ws_id, store) = setup_events("events-snap", 30);
@@ -117,7 +110,6 @@ fn events_cursor_binds_snapshot_max_seq() {
         "首屏 newer_count 为 0（queries.ts:310）"
     );
 
-    // 翻页期间写入者提交 3 条新事件（另一连接，模拟并发对账）
     for i in 0..3 {
         fixture.event(
             &ws_id,
@@ -153,7 +145,6 @@ fn events_cursor_binds_snapshot_max_seq() {
         "newer_count = max(0, 当前max − snap)"
     );
 
-    // 同筛选重新首页：进入新窗口，newer_count 归 0
     let fresh = crate::query::query_events(
         &store,
         &EventQuery {
@@ -167,7 +158,6 @@ fn events_cursor_binds_snapshot_max_seq() {
     crate::test_support::cleanup_dir(&fixture.dir);
 }
 
-/// 游标绑定筛选（契约 §0.3-3）与损坏游标 → CURSOR_STALE（v1 拆码，契约 §0.2）
 #[test]
 fn events_cursor_fingerprint_and_corrupt_rejected() {
     let (fixture, _ws, store) = setup_events("events-fp", 15);
@@ -179,7 +169,6 @@ fn events_cursor_fingerprint_and_corrupt_rejected() {
         },
     )
     .expect("首页失败");
-    // 指纹不符：续页换 kinds
     let mismatch = EventQuery {
         limit: Some(5),
         cursor: first.next_cursor.clone(),
@@ -190,7 +179,6 @@ fn events_cursor_fingerprint_and_corrupt_rejected() {
         crate::query::query_events(&store, &mismatch).map(|_| ()),
         "CURSOR_STALE",
     );
-    // 损坏游标：非 base64url / base64url 但非 JSON
     for raw in ["!!不是游标!!", "eyJzbmFwIjoxfQ"] {
         let q = EventQuery {
             limit: Some(5),
@@ -205,10 +193,8 @@ fn events_cursor_fingerprint_and_corrupt_rejected() {
     crate::test_support::cleanup_dir(&fixture.dir);
 }
 
-/// 纯日期不做时区换算（契约 §0.3-7/§5.6）：纯日期窗口归属与桶键与机器时区无关
 #[test]
 fn pure_dates_bypass_timezone_conversion() {
-    // 奇数序号（i=1,3,5,7,9）为纯日期 2026-01-02/04/06/08/10
     let (fixture, _ws, store) = setup_events("events-tz", 10);
     let page = crate::query::query_events(
         &store,
@@ -226,7 +212,6 @@ fn pure_dates_bypass_timezone_conversion() {
         "纯日期不得参与时区换算"
     );
 
-    // 事件日桶：纯日期桶键原样
     let days = crate::query::query_event_days(
         &store,
         &EventDaysQuery {
@@ -241,7 +226,6 @@ fn pure_dates_bypass_timezone_conversion() {
         .find(|g| g.date == "2026-01-06")
         .expect("纯日期桶应存在");
     assert_eq!(pure_bucket.count, 1);
-    // 桶键形状全部为 YYYY-MM-DD 或 ""（day 粒度，本夹具无待考）
     for g in &days.groups {
         assert!(
             g.date.is_empty() || (g.date.len() == 10 && g.date.as_bytes().get(4) == Some(&b'-')),
@@ -252,15 +236,12 @@ fn pure_dates_bypass_timezone_conversion() {
     crate::test_support::cleanup_dir(&fixture.dir);
 }
 
-/// events/days 聚合（契约 §1.5）：计数、by_kind、决策取组内 MAX(seq) 状态、
-/// 样本优先决策/修改类、「日期待考」恒排最后、hidden_days 折叠计数
 #[test]
 fn event_days_aggregation() {
     let fixture = FixtureDb::new("days-agg");
     let root = fixture.root();
     let ws_id = fixture.workspace(&root, 0, None);
 
-    // 2026-03-01：1 modified + 2 appeared（seq 1/2/3）
     for i in 0..3 {
         let kind = if i == 0 { "modified" } else { "appeared" };
         fixture.event(
@@ -278,7 +259,6 @@ fn event_days_aggregation() {
             "{}",
         );
     }
-    // 决策事件：同桶先 raised（待确认）后 changed（已确认）→ 决策聚合应取已确认
     fixture.event(
         &ws_id,
         "decision_raised",
@@ -307,7 +287,6 @@ fn event_days_aggregation() {
         "",
         r#"{"decision_id":"dec_d1","code":"Q9","status":"已确认","action":"confirmed"}"#,
     );
-    // 日期待考（occurred NULL）
     fixture.event(
         &ws_id,
         "missing",
@@ -322,7 +301,6 @@ fn event_days_aggregation() {
         "",
         "{}",
     );
-    // 更早一天的桶（会被 limit_days=1 折叠）
     fixture.event(
         &ws_id,
         "appeared",
@@ -347,7 +325,6 @@ fn event_days_aggregation() {
         days.total, 7,
         "总数含待考桶（queries.ts:625）：3+2 决策+1 待考+1 更早"
     );
-    // 组序：2026-03-01 → 2026-02-20 → ""（日期待考恒最后）
     assert_eq!(days.groups.len(), 3);
     assert_eq!(days.groups[0].date, "2026-03-01");
     assert_eq!(days.groups[1].date, "2026-02-20");
@@ -360,7 +337,6 @@ fn event_days_aggregation() {
     assert_eq!(first.by_kind.get("appeared"), Some(&2));
     assert_eq!(first.by_kind.get("decision_raised"), Some(&1));
     assert_eq!(first.by_kind.get("decision_changed"), Some(&1));
-    // 决策聚合取组内 MAX(seq) 的状态：已确认（queries.ts:514-533 的防串状态口径）
     let decision = first
         .decisions
         .iter()
@@ -368,7 +344,6 @@ fn event_days_aggregation() {
         .expect("决策样本");
     assert_eq!(decision.status, "已确认");
     assert_eq!(decision.count, 2);
-    // 样本优先级：modified/decision 类先于 appeared（queries.ts:559-564）
     assert_eq!(
         first.samples[0].kind, "decision_changed",
         "决策事件优先取样"
@@ -378,7 +353,6 @@ fn event_days_aggregation() {
         "modified 应先于 appeared"
     );
 
-    // limit_days=1 折叠：仅留 2026-03-01 与待考，hidden_days=1
     let folded = crate::query::query_event_days(
         &store,
         &EventDaysQuery {
@@ -393,7 +367,6 @@ fn event_days_aggregation() {
     crate::test_support::cleanup_dir(&fixture.dir);
 }
 
-/// events/days 的周/月桶键形状（契约 §1.5：week=该周周一、month=YYYY-MM）
 #[test]
 fn event_days_week_month_bucket_shapes() {
     let (fixture, _ws, store) = setup_events("days-shape", 5);
@@ -424,7 +397,6 @@ fn event_days_week_month_bucket_shapes() {
     crate::test_support::cleanup_dir(&fixture.dir);
 }
 
-/// events/range（契约 §1.6）：纯日期 min/max 原样；undatedCount 计数
 #[test]
 fn event_time_range_on_pure_dates() {
     let (fixture, ws_id, store) = setup_events("events-range", 6);
@@ -444,7 +416,6 @@ fn event_time_range_on_pure_dates() {
     );
     let range = crate::query::event_time_range(&store).expect("range 失败");
     assert!(range.ok);
-    // 纯日期短路：min/max 与机器时区无关（queries.ts:331-334）
     assert_eq!(range.range.occurred_min.as_deref(), Some("2026-01-01"));
     assert_eq!(range.range.occurred_max.as_deref(), Some("2026-01-06"));
     assert_eq!(range.range.undated_count, 1);
@@ -452,7 +423,6 @@ fn event_time_range_on_pure_dates() {
     crate::test_support::cleanup_dir(&fixture.dir);
 }
 
-/// 空工作区计数为 0；未认领工作区按 NOT_FOUND 报错（queries.ts:178-183 口径）
 #[test]
 fn events_on_empty_and_unclaimed_store() {
     let fixture = FixtureDb::new("events-empty");
@@ -466,7 +436,6 @@ fn events_on_empty_and_unclaimed_store() {
     assert_eq!(page.snapshot_max_seq, 0);
     assert_eq!(page.next_cursor, None);
 
-    // 未认领工作区的 store → NOT_FOUND
     let bare = crate::storage::ReadonlyStore::open(&fixture.db_path).expect("打开");
     assert_code(
         crate::query::query_events(&bare, &EventQuery::default()).map(|_| ()),
@@ -475,7 +444,6 @@ fn events_on_empty_and_unclaimed_store() {
     crate::test_support::cleanup_dir(&fixture.dir);
 }
 
-/// Node 侧编码的游标（同字段顺序 JSON + base64url）可被本实现续页（契约 §0.3-2）
 #[test]
 fn node_encoded_cursor_continues_pagination() {
     let (fixture, _ws, store) = setup_events("events-node-cursor", 12);
@@ -493,7 +461,6 @@ fn node_encoded_cursor_continues_pagination() {
         .as_ref()
         .map(|c| crate::query::decode_event_cursor(c).expect("游标可解码").fp)
         .expect("有更多页必有游标");
-    // 按 Node queries.ts:100-102 encodeCursor 的语义手工构造（字段顺序 snap,k,s,fp）
     let node_json = format!(
         r#"{{"snap":{},"k":"{}","s":{},"fp":"{}"}}"#,
         first.snapshot_max_seq,
@@ -518,7 +485,6 @@ fn node_encoded_cursor_continues_pagination() {
     crate::test_support::cleanup_dir(&fixture.dir);
 }
 
-/// 事件游标结构形状守护（snap/k/s/fp 与 Node CursorPayload 一致）
 #[test]
 fn cursor_payload_shape_matches_node() {
     let cursor = EventCursor {
@@ -532,17 +498,12 @@ fn cursor_payload_shape_matches_node() {
     assert_eq!(decoded, cursor);
 }
 
-// ===== 日桶先限展示范围再富化，桶内决定独立边界 =====
-
-/// 请求少量桶时：返回桶与 hidden_days/total/undated 口径不变；
-/// 桶内决定受独立上限约束，并提供总数与截断标记（不再无界嵌套集合）。
 #[test]
 fn event_days_limits_buckets_before_enrichment() {
     let fixture = FixtureDb::new("days-limit-enrich");
     let root = fixture.root();
     let ws_id = fixture.workspace(&root, 0, None);
 
-    // 6 个有日期桶（2026-04-01..06），每桶 1 条事件
     for day in 1..=6 {
         fixture.event(
             &ws_id,
@@ -559,7 +520,6 @@ fn event_days_limits_buckets_before_enrichment() {
             "{}",
         );
     }
-    // 最新桶（04-06）里塞 25 个不同决定事件 → 决策样本应被独立上限截断
     for i in 0..25 {
         fixture.event(
             &ws_id,
@@ -578,7 +538,6 @@ fn event_days_limits_buckets_before_enrichment() {
             ),
         );
     }
-    // 日期待考 1 条
     fixture.event(
         &ws_id,
         "missing",
@@ -595,7 +554,6 @@ fn event_days_limits_buckets_before_enrichment() {
     );
 
     let store = open_store(&fixture, &root);
-    // limit_days=2、samples=4：只返回最新两个日期桶 + 待考桶
     let result = crate::query::query_event_days(
         &store,
         &crate::query::EventDaysQuery {
@@ -607,7 +565,6 @@ fn event_days_limits_buckets_before_enrichment() {
     )
     .expect("日桶查询失败");
 
-    // 桶数量：2 个日期桶 + 待考桶
     let dated: Vec<_> = result
         .groups
         .iter()
@@ -624,10 +581,8 @@ fn event_days_limits_buckets_before_enrichment() {
         "待考桶恒排最后"
     );
 
-    // total 仍是全范围事件数（6 天 + 25 决定 + 1 待考 = 32），包含被折叠的桶
     assert_eq!(result.total, 32, "total 为全量事件数，不因 limit_days 缩小");
 
-    // 桶内决定：独立上限 20，且提供总数与截断标记
     let latest = result
         .groups
         .iter()
@@ -637,14 +592,12 @@ fn event_days_limits_buckets_before_enrichment() {
     assert_eq!(latest.decisions.len(), 20, "决定样本受独立上限约束");
     assert!(latest.decisions_truncated, "超过上限应标记截断");
 
-    // 样本仍受 samples 上限约束
     assert!(
         latest.samples.len() <= 4,
         "样本受 samples 上限约束，实际 {}",
         latest.samples.len()
     );
 
-    // 未被截断的桶标记为 false（回归：不能一律 true）
     let day5 = result
         .groups
         .iter()
@@ -656,7 +609,6 @@ fn event_days_limits_buckets_before_enrichment() {
     crate::test_support::cleanup_dir(&fixture.dir);
 }
 
-/// 小窗口（limit_days 大于桶数）时：所有桶都返回、hidden_days=0，口径与旧实现一致
 #[test]
 fn event_days_returns_all_buckets_when_under_limit() {
     let fixture = FixtureDb::new("days-limit-all");
@@ -692,7 +644,6 @@ fn event_days_returns_all_buckets_when_under_limit() {
     assert_eq!(result.total, 3);
     assert_eq!(result.undated_count, 0);
 
-    // 每桶 by_kind 与 count 保持
     for g in &result.groups {
         assert_eq!(g.count, 1);
         assert_eq!(g.by_kind.get("appeared").copied(), Some(1));

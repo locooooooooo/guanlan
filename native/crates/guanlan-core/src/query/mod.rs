@@ -61,11 +61,9 @@ pub use revisions::{
 pub use search::{search, search_state_of, SearchQuery};
 pub use state_overview::state_overview;
 
-// application 模块复用的内部查询件
 pub(crate) use decisions::relations_total;
 pub(crate) use events::event_time_range_inner;
 
-/// &str → SQLite 绑定参数（rusqlite 0.42 的 `Value` 未实现 `From<&str>`）
 pub(crate) fn sql_text(s: impl Into<String>) -> rusqlite::types::Value {
     rusqlite::types::Value::from(s.into())
 }

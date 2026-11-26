@@ -1,9 +1,3 @@
-/**
- * 阅读器 SVG / PDF 与通用格式分节插件层：
- *  - ReaderSvgSection：受限安全矢量预览（缩放/全宽/源文本切换 + 提取文字检索层）
- *  - ReaderPdfSection：PDF 原版版式 iframe / 页级文本 PdfReaderView 双视图
- *  - ReaderNonLegacySection：非 md/svg/pdf 格式的通用元数据与结构化预览面板
- */
 
 import React, { useEffect, useState } from 'react';
 import {
@@ -43,7 +37,6 @@ export function ReaderSvgSection({ ctx }: { ctx: ReaderCtx }) {
     activeFile,
     onAddEvidencePointer,
     indexGeneration,
-    // SVG 框选批注层
     svgAnnotations,
     svgAnnotateMode,
     setSvgAnnotateMode,
@@ -64,7 +57,6 @@ export function ReaderSvgSection({ ctx }: { ctx: ReaderCtx }) {
           svgFullWidth ? 'max-w-full' : 'max-w-[var(--measure-read)]'
         } mx-auto space-y-2.5`}
       >
-        {/* 精简 SVG 控制条：安全隔离默认静默保障，不在画布顶/底堆砌工程说明与 coverage 键值 */}
         <div
           data-svg-toolbar=""
           className="flex flex-wrap items-center justify-end gap-1.5 text-xs tabular-nums"
@@ -125,7 +117,6 @@ export function ReaderSvgSection({ ctx }: { ctx: ReaderCtx }) {
           >
             {showSvgSourceDiff ? '图像' : '源码'}
           </Button>
-          {/* 框选批注开合（叠加层 crosshair；保存区域恒百分比定位，原图字节零改动） */}
           <Button
             variant={svgAnnotateMode ? 'primary' : 'ghost'}
             size="sm"
@@ -149,7 +140,6 @@ export function ReaderSvgSection({ ctx }: { ctx: ReaderCtx }) {
           )}
         </div>
 
-        {/* Restricted Image Rendering via Data URI (Never injecting arbitrary SVG into DOM) */}
         {!showSvgSourceDiff ? (
           <div
             className={`rounded-xl border p-4 overflow-auto flex items-center justify-center min-h-[420px] ${
@@ -166,8 +156,6 @@ export function ReaderSvgSection({ ctx }: { ctx: ReaderCtx }) {
                 sanitizedSvg
               )}`;
               return (
-                /* relative w-fit 包裹层精确贴合图像盒（img 转块级消除基线空隙），
-                    框选/批注区域叠加层 inset-0 与图像逐像素对齐，缩放无关 */
                 <div className="relative w-fit" data-svg-annotation-host>
                   <img
                     src={dataUri}
@@ -199,7 +187,6 @@ export function ReaderSvgSection({ ctx }: { ctx: ReaderCtx }) {
           </pre>
         )}
 
-        {/* 按需展开的 SVG 可引用文字列表（默认零占位，仅点击工具栏「文字」后呈现） */}
         {svgTextsExpanded && extractedTexts.length > 0 && (
           <div
             data-svg-extracted-texts-panel=""
@@ -264,14 +251,11 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
     systemActions,
     onAddEvidencePointer,
     indexGeneration,
-    // PDF 页批注与到达闪烁
     flashPdfPage,
     pdfAnnotationsByPage,
     flashAnnotationId,
     annotateFromPdfPage,
   } = ctx;
-  // 页级文本选中文字 → 「批注选中文字」浮条（摘录进本地证据表，原文零改写）。
-  // mouseup 时读取选区；批注卡经 ctx.composer 挂 ReaderView 根。
   const [pdfSelectionQuote, setPdfSelectionQuote] = useState<string>('');
   useEffect(() => {
     setPdfSelectionQuote('');
@@ -299,13 +283,11 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
       }`}
     >
       <div className="max-w-[var(--measure-read)] mx-auto space-y-2.5">
-        {/* 精简 PDF 顶条：常态隐藏冗长索引说明，仅异常/未索引时以轻提示诚实告知 */}
         <div
           data-pdf-toolbar=""
           className="flex flex-wrap items-center justify-between gap-2 text-xs"
         >
           <div className="flex items-center gap-2">
-            {/* 原版版式 / 页级文本双视图切换（pdfAnchor 到达时自动切页级文本） */}
             <div
               className={`flex rounded-lg border overflow-hidden text-xs ${
                 paperLightMode ? 'border-[#D8B79B]' : 'border-[#383633]'
@@ -382,7 +364,6 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
               <PlusCircle className="w-3.5 h-3.5" />
               <span>引用此页</span>
             </Button>
-            {/* 本页批注入口（选中页内文字后也可经浮条带摘录批注） */}
             <Button
               variant="ghost"
               size="sm"
@@ -395,7 +376,6 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
           </div>
         </div>
 
-        {/* 嵌入式 PDF 原页视图 */}
         <div
           className={`grid grid-cols-1 ${
             hasPdfPageList ? 'lg:grid-cols-4' : ''
@@ -448,15 +428,13 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
             className={`${
               hasPdfPageList ? 'lg:col-span-3' : ''
             } rounded-xl border overflow-hidden min-h-[540px] flex flex-col ${
-              // 决定 pdfAnchor 到达时整卡闪两轮琥珀描边（flashPdfPage，2.2s 自动摘除）
               flashPdfPage !== undefined ? 'glx-anchor-flash' : ''
             } ${
               paperLightMode
-                ? 'bg-white border-[#DDD9CF] shadow-[var(--glass-shadow)]' /* 阴影统一走 --glass-shadow 令牌 */
+                ? 'bg-white border-[#DDD9CF] shadow-[var(--glass-shadow)]'
                 : 'bg-[#262524] border-[#383633]'
             }`}
           >
-            {/* 当前页批注 chips（本页有批注才渲染；定位闪烁逐条消费） */}
             {(pdfAnnotationsByPage.get(activePdfPage)?.length ?? 0) > 0 && (
               <div className="px-3 pt-2">
                 <PdfPageAnnotations
@@ -467,9 +445,6 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
               </div>
             )}
             {currentRev.snapshotAvailable && pdfViewMode === 'structured' ? (
-              /* 页级文本结构化视图（/revisions/{id}/pdf）：
-                 页码导航、扫描页诚实标注、pdfAnchor 直达高亮与 #page=N 引用；
-                 mouseup 采集页内选中文字 → 「批注选中文字」浮条 */
               <div
                 className={`flex-1 overflow-y-auto p-3 ${
                   paperLightMode ? 'bg-white' : 'bg-[#1A1917]'
@@ -526,7 +501,6 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
                 }`}
               />
             ) : (
-              /* 快照已淘汰：明确提示，不用磁盘当前文件冒充钉住的历史版本 */
               <div
                 className={`flex-1 flex flex-col items-center justify-center gap-2 p-6 text-center ${
                   paperLightMode ? 'bg-[#F2F0EA]' : 'bg-[#232220]'

@@ -65,8 +65,6 @@ pub fn resolve_root_with(root_path: &str, cwd: &str) -> String {
     path_win32::resolve_with(&[root_path], cwd, &drive_cwd_from_env)
 }
 
-/// 盘符专属工作目录：Node 读 `process.env['=D:']`（cmd.exe 维护的隐藏变量）。
-/// 环境变量缺失或非 UTF-8 时返回 None，回退进程 cwd（与 Node 的 `||` 一致）。
 fn drive_cwd_from_env(device: &str) -> Option<String> {
     std::env::var(format!("={device}")).ok()
 }
@@ -109,20 +107,12 @@ pub fn revision_id_of(file_id: &str, seq: i64) -> String {
     format!("{file_id}_r{seq}")
 }
 
-/// 夹具向量文件路径：native/testdata/identity-vectors.json（仅测试使用）
 #[cfg(test)]
-/// （由 scripts/seed-fixture.ts 生成，见下方测试的缺失提示）
 const IDENTITY_VECTORS_PATH: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../testdata/identity-vectors.json"
 );
 
-/// 测试提前返回（跳过）时调用，代替直接 `eprintln!("[skip] …")`。
-///
-/// libtest 会截获通过的测试打印的内容，所以直接打印的 `[skip]` 在 `cargo test` 的输出里
-/// 看不到，一份「381 通过」里会混着什么都没验证的测试。设了 `GUANLAN_TEST_SKIP_LOG`
-/// 时（`npm run gate` 会设），把「测试名: 原因」追加到那个文件，门禁据此在运行记录里
-/// 点名被跳过的测试。没设时只打印，与此前一样。
 #[cfg(test)]
 pub(crate) fn note_skipped(reason: impl std::fmt::Display) {
     eprintln!("[skip] {reason}");
@@ -132,13 +122,9 @@ pub(crate) fn note_skipped(reason: impl std::fmt::Display) {
     append_skip(&path, reason);
 }
 
-/// [`note_skipped`] 的落盘部分。路径由调用方给出：单测直接调它，不去改进程的环境变量
-/// （测试是并行跑的，改了会影响别的测试）。写不进去也不让测试失败，跳过的提示只是提示。
 #[cfg(test)]
 fn append_skip(path: &str, reason: impl std::fmt::Display) {
     use std::io::Write;
-    // 整行拼好再写一次。直接 writeln!(file, …) 会把一行拆成几次 write，两个测试同时
-    // 跳过时字会交错（实测出现过）。
     let current = std::thread::current();
     let name = current.name().unwrap_or("(未知测试名)");
     let line = format!("{name}: {reason}\n");
@@ -156,13 +142,10 @@ fn append_skip(path: &str, reason: impl std::fmt::Display) {
 mod tests {
     use super::*;
 
-    /// 本测试专用的临时目录，离开作用域时删除。删除不能只靠测试末尾的那一句：断言失败时
-    /// 走不到它，目录就留在临时文件夹里（做弄坏验证时留下过上百个）。
     struct ScratchDir(std::path::PathBuf);
 
     impl ScratchDir {
         fn new(tag: &str) -> Self {
-            // 名字里带进程 ID 与纳秒时间：上一次运行没删干净时不会读到旧记录
             let nanos = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_nanos())
@@ -175,7 +158,6 @@ mod tests {
             Self(dir)
         }
 
-        /// 目录里一个文件的路径，可以直接传给 [`append_skip`]
         fn file(&self, name: &str) -> String {
             self.0
                 .join(name)
@@ -199,7 +181,6 @@ mod tests {
             .collect()
     }
 
-    /// 跳过记录带上测试的完整路径名与原因，并且是追加而不是覆盖
     #[test]
     fn skip_log_appends_test_name_and_reason() {
         let dir = ScratchDir::new("append");
@@ -213,7 +194,6 @@ mod tests {
         assert_eq!(lines[1], format!("{prefix}另一个原因：2"));
     }
 
-    /// 几个测试同时跳过时，每条记录各占一行、互不交错。门禁按行数点名，交错会让两条并成一条。
     #[test]
     fn skip_log_lines_do_not_interleave_when_tests_skip_concurrently() {
         let dir = ScratchDir::new("race");
@@ -242,7 +222,6 @@ mod tests {
         }
     }
 
-    /// 断言失败时临时目录也要删掉：靠 Drop，不靠测试末尾的那一句
     #[test]
     fn scratch_dir_is_removed_even_when_the_test_panics() {
         let dir = ScratchDir::new("drop");
@@ -260,11 +239,9 @@ mod tests {
         );
     }
 
-    /// 契约 §2.1/§2.3 明列的具体值 + Node `path.win32.resolve` 实测向量补充。
     #[test]
     fn contract_stated_identity_values() {
         let cwd = r"C:\Users\tester\AppData\Local\Temp\rslv-vectors";
-        // 契约 §2.1 示例：D:\notebooks\demo → 6d74a29df40616ec
         assert_eq!(
             root_key_of_resolved(&path_win32::resolve_with(
                 &[r"D:\notebooks\demo"],
@@ -273,7 +250,6 @@ mod tests {
             )),
             "6d74a29df40616ec"
         );
-        // 盘符大小写原样保留（契约 §2.1 第 2 条实测）：小写盘符是另一个 rootKey
         assert_eq!(
             root_key_of_resolved(&path_win32::resolve_with(
                 &["d:/notebooks/demo"],
@@ -282,17 +258,14 @@ mod tests {
             )),
             "4c04a8aa7634d59c"
         );
-        // 契约 §2.3 示例：rootKey + Notes\ReadMe.MD → f_b967338b81904b60abf8374e
         assert_eq!(
             stable_file_id("6d74a29df40616ec", r"Notes\ReadMe.MD"),
             "f_b967338b81904b60abf8374e"
         );
-        // 同一路径的正斜杠/大小写变体得到同一 file_id
         assert_eq!(
             stable_file_id("6d74a29df40616ec", "notes/readme.md"),
             "f_b967338b81904b60abf8374e"
         );
-        // 中文路径实测向量
         assert_eq!(
             root_key_of_resolved(&path_win32::resolve_with(
                 &[r"D:\观澜\工作区"],
@@ -301,7 +274,6 @@ mod tests {
             )),
             "df515ae695087507"
         );
-        // revision_id 模板
         assert_eq!(
             revision_id_of("f_b967338b81904b60abf8374e", 1),
             "f_b967338b81904b60abf8374e_r1"
@@ -309,9 +281,6 @@ mod tests {
         assert_eq!(workspace_id_of("6d74a29df40616ec"), "ws_6d74a29df40616ec");
     }
 
-    /// Node `path.win32.resolve/join` 对 60 个 resolve 输入与 12 个 join 输入的实测向量
-    /// （cwd = "C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors"，一并注入）。
-    /// JSON 结构：[输入, 期望输出]。
     const SESSION_VECTORS: &str = r#"{"cwd":"C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors","resolve":[["D:\\notebooks\\demo","D:\\notebooks\\demo"],["d:/notebooks/demo","d:\\notebooks\\demo"],["D:/notebooks/demo/","D:\\notebooks\\demo"],["D:","D:\\"],["d:","d:\\"],["D:\\\\","D:\\"],["D:/","D:\\"],["/","C:\\"],["\\","C:\\"],["D:\\notebooks\\..\\demo","D:\\demo"],["D:\\.\\notebooks\\demo","D:\\notebooks\\demo"],["D:\\notebooks\\\\demo","D:\\notebooks\\demo"],["D:\\notebooks\\demo\\..","D:\\notebooks"],["c:\\x\\y\\z\\..\\w","c:\\x\\y\\w"],["C:\\","C:\\"],["Z:/A/B","Z:\\A\\B"],["z:/a/b","z:\\a\\b"],["foo","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\foo"],["foo\\bar","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\foo\\bar"],["foo/bar","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\foo\\bar"],["./foo","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\foo"],[".\\foo","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\foo"],["foo\\..\\bar","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\bar"],["foo\\..\\..\\bar","C:\\Users\\tester\\AppData\\Local\\Temp\\bar"],[".","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors"],["..","C:\\Users\\tester\\AppData\\Local\\Temp"],["...","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\..."],["a//b","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\a\\b"],["a/./b","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\a\\b"],["a\\/.\\/b","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\a\\b"],["a\\b\\","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\a\\b"],["a\\b\\\\","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\a\\b"],["C:a","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\a"],["C:a\\b","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\a\\b"],["C:.\\b","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\b"],["C:..\\b","C:\\Users\\tester\\AppData\\Local\\Temp\\b"],["D:.\\x","D:\\x"],["D:..","D:\\"],["\\\\server\\share","\\\\server\\share\\"],["\\\\server\\share\\","\\\\server\\share\\"],["\\\\server\\share\\a\\b","\\\\server\\share\\a\\b"],["//server/share/a","\\\\server\\share\\a"],["\\\\?\\C:\\x\\y","\\\\?\\C:\\x\\y"],["\\\\?\\UNC\\server\\share\\a","\\\\?\\UNC\\server\\share\\a"],["\\\\.\\x","\\\\.\\x"],["\\\\a\\b","\\\\a\\b\\"],["\\\\a","C:\\a"],["\\\\\\","C:\\"],["","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors"],[" ","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\ "],["file.md","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\file.md"],["?","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\?"],["*","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\*"],["/\\foo","C:\\foo"],["\\/foo","C:\\foo"],["\\foo","C:\\foo"],["/foo/bar","C:\\foo\\bar"],["D:\\Notes\\ReadMe.MD","D:\\Notes\\ReadMe.MD"],["中文\\目录","C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors\\中文\\目录"],["D:\\a b\\c d","D:\\a b\\c d"]],"join":[[["C:\\base","Guanlan","workspaces","6d74a29df40616ec"],"C:\\base\\Guanlan\\workspaces\\6d74a29df40616ec"],[["C:/base","Guanlan","workspaces","6d74a29df40616ec"],"C:\\base\\Guanlan\\workspaces\\6d74a29df40616ec"],[["C:/base/","","Guanlan","6d74a29df40616ec"],"C:\\base\\Guanlan\\6d74a29df40616ec"],[["C:\\","sub","6d74a29df40616ec"],"C:\\sub\\6d74a29df40616ec"],[["C:\\base\\",""],"C:\\base\\"],[["base","x"],"base\\x"],[["","x"],"x"],[["",""],"."],[["\\\\srv\\share","a","b"],"\\\\srv\\share\\a\\b"],[["C:\\base","a\\b","c"],"C:\\base\\a\\b\\c"],[["C:/base","a/b","c"],"C:\\base\\a\\b\\c"],[["C:\\base",".",".."],"C:\\"]],"rootKey":[["D:\\notebooks\\demo","6d74a29df40616ec"],["D:\\notebooks\\demo\\","6d74a29df40616ec"],["d:/notebooks/demo","4c04a8aa7634d59c"],["D:\\观澜\\工作区","df515ae695087507"],["C:\\Users\\tester\\AppData\\Local\\Temp\\rslv-vectors","8296ea6b493a5036"]],"fileId":[["6d74a29df40616ec","Notes\\ReadMe.MD","f_b967338b81904b60abf8374e"],["6d74a29df40616ec","notes/readme.md","f_b967338b81904b60abf8374e"],["6d74a29df40616ec","docs/方案.md","f_422b0386a77ef4e4f9eafd30"],["0123456789abcdef","a/b/c.svg","f_40700c3ee03f5b6c73d29880"]]}"#;
 
     #[test]

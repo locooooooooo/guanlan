@@ -1,25 +1,3 @@
-/**
- * 统一状态机投影层（SSOT）—— 六态文档状态机的前端唯一事实来源。
- *
- * 三层分工：
- *  - ① 存储与纯函数权威在 Rust：native/crates/guanlan-core/src/index/state_machine.rs
- *    （DocState 六态 / StateSignals / next_artifact_state / slot_state）。迁移规则的
- *    权威判定在该文件；本文件的 nextDocState 是其逐字 TS 镜像——双端改迁移规则必须
- *    两侧同步，且由单测锁定一致。
- *  - ② 本文件 = 前端投影 SSOT：六态词表（DOC_STATE_LABEL）、DOC_STATE↔StageRole 映射、
- *    双层投影 projectInitiativeState（服务端 /state-overview 优先，断连回退
- *    dominantStage——回退路径行为保持兼容）、阶段徽标短语
- *    （STAGE_BADGE_PHRASE，taskPackages 原私有词表上移）、文档态徽标/胶囊样式单一出口、
- *    task_node 状态词表、决策未决口径词表（DecisionRadar/HomeView 双份实现收敛）、
- *    版本「（最新）」后缀词（ReaderView/RightInspector 双份实现收敛）、
- *    陈述状态 wire 词映射。
- *  - ③ 消费层（专项卡片 / 专项详情下拉 / 星图节点 / 文档顶栏四处徽标）：
- *    taskPackages、TaskPackageGallery、GraphCanvasView、ReaderView、RightInspector、
- *    HomeView、DecisionRadar 一律从本文件取词，禁止再自造状态文案。
- *
- * 纪律：纯函数模块——禁 import .css / React（node --test 直跑约束）；运行时零依赖
- * （apiTypes 仅 type-only 导入，编译期擦除，与 services 层无运行时回环）。
- */
 
 import type {
   ArtifactStateView,
@@ -31,7 +9,6 @@ import type {
   TaskNodeState,
 } from '../services/apiTypes';
 
-// ================= 六态文档状态机 =================
 
 /** 文档六态（wire 词；Rust DocState 逐字镜像） */
 export type DocState = DocStateWire;
@@ -126,7 +103,6 @@ export interface StateSignals {
  */
 export function nextDocState(current: DocState, signals: StateSignals): DocState | null {
   const blocking = signals.pending_p0 + signals.pending_p1;
-  // 逆向回流唯一边：执行/交付中引入新的未决 P0/P1 → 打回待用户确认
   if ((current === 'executing' || current === 'delivered') && blocking > 0) {
     return 'pending_review';
   }
@@ -158,7 +134,6 @@ export function nextDocState(current: DocState, signals: StateSignals): DocState
   }
 }
 
-// ================= 阶段徽标短语（专项卡片等词表，单一出口） =================
 
 /**
  * 阶段徽标短语（从 taskPackages 上移至此，数值逐字不动以保持回退路径兼容）：
@@ -192,7 +167,6 @@ export function stageBadgeLine(
   return phrase ? `v${version} · ${phrase}` : `v${version}`;
 }
 
-// ================= 文档态徽标 / 胶囊样式（服务端投影路径出口） =================
 
 /**
  * 文档态徽标行：版本 + DOC_STATE_LABEL 组合（服务端 /state-overview 投影路径）。
@@ -219,7 +193,6 @@ export const PILL_LAYOUT_BASE =
   'w-fit max-w-full truncate rounded-full px-2 py-0.5 ' +
   'text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-medium ';
 
-/** 胶囊公共骨架（PILL_LAYOUT_BASE 的文档态别名，保既有内部引用） */
 const DOC_STATE_PILL_BASE = PILL_LAYOUT_BASE;
 
 /** 六态胶囊样式（stage-ink -text 深档保证浅底 AA；archived 走 --ink-soft 弱化） */
@@ -255,7 +228,6 @@ export function docStatePillClass(state: DocState): string {
   return DOC_STATE_PILL_CLASS[state];
 }
 
-// ================= 双层投影（服务端优先 / 断连回退 dominantStage） =================
 
 /** 服务端专项状态视图（/state-overview InitiativeStateView 的消费子集） */
 export interface InitiativeStateServerView {
@@ -274,9 +246,7 @@ export interface InitiativeLocalFallback {
 export interface InitiativeStateProjection {
   state: DocState;
   stage: StageRole;
-  /** server=服务端 /state-overview 投影；fallback=dominantStage 回退（无服务端计数） */
   source: 'server' | 'fallback';
-  /** 未决计数；fallback 路径为 null（本地无服务端口径，不造 0 冒充已对账） */
   pendingP0: number | null;
   pendingP1: number | null;
   pendingP2: number | null;
@@ -310,7 +280,6 @@ export function projectInitiativeState(
   };
 }
 
-// ================= /state-overview 前端索引（四视图共享接线） =================
 
 /**
  * /state-overview 的前端索引：一次构建，按 file_id / initiative_id / root_dir
@@ -324,7 +293,6 @@ export interface StateOverviewIndex {
   artifactsByFileId: Map<string, ArtifactStateView>;
 }
 
-/** 目录名归一：root_dir / 包 id 一律按 `/` 分段比较（Windows 反斜杠也收口） */
 function normalizeOverviewDir(value: string): string {
   return value.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
 }
@@ -408,7 +376,6 @@ export function projectArtifactState(
   return { state: STAGE_DOC_STATE[fallbackStage], source: 'fallback' };
 }
 
-// ================= 星图节点阶段回退词（GraphCanvasView 行 4 胶囊） =================
 
 /**
  * 星图事件卡阶段胶囊词（原 GraphCanvasView.tsx:4184-4189 内联三元上移）：
@@ -423,7 +390,6 @@ export function artifactStageBadgeText(
   return isDecisionCard ? '决策' : '';
 }
 
-// ================= 五槽位任务节点词表（专项详情下拉数据源） =================
 
 /**
  * task_node 状态词表（六态；suspended_on_hitl 是 HITL 挂起持久态，
@@ -443,7 +409,6 @@ export function taskNodeStateLabel(state: string): string {
   return (TASK_NODE_STATE_LABEL as Record<string, string>)[state] ?? state;
 }
 
-// ================= 决策未决口径（DecisionRadar / HomeView 双份实现收敛） =================
 
 /** 决策状态词（服务端 record_decision_events 口径逐字） */
 export const DECISION_STATUS_PENDING = '待确认';
@@ -483,7 +448,6 @@ export function unresolvedDecisionCount<T extends { status: string; isCandidateO
   return decisions.filter(isUnresolvedDecision).length;
 }
 
-// ================= 版本「（最新）」后缀（ReaderView / RightInspector 收敛） =================
 
 /** 版本链末版后缀词（统一全角括号；ReaderView 文件头/模式组/版本 select 与
  *  RightInspector 溯源区四处硬编码收敛到此） */
@@ -494,7 +458,6 @@ export function revisionVersionLabel(versionNumber: number, isLatest: boolean): 
   return `v${versionNumber}${isLatest ? LATEST_REVISION_SUFFIX : ''}`;
 }
 
-// ================= 陈述状态 wire 词映射 =================
 
 /**
  * wire 词 → 库内中文词（拍板表单/列表展示用；query 只传 wire 词，
@@ -508,7 +471,6 @@ export const STATEMENT_STATUS_LABEL: Record<StatementStatusWire, string> = {
   superseded: DECISION_STATUS_SUPERSEDED,
 };
 
-// ================= 专项橱窗筛选词（TaskPackageGallery 上移） =================
 
 export type GalleryFilterKey = 'all' | 'executing' | 'awaiting' | 'blueprint' | 'drawings';
 

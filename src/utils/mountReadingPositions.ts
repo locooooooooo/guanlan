@@ -1,15 +1,3 @@
-/**
- * 外挂资料阅读位置持久化（按规范化路径稳定哈希持久保留）。
- *
- * 身份口径：桶键取**来源工作区 root_key**
- * （参考区库内工作区行身份哈希 = `ws_<root_key>` 的哈希段，由 plain() 规范化
- * 根路径稳定派生、随跨库检索命中逐条下发）——`\\?\` 长路径 / 混合斜杠写法
- * 哈希恒一致，参考区离线 / 卸载重挂 / 服务重启后阅读位置均可恢复。桶内再按
- * file_id（= 该参考区 rootKey|路径 的稳定哈希）定位。
- *
- * 只存指针（file_id / revision_id / 相对路径 / 标题 / 时间），不存正文；
- * 写失败（隐私模式/配额满）静默——持久化是增强能力，不是阅读的前置条件。
- */
 
 const BASE_KEY = 'guanlan.mountReading.v1';
 
@@ -19,7 +7,6 @@ export interface MountedReadingEntry {
   revision_id: string;
   relative_path: string;
   title: string;
-  /** 本地时刻 ISO（recordMountedReading 时生成） */
   at: string;
 }
 
@@ -86,7 +73,7 @@ export function recordMountedReading(
       prev.relative_path === next.relative_path &&
       prev.title === next.title
     ) {
-      return false; // 同一版本重复记录：不写入（避免 localStorage 无谓 churn）
+      return false;
     }
     map[entry.file_id] = next;
     window.localStorage.setItem(key, JSON.stringify(map));

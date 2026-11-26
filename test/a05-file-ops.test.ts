@@ -59,19 +59,16 @@ describe('身份保真文件操作校验（fileOps.ts）', () => {
       assert.equal(okMd.targetRelativePath, '01-演示专项/03-拍板清单.md');
     }
 
-    // .markdown 兼容 md
     const okMarkdown = validateRenameInput('notes.markdown', 'notes.md', 'md');
     assert.equal(okMarkdown.ok, true);
     if (okMarkdown.ok) {
       assert.equal(okMarkdown.targetRelativePath, 'notes.markdown');
     }
 
-    // 同名无变化被拦
     assert.equal(
       validateRenameInput('03-待确认事项.md', '01-演示专项/03-待确认事项.md', 'md').ok,
       false
     );
-    // 路径穿越 / 分隔符 / 盘符 / 隐藏名 / Windows 保留名
     assert.equal(validateRenameInput('../evil.md', 'a/b.md', 'md').ok, false);
     assert.equal(validateRenameInput('sub/b.md', 'a/b.md', 'md').ok, false);
     assert.equal(validateRenameInput('C:evil.md', 'a/b.md', 'md').ok, false);
@@ -80,7 +77,6 @@ describe('身份保真文件操作校验（fileOps.ts）', () => {
     assert.equal(validateRenameInput('nul.md', 'a/b.md', 'md').ok, false);
     assert.equal(validateRenameInput('bad\u0007.md', 'a/b.md', 'md').ok, false);
 
-    // 不允许跨格式改扩展名
     assert.equal(validateRenameInput('03-拍板清单.pdf', '01-演示专项/03-待确认事项.md', 'md').ok, false);
     assert.equal(validateRenameInput('diagram.md', 'assets/diagram.svg', 'svg').ok, false);
     assert.equal(validateRenameInput('spec.svg', 'docs/spec.pdf', 'pdf').ok, false);
@@ -99,7 +95,6 @@ describe('身份保真文件操作校验（fileOps.ts）', () => {
       assert.equal(movedNested.targetRelativePath, '02-归档专项/定稿/03-拍板清单.md');
     }
 
-    // 移至工作区根目录（"" 或 "."）并同步改名
     const movedToRoot = validateMoveInput(
       '',
       '01-演示专项/03-拍板清单.md',
@@ -118,13 +113,11 @@ describe('身份保真文件操作校验（fileOps.ts）', () => {
       assert.equal(movedDotRoot.targetRelativePath, '03-拍板清单.md');
     }
 
-    // 原地不动被拦
     assert.equal(
       validateMoveInput('01-演示专项', '01-演示专项/03-拍板清单.md', 'md').ok,
       false
     );
 
-    // 越界 / 绝对路径 / 隐藏目录 / 排除目录 / 保留名
     assert.equal(validateMoveInput('../outside', 'a/b.md', 'md').ok, false);
     assert.equal(validateMoveInput('/abs/dir', 'a/b.md', 'md').ok, false);
     assert.equal(validateMoveInput('D:/other', 'a/b.md', 'md').ok, false);
@@ -204,7 +197,6 @@ describe('阅读进度连续性与事件标签', () => {
       f_gone: makeReadingState('f_gone', '已彻底消失'),
     };
 
-    // 1) 重命名/移动后 file_id 保持不变，进度 100% 连续
     const afterRename = pruneReadingStates(
       initial,
       [
@@ -217,7 +209,6 @@ describe('阅读进度连续性与事件标签', () => {
     assert.equal(afterRename.f_trashed?.personalNote, '回收站可还原批注');
     assert.equal(afterRename.f_gone, undefined);
 
-    // 2) f_trashed 移入系统回收站后离开 active 列表，但服务端下发 recoverable_file_ids
     const duringTrash = pruneReadingStates(
       afterRename,
       [makeFile('f_keep', '02-归档专项/改名后.md')],
@@ -226,11 +217,9 @@ describe('阅读进度连续性与事件标签', () => {
     assert.equal(duringTrash.f_keep?.personalNote, '继续保留');
     assert.equal(duringTrash.f_trashed?.personalNote, '回收站可还原批注');
 
-    // 3) 即使工作区所有 active 文件都被移入回收站，也不可清空可恢复文件的阅读状态
     const allTrashed = pruneReadingStates(duringTrash, [], ['f_trashed']);
     assert.equal(allTrashed.f_trashed?.personalNote, '回收站可还原批注');
 
-    // 4) 从系统回收站还原后重新回到 active 列表，原批注与书签 100% 连续
     const afterRestore = pruneReadingStates(
       duringTrash,
       [

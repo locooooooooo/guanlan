@@ -1,10 +1,3 @@
-/**
- * 阅读器锚点批注层渲染契约（SSR 冒烟，与 d03-multimodal-diff-view.test.ts 同风格）。
- * 交互（框选拖拽/选区采集/CAS 写回）在客户端；此处锁定静态结构契约：
- * 撰写卡（保存/转决定项/诚实禁用）/ 批注清单（定位·删除·已转徽标·空态）/
- * SVG 框选叠加层（模式两态·区域百分比定位·闪烁类）/ PDF 页批注 chips /
- * 闪烁工具类与关闭态零 DOM。
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
@@ -136,9 +129,9 @@ test('SVG 框选叠加层：查看态/框选态两态、已存区域百分比定
   );
   assert.ok(view.includes('data-svg-annotation-overlay="view"'));
   assert.ok(view.includes('data-svg-annotation-region="anno_2"'));
-  assert.ok(view.includes('left:12.000%')); // 百分比定位与缩放无关
+  assert.ok(view.includes('left:12.000%'));
   assert.ok(view.includes('width:25.000%'));
-  assert.ok(view.includes('glx-anchor-flash')); // 反向定位闪烁
+  assert.ok(view.includes('glx-anchor-flash'));
   assert.ok(!view.includes('data-svg-annotation-draft'));
   const selecting = renderToStaticMarkup(
     React.createElement(SvgAnnotationOverlay, {
@@ -173,12 +166,10 @@ test('PDF 页批注 chips：页内摘录前缀/闪烁类/无批注零 DOM', () =
       paperLightMode: false,
     })
   );
-  assert.equal(none, ''); // 无批注零 DOM（关闭态零扰动）
+  assert.equal(none, '');
 });
 
 test('决定块插入产物可被 parseDecisionBlocks 识别为待确认决定', () => {
-  // 端到端口径：批注转决定项 → 回写块 → 画布生成决定节点 → 点击反向定位。
-  // 此处锁定「回流解析」半环：插入块经 parseDecisionBlocks 必须产出待确认 P1 决定。
   const ins = buildDecisionBlockInsertion({
     markdownContent: '# 方案\n\n正文段。',
     afterLine: 3,
@@ -193,7 +184,6 @@ test('决定块插入产物可被 parseDecisionBlocks 识别为待确认决定',
   assert.equal(blocks[0].priority, 'P1');
   assert.ok(blocks[0].blocking);
   assert.match(blocks[0].title, /存储选型需复核/);
-  // 未插入行逐字节不变
   assert.equal(ins.newContent.split('\n')[0], '# 方案');
   assert.equal(ins.newContent.split('\n')[1], '');
   assert.equal(ins.newContent.split('\n')[2], '正文段。');

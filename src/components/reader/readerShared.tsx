@@ -1,9 +1,3 @@
-/**
- * 阅读器共享类型与轻组件。
- *
- * 包含 ReaderSubMode / ReturnBreadcrumb 类型以及长 ID 行内复制按钮 CopyIdButton。
- * 独立成文件避免 ReaderView 与分节渲染层之间产生循环 import。
- */
 
 import React, { useState } from 'react';
 import { Check, Copy } from 'lucide-react';

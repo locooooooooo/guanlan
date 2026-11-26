@@ -1,10 +1,3 @@
-/**
- * 统一状态机 SSOT 单测（node:test/tsx，node:assert/strict，禁 import .css）：
- *  - 六态迁移穷举（正向五边 + 逆向回流唯一边 + Archived 终态 + 槽位判据门禁）；
- *  - 阶段徽标短语回退路径与现状逐字一致；
- *  - 双层投影（server 优先 / fallback dominantStage）；
- *  - 决策未决口径、版本「（最新）」后缀、task_node 词表、陈述 wire 词映射。
- */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
@@ -40,7 +33,6 @@ import type { StateOverviewResponse } from '../services/apiTypes';
 import { packageBadgeLine } from './taskPackages';
 import type { TaskPackage } from './taskPackages';
 
-// ---------------- 六态迁移穷举 ----------------
 
 const baseSignals: StateSignals = {
   pending_p0: 0,
@@ -53,7 +45,6 @@ const baseSignals: StateSignals = {
   last_activity_days: 0,
 };
 
-/** 迁移表：每态在指定信号下应迁往的目标（null=保持现态） */
 function expectMove(current: DocState, patch: Partial<StateSignals>, expected: DocState | null) {
   assert.equal(nextDocState(current, { ...baseSignals, ...patch }), expected, `${current}`);
 }
@@ -62,7 +53,6 @@ describe('nextDocState 六态迁移穷举', () => {
   it('Draft→PendingReview 当未决 P0/P1>0；否则保持', () => {
     expectMove('draft', { pending_p1: 1 }, 'pending_review');
     expectMove('draft', { pending_p0: 2 }, 'pending_review');
-    // P2 不构成 Draft→PendingReview 门禁（P2 非阻塞）
     expectMove('draft', { pending_p2: 3 }, null);
     expectMove('draft', {}, null);
   });
@@ -91,12 +81,10 @@ describe('nextDocState 六态迁移穷举', () => {
       deliver_slot_completed: true,
     };
     expectMove('executing', full, 'delivered');
-    // 清单未满 / 无清单 / 双槽未齐 → 不迁移（保持现态）
     expectMove('executing', { ...full, checklist_done: 5 }, null);
     expectMove('executing', { ...full, checklist_total: 0, checklist_done: 0 }, null);
     expectMove('executing', { ...full, exec_slot_completed: false }, null);
     expectMove('executing', { ...full, deliver_slot_completed: false }, null);
-    // 引入未决 P1：不走 Delivered，命中逆向回流唯一边（优先于一切正向边）
     expectMove('executing', { ...full, pending_p1: 1 }, 'pending_review');
   });
 
@@ -110,11 +98,8 @@ describe('nextDocState 六态迁移穷举', () => {
   it('逆向回流唯一边：executing/delivered 引入未决 P0/P1 → PendingReview（优先于正向）', () => {
     expectMove('executing', { pending_p0: 1 }, 'pending_review');
     expectMove('delivered', { pending_p1: 1 }, 'pending_review');
-    // delivered + 未决 + 满足超期：回流边优先，不打归档
     expectMove('delivered', { pending_p1: 1, last_activity_days: 99 }, 'pending_review');
-    // approved_revision 引入未决不回流（保持现态，等待清零+定版）
     expectMove('approved_revision', { pending_p1: 1 }, null);
-    // P2 不触发回流
     expectMove('executing', { pending_p2: 2 }, null);
     expectMove('delivered', { pending_p2: 2 }, null);
   });
@@ -134,7 +119,6 @@ describe('nextDocState 六态迁移穷举', () => {
   });
 });
 
-// ---------------- 词表与映射 ----------------
 
 describe('词表与映射', () => {
   it('DOC_STATE_LABEL 六态词表逐字', () => {
@@ -149,7 +133,6 @@ describe('词表与映射', () => {
     assert.equal(DOC_STATE_ORDER.length, 6);
     assert.equal(Object.keys(STAGE_DOC_STATE).length, 6);
     assert.equal(Object.keys(DOC_STATE_PILL_CLASS).length, 6);
-    // 胶囊样式出口对每态都有非空类串
     for (const state of DOC_STATE_ORDER) {
       assert.ok(docStatePillClass(state).includes('rounded-full'));
     }
@@ -181,7 +164,6 @@ describe('词表与映射', () => {
   });
 });
 
-// ---------------- 双层投影 ----------------
 
 describe('projectInitiativeState 双层投影', () => {
   it('服务端视图优先：逐字段采信（含未决计数）', () => {
@@ -222,12 +204,10 @@ describe('projectInitiativeState 双层投影', () => {
       assert.equal(p.pendingP1, null);
       assert.equal(p.pendingP2, null);
     }
-    // undefined 同样走回退
     assert.equal(projectInitiativeState(undefined, { stage: '决策' }).source, 'fallback');
   });
 });
 
-// ---------------- /state-overview 前端索引（四视图接线） ----------------
 
 const overviewFixture = (): StateOverviewResponse => ({
   ok: true,
@@ -388,7 +368,6 @@ describe('/state-overview 前端索引（专项卡片 / 星图 / 顶栏共享）
   });
 });
 
-// ---------------- 星图回退词 / task_node 词表 ----------------
 
 describe('星图与任务节点词表', () => {
   it('artifactStageBadgeText：阶段词 / 待分类决策卡回退「决策」/ 其余空串', () => {
@@ -412,7 +391,6 @@ describe('星图与任务节点词表', () => {
   });
 });
 
-// ---------------- 决策未决口径 ----------------
 
 describe('决策未决口径（DecisionRadar/HomeView 收敛）', () => {
   const fixture = [
@@ -420,9 +398,7 @@ describe('决策未决口径（DecisionRadar/HomeView 收敛）', () => {
     { decision_id: 'd2', status: '来源不一致', isCandidateOnly: false },
     { decision_id: 'd3', status: '已确认', isCandidateOnly: false },
     { decision_id: 'd4', status: '已取代', isCandidateOnly: false },
-    // 候选只作线索：不计入
     { decision_id: 'd5', status: '待确认', isCandidateOnly: true },
-    // 未知状态：不属于未决
     { decision_id: 'd6', status: '状态未知', isCandidateOnly: false },
   ];
 
@@ -441,7 +417,6 @@ describe('决策未决口径（DecisionRadar/HomeView 收敛）', () => {
   });
 });
 
-// ---------------- 版本后缀 / 陈述 wire 词 / 橱窗筛选 ----------------
 
 describe('版本后缀与 wire 词映射', () => {
   it('revisionVersionLabel：末版带（最新），非末版仅版本号', () => {
@@ -470,7 +445,6 @@ describe('版本后缀与 wire 词映射', () => {
   });
 });
 
-// ---------------- packageBadgeLine 委托（专项卡片路径） ----------------
 
 describe('packageBadgeLine 经 SSOT 组合', () => {
   const pkgOf = (stage: TaskPackage['stage'], version?: number | null): TaskPackage => ({

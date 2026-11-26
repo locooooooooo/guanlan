@@ -11,13 +11,9 @@ import { PanelRightClose, PanelRightOpen } from 'lucide-react';
  * - 关闭/展开由宿主（DocumentTimeMachineView）持状态，本组件纯受控渲染。
  */
 export interface DiffSidePaneProps {
-  /** 格式徽标：MD / SVG / CSV / XLSX … */
   badge: string;
-  /** 对比方向：`v2 → v3` */
   subtitle: string;
-  /** 面板标题（当前视图文案由宿主注入，如「人类可读对比 / 叠影对比 / 表格数值对比」） */
   title: string;
-  /** 受控展开态；false 渲染右缘细条把手（点击展开），true 渲染完整面板 */
   open: boolean;
   onToggle: () => void;
   children?: ReactNode;
@@ -52,7 +48,6 @@ export function DiffSidePane({ badge, subtitle, title, open, onToggle, children 
       aria-label={`${badge}版本对比 · ${subtitle}`}
       className="absolute inset-y-0 right-0 z-10 flex min-w-0 flex-col overflow-hidden border-l"
       style={{
-        // 左侧版本链恒保留 ≥360px 可视宽度，避免旧版卡片右缘被侧面板截断
         width: 'min(560px, max(280px, calc(100% - 360px)))',
         background: 'color-mix(in srgb, var(--cv-panel) 88%, transparent)',
         borderColor: 'color-mix(in srgb, var(--cv-hairline-ink) 16%, transparent)',

@@ -8,19 +8,15 @@ const H1: &str = "aa0000000000000000000000000000000000000000000000000000000000aa
 const H2: &str = "bb0000000000000000000000000000000000000000000000000000000000bbbb";
 const H3: &str = "cc0000000000000000000000000000000000000000000000000000000000cccc";
 
-/// 建夹具工作区：6 个 md 文件分两目录 + 1 svg + 1 pdf + 1 missing，
-/// 主文件带 A→B→A 版本链（h1→h2→h1，seq 1..3）
 fn setup_files(tag: &str) -> (FixtureDb, String, crate::storage::ReadonlyStore, String) {
     let fixture = FixtureDb::new(tag);
     let root = fixture.root();
     let ws_id = fixture.workspace(&root, 0, None);
 
-    // 主文件：A→B→A（契约 §5.3：三次版本出现、两份内容）
     let main_id = "f_main";
     fixture.blob(H1, 21, 2);
     fixture.blob(H2, 17, 1);
     fixture.write_blob_file(H1, b"# v1 body");
-    // h1 写两次写盘也只一份文件（write_blob_file 幂等覆盖）
     fixture.write_blob_file(H2, b"# v2 body");
     fixture.file(
         &ws_id,
@@ -75,7 +71,6 @@ fn setup_files(tag: &str) -> (FixtureDb, String, crate::storage::ReadonlyStore, 
         )
         .expect("回填主文件当前版失败");
 
-    // 其余文件：单版本
     for (i, (path, format, role)) in [
         ("docs/a.md", "md", "方案"),
         ("docs/plan/b.md", "md", "需求"),
@@ -112,9 +107,7 @@ fn setup_files(tag: &str) -> (FixtureDb, String, crate::storage::ReadonlyStore, 
             )
             .expect("回填当前版失败");
     }
-    // SVG 快照含 <text>（供 svg_text coverage 断言）
     fixture.write_blob_file(H3, b"<svg><text x=\"1\" y=\"2\">label</text></svg>");
-    // missing 文件（不计入 active 基础集合）
     fixture.file(
         &ws_id,
         "f_miss",
@@ -129,7 +122,6 @@ fn setup_files(tag: &str) -> (FixtureDb, String, crate::storage::ReadonlyStore, 
     (fixture, ws_id, store, main_id.to_owned())
 }
 
-/// 翻页无重复无遗漏 + 排序（relative_path ASC）+ facets/total_matched 口径
 #[test]
 fn files_pagination_facets_and_order() {
     let (fixture, _ws, store, _main) = setup_files("files-paging");
@@ -149,7 +141,6 @@ fn files_pagination_facets_and_order() {
         for item in &page.items {
             seen.push(item.relative_path.clone());
         }
-        // 只在末页取一次 facets（各页同代际下相同；避免 unused_assignments）
         if !page.has_more {
             facets = Some(page.facets.clone());
         }
@@ -183,7 +174,6 @@ fn files_pagination_facets_and_order() {
     assert_eq!(facets.folders.get("assets"), Some(&2));
     assert_eq!(facets.matters.get("交接"), Some(&3));
 
-    // total_matched 与筛选同口径
     let filtered = crate::query::list_files(
         &store,
         &FileListQuery {
@@ -201,7 +191,6 @@ fn files_pagination_facets_and_order() {
     cleanup_dir(&fixture.dir);
 }
 
-/// 目录前缀筛选：含子目录；'.' 表示根散文件；分页代际绑定 CURSOR_STALE
 #[test]
 fn files_dir_filter_and_generation_binding() {
     let (fixture, ws_id, store, _main) = setup_files("files-dir");
@@ -233,7 +222,6 @@ fn files_dir_filter_and_generation_binding() {
     .expect("根散文件筛选失败");
     assert_eq!(root_only.total_matched, 0, "夹具无根散文件");
 
-    // 代际绑定：签发游标后 bump index_generation → 续页 CURSOR_STALE（契约 §1.3）
     let page = crate::query::list_files(
         &store,
         &FileListQuery {
@@ -265,8 +253,6 @@ fn files_dir_filter_and_generation_binding() {
     cleanup_dir(&fixture.dir);
 }
 
-/// 摘要字段口径（契约 §1.3）：current_revision_id/revision_count/first_source_time/
-/// coverage/pdf_status/snapshot_available
 #[test]
 fn files_summary_fields() {
     let (fixture, ws_id, store, main_id) = setup_files("files-summary");
@@ -289,15 +275,11 @@ fn files_summary_fields() {
         main.current_revision_id.as_deref(),
         Some(format!("{main_id}_r3").as_str())
     );
-    // first_source_time = seq ASC 首条 occurred_at（契约 §5 风险 1：最早版本发生时间）
     assert_eq!(main.first_source_time.as_deref(), Some("2026-01-01"));
-    // h1 快照已落盘且 ≤256KiB → md coverage full_text
     assert_eq!(main.coverage, "full_text");
     assert!(main.snapshot_available);
-    // title 已按 titleOf 回退写入（夹具走 files.title 非空分支）
     assert_eq!(main.title, "主文件");
 
-    // PDF：恒 filename_only + pdf_status unindexed（project.ts:180-205）
     let pdf = crate::query::list_files(
         &store,
         &FileListQuery {
@@ -308,7 +290,6 @@ fn files_summary_fields() {
     .expect("查询失败");
     assert_eq!(pdf.items[0].coverage, "filename_only");
     assert_eq!(pdf.items[0].pdf_status.as_deref(), Some("unindexed"));
-    // 非 PDF 不下发 pdf_status（FileRecord.pdfStatus 的 undefined 口径）
     let svg = crate::query::list_files(
         &store,
         &FileListQuery {
@@ -319,7 +300,6 @@ fn files_summary_fields() {
     .expect("查询失败");
     assert_eq!(svg.items[0].pdf_status, None);
 
-    // q 筛选命中标题或路径
     let q = crate::query::list_files(
         &store,
         &FileListQuery {
@@ -331,7 +311,6 @@ fn files_summary_fields() {
     assert_eq!(q.total_matched, 1);
     assert_eq!(q.items[0].relative_path, "assets/示意图.svg");
 
-    // matter（role）筛选
     let matter = crate::query::list_files(
         &store,
         &FileListQuery {
@@ -343,7 +322,6 @@ fn files_summary_fields() {
     assert_eq!(matter.total_matched, 1);
     assert_eq!(matter.items[0].relative_path, "docs/plan/b.md");
 
-    // snapshot_available=0 的当前版 → false（快照不可用口径）
     let fid = "f_snap0";
     fixture.file(&ws_id, fid, "docs/失效.md", "md", "方案", "active", None);
     let rid = fixture.revision(
@@ -387,8 +365,6 @@ fn files_summary_fields() {
     cleanup_dir(&fixture.dir);
 }
 
-/// include 段与版本链分页在 files_tests 内覆盖（revisions_tests 主测），
-/// 这里只守护 RevisionIncludeSection 存在性引用不被裁剪
 #[test]
 fn include_sections_enum_reference() {
     let sections = [
@@ -400,14 +376,9 @@ fn include_sections_enum_reference() {
     assert_eq!(sections.len(), 4);
 }
 
-// ===== generation 与全部数据库字段绑定同一读快照 =====
-
-/// 外部写者（模拟另一进程的 Node writer）在 WAL 下与读事务并发提交：
-/// 读事务内 generation 与数据行都不漂移；事务结束后的新查询看到新代际。
 #[test]
 fn read_snapshot_binds_generation_and_rows() {
     let (fixture, ws_id, store, _main) = setup_files("files-snapshot");
-    // WAL：读事务持有时写者仍可提交（Node writer 的既有模式，WorkspaceStore.ts）
     fixture
         .conn
         .execute_batch("PRAGMA journal_mode=WAL")
@@ -436,7 +407,6 @@ fn read_snapshot_binds_generation_and_rows() {
                 )
                 .map_err(crate::storage::internal_sql)?;
 
-            // 外部写者：同一次提交里插入数据行 + bump generation
             fixture
                 .conn
                 .execute(
@@ -455,7 +425,6 @@ fn read_snapshot_binds_generation_and_rows() {
                 )
                 .expect("外部写者 bump generation 失败");
 
-            // 读事务内：generation 与行数都仍是最初快照（不混代）
             let ws2 = store.workspace()?;
             let n2: i64 = store
                 .conn()
@@ -475,7 +444,6 @@ fn read_snapshot_binds_generation_and_rows() {
         })
         .expect("读事务失败");
 
-    // 事务结束后：新查询看到外部提交后的代际与数据（不是永久缓存）
     let after = crate::query::list_files(
         &store,
         &FileListQuery {
@@ -501,8 +469,6 @@ fn read_snapshot_binds_generation_and_rows() {
     cleanup_dir(&fixture.dir);
 }
 
-/// 多 SQL 组合响应（list_files 的 count/items/facets 与 generation）取自同一快照：
-/// 事务内外部并发提交不影响本次响应的自洽性（facets 合计 == total_matched）。
 #[test]
 fn list_files_response_is_self_consistent_under_concurrent_commit() {
     let (fixture, ws_id, store, _main) = setup_files("files-self-consistent");
@@ -511,8 +477,6 @@ fn list_files_response_is_self_consistent_under_concurrent_commit() {
         .execute_batch("PRAGMA journal_mode=WAL")
         .expect("切换 WAL 失败");
 
-    // 在读事务内先取一次完整响应，随后外部提交，再取一次响应：
-    // 两次响应各自内部自洽（facets 格式合计 = total_matched），且第二次反映新数据
     let first = crate::query::list_files(
         &store,
         &FileListQuery {

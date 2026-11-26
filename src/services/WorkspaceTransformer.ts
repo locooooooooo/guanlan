@@ -1,6 +1,3 @@
-/**
- * 观澜 Guanlan —— Markdown 章节大纲解析（Node 对拍基线）
- */
 
 import type { MarkdownSection } from '../types/guanlan';
 

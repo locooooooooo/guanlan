@@ -478,7 +478,6 @@ pub fn import_external_files_impl(
             continue;
         }
 
-        // 若源文件已在同一个目标目录内，不再自我复制制造冗余副本
         if let Ok(canon_src) = fs::canonicalize(src_path) {
             if canon_src.parent() == Some(canon_dest_dir.as_path()) {
                 skipped.push(SkippedImportEntry {
@@ -556,10 +555,6 @@ pub fn resolve_workspace_path_impl(
     let (clean, _) = resolve_existing_inside_workspace(root, relative_path, true)?;
     Ok(clean.to_string_lossy().into_owned())
 }
-
-// ============================================================
-// OS 原生操作（Windows Shell / Clipboard + 非 Windows 回退）
-// ============================================================
 
 #[cfg(windows)]
 mod win_shell {
@@ -710,7 +705,6 @@ mod win_shell {
         }
 
         // SAFETY: 成功 OpenClipboard 后配对 EmptyClipboard / SetClipboardData / CloseClipboard；
-        // SetClipboardData 成功后内存所有权移交 OS，失败则显式 GlobalFree。
         unsafe {
             let _ = EmptyClipboard();
             let h_mem = GlobalAlloc(GMEM_MOVEABLE, byte_len);
@@ -933,7 +927,6 @@ mod tests {
             assert_eq!(import_err.code, "INVALID_PATH", "导入越界：{evil}");
         }
 
-        // 确认工作区外没有发生任何写入
         assert!(!outside.join("secret (1).pdf").exists());
         assert_eq!(fs::read_dir(&outside).unwrap().count(), 1);
         assert_eq!(fs::read_dir(&ws).unwrap().count(), 0);
@@ -983,7 +976,6 @@ mod tests {
         assert!(ws.join("docs/inbox/架构图.svg").is_file());
         assert!(ws.join("docs/inbox/现场照片.png").is_file());
 
-        // 同名再导入不得静默覆盖，自动重命名为 `stem (1).ext`
         let second =
             import_external_files_impl(&ws, "docs/inbox", &[pdf.to_string_lossy().into_owned()])
                 .expect("同名不覆盖");

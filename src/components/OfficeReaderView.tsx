@@ -48,7 +48,6 @@ export interface OfficeReaderViewProps {
   onAddEvidencePointer?: (pointer: EvidencePointer) => void | Promise<boolean> | boolean;
 }
 
-/** 按工作表名或索引解析要激活的 Sheet */
 function resolveInitialSheetIdx(
   sheets: XlsxSheetData[],
   anchor?: OfficeEvidenceAnchor | null
@@ -82,16 +81,13 @@ export const OfficeReaderView: React.FC<OfficeReaderViewProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [officeData, setOfficeData] = useState<OfficeContentResponse | null>(null);
 
-  // .docx 交互态
   const [activePara, setActivePara] = useState<number | null>(null);
   const [showTrackedSamples, setShowTrackedSamples] = useState(false);
 
-  // .xlsx 交互态
   const [activeSheetIdx, setActiveSheetIdx] = useState(0);
   const [selectedRange, setSelectedRange] = useState<string>('');
   const [anchorCell, setAnchorCell] = useState<{ col: number; row: number } | null>(null);
 
-  // 反馈提示
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [basketAddedId, setBasketAddedId] = useState<string | null>(null);
 
@@ -128,7 +124,6 @@ export const OfficeReaderView: React.FC<OfficeReaderViewProps> = ({
     };
   }, [currentRev.revision_id, currentRev.snapshotAvailable]);
 
-  // 响应外部决定/Markdown 链接传入的 officeAnchor，自动切 Sheet / 选区 / 滚动高亮
   useEffect(() => {
     if (!officeData || officeData.status !== 'indexed') return;
 
@@ -311,7 +306,6 @@ export const OfficeReaderView: React.FC<OfficeReaderViewProps> = ({
     );
   }
 
-  // 未存快照或解析降级（encrypted / corrupted / metadata_only）→ 诚实 L0 元数据降级卡
   if (!currentRev.snapshotAvailable || !officeData || officeData.status !== 'indexed') {
     const status = !currentRev.snapshotAvailable
       ? 'metadata_only'
@@ -356,7 +350,6 @@ export const OfficeReaderView: React.FC<OfficeReaderViewProps> = ({
     );
   }
 
-  // ==================== 1. Word (.docx) L2 结构化阅读 ====================
   if (officeData.docx) {
     const docx = officeData.docx;
     const commentsByPara = new Map<number, DocxComment[]>();
@@ -373,7 +366,6 @@ export const OfficeReaderView: React.FC<OfficeReaderViewProps> = ({
 
     return (
       <div ref={containerRef} className="space-y-4">
-        {/* 顶栏结构摘要与外部锚点提示 */}
         <div className={`rounded-xl border p-4 space-y-3 ${cardCls}`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -439,7 +431,6 @@ export const OfficeReaderView: React.FC<OfficeReaderViewProps> = ({
           )}
         </div>
 
-        {/* 段落正文（带 1-based ¶ 序号与证据锚点生成） */}
         <div className={`rounded-xl border divide-y ${cardCls} ${paperLightMode ? 'divide-[#ECEAE4]' : 'divide-[#2C2C30]'}`}>
           {docx.paragraphs.length === 0 ? (
             <div className={`p-8 text-center text-xs ${mutedCls}`}>该 Word 文档未抽取到可读文本段落</div>
@@ -565,7 +556,6 @@ export const OfficeReaderView: React.FC<OfficeReaderViewProps> = ({
     );
   }
 
-  // ==================== 2. Excel (.xlsx) L2 结构化阅读 ====================
   if (officeData.xlsx && activeSheet) {
     const sheets = officeData.xlsx.sheets;
     const maxCols = Math.max(
@@ -599,7 +589,6 @@ export const OfficeReaderView: React.FC<OfficeReaderViewProps> = ({
 
     return (
       <div ref={containerRef} className="space-y-4">
-        {/* 工作表标签栏 + 当前选中区域引用生成条 */}
         <div className={`rounded-xl border p-4 space-y-3 ${cardCls}`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -635,7 +624,6 @@ export const OfficeReaderView: React.FC<OfficeReaderViewProps> = ({
             )}
           </div>
 
-          {/* 选中区域操作条（单机选格，Shift+点击选矩形区域） */}
           <div className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs ${chipBgCls}`}>
             <div className="flex items-center gap-2 min-w-0">
               <Hash className="w-3.5 h-3.5 text-[color:var(--accent-iris)] shrink-0" />
@@ -680,7 +668,6 @@ export const OfficeReaderView: React.FC<OfficeReaderViewProps> = ({
             )}
           </div>
 
-          {/* 数值列关键摘要卡片 */}
           {activeSheet.numeric_summaries.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
               {activeSheet.numeric_summaries.map((sum) => {
@@ -716,7 +703,6 @@ export const OfficeReaderView: React.FC<OfficeReaderViewProps> = ({
           )}
         </div>
 
-        {/* 只读表格网格 */}
         <div className={`rounded-xl border overflow-hidden ${cardCls}`}>
           <div className={`flex items-center justify-between px-4 py-2 border-b text-xs ${headerBarCls}`}>
             <span className="font-medium">

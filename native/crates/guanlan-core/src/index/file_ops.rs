@@ -35,8 +35,6 @@ use crate::index::{reconcile_paths, ReconcileOptions};
 static FILE_OP_SEQ: AtomicU64 = AtomicU64::new(1);
 static LAST_OP_EPOCH_MS: AtomicI64 = AtomicI64::new(0);
 
-/// 生成严格单调递增的 UTC ISO 时间戳，避免同毫秒内连续重命名/移动/删除
-/// 在 `uniq_event_identity` 上碰撞而静默丢弃事件。
 fn monotonic_now_iso() -> String {
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -157,7 +155,6 @@ impl TrashDriver for OsTrashDriver {
     }
 }
 
-/// 剥离 Windows `canonicalize` 生成的 `\\?\` 长路径前缀，确保 Shell API 可识别且进回收站。
 fn strip_win_verbatim_prefix(path: &Path) -> PathBuf {
     #[cfg(windows)]
     {
@@ -236,8 +233,6 @@ fn validate_new_file_name(raw_name: &str, current_format: &str) -> Result<String
     let expected = FileFormat::parse(current_format).ok_or_else(|| {
         GuanlanError::BadRequest(format!("不支持重命名此格式文件：{current_format}"))
     })?;
-    // 扩展名兼容性按格式族判定：同族改名（md→markdown、
-    // png→jpg）放行；跨族改名（md→png）仍拦住，避免阅读器拿到读不了的类型。
     let actual = collector::format_of(&clean, Path::new(&clean));
     if !expected.is_compatible_with(&actual) {
         return Err(GuanlanError::BadRequest(format!(
@@ -551,7 +546,6 @@ fn execute_relocate(
         && old_name != final_name;
 
     if !case_only_rename {
-        // 核对库内是否有其他活动文件占用了目标路径（Windows 下按大小写无关核验）
         for existing in writer.list_files(workspace_id, false)? {
             if existing.file_id == file.file_id {
                 continue;
@@ -578,12 +572,10 @@ fn execute_relocate(
         )));
     }
 
-    // 事务外原子磁盘重命名 / 移动（仅同卷原子 rename，绝不调用物理删除）
     fs::rename(&old_abs, &new_abs).map_err(|e| {
         GuanlanError::Internal(format!("原子移动文件失败（{old_rel} -> {new_rel}）：{e}"))
     })?;
 
-    // 落盘后核对新路径确在工作区边界内
     let canon_dest = fs::canonicalize(&new_abs).map_err(|e| {
         let _ = fs::rename(&new_abs, &old_abs);
         GuanlanError::Internal(format!("校验新文件路径失败：{e}"))
@@ -682,7 +674,6 @@ fn execute_relocate(
     let generation = match tx_res {
         Ok(gen) => gen,
         Err(err) => {
-            // 数据库写事务失败时尝试回滚磁盘路径，避免磁盘与索引状态分叉
             let _ = fs::rename(&new_abs, &old_abs);
             return Err(err);
         }
@@ -903,7 +894,6 @@ fn is_same_or_descendant_dir(source_rel: &str, candidate_parent: &str) -> bool {
     }
 }
 
-/// 若 `file_rel` 位于 `folder_rel` 子树下，返回相对该目录的尾路径（不含前导 `/`）。
 fn strip_folder_prefix(file_rel: &str, folder_rel: &str) -> Option<String> {
     let norm = normalize_rel_path(file_rel);
     let prefix = format!("{folder_rel}/");
@@ -911,7 +901,6 @@ fn strip_folder_prefix(file_rel: &str, folder_rel: &str) -> Option<String> {
         let lower_norm = norm.to_ascii_lowercase();
         let lower_prefix = prefix.to_ascii_lowercase();
         if lower_norm.starts_with(&lower_prefix) {
-            // 按字符边界切片：prefix 由合法路径段组成，Unicode 大小写长度可能差异，改按段匹配最安全
             let folder_segs: Vec<&str> = folder_rel.split('/').collect();
             let file_segs: Vec<&str> = norm.split('/').collect();
             if file_segs.len() > folder_segs.len()
@@ -1175,7 +1164,6 @@ fn execute_folder_relocate(
         )));
     }
 
-    // 找出子树中所有活动受管文件，提前准备新路径映射
     let all_active = writer.list_files(workspace_id, false)?;
     let mut subtree_updates: Vec<(crate::storage::FileRow, String, String)> = Vec::new();
     for row in all_active {
@@ -1550,7 +1538,6 @@ mod os_trash {
         data4: [u8; 8],
     }
 
-    // CLSID_FileOperation: {3AD05575-8857-4850-9277-11B85BDB8E09}
     const CLSID_FILE_OPERATION: Guid = Guid {
         data1: 0x3AD0_5575,
         data2: 0x8857,
@@ -1558,7 +1545,6 @@ mod os_trash {
         data4: [0x92, 0x77, 0x11, 0xB8, 0x5B, 0xDB, 0x8E, 0x09],
     };
 
-    // IID_IFileOperation: {947AAB5F-0A5C-4C13-B4D6-4BF7836FC9F8}
     const IID_I_FILE_OPERATION: Guid = Guid {
         data1: 0x947A_AB5F,
         data2: 0x0A5C,
@@ -1566,7 +1552,6 @@ mod os_trash {
         data4: [0xB4, 0xD6, 0x4B, 0xF7, 0x83, 0x6F, 0xC9, 0xF8],
     };
 
-    // IID_IShellItem: {43826D1E-E718-42EE-BC55-A1E261C37BFE}
     const IID_I_SHELL_ITEM: Guid = Guid {
         data1: 0x4382_6D1E,
         data2: 0xE718,
@@ -1583,7 +1568,6 @@ mod os_trash {
     const FOF_NOCONFIRMATION: u32 = 0x0010;
     const FOF_ALLOWUNDO: u32 = 0x0040;
     const FOF_NOERRORUI: u32 = 0x0400;
-    // ShObjIdl_core.h: FOFX_RECYCLEONDELETE —— 仅走回收站，回收站不可用时失败而绝不静默永久删除
     const FOFX_RECYCLEONDELETE: u32 = 0x0008_0000;
 
     #[link(name = "ole32")]
@@ -1649,7 +1633,6 @@ mod os_trash {
             let need_uninit = if hr_init == 0 || hr_init == 1 {
                 true
             } else if hr_init == RPC_E_CHANGED_MODE {
-                // 当前线程已是 MTA，在干净的新 STA 线程上执行 Shell IFileOperation
                 let owned = path.to_path_buf();
                 return std::thread::spawn(move || run_on_sta(&owned))
                     .join()
@@ -1677,8 +1660,6 @@ mod os_trash {
             let op = raw_op as *mut ComObject;
             let _release_op = ComGuard::new(|| release_com(op));
 
-            // 槽位核自 ShObjIdl_core.h：SetOperationFlags=5, DeleteItem=18,
-            // PerformOperations=21, GetAnyOperationsAborted=22
             let set_flags: unsafe extern "system" fn(*mut ComObject, u32) -> i32 =
                 std::mem::transmute(*(*op).vtbl.add(5));
             let delete_item: unsafe extern "system" fn(
@@ -1765,7 +1746,6 @@ mod os_trash {
                 return Ok("macos_finder_trash");
             }
         }
-        // 无 GUI Finder 环境回退到 ~/.Trash 原子移动（绝不永久删除）
         let home = std::env::var_os("HOME")
             .map(PathBuf::from)
             .ok_or_else(|| GuanlanError::Internal("无法解析 HOME 目录以定位废纸篓".to_owned()))?;
@@ -1818,7 +1798,6 @@ mod os_trash {
         match fs::rename(abs_path, &dest_file) {
             Ok(()) => Ok("freedesktop_trash"),
             Err(rename_err) => {
-                // 跨挂载点尝试 gio trash（不调用永久物理删除）
                 let _ = fs::remove_file(&info_file);
                 if let Ok(output) = Command::new("gio").arg("trash").arg(abs_path).output() {
                     if output.status.success() && fs::symlink_metadata(abs_path).is_err() {
@@ -2026,7 +2005,6 @@ mod tests {
         let r1 = env.scan(&mut writer, "2026-11-18T10:00:00.000Z");
         assert_eq!(r1.new_files, 3);
 
-        // 追加 v2 版本
         env.write(
             "01-演示专项/03-待确认事项.md",
             "---\ndate: 2026-05-01\n---\n# 03-待确认事项\n\n## 1. 接口策略\n沿用编号：Q01\n状态：待确认\n- **选项 A**：同步写回\n补充说明 v2\n",
@@ -2039,7 +2017,6 @@ mod tests {
             .expect("文件存在");
         let original_id = before.file_id.clone();
 
-        // 1) 同目录重命名
         let renamed = rename_file(
             &mut writer,
             &RenameFileInput {
@@ -2058,7 +2035,6 @@ mod tests {
         assert!(!env.root.join("01-演示专项/03-待确认事项.md").exists());
         assert!(env.root.join("01-演示专项/03-核心拍板单.md").is_file());
 
-        // 2) 跨目录移动到新建子目录
         let moved = move_file(
             &mut writer,
             &MoveFileInput {
@@ -2079,7 +2055,6 @@ mod tests {
             .join("02-方案归档/决策组/03-定稿拍板单.md")
             .is_file());
 
-        // 3) 校验历史版本链、决定证据与路径别名全部连续
         let store = env.readonly();
         let history = query::file_revisions(
             &store,
@@ -2115,7 +2090,6 @@ mod tests {
             "02-方案归档/决策组/03-定稿拍板单.md"
         );
 
-        // 4) 重扫幂等 + 在旧路径新建文件不会劫持旧 file_id
         let rescan = env.scan(&mut writer, "2026-11-18T10:10:00.000Z");
         assert_eq!(rescan.new_files, 0);
         assert_eq!(rescan.missing, 0);
@@ -2178,7 +2152,6 @@ mod tests {
             assert_eq!(err.code(), "BAD_REQUEST", "bad_name={bad_name:?} => {err}");
         }
 
-        // 重名冲突
         let conflict = rename_file(
             &mut writer,
             &RenameFileInput {
@@ -2228,7 +2201,6 @@ mod tests {
             trash_dir: env.trash_dir.clone(),
         };
 
-        // 1) 未二次确认拒绝执行
         let unconfirmed = trash_file_with(
             &mut writer,
             &TrashFileInput {
@@ -2241,7 +2213,6 @@ mod tests {
         assert_eq!(unconfirmed.code(), "BAD_REQUEST");
         assert!(env.root.join("docs/plan.md").is_file());
 
-        // 2) 二次确认移入回收站
         let trashed = trash_file_with(
             &mut writer,
             &TrashFileInput {
@@ -2257,7 +2228,6 @@ mod tests {
         assert!(!env.root.join("docs/plan.md").exists());
         assert!(env.trash_dir.join("plan.md").is_file());
 
-        // 活动列表不可见，可恢复列表可见（保护前端阅读进度不误删）
         let store = env.readonly();
         let active_list =
             query::list_files(&store, &FileListQuery::default()).expect("active files");
@@ -2279,7 +2249,6 @@ mod tests {
             vec![file.file_id.clone()]
         );
 
-        // 3) 整库对账期间维持 trashed，不误覆盖为 missing
         let scan_while_trashed = env.scan(&mut writer, "2026-11-18T10:05:00.000Z");
         assert_eq!(scan_while_trashed.missing, 0);
         assert_eq!(
@@ -2291,7 +2260,6 @@ mod tests {
             "trashed"
         );
 
-        // 4) 从回收站还原回原路径 → 自动重连原 file_id + read_recovered 事件 + 保留历史/决定
         fs::rename(env.trash_dir.join("plan.md"), env.root.join("docs/plan.md")).expect("还原文件");
         let restored = env.scan(&mut writer, "2026-11-18T10:10:00.000Z");
         assert_eq!(restored.new_files, 0, "还原不得分裂成新文件");
@@ -2357,7 +2325,6 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        // 1) 新建嵌套文件夹 + 新建文档并立即入库
         let created_dir = create_folder(
             &mut writer,
             &CreateFolderInput {
@@ -2381,7 +2348,6 @@ mod tests {
         assert_eq!(created_doc.relative_path, "empty-inbox/2026/周报.md");
         assert!(!created_doc.file_id.is_empty());
 
-        // 2) 重命名文件夹 → 子树所有文件 file_id 不裂链
         let renamed = rename_folder(
             &mut writer,
             &RenameFolderInput {
@@ -2396,7 +2362,6 @@ mod tests {
         assert_eq!(spec_after.current_path, "specs/spec.md");
         assert_eq!(plan_after.current_path, "specs/sub/plan.md");
 
-        // 3) 防成环：禁止把 specs 移入 specs/sub
         let cycle_err = move_folder(
             &mut writer,
             &MoveFolderInput {
@@ -2407,7 +2372,6 @@ mod tests {
         .expect_err("必须拦截移入子目录成环");
         assert!(matches!(cycle_err, GuanlanError::BadRequest(_)));
 
-        // 4) 合法移动文件夹 specs → empty-inbox/specs
         let moved = move_folder(
             &mut writer,
             &MoveFolderInput {
@@ -2427,7 +2391,6 @@ mod tests {
             "empty-inbox/specs/sub/plan.md"
         );
 
-        // 5) 批量移动两个文件到根目录
         let batch_moved = batch_move_files(
             &mut writer,
             &BatchMoveFilesInput {
@@ -2447,7 +2410,6 @@ mod tests {
             "spec.md"
         );
 
-        // 6) 文件夹移入回收站（未确认必拒；确认后安全进回收站并标记子树文件 trashed）
         let driver = TempTrashDriver {
             trash_dir: env.trash_dir.clone(),
         };
@@ -2484,7 +2446,6 @@ mod tests {
             "trashed"
         );
 
-        // 7) 批量移入回收站
         let batch_trashed = batch_trash_files_with(
             &mut writer,
             &BatchTrashFilesInput {

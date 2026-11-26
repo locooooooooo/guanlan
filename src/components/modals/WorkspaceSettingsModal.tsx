@@ -1,13 +1,3 @@
-/**
- * 工作区与项目设置弹窗（左侧垂直 Tabs + 右侧 Frame 卡片表单）。
- *
- * 五大分栏：
- *  - workspace：工作区根目录、数据目录、文件枚举快照 KPI 与 .gitignore 扫描边界校验；
- *  - noise：目录静默清单（工作区私有状态一键管理/恢复）+ 显式排除目录清单；
- *  - storage：快照配额水位条 + StorageUsageSection 空间占用与清理治理；
- *  - health：本地引擎运行态（索引代际 / 监听服务 / 数据库与一致性备份护栏）；
- *  - about：观澜版本信息、设计底座与本地优先隐私承诺。
- */
 
 import React, { useEffect, useState } from 'react';
 import {
@@ -60,7 +50,6 @@ import {
 
 export type SettingsTabId = 'workspace' | 'noise' | 'storage' | 'health' | 'about';
 
-/** 「关于观澜」里检查更新的界面状态。检查只在用户点按钮时发生。 */
 type UpdateUiState =
   | { kind: 'idle' }
   | { kind: 'checking' }
@@ -86,11 +75,9 @@ export interface WorkspaceSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   config: WorkspaceConfig;
-  /** 工作区私有目录静默清单（只存本机私有存储，磁盘零写入业务目录） */
   mutedFolders?: readonly string[];
   onUnmuteFolder?: (folderPath: string) => void;
   onClearMutedFolders?: () => void;
-  /** 可选默认分栏（测试或深度跳转可指定） */
   initialTab?: SettingsTabId;
 }
 
@@ -115,7 +102,6 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
     });
   }, [isOpen, config.rootPath]);
 
-  // 下载与安装进度由桌面壳以 CustomEvent 推过来（见 src/services/desktopBridge.ts）
   useEffect(() => {
     if (!isOpen) return;
     return subscribeUpdateProgress((progress) => {
@@ -234,7 +220,6 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
         style={{ '--nested-dialogs': 0 } as React.CSSProperties}
         className="glass-pop glx-modal-in rounded-2xl border border-border/85 w-full max-w-4xl h-[min(86vh,740px)] flex flex-col overflow-hidden text-foreground shadow-2xl"
       >
-        {/* 顶栏 */}
         <header className="px-5 py-3.5 bg-card/85 backdrop-blur-md border-b border-border/80 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <span className="inline-flex size-8 items-center justify-center rounded-xl bg-[color:color-mix(in_srgb,var(--accent-iris)_14%,transparent)] text-[color:var(--accent-iris-deep)] shrink-0">
@@ -254,7 +239,6 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
           </IconButton>
         </header>
 
-        {/* 左侧垂直 Tabs 导航 + 右侧 Frame 卡片表单 */}
         <Tabs
           orientation="vertical"
           value={activeTab}
@@ -290,7 +274,6 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
 
           <ScrollArea scrollFade scrollbarGutter className="flex-1 min-h-0 bg-background/40">
             <div className="p-5 pb-8 text-xs space-y-4">
-              {/* Tab 1: 工作区 */}
               <TabsPanel value="workspace" className="space-y-4">
                 {config.gitIgnoreWarning?.trim() ? (
                   <div className="p-3.5 rounded-xl border border-[color:color-mix(in_srgb,var(--stage-ink-decision)_38%,transparent)] bg-[color:color-mix(in_srgb,var(--stage-ink-decision)_10%,var(--card))] text-[color:var(--stage-ink-decision-text)] space-y-1">
@@ -374,7 +357,6 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
                 </Frame>
               </TabsPanel>
 
-              {/* Tab 2: 降噪与忽略 */}
               <TabsPanel value="noise" className="space-y-4">
                 <Frame className="border border-border/75">
                   <div className="flex items-center justify-between gap-2 px-3.5 py-2">
@@ -443,7 +425,6 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
                 </Frame>
               </TabsPanel>
 
-              {/* Tab 3: 存储配额 */}
               <TabsPanel value="storage" className="space-y-4">
                 <Frame className="border border-border/75">
                   <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2">
@@ -490,7 +471,6 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
                 <StorageUsageSection config={config} isOpen={isOpen} />
               </TabsPanel>
 
-              {/* Tab 4: 备份与健康 */}
               <TabsPanel value="health" className="space-y-4">
                 <Frame className="border border-border/75">
                   <div className="px-3.5 py-2 text-[12px] font-semibold text-foreground">
@@ -525,7 +505,6 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
                 </Frame>
               </TabsPanel>
 
-              {/* Tab 5: 关于观澜 */}
               <TabsPanel value="about" className="space-y-4">
                 <Frame className="border border-border/75">
                   <div className="px-3.5 py-2 text-[12px] font-semibold text-foreground">

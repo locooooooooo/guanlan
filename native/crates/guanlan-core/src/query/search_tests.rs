@@ -15,7 +15,6 @@ use crate::index::{reconcile, ReconcileOptions};
 use crate::query::{search, SearchQuery};
 use crate::storage::ReadonlyStore;
 
-/// 临时工作区夹具：写文件 → reconcile（含检索索引同步）
 struct SearchFixture {
     data_dir: PathBuf,
     root: PathBuf,
@@ -53,7 +52,6 @@ impl SearchFixture {
         drop(writer);
     }
 
-    /// 直接对底层库执行 SQL（插入决定陈述 / 破坏派生表等）
     fn exec(&self, sql: &str, p: &[&str]) {
         let conn = rusqlite::Connection::open(self.data_dir.join("index.db")).expect("开库失败");
         conn.execute(sql, rusqlite::params_from_iter(params_from(p)))
@@ -110,7 +108,6 @@ fn c02_search_bigram_code_and_abbreviation_end_to_end() {
 
     let store = fixture.store();
 
-    // ① 中文双字短语：行级核验 + 1-based 行号 + 当前版本号
     let resp = do_search(&store, "登录方案");
     assert!(resp.ok);
     assert_eq!(resp.mode, "phrase");
@@ -136,10 +133,8 @@ fn c02_search_bigram_code_and_abbreviation_end_to_end() {
         }
         other => panic!("md 命中应为 Lines 定位：{other:?}"),
     }
-    // 每文件命中上限 3（该 md 正文有 4 行含「登录方案」）
     assert!(md_hits.len() <= 3, "每文件上限 3：{}", md_hits.len());
 
-    // ② SVG 文本层命中：svg_text 覆盖与 fragment 定位
     let svg_hits: Vec<_> = resp.items.iter().filter(|h| h.format == "svg").collect();
     assert!(!svg_hits.is_empty(), "svg 应命中：{:?}", resp.items);
     assert_eq!(svg_hits[0].coverage, "svg_text");
@@ -150,7 +145,6 @@ fn c02_search_bigram_code_and_abbreviation_end_to_end() {
         other => panic!("svg 命中应为 SvgText 定位：{other:?}"),
     }
 
-    // ③ 专有编号：正文核验通道（100% 召回）
     let code_resp = do_search(&store, "AC-03");
     assert_eq!(code_resp.mode, "code");
     let code_hits: Vec<_> = code_resp
@@ -164,7 +158,6 @@ fn c02_search_bigram_code_and_abbreviation_end_to_end() {
         other => panic!("编号命中应为行定位：{other:?}"),
     }
 
-    // ④ 文件名首字母缩写（user-auth-service → uas）
     let abbr_resp = do_search(&store, "uas");
     assert!(
         abbr_resp
@@ -176,7 +169,6 @@ fn c02_search_bigram_code_and_abbreviation_end_to_end() {
         abbr_resp.items
     );
 
-    // ⑤ 单字有界回退
     let single_resp = do_search(&store, "登");
     assert_eq!(single_resp.mode, "single");
     assert!(
@@ -188,7 +180,6 @@ fn c02_search_bigram_code_and_abbreviation_end_to_end() {
         single_resp.items
     );
 
-    // ⑥ format / dir 筛选
     let md_only = search(
         &store,
         &SearchQuery {
@@ -237,7 +228,6 @@ fn c02_search_decision_code_channel_and_scoring() {
         "docs/登录方案.md",
         "# 登录方案\n正文提及 AC-03 但作为普通引用。\n",
     )]);
-    // 直接插一条决定陈述（code=AC-03）——决策编号通道置顶
     fixture.exec(
         "INSERT INTO statements (statement_id, workspace_id, file_id, revision_id, code, namespace, \
          question, status, quote, line_start, line_end, decision_id, detail_json, extract_rule_version, observed_at) \
@@ -251,7 +241,6 @@ fn c02_search_decision_code_channel_and_scoring() {
     let resp = do_search(&store, "AC-03");
     assert_eq!(resp.mode, "code");
     assert!(!resp.items.is_empty());
-    // 决定陈述命中分最高，排首位
     let top = &resp.items[0];
     assert_eq!(top.coverage, "decision", "首位应为决定陈述：{:?}", top);
     assert_eq!(top.match_strategy, "exact_code");
@@ -263,7 +252,6 @@ fn c02_search_decision_code_channel_and_scoring() {
         other => panic!("决定陈述应为行定位：{other:?}"),
     }
     assert!(top.snippet.contains("AC-03"));
-    // 正文命中的普通文件也在结果里（决定 + 正文双通道）
     assert!(
         resp.items.iter().any(|h| h.coverage == "full_text"),
         "正文通道也应命中：{:?}",
@@ -274,7 +262,6 @@ fn c02_search_decision_code_channel_and_scoring() {
 #[test]
 fn c02_search_not_ready_returns_honest_empty() {
     let fixture = SearchFixture::setup(&[("a.md", "含有关键词的文档\n")]);
-    // 模拟「建索引中」：清空状态标记
     fixture.exec("DELETE FROM meta WHERE key = 'search_state'", &[]);
     let store = fixture.store();
     let resp = do_search(&store, "关键词");
@@ -282,7 +269,6 @@ fn c02_search_not_ready_returns_honest_empty() {
     assert_eq!(resp.search_state, "absent");
     assert!(resp.ok);
 
-    // 规则版本不符 → 下一轮对账自动重建恢复
     fixture.reopen_reconcile();
     let store = fixture.store();
     let resp = do_search(&store, "关键词");
@@ -297,7 +283,6 @@ fn c02_search_corruption_rebuild_restores_hits() {
     assert!(!do_search(&store, "登录网关").items.is_empty());
     drop(store);
 
-    // 模拟损坏：清空词项表（文档行仍在——差分不会发现）
     fixture.exec("DELETE FROM search_postings", &[]);
     let store = fixture.store();
     assert!(
@@ -306,7 +291,6 @@ fn c02_search_corruption_rebuild_restores_hits() {
     );
     drop(store);
 
-    // 一键重建（POST /api/v1/search/rebuild 的内核等价入口）
     {
         let mut writer = crate::index::writer::Writer::open_at(
             &fixture.data_dir,
@@ -331,7 +315,6 @@ fn c02_search_trashed_file_removed_from_index() {
     assert!(!do_search(&store, "登录设计").items.is_empty());
     drop(store);
 
-    // 移入回收站并移除磁盘文件 → 下一轮对账差分移除检索行
     {
         let conn = rusqlite::Connection::open(fixture.data_dir.join("index.db")).expect("开库失败");
         conn.execute("UPDATE files SET status = 'trashed'", params![])

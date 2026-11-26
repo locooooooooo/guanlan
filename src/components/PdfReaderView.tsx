@@ -31,11 +31,9 @@ export interface PdfReaderViewProps {
   pdfAnchor?: PdfEvidenceAnchor | null;
   systemActions?: DesktopFileActionCallbacks;
   onAddEvidencePointer?: (pointer: EvidencePointer) => void | Promise<boolean> | boolean;
-  /** 页码变化回调：供阅读器 iframe 原版视图同步 `#page=N` 跳转 */
   onActivePageChange?: (page: number) => void;
 }
 
-/** 页类型 → 展示徽标（诚实口径：image_only / extract_failed / empty 绝不冒充文本页） */
 function pageKindBadge(kind: string): { label: string; cls: string } {
   switch (kind) {
     case 'text':
@@ -109,7 +107,6 @@ export const PdfReaderView: React.FC<PdfReaderViewProps> = ({
     };
   }, [currentRev.revision_id, currentRev.snapshotAvailable]);
 
-  // 响应外部决定/Markdown 链接传入的 pdfAnchor，自动跳页并滚动高亮
   useEffect(() => {
     if (!pdfData || pdfData.status !== 'page_indexed') return;
     const target = pdfAnchor?.kind === 'pdf_page' ? pdfAnchor.page : null;
@@ -206,8 +203,6 @@ export const PdfReaderView: React.FC<PdfReaderViewProps> = ({
     );
   }
 
-  // 未存快照或整档降级（image_only / ocr_pending / extract_failed / encrypted / corrupted /
-  // metadata_only）→ 诚实降级卡，绝不拿空白文本冒充正文
   if (!currentRev.snapshotAvailable || !pdfData || pdfData.status !== 'page_indexed') {
     const status = !currentRev.snapshotAvailable
       ? 'metadata_only'
@@ -264,7 +259,6 @@ export const PdfReaderView: React.FC<PdfReaderViewProps> = ({
 
   return (
     <div className={`rounded-xl border overflow-hidden ${cardCls}`} data-pdf-structured-view="true">
-      {/* 摘要头：页统计 + 当前锚点 */}
       <div className={`px-4 py-3 border-b flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] ${headerBarCls}`}>
         <span className="font-semibold text-xs">
           PDF 页级文本 · 共 {pdfData.page_count} 页
@@ -282,7 +276,6 @@ export const PdfReaderView: React.FC<PdfReaderViewProps> = ({
         )}
       </div>
 
-      {/* 页码导航条 */}
       <div className="px-4 py-2 border-b flex flex-wrap gap-1.5" data-pdf-page-nav="true">
         {pages.map((p) => {
           const badge = pageKindBadge(p.page_kind);
@@ -305,7 +298,6 @@ export const PdfReaderView: React.FC<PdfReaderViewProps> = ({
         })}
       </div>
 
-      {/* 当前页正文 */}
       {shown && (
         <div className="p-4 space-y-2" data-pdf-page={shown.page_number}>
           <div className="flex flex-wrap items-center gap-2">

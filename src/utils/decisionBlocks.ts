@@ -1,57 +1,24 @@
-/**
- * Inline 拍板闭环 · 卡点块解析与拍板表单纯函数层。
- *
- * 职责（全部纯函数 + 本机记忆存储，禁 import .css / React——node --test 直跑约束）：
- *  - parseDecisionBlocks：识别 `[P0/P1/P2 - 待确认|已确认|…]` 卡点标记与
- *    标准字段行（决定/确认人/角色/现·新运行条件/生效范围与日期），
- *    产出行号锚定的区块模型（阅读器按块模型行号原位渲染表单）；
- *  - extractDecisionOptions：从「可选方案 / 推荐理由」章节提取决定下拉的预设选项
- *    （自动提取文档中选项作为预设，并支持表单层自定义输入）；
- *  - buildDecisionResolvePayload：表单值 → DecisionResolveRequest
- *    （trim、空可选字段省略键——不发送空串）；
- *  - matchStatementToBlock：服务端陈述（GET /statements，line_start 行号）与本地
- *    解析区块的匹配（区块行范围内首个命中）；无服务端陈述 → null（表单诚实降级）；
- *  - remainingBlockingCount / isBlockingCleared：本会话已拍板集合下的剩余阻塞
- *    （P0/P1）计数与清零判定（长任务恢复提示的本地口径）；
- *  - 确认人/角色本机记忆：无成员数据源——自由文本 + localStorage
- *    最近值点选（datalist 预填），读写全 try/catch，node 无 window 环境安全降级。
- *
- * 铁律：本层不写文件、不发请求——.md 占位符替换由后端拍板回写 job（CAS）完成，
- * 前端只组装载荷与展示结果（后端恒 202，无 409 路径）。
- */
 
 import type { DecisionResolveRequest, StatementDetailDTO } from '../services/apiTypes';
 
-// ================= 卡点标记解析 =================
 
 export type DecisionPriority = 'P0' | 'P1' | 'P2';
 
 /** 状态词（库内口径，与 STATEMENT_STATUS_LABEL 同域） */
 export type DecisionBlockStatus = '待确认' | '已确认' | '已否决' | '已搁置' | '已取代';
 
-/**
- * 卡点标记：`[P1 - 待确认]` 形态。容忍全角连字符与空格变体；
- * 组合优先级（如 `[P0/P1 - 待确认]`）按列出顺序取首个为代表性优先级，
- * blocking = 任一为 P0/P1（P2 不构成阻塞门禁）。
- */
 const DECISION_MARKER_RE =
   /\[((?:P[012])(?:\s*\/\s*P[012])*)\s*[-－—]\s*(待确认|已确认|已否决|已搁置|已取代)\]/;
 
 /** 卡点块（行号锚定；行号 1-based，与 buildMarkdownBlocks 块模型同一坐标系） */
 export interface DecisionBlock {
-  /** 标记行（1-based） */
   line: number;
-  /** 区块行范围 [start, end]（含标记行与字段行；标题/围栏/空行/下一标记断开） */
   range: [number, number];
   priorities: DecisionPriority[];
-  /** 代表性优先级（组合标记取首个；单标记即其自身） */
   priority: DecisionPriority;
-  /** 任一优先级为 P0/P1（阻塞门禁语义） */
   blocking: boolean;
   status: DecisionBlockStatus;
-  /** 标记行去掉标记与列表符后的标题文本 */
   title: string;
-  /** 标准字段行号（区块内首个命中；缺省字段不出键） */
   fields: {
     decision?: number;
     confirmer?: number;
@@ -62,7 +29,6 @@ export interface DecisionBlock {
   };
 }
 
-/** 字段标签 → 键（顺序即匹配优先级；前缀词容忍加粗/列表符） */
 const DECISION_FIELD_LABELS: ReadonlyArray<{
   key: keyof DecisionBlock['fields'];
   re: RegExp;
@@ -95,7 +61,6 @@ export function parseDecisionBlocks(markdownContent: string): DecisionBlock[] {
   while (i < lines.length) {
     const trimmed = lines[i].trim();
     if (trimmed.startsWith('```')) {
-      // 围栏整段跳过（与 ReaderView.parseDecisionFormItems 同纪律：字面量不识别）
       i++;
       while (i < lines.length && !lines[i].trim().startsWith('```')) i++;
       i++;
@@ -111,9 +76,8 @@ export function parseDecisionBlocks(markdownContent: string): DecisionBlock[] {
     const status = marker[2] as DecisionBlockStatus;
     const startLine = i + 1;
     const fields: DecisionBlock['fields'] = {};
-    let end = i; // 0-based 游标，结束 +1 回写
+    let end = i;
 
-    // 区块延伸：标记行之后的字段行（遇标题/围栏/空行/下一标记收口）
     let j = i + 1;
     while (j < lines.length) {
       const t = lines[j].trim();
@@ -154,24 +118,19 @@ export function pendingDecisionBlocksOf(markdownContent: string): DecisionBlock[
   return parseDecisionBlocks(markdownContent).filter((b) => b.status === '待确认');
 }
 
-// ================= 可选方案 / 推荐理由 提取 =================
 
-/** 选项锚定行：章节标题或行内标签（含「可选方案/推荐理由/选项」字样） */
 const OPTIONS_ANCHOR_RE = /可选方案|推荐理由|备选|候选项|请选择|选项[:：]?$/;
-/** 列表项（含 □ 复选与任务形态） */
 const OPTIONS_LIST_ITEM_RE = /^(?:[-*]|\d+[.)])\s+(?:\[[ xX]\]\s*)?(.+)$/;
-/** 选项分隔符（行内列举：A、B / A，B / A; B / A；B / A / B） */
 const OPTIONS_INLINE_SPLIT_RE = /\s*[、，,;；/]\s*/;
 /** 选项条数护栏（提取是启发式，最多取 12 条预设） */
 export const DECISION_OPTIONS_MAX = 12;
-/** 列表收集越界护栏（标题后最多扫描 30 行） */
 const OPTIONS_COLLECT_MAX_LINES = 30;
 
 function normalizeOptionText(raw: string): string {
   return raw
-    .replace(/_{3,}/g, '') // 填空占位不是选项
+    .replace(/_{3,}/g, '')
     .replace(/\s+/g, ' ')
-    .replace(/[（(]\s*推荐\s*[))]$/, '') // 尾注「（推荐）」归推荐语义，不进选项词面
+    .replace(/[（(]\s*推荐\s*[))]$/, '')
     .trim();
 }
 
@@ -225,17 +184,14 @@ export function extractDecisionOptions(markdownContent: string): string[] {
         pushOption(listItem[1]);
         continue;
       }
-      // 非列表正文行不收集（保守：章节里夹叙述段不当选项）
       continue;
     }
     if (isHeading) continue;
-    // 行内标签形态（仅「可选方案/选项」；「推荐理由：」整行跳过不进选项）
     if (/可选方案|备选|候选项/.test(trimmed) && /[：:]/.test(trimmed)) {
       const labeled = /(?:可选方案|备选|候选项)\s*[：:]\s*(.*)$/.exec(trimmed);
       if (labeled) {
         const inline = labeled[1].trim();
         if (!inline) {
-          // 「可选方案：」冒号后为空 = 章节收集起点（选项在下方列表）
           collecting = true;
           blankRun = 0;
           continue;
@@ -245,7 +201,6 @@ export function extractDecisionOptions(markdownContent: string): string[] {
       }
     }
     if (OPTIONS_ANCHOR_RE.test(trimmed) && !/推荐理由/.test(trimmed) && !/[：:]/.test(trimmed)) {
-      // 「可选方案」独立行（非标题非标签）视作列表收集起点
       collecting = true;
       blankRun = 0;
     }
@@ -253,16 +208,13 @@ export function extractDecisionOptions(markdownContent: string): string[] {
   return options.slice(0, DECISION_OPTIONS_MAX);
 }
 
-// ================= 拍板载荷 =================
 
 /** 拍板表单值（DecisionResolveCard 的提交形状） */
 export interface DecisionResolveFormValues {
   decision: string;
   confirmer: string;
   role: string;
-  /** 影响范围标签（如「全量专项 / 仅当前分支」） */
   effectiveScope: string;
-  /** YYYY-MM-DD（input[type=date] 原生值） */
   effectiveDate: string;
   note: string;
 }
@@ -286,7 +238,6 @@ export function buildDecisionResolvePayload(values: DecisionResolveFormValues): 
   return payload;
 }
 
-// ================= 陈述匹配（服务端 statements ↔ 本地区块） =================
 
 /**
  * 区块行范围内首个命中陈述（statement.line_start ∈ block.range）。
@@ -304,7 +255,6 @@ export function matchStatementToBlock(
   return best;
 }
 
-// ================= 阻塞清零判定（本地口径） =================
 
 /**
  * 剩余阻塞数：待确认 + blocking(P0/P1) + 不在本会话已拍板集合。
@@ -330,14 +280,11 @@ export function isBlockingCleared(
   return remainingBlockingCount(blocks, resolvedLines) === 0;
 }
 
-// ================= 确认人 / 角色本机记忆（无成员数据源，偏差登记） =================
 
 export const DECISION_IDENTITY_STORAGE_KEY = 'guanlan.decisionIdentity.v1';
 
 export interface DecisionIdentityMemory {
-  /** 最近使用的确认人（新者在前，去重，上限 8——点选来源） */
   confirmers: string[];
-  /** 最近使用的角色（同上） */
   roles: string[];
 }
 
@@ -389,7 +336,6 @@ export function rememberDecisionIdentity(
         JSON.stringify(next)
       );
     } catch {
-      /* 隐私模式/配额满：静默 */
     }
   }
   return next;

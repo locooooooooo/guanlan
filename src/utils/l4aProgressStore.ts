@@ -1,15 +1,3 @@
-/**
- * 后台语义整理（L4A）进度的活值层。
- *
- * 背景：这份进度此前是 useWorkspaceStore 的 useState。写线程每处理最多 3 篇就发一条
- * `l4a` 事件，前端每收一条立刻打一次 `/status` 并 setState；另有 2.5 秒轮询兜底。
- * 1,397 篇的队列 ≈ 466 次「整棵 App 树重渲」——App 与五个分节都把 ctx 当 props，
- * 阅读器正文与星图画布因此跟着进度条一起重渲。形制照 canvasThemeStore.ts：
- * 活值住模块内存，横幅叶子经 useSyncExternalStore 订阅，进度更新零重子树重渲。
- *
- * 本模块不引 React（node 测试直接导入）；同值短路让每 2.5 秒的轮询回到同一进度时
- * 不再通知订阅者。
- */
 import type { L4aProgress } from '../services/apiTypes';
 
 let currentProgress: L4aProgress | null = null;

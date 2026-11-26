@@ -1,12 +1,3 @@
-/**
- * 原位拍板（HITL）唤醒任务与批次「批阅看板」联动前端契约单测。
- *
- * 覆盖：
- *  1. DecisionResolveCard：「确认拍板」与「已知悉」双通道渲染，缺失服务端陈述时诚实双禁用；
- *  2. ReviewBoardDrawer 纯函数：五态分栏过滤 + 失联时长中文格式化 + 待关注计数聚合；
- *  3. ReviewBoardDrawer SSR：五态分栏 + 失联 unknown 孤儿诊断与安全修复入口
- *     （reset_to_dispatchable / mark_suspended_hitl），绝不存在跳过人工审阅直接完结按钮。
- */
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import React from 'react';
@@ -252,18 +243,14 @@ describe('ReviewBoardDrawer 五态批阅看板与孤儿修复', () => {
     assert.ok(html.includes('data-board-filter="awaiting_receipt"'));
     assert.ok(html.includes('data-board-filter="completed"'));
     assert.ok(html.includes('data-board-filter="unknown"'));
-    // 待拍板已知悉 + 原位拍板
     assert.ok(html.includes('data-board-ack-btn="stmt_1"'));
     assert.ok(html.includes('原位拍板'));
-    // 待批阅回执
     assert.ok(html.includes('v2-agent-draft'));
     assert.ok(html.includes('查看 Diff 批阅'));
-    // 失联 unknown 孤儿诊断与安全修复
     assert.ok(html.includes('data-board-orphan="node_exec_1"'));
     assert.ok(html.includes('已静默 45 分钟'));
     assert.ok(html.includes('data-board-repair="init_orphan:reset_to_dispatchable"'));
     assert.ok(html.includes('data-board-repair="init_orphan:mark_suspended_hitl"'));
-    // 停机红线：绝无强制完结或跳过审阅按钮
     assert.ok(!html.includes('强制完结'));
     assert.ok(!html.includes('跳过审阅'));
   });

@@ -10,13 +10,10 @@
  * 渲染路径的散点裸读。
  */
 export function safeStorageGet(key: string): string | null {
-  // 无窗口环境（node --test/tsx 测试链）直接按未设置处理，避免 ReferenceError
   if (typeof window === 'undefined') return null;
   try {
     return window.localStorage.getItem(key);
   } catch {
-    // SecurityError（阻止所有 Cookie）/配额满/存储被禁用：降级为「未设置」，
-    // 门控 UI 缺席是可接受损失，白屏不可接受
     return null;
   }
 }

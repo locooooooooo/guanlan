@@ -34,18 +34,13 @@ export interface ReadingIslandProps {
   files: FileRecord[];
   readingStates: ReadingStateMap;
   quota: WorkspaceConfig['quota'];
-  /** 打开文档：App 侧复用续读入口（钉回上次读到的版本），组件只转发 file_id */
   onOpenDoc: (fileId: string) => void;
-  /** 摆放形态：header=顶栏横向微胶囊（默认，零遮挡）；inline=标准三环按钮 */
   placement?: 'header' | 'inline';
-  /** 抽屉内单文档 1-click 标为已读 / 标为未读 */
   onMarkFileRead?: (fileId: string, revisionId: string) => void;
   onMarkFileUnread?: (fileId: string) => void;
-  /** 抽屉内一键确立当前工作区已读基线 */
   onMarkReadingBaseline?: () => Promise<boolean> | void;
 }
 
-// ---------- 迷你进度环 ----------
 
 /**
  * 环描边生长纯函数：周长口径取整 100（r=15.9155），
@@ -58,15 +53,12 @@ export function islandRingDashOffset(percent: number): number {
 }
 
 interface IslandRingProps {
-  /** 环语义名（已读/未读/已落盘），同时作 data-island-ring 标记值 */
   label: string;
-  /** 0-100 取整百分比；0 时只画轨道弧 */
   percent: number;
   count: number;
   total: number;
   color: string;
   icon: React.ReactNode;
-  /** 顶栏紧凑横向模式（18px 微环 + 百分比并排，零垂直占位） */
   compact?: boolean;
 }
 
@@ -175,7 +167,6 @@ export function IslandRing({
   );
 }
 
-// ---------- 展开面板：清单行与分组 ----------
 
 const ISLAND_SECTION_PAGE_CAP = 60;
 
@@ -367,7 +358,6 @@ interface ReadingIslandPanelProps {
   quota: WorkspaceConfig['quota'];
   onOpenDoc: (fileId: string) => void;
   onClose: () => void;
-  /** 是否嵌于 coss Sheet (inset) 内（内嵌时由 Sheet 承担外框与滑入过渡） */
   inSheet?: boolean;
   onMarkFileRead?: (fileId: string, revisionId: string) => void;
   onMarkFileUnread?: (fileId: string) => void;
@@ -445,7 +435,6 @@ export function ReadingIslandPanel({
           </Button>
         </div>
 
-        {/* 明确中文语义三项总览（已读 / 未读 / 已落盘），避免纯图标歧义 */}
         <Frame>
           <FramePanel className="grid grid-cols-3 divide-x divide-border p-2.5">
             <div className="flex flex-col items-center gap-0.5 px-1">
@@ -478,7 +467,6 @@ export function ReadingIslandPanel({
           </FramePanel>
         </Frame>
 
-        {/* 双色阅读覆盖进度轨（GPU scaleX 推进） + 一键确立基线 CTA */}
         <div className="space-y-2">
           <div
             data-island-progress-bar=""
@@ -583,7 +571,6 @@ export function ReadingIslandPanel({
   );
 }
 
-// ---------- 阅读与存档触发胶囊 + Inset Sheet 抽屉 ----------
 
 export default function ReadingIsland({
   files,

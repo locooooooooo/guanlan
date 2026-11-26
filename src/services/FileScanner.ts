@@ -1,14 +1,3 @@
-/**
- * 观澜 Guanlan 工作区文件采集器（Node 对拍基线）
- *
- * 核心职责:
- * - 授权根目录枚举（仅指定目录）
- * - 递归采集 MD/SVG/PDF 文件
- * - 计算 SHA-256 字节哈希并做稳定读取校验
- * - 产出纯采集结果 CollectedFile，版本与事件由服务端比对持久库后分配
- *
- * 运行环境: Node.js（供测试与 Rust 写入对拍基准调用）
- */
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -27,7 +16,6 @@ const DEFAULT_EXCLUDED = [
   'tmp',
 ];
 
-/** 通过文件头魔数判断 PDF（无扩展名的内容也认） */
 function looksLikePdf(filePath: string): boolean {
   if (!fs.existsSync(filePath)) return false;
   try {
@@ -53,13 +41,9 @@ export interface CollectedFile {
   fileName: string;
   format: FileFormat;
   sizeBytes: number;
-  /** 文件系统修改时间，仅作为独立事实保存，不当成 observed_at */
   mtimeMs: number;
-  /** 稳定读取后的完整字节 SHA-256 */
   sha256: string;
-  /** 读取期间未被改写；false 时本轮不落版本，只报告读取问题 */
   stable: boolean;
-  /** 惰性读取原始字节：仅在需要写快照时调用，避免整批内容驻留内存 */
   readContent: () => Buffer;
 }
 
@@ -71,9 +55,7 @@ export interface CollectOptions {
 
 export interface CollectResult {
   files: CollectedFile[];
-  /** 采集期间读不到的路径：不登记缺失，只报告问题 */
   readErrors: Array<{ relativePath: string; message: string }>;
-  /** 采集是否覆盖了指定范围的完整遍历；不完整时不得据此判定缺失 */
   complete: boolean;
   truncated: boolean;
 }
@@ -85,7 +67,6 @@ function hashFileStable(fullPath: string): {
   bytes: Buffer;
   stable: boolean;
 } {
-  // 稳定读取：先取 stat，读字节算哈希，再取 stat；若期间 size/mtime 变化则重读一次
   const statOf = () => {
     const s = fs.statSync(fullPath);
     return { size: s.size, mtimeMs: s.mtimeMs };
@@ -102,7 +83,6 @@ function hashFileStable(fullPath: string): {
   const first = attempt();
   if (first.stable) return first;
 
-  // 读取期间文件被改写：以第二次为准；仍不稳定则由调用方按 read_error 处理，不落版本
   return attempt();
 }
 
@@ -142,7 +122,6 @@ export function collectWorkspace(rootPath: string, options: CollectOptions = {})
   const walk = (dir: string, relativeDir: string, depth: number) => {
     if (depth > maxDepth || files.length >= maxFiles) {
       truncated = true;
-      // 范围不完整：complete 必须同步为 false，调用方才不会把截断范围外的文件误判缺失
       complete = false;
       return;
     }
@@ -150,7 +129,6 @@ export function collectWorkspace(rootPath: string, options: CollectOptions = {})
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch (error) {
-      // 目录暂时读不到：保留原有记录，报告问题，不判定缺失
       complete = false;
       readErrors.push({
         relativePath: relativeDir || '.',
@@ -176,7 +154,6 @@ export function collectWorkspace(rootPath: string, options: CollectOptions = {})
 
       let format = formatOf(path.extname(entry.name));
       if (!format) {
-        // 无扩展名但内容像 PDF 时仍纳入
         format = looksLikePdf(fullPath) ? 'pdf' : null;
       }
       if (!format) continue;
@@ -193,7 +170,6 @@ export function collectWorkspace(rootPath: string, options: CollectOptions = {})
           mtimeMs,
           sha256,
           stable,
-          // 哈希阶段已读入的字节可复用，避免对同一文件二次全量读取
           readContent: () => bytes ?? fs.readFileSync(capturedPath),
         });
       } catch (error) {

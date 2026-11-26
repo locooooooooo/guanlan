@@ -20,7 +20,6 @@ describe('发版预检：版本号收集', () => {
   it('仓库里每一处版本号都一致——升版本时漏改任何一处，这里都会红', () => {
     const { version, sources } = collectVersions();
     assert.match(version, /^\d+\.\d+\.\d+$/);
-    // 两份锁文件、三处清单、构建身份的兜底值，以及断言版本的测试与脚本里的字面量
     assert.ok(sources.length >= 15, `只收集到 ${sources.length} 处版本号，少于预期`);
     assert.deepEqual(
       sources.filter((source) => source.version !== version).map((source) => source.where),

@@ -12,15 +12,6 @@ import type { CrossSearchResponseDto, MountedWorkspaceDto } from '../services/ap
 import type { PaletteItem } from './commandPaletteResults';
 import { MountManagerPanel } from '../components/MountManagerPanel';
 
-/**
- * 跨项目联合检索行为锁定（纯函数 + SSR 冒烟）：
- * · 跨库命中 → 面板条目携带 sourceWorkspace 徽标数据（工作区名 + 身份哈希）；
- *   主区命中（无 source_workspace）不进入跨库层；
- * · 三层合并 fileId 去重（主区优先）与 score 排序；离线挂载零条目；
- * · 在线挂载判定（离线区不触发 cross 请求）；
- * · MountManagerPanel SSR：挂载行（在线/离线徽标 + 短哈希 + 最后已知摘要）与
- *   错误行按需出现，SSR 安全。
- */
 
 function mount(overrides: Partial<MountedWorkspaceDto> = {}): MountedWorkspaceDto {
   return {
@@ -111,7 +102,6 @@ test('mergeCrossItems 三层合并：fileId 去重主区优先 + score 排序 + 
     },
   ];
   const merged = mergeCrossItems(cross, base, 30);
-  // f_dup 主区保留（同 id 主区优先）；f_ref score 90 在前；动作行保留
   const ids = merged.filter((i) => i.kind === 'file').map((i) => i.fileId);
   assert.deepEqual(ids, ['f_ref', 'f_dup']);
   assert.ok(merged.some((i) => i.kind === 'action' && i.actionId === 'mount-workspace'));
@@ -168,7 +158,6 @@ test('MountManagerPanel SSR：挂载行/离线徽标/最后已知摘要/错误�
   assert.ok(html.includes('rk123456'), 'root_key 8 位短哈希（快照哈希标识）');
   assert.ok(html.includes('父子目录互相包含互斥'), '确定性错误行透出');
   assert.ok(html.includes('D:\\\\archive\\\\legacy-a') || html.includes('archive'), '规范化根路径展示');
-  // 关闭态渲染为空
   const closed = renderToStaticMarkup(
     React.createElement(MountManagerPanel, {
       isOpen: false,

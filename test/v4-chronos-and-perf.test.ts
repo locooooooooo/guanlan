@@ -1,6 +1,3 @@
-/**
- * 司辰时光步进回放、今日/本周沉淀手记、全站键盘流与 5,500 份虚拟化护栏单测集。
- */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -101,10 +98,8 @@ function makeEvent(
   };
 }
 
-// ===== 司辰时光步进回放纯函数 =====
 
 test('stepChronosReplayIndex 与 chronosReplayIntervalMs：日/周步进与倍速护栏', () => {
-  // 空/单日边界
   assert.equal(stepChronosReplayIndex([], 0, 1, 'day'), -1);
   assert.equal(stepChronosReplayIndex(['2026-11-23'], 0, 1, 'day'), 0);
   assert.equal(stepChronosReplayIndex(['2026-11-23'], 0, -1, 'week'), 0);
@@ -113,19 +108,17 @@ test('stepChronosReplayIndex 与 chronosReplayIntervalMs：日/周步进与倍�
     '2026-11-01',
     '2026-11-03',
     '2026-11-05',
-    '2026-11-08', // +7 days from 11-01
+    '2026-11-08',
     '2026-11-12',
-    '2026-11-16', // +8 days from 11-08
-    '2026-11-23', // +7 days from 11-16
+    '2026-11-16',
+    '2026-11-23',
   ];
 
-  // 按日步进 + 边界钳位
   assert.equal(stepChronosReplayIndex(dates, 0, 1, 'day'), 1);
   assert.equal(stepChronosReplayIndex(dates, 0, -1, 'day'), 0);
   assert.equal(stepChronosReplayIndex(dates, 6, 1, 'day'), 6);
   assert.equal(stepChronosReplayIndex(dates, 6, -1, 'day'), 5);
 
-  // 按周步进（跨越 >= 7 自然日）
   assert.equal(stepChronosReplayIndex(dates, 0, 1, 'week'), 3, '11-01 +1周应落至 11-08');
   assert.equal(stepChronosReplayIndex(dates, 3, 1, 'week'), 5, '11-08 +1周应落至 11-16');
   assert.equal(stepChronosReplayIndex(dates, 5, 1, 'week'), 6, '11-16 +1周应落至 11-23');
@@ -133,16 +126,13 @@ test('stepChronosReplayIndex 与 chronosReplayIntervalMs：日/周步进与倍�
   assert.equal(stepChronosReplayIndex(dates, 5, -1, 'week'), 3, '11-16 -1周应回退至 11-08');
   assert.equal(stepChronosReplayIndex(dates, 2, -1, 'week'), 0, '不足7天应钳位到最早日 0');
 
-  // 倍速节拍 + reduced-motion 安全下限
   assert.equal(chronosReplayIntervalMs(1, false), 1850);
   assert.equal(chronosReplayIntervalMs(2, false), 920);
   assert.ok(chronosReplayIntervalMs(2, true) >= 1400, 'reduced-motion 下 2x 需保底放缓避免频闪');
 });
 
-// ===== 司辰沉淀手记纯函数（空窗 / 单日 / 近 7 日高密 + Markdown 零造数） =====
 
 test('buildChronosDigest：空窗口、今日与近 7 日高密窗口汇总及标准 Markdown 可溯源导出', () => {
-  // 1. 空窗口：零造数、诚实空态
   const emptyDigest = buildChronosDigest([], [], [], 'today', '2026-11-23');
   assert.equal(emptyDigest.totalEvents, 0);
   assert.equal(emptyDigest.addedDocs.length, 0);
@@ -150,7 +140,6 @@ test('buildChronosDigest：空窗口、今日与近 7 日高密窗口汇总及�
   assert.equal(emptyDigest.topPackages.length, 0);
   assert.ok(emptyDigest.markdown.includes('暂无新的文档演进'));
 
-  // 2. 构造多专项高密真实样本（含噪音路径与候选决策验证过滤）
   const files: FileRecord[] = [
     makeFile('f1', '01-方案文档/架构/核心设计.md', 'md', '确立 coss 原语架构与双时间口径', 3),
     makeFile('f2', '01-方案文档/架构/接口清单.md', 'md', '新增只读快照 API 规范', 1),
@@ -248,7 +237,6 @@ test('buildChronosDigest：空窗口、今日与近 7 日高密窗口汇总及�
     },
   ];
 
-  // 今日窗口（2026-11-23）：命中 e1/e2/e3（自动过滤 e_noise、排除 11-20/11-18/10-01）
   const todayDigest = buildChronosDigest(events, files, decisions, 'today', '2026-11-23');
   assert.equal(todayDigest.startDay, '2026-11-23');
   assert.equal(todayDigest.endDay, '2026-11-23');
@@ -261,7 +249,6 @@ test('buildChronosDigest：空窗口、今日与近 7 日高密窗口汇总及�
   assert.equal(todayDigest.resolvedDecisions.length, 1);
   assert.equal(todayDigest.pendingDecisions.length, 1, '候选决策 isCandidateOnly 必须排除');
 
-  // 近 7 日窗口（2026-11-17 ~ 2026-11-23）：命中 5 条事件（含 11-23 / 11-20 / 11-18，排除 10-01）
   const weekDigest = buildChronosDigest(events, files, decisions, 'week', '2026-11-23');
   assert.equal(weekDigest.startDay, '2026-11-17');
   assert.equal(weekDigest.endDay, '2026-11-23');
@@ -274,7 +261,6 @@ test('buildChronosDigest：空窗口、今日与近 7 日高密窗口汇总及�
   assert.ok(!weekDigest.markdown.includes('C-99'), '候选决策不得泄露进手记导出');
 });
 
-// ===== ChronosDigestDrawer SSR & 星图回放微轨接线验收 =====
 
 test('ChronosDigestDrawer (Sheet inset) 与 HomeView / 星图回放微轨接线', () => {
   const f1 = makeFile('f1', '01-方案文档/架构/核心设计.md', 'md', '司辰手记摘要验证', 2);
@@ -299,7 +285,6 @@ test('ChronosDigestDrawer (Sheet inset) 与 HomeView / 星图回放微轨接线'
   assert.ok(drawerHtml.includes('data-digest-copy-markdown=""'), '必须渲染一键复制 Markdown 按钮');
   assert.ok(drawerHtml.includes('核心设计.md'));
 
-  // HomeView 渲染「司辰手记」入口
   const homeHtml = renderToStaticMarkup(
     React.createElement(HomeView, {
       files: [f1],
@@ -319,7 +304,6 @@ test('ChronosDigestDrawer (Sheet inset) 与 HomeView / 星图回放微轨接线'
   );
   assert.ok(homeHtml.includes('data-open-chronos-digest=""'), '首页应渲染「司辰手记」入口');
 
-  // 星图 chrome 具备步进回放微轨（按日/按周 + 1x/2x 倍速 + 司辰手记入口）
   const chromeSrc = readFileSync(
     new URL('../src/components/graph/graphCanvasChrome.tsx', import.meta.url),
     'utf8'
@@ -330,7 +314,6 @@ test('ChronosDigestDrawer (Sheet inset) 与 HomeView / 星图回放微轨接线'
   assert.ok(chromeSrc.includes('data-open-chronos-digest=""'));
 });
 
-// ===== 全站键盘流（1/2/3 · G S/C/L · [/]）与输入态/浮层静默保护 =====
 
 function rawKey(
   k: string,
@@ -351,14 +334,12 @@ test('全站快捷键（1/2/3、G S/C/L、[/]）解析与输入态/浮层/组字
   const editCtx = { editableTarget: true, overlayOpen: false };
   const overlayCtx = { editableTarget: false, overlayOpen: true };
 
-  // 单键：主工作区切换 + 左右侧栏折展
   assert.equal(resolveShortcutAction(rawKey('1'), openCtx), 'nav-tab-home');
   assert.equal(resolveShortcutAction(rawKey('2'), openCtx), 'nav-tab-panorama');
   assert.equal(resolveShortcutAction(rawKey('3'), openCtx), 'nav-tab-library');
   assert.equal(resolveShortcutAction(rawKey('['), openCtx), 'toggle-left-sidebar');
   assert.equal(resolveShortcutAction(rawKey(']'), openCtx), 'toggle-right-inspector');
 
-  // 全部归入 STORE_SHORTCUT_ACTIONS
   for (const act of [
     'nav-tab-home',
     'nav-tab-panorama',
@@ -372,7 +353,6 @@ test('全站快捷键（1/2/3、G S/C/L、[/]）解析与输入态/浮层/组字
     assert.ok(STORE_SHORTCUT_ACTIONS.has(act), `STORE_SHORTCUT_ACTIONS 应包含 ${act}`);
   }
 
-  // 两键和弦：G S / G C / G L
   assert.equal(isShortcutChordPrefix(rawKey('g'), openCtx), 'g');
   assert.equal(isShortcutChordPrefix(rawKey('G'), openCtx), 'g');
   assert.equal(resolveShortcutChord('g', rawKey('s'), openCtx), 'nav-panorama-star');
@@ -380,7 +360,6 @@ test('全站快捷键（1/2/3、G S/C/L、[/]）解析与输入态/浮层/组字
   assert.equal(resolveShortcutChord('g', rawKey('l'), openCtx), 'nav-panorama-list');
   assert.equal(resolveShortcutChord('g', rawKey('x'), openCtx), null);
 
-  // 停机线：输入框聚焦 / 浮层打开 / 输入法组字 / 修饰键全部静默让路
   for (const ctx of [editCtx, overlayCtx]) {
     assert.equal(resolveShortcutAction(rawKey('1'), ctx), null);
     assert.equal(resolveShortcutAction(rawKey('['), ctx), null);
@@ -393,7 +372,6 @@ test('全站快捷键（1/2/3、G S/C/L、[/]）解析与输入态/浮层/组字
   assert.equal(resolveShortcutChord('g', rawKey('c', { metaKey: true }), openCtx), null);
 });
 
-// ===== ShortcutsCheatSheetModal (coss Dialog + Frame + Kbd) SSR =====
 
 test('ShortcutsCheatSheetModal 渲染完整 Frame 分组、Kbd 徽章与工作区快照', () => {
   const closed = renderToStaticMarkup(
@@ -430,7 +408,6 @@ test('ShortcutsCheatSheetModal 渲染完整 Frame 分组、Kbd 徽章与工作�
   }
 });
 
-// ===== 无痛增量事件并入（保留分页与滚动位）与 AppBanners 双选项 =====
 
 test('mergeIncrementalEventPage 与 AppBanners「静默并入（保持当前位置）」双按钮契约', () => {
   const baseWindow = {
@@ -520,7 +497,7 @@ test('mergeIncrementalEventPage 与 AppBanners「静默并入（保持当前位�
         file_path: '01-方案文档/架构/接口清单.md',
         file_title: '接口清单.md',
       },
-      prevPage.items[0], // 重复项必须去重
+      prevPage.items[0],
     ],
     total_in_window: 121,
     has_more: true,
@@ -535,7 +512,6 @@ test('mergeIncrementalEventPage 与 AppBanners「静默并入（保持当前位�
   assert.equal(mergedPage.next_cursor, 'cursor_page_2', '必须保留原有分页游标，绝不丢滚动/翻页位置');
   assert.equal(mergedPage.total_in_window, 121);
 
-  // AppBanners 仅在全景溯源页签渲染新事件双按钮条（阅读文档/首页不打断）
   const bannerHtml = renderToStaticMarkup(
     React.createElement(AppBanners, {
       ctx: {
@@ -565,7 +541,6 @@ test('mergeIncrementalEventPage 与 AppBanners「静默并入（保持当前位�
   assert.ok(bannerHtml.includes('data-refresh-events-window=""'), '必须保留刷新进入新窗口原契约');
   assert.ok(bannerHtml.includes('刷新进入新窗口'));
 
-  // 知识资产库阅读态不得弹出新事件通栏条打断阅读
   const libraryBannerHtml = renderToStaticMarkup(
     React.createElement(AppBanners, {
       ctx: {
@@ -593,10 +568,8 @@ test('mergeIncrementalEventPage 与 AppBanners「静默并入（保持当前位�
   assert.ok(!libraryBannerHtml.includes('data-silent-merge-events=""'), '阅读文档时不弹出事件分页通栏横幅');
 });
 
-// ===== 5,500 份虚拟窗口切片索引边界、渲染预算与日历多目录行护栏 =====
 
 test('computeVirtualWindowSlice / VirtualFileSlice / CalendarBoardView：5,500 份渲染预算与边界护栏', () => {
-  // 1. 低于等于 150 条不虚拟化（零 DOM 变化）
   const small = computeVirtualWindowSlice({
     totalCount: SIDEBAR_FILE_SLICE_THRESHOLD,
     scrollTop: 0,
@@ -607,10 +580,9 @@ test('computeVirtualWindowSlice / VirtualFileSlice / CalendarBoardView：5,500 �
   assert.equal(small.startIndex, 0);
   assert.equal(small.endIndex, SIDEBAR_FILE_SLICE_THRESHOLD);
 
-  // 2. 5,500 份文件：顶/中/底/越界滚动渲染预算恒 <= 40 项（稳守 60fps）
   const topSlice = computeVirtualWindowSlice({
     totalCount: 5500,
-    scrollTop: -200, // 负滚动自动钳位到 0
+    scrollTop: -200,
     viewportHeight: 420,
     rowHeight: 28,
     overscan: 10,
@@ -638,7 +610,7 @@ test('computeVirtualWindowSlice / VirtualFileSlice / CalendarBoardView：5,500 �
 
   const endSlice = computeVirtualWindowSlice({
     totalCount: 5500,
-    scrollTop: 9999999, // 超底滚动自动钳位
+    scrollTop: 9999999,
     viewportHeight: 420,
     rowHeight: 28,
     overscan: 10,
@@ -647,7 +619,6 @@ test('computeVirtualWindowSlice / VirtualFileSlice / CalendarBoardView：5,500 �
   assert.equal(endSlice.bottomSpacerPx, 0);
   assert.ok(endSlice.visibleCount <= 36);
 
-  // 3. VirtualFileSlice SSR 实测 5,500 项：单帧仅挂载 25 项（而非 5,500 项）且耗时极短
   const t0 = performance.now();
   const massiveItems = Array.from({ length: 5500 }, (_, i) => ({
     id: `f_${i}`,
@@ -670,7 +641,6 @@ test('computeVirtualWindowSlice / VirtualFileSlice / CalendarBoardView：5,500 �
   assert.ok(mountedRows > 0 && mountedRows <= 40, `5500 项虚拟切片首帧渲染应 <=40 项，实际 ${mountedRows}`);
   assert.ok(elapsedMs < 250, `5500 项虚拟切片 SSR 应极速完成，实际 ${elapsedMs.toFixed(1)}ms`);
 
-  // 4. 日历多目录行分批切片护栏（>48 行自动切片）
   const chunk = computeChunkedListSlice(80, CALENDAR_ROW_SLICE_THRESHOLD);
   assert.equal(chunk.sliced, true);
   assert.equal(chunk.visibleCount, CALENDAR_ROW_SLICE_THRESHOLD);

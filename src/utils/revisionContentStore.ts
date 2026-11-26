@@ -1,53 +1,27 @@
-/**
- * 观澜 —— 统一版本正文仓库
- *
- * 此前正文分散在三套缓存且没有共享请求协调：
- * - App.ensureRevisionContent（fileCache 版本行并入）——contentRequestedRef 永久标记，
- *   失败或取消后不再补取；晚到 FileDetail 整链替换 revisions 会丢掉已并入的正文；
- * - ReaderView.fetchedContent / diffContents（阅读与对比各自持有）；
- * - DocumentTimeMachineView 自带回退缓存。
- * 同一版本可并发走多个入口，重复请求且无字节预算。
- *
- * 本模块是唯一的请求协调与字节预算层：
- * - `Map<revision_id, entry>`（ready/failed 终态）+ `Map<revision_id, Promise>` in-flight：
- *   同版本并发读取合并为一次底层请求；完成后删除 in-flight；失败不永久锁死（可重试）。
- * - 字节 LRU（总量预算，非条数）：访问续期、逐最旧；阅读/对比版本可 pin 不被逐出。
- * - 纯协调层，不 import services：fetcher 由调用方传入（workspaceClient.fetchRevisionContent），
- *   依赖方向 store ← services ← components 无环。
- */
 
 /** fetcher 的返回形状（与 workspaceClient.fetchRevisionContent 对齐） */
 export interface ContentFetchResult {
   ok: boolean;
   text?: string;
   error?: string;
-  /** wire 错误码（如 SNAPSHOT_UNAVAILABLE），failed 条目原样保留供 UI 分型 */
   code?: string;
 }
 
 export interface RevisionContentEntry {
   state: 'ready' | 'failed';
-  /** ready 时的正文文本 */
   text?: string;
-  /** failed 时的错误说明（如快照过保留期） */
   error?: string;
-  /** failed 时的 wire 错误码（UI 分型用，如 SNAPSHOT_UNAVAILABLE） */
   code?: string;
-  /** 正文字节量（预算单位；failed 为 0） */
   bytes: number;
-  /** 调用方可选提供的格式标记：详情合并与 pin 策略按格式区分 md/svg */
   format?: 'md' | 'svg';
 }
 
-/** 字节预算：64 MiB——单版本正文可达数百 KB，条数限制挡不住字节膨胀；
- *  超预算按访问序逐最旧（未 pin 者） */
 const MAX_TOTAL_BYTES = 64 * 1024 * 1024;
 
 const entries = new Map<string, RevisionContentEntry>();
 const inFlight = new Map<string, Promise<string | null>>();
 const pinned = new Set<string>();
 let totalBytes = 0;
-/** 仅供测试：临时预算覆盖（0 = 使用默认 MAX_TOTAL_BYTES） */
 let testByteBudget = 0;
 
 function entryBytes(entry: RevisionContentEntry): number {
@@ -58,7 +32,6 @@ function effectiveBudget(): number {
   return testByteBudget > 0 ? testByteBudget : MAX_TOTAL_BYTES;
 }
 
-/** 访问续期（Map 迭代序=插入序 → LRU） */
 function renew(id: string): void {
   const entry = entries.get(id);
   if (!entry) return;
@@ -66,7 +39,6 @@ function renew(id: string): void {
   entries.set(id, entry);
 }
 
-/** 超预算逐最旧（跳过 pin 与刚插入的条目；仅剩 pin/新条目时允许超限——阅读体验优先） */
 function evictBeyondBudget(justInserted?: string): void {
   if (totalBytes <= effectiveBudget()) return;
   for (const [id, entry] of entries) {
@@ -174,7 +146,6 @@ export async function requestRevisionContentsBatch(
   }
   const contents: Record<string, string> = {};
   const failed: Record<string, string> = {};
-  // 先回填已就绪条目（不发请求）
   for (const id of seen) {
     const cached = entries.get(id);
     if (cached?.state === 'ready') contents[id] = cached.text ?? '';
@@ -231,7 +202,6 @@ export function mergeDetailRevisionsPreservingContent<R extends RevisionLike>(
     if (format === 'svg') {
       const prevSource = prev?.svgSource;
       const svgSource = rev.svgSource ?? prevSource ?? storeText;
-      // store 补源（rev/prev 都没有时）才需要重算抽取文本；detail/既有行自带则沿用自己的
       const filledFromStore =
         rev.svgSource === undefined && prevSource === undefined && storeText !== undefined;
       const svgExtractedTexts =

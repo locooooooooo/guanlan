@@ -1,7 +1,3 @@
-/**
- * 「本机文件 / 挂载目录」分区：把只读挂载的参考工作区直接呈现在全局左侧目录栏中，
- * 支持一键展开浏览其真实文件夹树并点击任意文件进入只读 QuickLook 预览（无需仅经由 Ctrl+K 访问）。
- */
 
 import React, { useMemo, useState } from 'react';
 import {

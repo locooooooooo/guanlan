@@ -1,10 +1,3 @@
-/**
- * Quiet.md 风格全局常驻目录侧栏的纯函数模块（零 UI / 零网络 IO）：
- * - 合并真实目录清单（含空目录）与已索引文件构建完整文件夹树；
- * - 文件夹移动防成环校验（自身 / 当前父目录 / 任意后代目录 100% 拦截）；
- * - 挂载参考工作区只读目录树构建；
- * - 侧栏宽度/折叠状态与置顶清单的安全本地持久化（SSR 友好）。
- */
 
 import type { FileRecord } from '../types/guanlan';
 import type {
@@ -16,17 +9,11 @@ import type {
 import { classifyAssetDomain, type AssetDomainFilter } from './formatMeta';
 
 export interface FolderNode {
-  /** 最后一段目录名。 */
   name: string;
-  /** 完整目录路径（正斜杠，不含首尾斜杠），用于筛选、拖拽落点与前缀匹配。 */
   path: string;
-  /** 直接放在该目录的文件数。 */
   direct: number;
-  /** 含子目录的文件总数。 */
   total: number;
-  /** 是否为空文件夹（既无文件也无子目录）。 */
   isEmpty: boolean;
-  /** 直接归属该目录的文件列表。 */
   directFiles: FileRecord[];
   children: FolderNode[];
 }
@@ -84,7 +71,6 @@ export function saveSidebarShellPrefs(prefs: SidebarShellPrefs): void {
       })
     );
   } catch {
-    // 隐私模式或配额受限时静默降级
   }
 }
 
@@ -109,7 +95,6 @@ export function savePinnedFileIds(workspaceScopeKey: string, ids: readonly strin
       JSON.stringify(Array.from(new Set(ids)))
     );
   } catch {
-    // 隐私模式或配额受限时静默降级
   }
 }
 
@@ -367,7 +352,6 @@ export function buildMountedFolderTree(
   return { nodes: root.children, rootFiles: root.directFiles };
 }
 
-// ===== 多项目侧栏树、跨项目置顶与展开态持久化 =====
 
 export interface ProjectFolderNode {
   name: string;
@@ -415,7 +399,6 @@ export function saveGlobalPinnedFiles(pins: readonly GlobalPinnedFile[]): void {
   try {
     window.localStorage.setItem(GLOBAL_PINS_KEY, JSON.stringify(pins));
   } catch {
-    // 隐私模式静默降级
   }
 }
 
@@ -437,7 +420,6 @@ export function saveExpandedProjects(ids: readonly string[]): void {
   try {
     window.localStorage.setItem(EXPANDED_PROJECTS_KEY, JSON.stringify(Array.from(new Set(ids))));
   } catch {
-    // 隐私模式静默降级
   }
 }
 
@@ -542,7 +524,6 @@ export function buildProjectFolderTree(
   return { nodes: root.children, rootFiles: root.directFiles };
 }
 
-// ===== 同前缀长文件名智能中段省略（保留开头主题词 + 结尾差异词与扩展名） =====
 
 function commonPrefixLengthOfTwo(a: string, b: string): number {
   const limit = Math.min(a.length, b.length);
@@ -589,7 +570,6 @@ export function formatMiddleEllipsisName(
   const chars = Array.from(name);
   if (chars.length <= safeMax) return name;
 
-  // 识别扩展名（如 .md / .svg / .tsx，长度 2..7 且非隐藏点文件）
   const lastDot = name.lastIndexOf('.');
   let ext = '';
   if (lastDot > 0 && name.length - lastDot <= 7) {
@@ -609,8 +589,6 @@ export function formatMiddleEllipsisName(
 
   let clampedShared = Math.max(0, Math.min(Math.floor(sharedPrefixLen), stemChars.length));
   if (clampedShared >= 4 && clampedShared < stemChars.length) {
-    // 若公共前缀恰好切在版本词/编号词中间（如 `-v1` 与 `-v2` 共享到 `-v`），回退到词界分隔符处，
-    // 完整保留 `-v1` / `-v2` / `-final` 等关键差异词而非裸露单字符 `1`
     let snapped = clampedShared;
     while (snapped > 2 && /[A-Za-z0-9]/.test(stemChars[snapped - 1])) {
       snapped -= 1;
@@ -621,20 +599,16 @@ export function formatMiddleEllipsisName(
     if (snapped >= 2) clampedShared = snapped;
 
     const diffTail = stemChars.slice(clampedShared);
-    // 差异尾段尽量全保，同时至少留 3 字符给开头锚点
     const minHead = Math.min(4, Math.max(2, Math.floor(availForStem * 0.35)));
     const maxTail = availForStem - minHead;
     if (diffTail.length <= maxTail) {
-      // 剩余额度尽量补在开头（和差异段前 1–2 字上下文）
       const headLen = availForStem - diffTail.length;
       return `${stemChars.slice(0, headLen).join('')}${ellipsis}${diffTail.join('')}${ext}`;
     }
-    // 差异段本身也很长：保留开头锚点 + 差异段末尾最关键区分词
     const tailSlice = diffTail.slice(diffTail.length - maxTail);
     return `${stemChars.slice(0, minHead).join('')}${ellipsis}${tailSlice.join('')}${ext}`;
   }
 
-  // 无显著共享前缀：60% 开头 + 40% 结尾，保留扩展名
   const headLen = Math.max(2, Math.ceil(availForStem * 0.6));
   const tailLen = Math.max(1, availForStem - headLen);
   return `${stemChars.slice(0, headLen).join('')}${ellipsis}${stemChars
@@ -642,7 +616,6 @@ export function formatMiddleEllipsisName(
     .join('')}${ext}`;
 }
 
-// ===== 工作区私有「目录静默清单（Muted Folders）」SSOT（磁盘零写入用户业务目录） =====
 
 export const MUTED_FOLDERS_STORAGE_KEY = 'guanlan.mutedFolders.v1';
 
@@ -686,7 +659,6 @@ export function saveMutedFolders(folders: readonly string[], workspaceId?: strin
     );
     window.localStorage.setItem(mutedFoldersStorageKey(workspaceId), JSON.stringify(unique));
   } catch {
-    /* 隐私模式 / 配额满静默降级 */
   }
 }
 
@@ -778,7 +750,6 @@ function isPanoramaWireItemKept(
   mutedFolders: readonly string[],
   domain: AssetDomainFilter
 ): boolean {
-  // 工作区级/决策级无关联文件事件保留，不受目录静默或代码域过滤误伤
   if (!item.file_id && !item.file_path) return true;
   if (
     mutedFolders.length > 0 &&
@@ -850,18 +821,15 @@ export function filterPanoramaEventDays(
   };
 }
 
-// ===== 左栏目录树三态排序（名称 / 近 7 日活跃 / 未读数）与即时快筛 + 高亮 =====
 
 export type SidebarTreeSortMode = 'name' | 'active7d' | 'unread';
 
 export interface FolderSortMetrics {
   unreadCount: number;
   active7dCount: number;
-  /** 若调用方传入的指标已是子树递归汇总值（如 collectFolderActivitySummaries），跳过二次累加防重复计数。 */
   subtreeAggregated?: boolean;
 }
 
-/** 计算每个目录节点的子树聚合指标（自身 + 全量后代），保证按活跃/未读排序时父目录能上浮。 */
 function computeSubtreeSortMetrics(
   nodes: readonly FolderNode[],
   activityMap?: ReadonlyMap<string, FolderSortMetrics>
@@ -963,7 +931,6 @@ export function filterFolderTreeByQuery(
       node.name.toLowerCase().includes(q) || node.path.toLowerCase().includes(q);
     if (nameHit) {
       matchedFolderCount += 1;
-      // 目录自身命中：保留全部子文件与子目录（方便直接浏览该目录）
       return node;
     }
     const matchedDirectFiles = node.directFiles.filter(fileMatches);

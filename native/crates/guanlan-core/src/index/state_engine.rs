@@ -82,16 +82,11 @@ pub struct CheckpointCommitOutcome {
     pub transitions: Vec<Transition>,
 }
 
-// ---------- 文件信号（库内行推导） ----------
-
-/// 单个文件的投影信号（纯推导，不落库）
 struct FileSignals {
     file_id: String,
     title: String,
     stage: Stage,
-    /// 识别出的首段目录名（未识别为 None）
     initiative_dir: Option<String>,
-    /// initiative_id = init_ + stable_key(目录名)
     initiative_id: Option<String>,
     last_revision_id: Option<String>,
     checklist_done: u32,
@@ -100,7 +95,6 @@ struct FileSignals {
     pending_p1: u32,
     pending_p2: u32,
     last_activity_at: Option<String>,
-    /// 最新版本 size_bytes>0（stage_has_content 的 v1 口径）
     has_content: bool,
 }
 
@@ -110,18 +104,15 @@ impl FileSignals {
     }
 }
 
-/// 专项级五槽位的重算结果
 struct InitiativePlan {
     initiative_id: String,
     dir_name: String,
     member_indices: Vec<usize>,
-    /// 五槽位（按 PIPELINE_STAGES 次序）：(stage, kind, state, latest_success_ckpt)
     slots: Vec<(Stage, SlotKind, NodeState, Option<String>)>,
     gates: SlotGates,
     running: bool,
 }
 
-/// 从库内行推导全部文件信号
 fn collect_file_signals(
     writer: &Writer,
     workspace_id: &str,
@@ -131,7 +122,6 @@ fn collect_file_signals(
 ) -> Result<Vec<FileSignals>, GuanlanError> {
     let initiative_dirs = writer.initiative_dirs()?;
 
-    // 未决分级：当前版本的待确认陈述按 detail_json.priority 聚合
     let mut pending: HashMap<String, [u32; 3]> = HashMap::new();
     {
         let mut stmt = writer
@@ -156,7 +146,6 @@ fn collect_file_signals(
         }
     }
 
-    // 活动时刻与内容标记：最新版本的 occurred_at / size_bytes
     let mut revisions_meta: HashMap<String, (Option<String>, i64)> = HashMap::new();
     {
         let mut stmt = writer
@@ -187,8 +176,6 @@ fn collect_file_signals(
         .map(|row| (row.file_id.as_str(), (row.done, row.total)))
         .collect();
 
-    // 已采纳候选事项的成员归属优先于路径规则（用户显式确认的映射，重算固化不回退；
-    // 未覆盖的文件仍走 `recognize_initiative` 路径规则）
     let adopted_map = writer.adopted_candidate_map(workspace_id)?;
 
     let mut signals: Vec<FileSignals> = Vec::new();
@@ -209,7 +196,6 @@ fn collect_file_signals(
             } else if let Some((done, total)) = init_checklists.get(&file.file_id) {
                 (*done, *total)
             } else {
-                // 有既有状态行：沿用既有值，避免二次读 blob
                 match existing_artifacts.get(file.file_id.as_str()) {
                     Some(row) => (
                         row.checklist_done.max(0) as u32,
@@ -242,8 +228,6 @@ fn collect_file_signals(
     Ok(signals)
 }
 
-/// 载荷优先级解析：detail_json 的 `priority` 键（P0/P1/P2）；无键按 P2 计
-/// （旧抽取规则产出的陈述不含优先级字段，不作为阻塞项处理，见 `contract-storage.md` §4.3）
 fn pending_bucket(detail_json: &str) -> usize {
     serde_json::from_str::<serde_json::Value>(detail_json)
         .ok()
@@ -261,7 +245,6 @@ fn pending_bucket(detail_json: &str) -> usize {
         .unwrap_or(2usize)
 }
 
-/// 某阶段成员的 checklist 聚合
 fn stage_checklist(members: &[usize], signals: &[FileSignals], stage: Stage) -> (u32, u32) {
     members
         .iter()
@@ -272,7 +255,6 @@ fn stage_checklist(members: &[usize], signals: &[FileSignals], stage: Stage) -> 
         })
 }
 
-/// 某阶段是否有文档 / 是否有内容
 fn stage_presence(members: &[usize], signals: &[FileSignals], stage: Stage) -> (bool, bool) {
     let mut has_artifact = false;
     let mut has_content = false;
@@ -287,7 +269,6 @@ fn stage_presence(members: &[usize], signals: &[FileSignals], stage: Stage) -> (
     (has_artifact, has_content)
 }
 
-/// 该专项各阶段最近一次 SUCCESS checkpoint（按 created_at/rowid 倒序取首个）
 fn success_checkpoint_by_stage(
     writer: &Writer,
     workspace_id: &str,
@@ -303,7 +284,6 @@ fn success_checkpoint_by_stage(
     Ok(map)
 }
 
-/// 计算单个专项的五槽位（蓝图→计划→决策→执行→交付，链式前置门禁）
 fn compute_slots(
     members: &[usize],
     signals: &[FileSignals],
@@ -337,9 +317,6 @@ fn compute_slots(
     slots
 }
 
-/// 迁移事件落库（身份编码：subject_id=`{id}:{from}->{to}`；
-/// occurred_at=迁移时刻（clock::now_iso）；同迁移重试同身份由
-/// uniq_event_identity 去重跳过——幂等成立）
 fn write_transition_event(
     writer: &Writer,
     workspace_id: &str,
@@ -378,7 +355,6 @@ fn write_transition_event(
         revision_id: None,
         occurred_at: Some(moved_at.clone()),
         occurred_precision: "second".to_owned(),
-        // 迁移由状态机引擎判定（扩展 occurred_source 枚举，见 `contract-storage.md` §4.3）
         occurred_source: Some("state_machine".to_owned()),
         observed_at: moved_at,
         headline: transition.headline.clone(),
@@ -398,8 +374,6 @@ fn write_transition_event(
     Ok(())
 }
 
-/// 距今天数（超期归档判据）：`last_activity_days = max(0, 今天 - 最近活动日)`；
-/// 无活动记录返回 0（不做超期归档）。时区口径：UTC 天差。
 fn days_since(activity_at: Option<&str>, today_days: i64) -> u32 {
     activity_at
         .and_then(clock::days_since_epoch_of_iso)
@@ -407,8 +381,6 @@ fn days_since(activity_at: Option<&str>, today_days: i64) -> u32 {
         .unwrap_or(0)
 }
 
-/// 从持久化状态词出发重算到不动点；无既有行时从初始态静默推导。
-/// 返回（最终态，单步迁移路径）。
 fn resolve_state_path(
     persisted: Option<&str>,
     initial: DocState,
@@ -432,9 +404,6 @@ pub fn state_machine_recompute(
     observed_at: &str,
     derived_checklists: &[DerivedChecklist],
 ) -> Result<RecomputeOutcome, GuanlanError> {
-    // 事务外 IO：首轮初始化的 checklist 读一次快照（无既有行可沿用时的兜底读取）
-    // 既有状态行全量只读一次，init 检查 / signals 收集 / 重算核心三处共用，
-    // 不再逐文件 get_artifact_state 点查（大工作区可显著减少点查次数）。
     let existing_artifacts: HashMap<String, ArtifactStateRow> = writer
         .list_artifact_states(workspace_id)?
         .into_iter()
@@ -458,8 +427,6 @@ pub fn state_machine_recompute(
     })
 }
 
-/// 首轮初始化 checklist：无既有 artifact_states 行、又不在本轮派生清单里的
-/// md 文件，读一次快照计数；有既有行则沿用既有值
 fn prepare_init_checklists(
     writer: &Writer,
     workspace_id: &str,
@@ -491,8 +458,6 @@ fn prepare_init_checklists(
     Ok(init)
 }
 
-/// 事务内全量重算的便捷入口（供文件操作/节点唤醒等调用方复用：内部一次性加载
-/// 既有状态行全表后走 [`recompute_inner`]，避免逐文件点查）
 pub(crate) fn recompute_full(
     writer: &mut Writer,
     workspace_id: &str,
@@ -513,7 +478,6 @@ pub(crate) fn recompute_full(
     )
 }
 
-/// 重算核心（无自有事务；调用方必须在 `Writer::transaction` 内调用）
 pub(crate) fn recompute_inner(
     writer: &mut Writer,
     workspace_id: &str,
@@ -541,20 +505,17 @@ pub(crate) fn recompute_inner(
         .map(|row| ((row.initiative_id.clone(), row.stage.clone()), row))
         .collect();
 
-    // 按专项分组（未识别专项的文件只有文档级行）
     let mut groups: HashMap<String, Vec<usize>> = HashMap::new();
     for (index, signal) in signals.iter().enumerate() {
         if let Some(initiative_id) = &signal.initiative_id {
             groups.entry(initiative_id.clone()).or_default().push(index);
         }
     }
-    // 专项按 ID 排序处理（输出与事件顺序稳定）
     let mut group_ids: Vec<String> = groups.keys().cloned().collect();
     group_ids.sort();
     let now_for_today = clock::now_iso();
     let today_days = clock::days_since_epoch_of_iso(&now_for_today).unwrap_or(0);
 
-    // ---------- 五槽位重算（同输入重算结果稳定，running 持久跨轮） ----------
     let mut plans: Vec<InitiativePlan> = Vec::new();
     for initiative_id in &group_ids {
         let members = groups.get(initiative_id).expect("分组键来自信号表");
@@ -591,7 +552,6 @@ pub(crate) fn recompute_inner(
         });
     }
 
-    // ---------- 专项行（三级投影之第一级）：pending 聚合 + 状态迁移 ----------
     for plan in &plans {
         let existing = existing_initiatives.get(&plan.initiative_id);
         let pending_p0: i64 = plan
@@ -619,8 +579,6 @@ pub(crate) fn recompute_inner(
             .map(|signal| signal.stage)
             .max()
             .unwrap_or(Stage::Unclassified);
-        // 专项级信号：checklist 用交付段聚合（与 deliver_completed 门禁同口径），
-        // last_activity_days 取成员最近活动的最大间隔
         let (deliver_done, deliver_total) =
             stage_checklist(&plan.member_indices, &signals, Stage::Delivery);
         let latest_activity = plan
@@ -649,7 +607,6 @@ pub(crate) fn recompute_inner(
             DocState::Draft,
             &initiative_signals,
             &plan.gates,
-            // user_accepted 唯一来源 = archive 写线程置位；重算恒 false
             false,
         );
         let initiative_row = InitiativeRow {
@@ -692,7 +649,6 @@ pub(crate) fn recompute_inner(
         }
     }
 
-    // ---------- 节点行（task_nodes 五槽位）：UPSERT + 迁移记账（首建静默） ----------
     for plan in &plans {
         for (stage, kind, state, latest_checkpoint) in &plan.slots {
             let node_id = node_id_of(&plan.initiative_id, *stage, *kind);
@@ -757,7 +713,6 @@ pub(crate) fn recompute_inner(
         }
     }
 
-    // ---------- 文档行（三级投影之第三级）：迁移才记账，首建静默 ----------
     let plan_by_initiative: HashMap<&str, &InitiativePlan> = plans
         .iter()
         .map(|plan| (plan.initiative_id.as_str(), plan))
@@ -804,7 +759,6 @@ pub(crate) fn recompute_inner(
         writer.upsert_artifact_state(&row)?;
         outcome.artifacts_upserted += 1;
 
-        // 多级迁移逐步记账：fixpoint 的每一单步身份互异
         if existing.is_some() {
             let mut from = existing
                 .and_then(|row| DocState::parse(&row.state))
@@ -832,8 +786,6 @@ pub(crate) fn recompute_inner(
 
     Ok(outcome)
 }
-
-// ---------- checkpoint 同步受理 ----------
 
 /// POST /checkpoints 的同步受理核心。
 ///
@@ -871,7 +823,6 @@ pub fn commit_checkpoint(
         )));
     }
 
-    // node_id 缺省时按 (initiative_id, stage) 反查；给定时必须存在
     let resolved_node = match &input.node_id {
         Some(node_id) => {
             let row = writer
@@ -887,11 +838,8 @@ pub fn commit_checkpoint(
         None => writer.find_task_node_by_stage(&workspace_id, &initiative_id, &stage)?,
     };
 
-    // 插 checkpoint 行：seq 由库内既有行数派生，重启安全
     let checkpoint_id = writer.insert_checkpoint(input)?;
 
-    // output_artifact_version（版本号如 v2）：由产出修订的 per-file seq
-    // 派生（与 TS 侧 versionNumber = revision.seq 同源口径）；无产出修订 → null
     let output_artifact_version = match &input.output_revision_id {
         Some(revision_id) => writer
             .get_revision(revision_id)?
@@ -899,7 +847,6 @@ pub fn commit_checkpoint(
         None => None,
     };
 
-    // checkpoint_committed 事件
     let payload = json_object(&[
         ("checkpoint_id", json_string(&checkpoint_id)),
         ("initiative_id", json_string(&initiative_id)),
@@ -963,7 +910,6 @@ pub fn commit_checkpoint(
     };
     writer.insert_event(&event)?;
 
-    // SUCCESS 且命中节点 → 推进 completed（随后 recompute 以声明式口径复核）
     if input.status == "SUCCESS" {
         if let Some(node) = &resolved_node {
             writer.upsert_task_node(&TaskNodeRow {
@@ -975,19 +921,14 @@ pub fn commit_checkpoint(
         }
     }
 
-    // 同事务同步重算（唤醒直接走同步函数调用，无独立后台 job 载体）
     let outcome = recompute_full(writer, &workspace_id, &input.created_at)?;
 
-    // 回传推进后的节点状态
     let node_state = match (&input.node_id, &resolved_node) {
         (Some(node_id), _) => writer.get_task_node(node_id)?.map(|row| row.state),
         (None, Some(node)) => writer.get_task_node(&node.node_id)?.map(|row| row.state),
-        (None, None) => {
-            // 槽位节点此前不存在：recompute 可能已按五槽位模型建行
-            writer
-                .find_task_node_by_stage(&workspace_id, &initiative_id, &stage)?
-                .map(|row| row.state)
-        }
+        (None, None) => writer
+            .find_task_node_by_stage(&workspace_id, &initiative_id, &stage)?
+            .map(|row| row.state),
     };
 
     Ok(CheckpointCommitOutcome {

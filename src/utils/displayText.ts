@@ -6,18 +6,13 @@
 export function cleanDisplayText(raw: string | null | undefined): string {
   if (!raw) return '';
   return raw
-    // Markdown 链接 `[文本](url)` → 保留可见文本
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    // 粗体 / 斜体 / 删除线标记
     .replace(/\*\*(.+?)\*\*/g, '$1')
     .replace(/__(.+?)__/g, '$1')
     .replace(/~~(.+?)~~/g, '$1')
-    // 残余成对或孤立的反引号、星号
     .replace(/`+/g, '')
     .replace(/\*{2,}/g, '')
-    // 表格竖线分隔符收敛为中文顿点分隔
     .replace(/\s*\|\s*/g, ' · ')
-    // 清除行首/行尾残留分隔符与多余空白
     .replace(/^[·\s:：-]+/, '')
     .replace(/\s+/g, ' ')
     .trim();

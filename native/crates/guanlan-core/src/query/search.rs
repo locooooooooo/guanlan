@@ -41,16 +41,11 @@ pub struct SearchQuery {
 
 const DEFAULT_LIMIT: u32 = 30;
 const MAX_LIMIT: u32 = 100;
-/// 每文件命中上限（契约沿用前端 searchWorkspace 语义）
 const HITS_PER_FILE: usize = 3;
-/// 片段最大字符数（char 边界安全截断）
 const SNIPPET_MAX_CHARS: usize = 240;
-/// 单次核验候选上限（评分排序后截断；防极端共现词把核验拖过预算）
 const VERIFY_CAP: usize = 200;
-/// 决定陈述命中分（固定置顶；编号拍板是最高价值命中）
 const DECISION_SCORE: i64 = 100;
 
-/// 倒排交集的每文件累积状态
 #[derive(Debug, Clone, Default)]
 struct CandidateScore {
     matched_terms: u32,
@@ -93,7 +88,6 @@ pub fn search(store: &ReadonlyStore, query: &SearchQuery) -> Result<SearchRespon
         return Ok(empty_response(&ws.index_generation, &norm, mode, state));
     }
 
-    // ---- 通道 1：倒排交集（跨词项 AND；每词项每文件只计一次；字段权重取最大值）----
     let conn = store.conn();
     let mut candidates: HashMap<String, CandidateScore> = HashMap::new();
     {
@@ -114,7 +108,6 @@ pub fn search(store: &ReadonlyStore, query: &SearchQuery) -> Result<SearchRespon
             for row in rows {
                 let (file_id, field, weight) = row.map_err(internal_sql)?;
                 let entry = candidates.entry(file_id.clone()).or_default();
-                // 同一词项在同一文件命中多字段（标题+正文）只计一次词项数
                 if hit_files.insert(file_id.clone()) {
                     entry.matched_terms += 1;
                 }
@@ -126,8 +119,6 @@ pub fn search(store: &ReadonlyStore, query: &SearchQuery) -> Result<SearchRespon
             }
         }
     }
-    // AND 语义：必须每个词项都命中。只需 top VERIFY_CAP（核验硬上限）——
-    // 高频词候选可达万级，全量排序是无谓成本；部分选择后再小排序。
     let term_total = terms.len() as u32;
     let mut ranked: Vec<(String, CandidateScore)> = candidates
         .into_iter()
@@ -142,9 +133,7 @@ pub fn search(store: &ReadonlyStore, query: &SearchQuery) -> Result<SearchRespon
     }
     ranked.sort_by(|a, b| b.1.score().cmp(&a.1.score()).then_with(|| a.0.cmp(&b.0)));
 
-    // ---- 筛选参数 ---
     let limit = query.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT) as usize;
-    // dir 口径对齐契约 §1.3（`docs` 含子树；`'.'` 仅根散文件）；大小写无关
     let dir_norm = query
         .dir
         .as_deref()
@@ -153,8 +142,6 @@ pub fn search(store: &ReadonlyStore, query: &SearchQuery) -> Result<SearchRespon
         .filter(|d| !d.is_empty());
     let format_filter = query.format.as_deref().map(str::to_owned);
 
-    // ---- 通道 2：回源核验（评分序取候选；硬上限 VERIFY_CAP——有界检索口径，
-    // total_matched 以核验到的命中文件数封顶并诚实置 truncated）----
     let mut items: Vec<SearchHit> = Vec::new();
     let mut verified = 0usize;
     for (file_id, score) in &ranked {
@@ -164,11 +151,9 @@ pub fn search(store: &ReadonlyStore, query: &SearchQuery) -> Result<SearchRespon
         let Some(doc) = load_doc(conn, file_id)? else {
             continue;
         };
-        // 状态双保险（索引行可能滞后一轮差分）
         if doc.status != "active" {
             continue;
         }
-        // format 筛选：精确 token 或 class: 族名（对齐 §1.3 class_of_token 口径）
         if let Some(want) = &format_filter {
             if let Some(class_name) = want.strip_prefix("class:") {
                 let matches = FileFormat::parse(&doc.format)
@@ -183,7 +168,6 @@ pub fn search(store: &ReadonlyStore, query: &SearchQuery) -> Result<SearchRespon
                 continue;
             }
         }
-        // dir 前缀筛选（目录前缀含子目录；'.' 仅工作区根散文件）
         if let Some(dir) = &dir_norm {
             let lower_rel = doc.rel_path.to_lowercase();
             let in_dir = if dir == "." {
@@ -205,14 +189,12 @@ pub fn search(store: &ReadonlyStore, query: &SearchQuery) -> Result<SearchRespon
         }
     }
 
-    // ---- 通道 3：决定陈述精确编号（仅 Code 模式）----
     if plan.mode == QueryMode::Code {
         let code = plan.norm.clone();
         let decision_hits = decision_code_hits(conn, &ws.workspace_id, &code, limit)?;
         items.extend(decision_hits);
     }
 
-    // 排序：分数降序 → file_id 稳定 → 行号稳定；随后按契约每文件上限 3 收口
     items.sort_by(|a, b| {
         b.score
             .cmp(&a.score)
@@ -229,7 +211,6 @@ pub fn search(store: &ReadonlyStore, query: &SearchQuery) -> Result<SearchRespon
             false
         }
     });
-    // 收口后命中文件数 = 各文件首条命中保留后的去重数
     let total_matched = per_file.len();
     items.truncate(limit);
 
@@ -272,7 +253,6 @@ pub fn search_state_of(store: &ReadonlyStore) -> Result<String, GuanlanError> {
     })
 }
 
-/// search_docs 行（查询侧最小投影）
 struct DocRow {
     file_id: String,
     revision_id: String,
@@ -309,13 +289,6 @@ fn load_doc(conn: &rusqlite::Connection, file_id: &str) -> Result<Option<DocRow>
     Ok(row)
 }
 
-/// 单文档回源核验：按查询模式给出 ≤3 条命中（正文核验 + 标题/路径回退）。
-/// 回退口径：路径/标题**连续子串**命中，或 title/path 字段拿到**非单字词项**
-/// 权重（整段词 / 首字母缩写 / Bigram——文件名缩写检索 `uas` →
-/// `user-auth-service` 不构成子串，必须走词项级命中）。
-///
-/// 性能口径：正文核验对整个 body 只做**一次** `to_lowercase`，再用子串查找
-/// + 行偏移二分定位行号（高频词候选可达核验上限，逐行 lowercase 会放大分配成本）。
 fn verify_doc(plan: &QueryPlan, doc: &DocRow, score: &CandidateScore) -> Vec<SearchHit> {
     let lower_path = doc.rel_path.to_lowercase();
     let lower_title = doc.title.to_lowercase();
@@ -329,21 +302,19 @@ fn verify_doc(plan: &QueryPlan, doc: &DocRow, score: &CandidateScore) -> Vec<Sea
 
     if doc.has_body {
         let lower = doc.body_text.to_lowercase();
-        // 行偏移表（字节偏移 → 0-based 行号下标）
         let mut line_starts: Vec<usize> = vec![0];
         for (i, b) in lower.bytes().enumerate() {
             if b == b'\n' {
                 line_starts.push(i + 1);
             }
         }
-        // 命中行集合（同一行多次出现只计一次；每文件上限 3）
         let mut found_lines: Vec<usize> = Vec::new();
         let mut from = 0usize;
         while let Some(pos) = lower[from..].find(&plan.norm) {
             let abs = from + pos;
             let line_idx = match line_starts.binary_search(&abs) {
                 Ok(i) => i,
-                Err(i) => i - 1, // abs 落于 line_starts[i-1]..line_starts[i] 之间
+                Err(i) => i - 1,
             };
             if found_lines.last() != Some(&line_idx) {
                 found_lines.push(line_idx);
@@ -359,9 +330,6 @@ fn verify_doc(plan: &QueryPlan, doc: &DocRow, score: &CandidateScore) -> Vec<Sea
                 let line = lines.get(idx).copied().unwrap_or("").trim();
                 let locator = locator_for(&doc.format, &doc.anchor_json, idx, line);
                 hits.push(SearchHit {
-                    // 正文命中必须携带真实 file_id：跨库合并与前端「Enter 打开」都按
-                    // file_id 去重/路由，空值会让全部正文命中挤进同一键（契约 §2.4
-                    // SearchHit.file_id 要求真实值）
                     file_id: doc.file_id.clone(),
                     revision_id: doc.revision_id.clone(),
                     relative_path: doc.rel_path.clone(),
@@ -371,7 +339,7 @@ fn verify_doc(plan: &QueryPlan, doc: &DocRow, score: &CandidateScore) -> Vec<Sea
                     match_strategy: strategy_for(plan),
                     locator,
                     snippet: bounded_snippet(line),
-                    score: base_score + 5, // 正文短语核验通过加成
+                    score: base_score + 5,
                     stale: false,
                     source_workspace: None,
                 });
@@ -379,7 +347,6 @@ fn verify_doc(plan: &QueryPlan, doc: &DocRow, score: &CandidateScore) -> Vec<Sea
         }
     }
 
-    // 正文未中（或无正文）但标题/路径命中 → filename_match（对齐前端回退语义）
     if hits.is_empty() && filename_matched {
         hits.push(SearchHit {
             file_id: doc.file_id.clone(),
@@ -399,8 +366,6 @@ fn verify_doc(plan: &QueryPlan, doc: &DocRow, score: &CandidateScore) -> Vec<Sea
     hits
 }
 
-/// 决定陈述通道：编号精确匹配 statements.code（workspace 扫描 + 小写比较；
-/// statements 规模 = 决定块量级，扫描代价可忽略）
 fn decision_code_hits(
     conn: &rusqlite::Connection,
     workspace_id: &str,
@@ -482,7 +447,6 @@ fn strategy_for(plan: &QueryPlan) -> String {
     }
 }
 
-/// coverage 双值：(正文命中时, 文件名命中时)
 fn coverage_for(format: &str, has_body: bool) -> (String, String) {
     let fmt = FileFormat::parse(format);
     let body = if !has_body {
@@ -516,7 +480,6 @@ fn coverage_for(format: &str, has_body: bool) -> (String, String) {
     (body, name)
 }
 
-/// 行级定位器：按格式解释 anchor_json
 fn locator_for(format: &str, anchor_json: &str, line_idx: usize, line: &str) -> SearchLocator {
     match format {
         "svg" => SearchLocator::SvgText {
@@ -571,7 +534,6 @@ fn anchor_xlsx(anchor_json: &str, line_idx: usize) -> Option<String> {
     Some(format!("{name}!{reference}"))
 }
 
-/// 排序次键：行号越小越靠前；File 定位器排最后
 fn locator_order(hit: &SearchHit) -> i64 {
     match &hit.locator {
         SearchLocator::Lines { start, .. } => *start,
@@ -581,7 +543,6 @@ fn locator_order(hit: &SearchHit) -> i64 {
     }
 }
 
-/// char 边界安全截断（≤ SNIPPET_MAX_CHARS）
 fn bounded_snippet(s: &str) -> String {
     if s.chars().count() <= SNIPPET_MAX_CHARS {
         return s.to_owned();

@@ -31,12 +31,6 @@ import type {
   WorkspaceConfig,
 } from '../types/guanlan';
 
-// ============================================================
-// 本地自建测试夹具：等价迁移自已删除的演示数据文件 src/data/sampleWorkspace.ts。
-// 生产代码已删除样本回退（App.tsx 在接口失败时展示空态与错误横幅），
-// 测试不得再 import 生产演示数据；以下夹具仅供本测试文件构造等价输入，
-// 内容与原样本逐字一致，保证既有断言行为不变。
-// ============================================================
 export const INITIAL_WORKSPACE_CONFIG: WorkspaceConfig = {
   rootPath: 'D:\\Workspaces\\sample-project',
   rootKey: 'ws_sample_project_9f3a2c',
@@ -368,7 +362,6 @@ export const INITIAL_FILES: FileRecord[] = [
         revision_id: 'rev_02_03',
         file_id: 'file_02',
         versionNumber: 3,
-        // Notice: A -> B -> A! Exact same SHA-256 as rev_02_01 to prove A -> B -> A keeps 3 revisions!
         content_sha256: 'd111111111111111111111111111111111111111111111111111111111111101',
         observed_at: '2026-11-05T14:28:00+08:00',
         source_time: '2026-11-05',
@@ -430,7 +423,7 @@ export const INITIAL_FILES: FileRecord[] = [
         observed_at: '2026-11-04T21:00:00+08:00',
         source_time: '2026-11-04',
         sizeBytes: 3120,
-        snapshotAvailable: false, // 模拟旧的未保护快照已被配额淘汰，用于验证 REVISION_UNAVAILABLE
+        snapshotAvailable: false,
         summaryNote: '初始回执模板（快照已超保留期淘汰，仅保留版本元数据）',
       },
       {
@@ -1330,7 +1323,7 @@ export const INITIAL_DECISIONS: DecisionAssertion[] = [
     namespace: '示例工程 / 办公协同专项（疑似决策候选）',
     question: '是否将周报汇总接入同一个飞书/企微 Webhook 通道？',
     status: '未知',
-    isCandidateOnly: true, // 疑似决策候选：不计入“待你确认”真实计数
+    isCandidateOnly: true,
     options: ['复用现有审批通知 Webhook', '保持独立周报推送通道'],
     recommendation:
       '原文仅为会议随笔探讨（“是不是可以考虑……目前只是口头探讨”），按规则归入疑似决策候选列表，不增加顶部“待你确认”计数。',
@@ -1357,7 +1350,6 @@ export const INITIAL_DECISIONS: DecisionAssertion[] = [
 ];
 
 export const INITIAL_RELATIONS: RelationEdge[] = [
-  // Explicit references from file_01 (四专项待确认事项.md)
   {
     edge_id: 'rel_01',
     source_id: 'file_01',
@@ -1408,7 +1400,6 @@ export const INITIAL_RELATIONS: RelationEdge[] = [
     reason: '《四专项待确认事项.md》第 36 行引用《多格式抽取与索引边界说明.md》',
     locator: { startLine: 35, endLine: 37 },
   },
-  // Explicit references from file_02 (PDM编码与BOM主数据方案.md)
   {
     edge_id: 'rel_06',
     source_id: 'file_02',
@@ -1429,7 +1420,6 @@ export const INITIAL_RELATIONS: RelationEdge[] = [
     reason: '《PDM编码与BOM主数据方案.md》第 15 行引用《ERP-PDM接口规范-v2.4.pdf》',
     locator: { startLine: 14, endLine: 16 },
   },
-  // Explicit references from file_03 (决策回执.md)
   {
     edge_id: 'rel_08',
     source_id: 'file_03',
@@ -1440,7 +1430,6 @@ export const INITIAL_RELATIONS: RelationEdge[] = [
     reason: '《决策回执.md》第 30 行引用《观澜单进程架构图.svg》',
     locator: { startLine: 29, endLine: 31 },
   },
-  // Decision basis edges
   {
     edge_id: 'rel_09',
     source_id: 'dec_four_spec_q01',
@@ -1490,7 +1479,6 @@ export const INITIAL_RELATIONS: RelationEdge[] = [
     label: '安全红线依据',
     reason: '四专项::Q03 引用《集团主数据安全红线2026.pdf》第 3 条规定',
   },
-  // Same topic / task code grouping (inferred/grouping edge -> dashed line with explicit reason)
   {
     edge_id: 'rel_14',
     source_id: 'file_02',
@@ -1515,7 +1503,7 @@ export const INITIAL_RELATIONS: RelationEdge[] = [
 export const INITIAL_READING_STATES: Record<string, ReadingState> = {
   file_01: {
     file_id: 'file_01',
-    last_read_revision_id: 'rev_01_01', // 用户上次读的是 v1，当前是 v3，因此有“未读变化”！
+    last_read_revision_id: 'rev_01_01',
     last_section_id: '需你决策',
     scrollPercent: 45,
     isFullyRead: false,
@@ -1525,7 +1513,7 @@ export const INITIAL_READING_STATES: Record<string, ReadingState> = {
   },
   file_02: {
     file_id: 'file_02',
-    last_read_revision_id: 'rev_02_02', // 用户上次读过实验版 v2，现在回滚到 v3 (A->B->A)
+    last_read_revision_id: 'rev_02_02',
     last_section_id: '1. 双轨映射与流转架构',
     scrollPercent: 30,
     isFullyRead: false,
@@ -1544,7 +1532,7 @@ export const INITIAL_READING_STATES: Record<string, ReadingState> = {
   },
   file_06: {
     file_id: 'file_06',
-    last_read_revision_id: 'rev_06_01', // SVG 也有新版本未读变化
+    last_read_revision_id: 'rev_06_01',
     scrollPercent: 100,
     isFullyRead: false,
     bookmarked: false,
@@ -1557,40 +1545,31 @@ test('中文检索：双字切分 (Bigram) 候选与两字词“决策”“验�
   const bigrams = generateChineseBigrams('决策回执');
   assert.deepEqual(bigrams, ['决策', '策回', '回执']);
 
-  // 搜索两字词“决策”应命中正文与对应行段，而非因 trigram <3 字符限制而漏检
   const decisionHits = searchWorkspace(INITIAL_FILES, '决策');
   assert.ok(decisionHits.length >= 3);
   assert.ok(decisionHits.some((h) => h.file_id === 'file_01' && h.coverage === 'full_text'));
 
-  // 搜索两字词“验收”应命中包含“不代表验收通过”的方案与已抽取页文本的 PDF
   const acceptanceHits = searchWorkspace(INITIAL_FILES, '验收');
   assert.ok(acceptanceHits.some((h) => h.file_id === 'file_02'));
   assert.ok(acceptanceHits.some((h) => h.file_id === 'file_09' && h.coverage === 'pdf_page_text'));
 
-  // 搜索任务编号 T-204 应采用 exact_code 策略命中 MD 与 SVG 文字
   const codeHits = searchWorkspace(INITIAL_FILES, 'T-204');
   assert.ok(codeHits.some((h) => h.matchStrategy === 'exact_code' && h.format === 'md'));
   assert.ok(codeHits.some((h) => h.format === 'svg' && h.coverage === 'svg_text'));
 });
 
 test('SVG 与 PDF 检索覆盖边界：无文本层 SVG 与未索引 PDF 仅匹配文件名', () => {
-  // file_10 (集团主数据安全红线2026.pdf) 状态为 unindexed，搜文件名命中并标记 filename_only
   const pdfFileHits = searchWorkspace(INITIAL_FILES, '安全红线');
   const redlineHit = pdfFileHits.find((h) => h.file_id === 'file_10');
   assert.ok(redlineHit);
   assert.equal(redlineHit.coverage, 'filename_only');
 
-  // file_08 (历史盖章件矢量轮廓-无文字层.svg) 仅文件名可检索
   const svgFileHits = searchWorkspace(INITIAL_FILES, '历史盖章件');
   const stampHit = svgFileHits.find((h) => h.file_id === 'file_08');
   assert.ok(stampHit);
   assert.equal(stampHit.coverage, 'filename_only');
 });
 
-// ============================================================
-// 检索行为锁定：searchWorkspace 的截断 / 回退 / matchStrategy / 正文缓存语义。
-// 性能重构（per-file 命中计数 Map + revision_id 行缓存）前后输出必须逐字段一致。
-// ============================================================
 interface P3SearchFixtureSpec {
   file_id: string;
   relative_path: string;
@@ -1638,11 +1617,10 @@ test('检索行为锁定：每文件正文命中 3 行截断、命中后不回�
   });
 
   const hits = searchWorkspace([file], '性能');
-  assert.equal(hits.length, 3); // 每文件正文命中上限 3 条
+  assert.equal(hits.length, 3);
   assert.ok(hits.every((h) => h.file_id === 'p3_trunc' && h.coverage === 'full_text'));
   assert.ok(hits.every((h) => h.matchStrategy === 'bigram_phrase_verified'));
-  assert.ok(hits.every((h) => h.matchStrategy !== 'filename_match')); // 正文已命中不回退
-  // 命中按行序取前三条，locator 与 snippet 逐字段保持原语义
+  assert.ok(hits.every((h) => h.matchStrategy !== 'filename_match'));
   assert.deepEqual(
     hits.map((h) => (h.locator.kind === 'lines' ? [h.locator.start, h.locator.end] : null)),
     [
@@ -1653,8 +1631,6 @@ test('检索行为锁定：每文件正文命中 3 行截断、命中后不回�
   );
   assert.deepEqual(hits.map((h) => h.snippet), ['性能验证行 0', '性能验证行 1', '性能验证行 2']);
 
-  // 同一 file_id 重复出现在入参数组：计数按 file_id 全局累计（3 + 1 = 4），
-  // 与原 hits.filter(...).length >= 3 语义逐点一致；若循环内局部重置会错误地输出 3 + 3 = 6
   const duplicated = searchWorkspace([file, file], '性能');
   assert.equal(duplicated.length, 4);
   assert.equal(duplicated.filter((h) => h.matchStrategy !== 'filename_match').length, 4);
@@ -1686,19 +1662,16 @@ test('检索行为锁定：matchStrategy 三分支——bigram_phrase_verified /
     markdownContent: ['性能基线说明', '小组讨论记录', 'Q101：待确认事项'].join('\n'),
   });
 
-  // 多字中文词：bigram 候选 + 原文短语核验
   const bigramHits = searchWorkspace([file], '性能');
   assert.equal(bigramHits.length, 1);
   assert.equal(bigramHits[0].matchStrategy, 'bigram_phrase_verified');
   assert.equal(bigramHits[0].snippet, '性能基线说明');
 
-  // 单字：有界回退分支
   const singleHits = searchWorkspace([file], '讨');
   assert.equal(singleHits.length, 1);
   assert.equal(singleHits[0].matchStrategy, 'single_char_bounded');
   assert.equal(singleHits[0].snippet, '小组讨论记录');
 
-  // 编号：q\d+ 精确匹配分支（大小写不敏感）
   const codeHits = searchWorkspace([file], 'q101');
   assert.equal(codeHits.length, 1);
   assert.equal(codeHits[0].matchStrategy, 'exact_code');
@@ -1714,7 +1687,7 @@ test('检索行为锁定：svgExtractedTexts 命中与无文本层 SVG 仅文件
   });
 
   const textHits = searchWorkspace([svgWithText], '性能');
-  assert.equal(textHits.length, 2); // 逐片段命中，不套用每文件 3 行截断
+  assert.equal(textHits.length, 2);
   assert.ok(textHits.every((h) => h.coverage === 'svg_text' && h.format === 'svg'));
   assert.ok(textHits.every((h) => h.matchStrategy === 'bigram_phrase_verified'));
   assert.deepEqual(textHits.map((h) => h.snippet), [
@@ -1726,7 +1699,6 @@ test('检索行为锁定：svgExtractedTexts 命中与无文本层 SVG 仅文件
     ['性能与架构设计讨论', '性能复核结论']
   );
 
-  // 无文本层 SVG：仅文件名可检索
   const svgNoText = makeSearchFixtureFile({
     file_id: 'p3_svg_none',
     relative_path: 'p3-fixtures/历史盖章件.svg',
@@ -1745,23 +1717,19 @@ test('检索行为锁定：svgExtractedTexts 命中与无文本层 SVG 仅文件
 });
 
 test('检索行为锁定：contentCache 按 revision_id 参与正文匹配，缺失/版本不符时不产生命中', () => {
-  // MD 正文不随 /scan 内联，markdownContent 缺失
   const file = makeSearchFixtureFile({
     file_id: 'p3_cache',
     relative_path: 'p3-fixtures/缓存回退.md',
     markdownContent: undefined,
   });
 
-  // 无缓存：正文源缺失，即使文件名可命中也不产生任何结果
   assert.equal(searchWorkspace([file], '缓存回退').length, 0);
 
-  // 缓存中的 revision_id 与当前版本不符：同样不命中
   const wrongRev = searchWorkspace([file], '缓存回退', undefined, {
     p3_cache_rX: '第一行：缓存回退正文\n第二行',
   });
   assert.equal(wrongRev.length, 0);
 
-  // 按 revision_id 命中缓存正文；snippet 为原行 trim
   const cached = searchWorkspace([file], '缓存回退', undefined, {
     p3_cache_r1: '第一行：缓存回退正文\n  缓存回退缩进行  \n第二行',
   });
@@ -1823,12 +1791,10 @@ test('决策准确性：同编号 Q03 按命名空间隔离，“推荐”“不
   assert.equal(fourSpecQ03[0].status, '待确认');
   assert.equal(oaCollabQ03[0].status, '已确认');
 
-  // 疑似决策 (isCandidateOnly) 不增加真实待确认计数
   const actionable = getActionablePendingDecisions(INITIAL_DECISIONS);
   assert.equal(actionable.some((d) => d.isCandidateOnly), false);
-  assert.equal(actionable.length, 2); // Q01 (来源不一致) + 四专项::Q03 (待确认)
+  assert.equal(actionable.length, 2);
 
-  // 语义边界校验
   assert.equal(
     evaluateDecisionPhraseSemantics('推荐采用选项 B（仅作架构组建议，尚未获业务负责人签批）')
       .inferredStatus,
@@ -1898,8 +1864,6 @@ test('局部关系图与复制给智能体：支持一跳/二跳展开并输出�
   assert.ok(formatted.includes('revision_id=rev_01_03'));
   assert.ok(formatted.includes('Lines 16–23'));
 
-  // 导出时间必须是真实的 Asia/Shanghai 挂钟时间，与 Intl 独立计算一致（容忍跨分钟竞态 1 分钟）。
-  // 旧实现 toISOString().replace('Z', '+08:00') 把 UTC 时刻错标成北京时间，差 8 小时。
   const exportedLine = formatted.split('\n').find((l) => l.startsWith('- 导出时间：'))!;
   const m = /- 导出时间：(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}) \(\+08:00\)$/.exec(exportedLine);
   assert.ok(m, `导出时间行应为「YYYY-MM-DD HH:MM (+08:00)」，实际为：${exportedLine}`);
@@ -1921,16 +1885,12 @@ test('局部关系图与复制给智能体：支持一跳/二跳展开并输出�
     `导出时间应等于此刻北京时间：actual=${actualStamp}, expected=${expectedBeijing}`
   );
 
-  // sha256 输出完整 64 位十六进制（原 slice(0,16)+「...」截断让校验凭证形同虚设）
   assert.ok(
     formatted.includes('sha256:c7e329f5d4261a99325160324150693241506932415069324150693241506903'),
     '内容哈希必须逐字输出完整 64 位，不得截断'
   );
   assert.ok(!formatted.includes('...`'), '哈希行不得再带截断省略号');
 
-  // 唯一输出——本地挂钟手拼的时间字段不得存在（buildStructuredPrompt 已删除，
-  // 其「生成于 HH:MM (+08:00)」标记为非 +08:00 时区机器错标 8 小时的来源）；
-  // (+08:00) 只允许出现在受上方 Intl 守卫的导出时间行
   assert.ok(!formatted.includes('生成于'), '不得残留本地挂钟手拼时间标记「生成于」');
   assert.equal(
     formatted.split('\n').filter((l) => l.includes('(+08:00)')).length,
@@ -1939,13 +1899,8 @@ test('局部关系图与复制给智能体：支持一跳/二跳展开并输出�
   );
 });
 
-// 统一证据导出器契约——单一函数单一字符串（「复制」「生成结构化 Prompt」、
-// RightInspector 入口全部经由 formatContextForAgent），sha256 全长、摘录逐字不截断
 test('统一导出器：sha256 完整 64 位、摘录逐字不截断、整文件凭证与指针字段一致', () => {
-  // 真实形态的 64 位十六进制（空串 sha256）
   const sha64 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
-  // >120 字且含换行的摘录：旧的 buildStructuredPrompt 会 slice(0,120) 截断，
-  // 统一导出器必须逐字完整输出（完整性优先，折叠/上限策略延后到积压）
   const longExcerpt =
     '这是一段超过一百二十字的证据摘录，用于证明统一导出器不再做 slice(0, 120) 截断：' +
     '观澜把每一次版本变化都变成可溯源事件。'.repeat(8) +
@@ -1965,7 +1920,6 @@ test('统一导出器：sha256 完整 64 位、摘录逐字不截断、整文件
   };
   const out = formatContextForAgent([pointer], INITIAL_WORKSPACE_CONFIG.rootPath);
 
-  // 指针字段逐字出现且一致
   assert.ok(out.includes(`sha256:${sha64}`), '完整 64 位 sha256 必须逐字出现');
   assert.ok(!out.includes(`${sha64.slice(0, 16)}...`), '不得残留 16 位截断形态');
   assert.ok(out.includes('file_id=f_gucc02'));
@@ -1973,14 +1927,12 @@ test('统一导出器：sha256 完整 64 位、摘录逐字不截断、整文件
   assert.ok(out.includes('Full File'), "locator.kind === 'file' 输出整文件定位段");
   assert.ok(out.includes(`\`${pointer.observed_at}\``), '观察时间逐字出现');
 
-  // 摘录逐字不截断：整块引用（含换行续引）与输入一致
   assert.ok(
     out.includes(`> ${longExcerpt.replace(/\n/g, '\n> ')}`),
     '摘录必须逐字完整出现（含换行续引），不得 slice 截断'
   );
   assert.ok(out.length > 200, '导出文本长度应容纳完整摘录');
 
-  // 空摘录诚实化：内容不可用时不输出空引用行、不虚构占位文本
   const emptyOut = formatContextForAgent(
     [{ ...pointer, excerpt: '' }],
     INITIAL_WORKSPACE_CONFIG.rootPath
@@ -1993,13 +1945,10 @@ test('Graph 节点悬停预览与动态拖拽连线计算：返回核心结论�
   const preview = buildNodeHoverPreviewData(file01, INITIAL_READING_STATES.file_01);
   assert.equal(preview.fileId, 'file_01');
   assert.equal(preview.unreadStatus.isUnread, true);
-  // 修改轮次标签必须来自修订记录真实的 agent_turn_hint（夹具见第 210 行），
-  // 引擎不虚构“第 N 轮”式文案（见 guanlanEngine.ts 悬停预览注释）
   assert.ok(preview.modificationRoundLabel.includes('轮次 #15'));
   assert.ok(preview.coreSummary.includes('3 项显式决策事项'));
   assert.ok(preview.unreadStatus.changedSections.length > 0);
 
-  // 已读最新版本的节点（file_03）应显示 isUnread === false → 『已读最新』
   const file03 = INITIAL_FILES.find((f) => f.file_id === 'file_03')!;
   const previewRead = buildNodeHoverPreviewData(file03, INITIAL_READING_STATES.file_03);
   assert.equal(previewRead.unreadStatus.isUnread, false);
@@ -2019,10 +1968,8 @@ test('Graph 节点悬停预览与动态拖拽连线计算：返回核心结论�
   assert.ok(bounds.height >= 340);
 });
 
-// ---------- 未读三态文案单一出口 ----------
 
 test('unreadStatusLabel：三态映射正确，never_read 不含「上次读」字样', () => {
-  // 术语两态统一：未读新件（首次收录）/ 读后有更新（读后变更）——绝不混同
   assert.equal(unreadStatusLabel('never_read'), '未读新件（尚未建立阅读基线）');
   assert.equal(unreadStatusLabel('updated_since_last_read'), '读后有更新');
   assert.equal(unreadStatusLabel('up_to_date'), '已读最新');
@@ -2040,23 +1987,19 @@ test('unreadStatusLabel：三态映射正确，never_read 不含「上次读」�
 test('未读文案按 reason 渲染：右栏与悬停预览共用同一措辞', () => {
   const file01 = INITIAL_FILES.find((f) => f.file_id === 'file_01')!;
 
-  // 从未建立阅读基线 → never_read（右栏用 unreadStatusLabel(unreadInfo.reason) 渲染此值）
   const never = hasUnreadChanges(file01);
   assert.equal(never.reason, 'never_read');
   assert.equal(unreadStatusLabel(never.reason), '未读新件（尚未建立阅读基线）');
 
-  // 读后有更新 → updated_since_last_read
   const updated = hasUnreadChanges(file01, INITIAL_READING_STATES.file_01);
   assert.equal(updated.reason, 'updated_since_last_read');
   assert.equal(unreadStatusLabel(updated.reason), '读后有更新');
 
-  // 已读最新 → up_to_date
   const file03 = INITIAL_FILES.find((f) => f.file_id === 'file_03')!;
   const upToDate = hasUnreadChanges(file03, INITIAL_READING_STATES.file_03);
   assert.equal(upToDate.reason, 'up_to_date');
   assert.equal(unreadStatusLabel(upToDate.reason), '已读最新');
 
-  // 悬停预览与右栏同源：同一 reason 得到同一措辞（不再维护第二套文案）
   assert.equal(
     buildNodeHoverPreviewData(file01, INITIAL_READING_STATES.file_01).unreadStatus.statusLabel,
     unreadStatusLabel(updated.reason)
@@ -2105,12 +2048,10 @@ test('组件断言：右栏按 reason 如实渲染 never_read 与读后更新两
     indexGeneration: 1,
   };
 
-  // 从未建立阅读基线：右栏必须说真话，不得出现「读后有更新」（两态互斥）
   const neverHtml = renderToStaticMarkup(React.createElement(RightInspector, baseProps));
   assert.ok(neverHtml.includes('未读新件（尚未建立阅读基线）'));
   assert.ok(!neverHtml.includes('读后有更新'));
 
-  // 读后有更新：渲染「读后有更新」
   const readingState: ReadingState = {
     file_id: 'f_gl01',
     last_read_revision_id: 'r1',

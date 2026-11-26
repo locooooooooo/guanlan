@@ -1,10 +1,3 @@
-/**
- * diff-summary-01：语义 Diff 摘要卡（任务队列口径）。
- *
- * - 适配层：DiffResult → 摘要卡视图模型（三指标透传/空值兜底/格式化文案/Checkpoint）；
- * - 全链（本地 http 桩）：POST /api/v1/diff 202 → /jobs/{id} 轮询 → /jobs/{id}/result
- *   三项指标 + checkpoint_id；任务 failed 与端点缺失分支如实透传。
- */
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -22,7 +15,6 @@ import {
   type DiffResult,
 } from '../src/services/workspaceClient';
 
-// ---------- 适配层 ----------
 
 const RESULT: DiffResult = {
   summary: {
@@ -77,7 +69,6 @@ describe('diffSummaryCardOf 适配层', () => {
   });
 });
 
-// ---------- 全链（http 桩） ----------
 
 type Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => void;
 

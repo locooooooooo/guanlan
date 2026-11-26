@@ -46,7 +46,6 @@ pub const MAX_BODY_LINES: usize = 20_000;
 pub const MAX_BODY_BYTES: usize = 512 * 1024;
 /// 单文档 content 词项上限（去重后；title/path 词项不受此限——规模小且权重高）
 pub const MAX_CONTENT_TOKENS: usize = 4096;
-/// 全量重建的分批事务大小（文件数）
 const REBUILD_CHUNK: usize = 500;
 
 /// 词项字段（postings.field；公开给查询侧做字段语义分支）
@@ -104,7 +103,6 @@ pub struct SearchSyncOutcome {
     pub rebuilt: bool,
 }
 
-// ===== DDL（单一来源：由 `Writer::ensure_schema` 幂等执行；契约 §11 v3 派生段）=====
 pub const SEARCH_DDL: &str = "
 CREATE TABLE IF NOT EXISTS search_docs (
   file_id       TEXT PRIMARY KEY,
@@ -133,8 +131,6 @@ CREATE TABLE IF NOT EXISTS search_postings (
 CREATE INDEX IF NOT EXISTS idx_spost_file ON search_postings(file_id);
 ";
 
-// ===== 正文构建（纯函数，可单测）=====
-
 /// 一份待索引文档的正文材料（行 + 行级锚点 JSON）
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DocBody {
@@ -149,13 +145,11 @@ pub struct DocBody {
 /// 去内嵌标签（tspan 等）、基本实体回替、trim；跳过空行）
 pub fn svg_text_lines(source: &str) -> Vec<String> {
     let mut lines = Vec::new();
-    // ASCII 小写化不改字节布局——lower 与 source 的切点一致
     let lower = source.to_ascii_lowercase();
     let bytes = lower.as_bytes();
     let mut from = 0usize;
     while let Some(pos) = find_sub(&bytes[from..], b"<text") {
         let tag_start = from + pos;
-        // 须为 `<text` 后跟 '>' 或空白（防御 `<textarea` 类假阳性）
         match bytes.get(tag_start + 5) {
             Some(&c) if c == b'>' || c.is_ascii_whitespace() => {}
             _ => {
@@ -224,7 +218,6 @@ pub fn body_from_text(snapshot: &str) -> DocBody {
         lines.truncate(MAX_BODY_LINES);
         truncated = true;
     }
-    // 字节保险丝：在行边界截断
     let mut total = 0usize;
     let mut keep = lines.len();
     for (i, line) in lines.iter().enumerate() {
@@ -236,7 +229,6 @@ pub fn body_from_text(snapshot: &str) -> DocBody {
         }
     }
     lines.truncate(keep);
-    // 尾部空行不进正文（行号仅受影响于文件真实末尾，倒排定位无歧义）
     while lines.last() == Some(&"") {
         lines.pop();
     }
@@ -339,8 +331,6 @@ pub fn body_from_xlsx(record: &OfficeExtractRecord) -> DocBody {
     }
 }
 
-// ===== 词项构建（纯函数，可单测）=====
-
 /// 由标题 + 相对路径 + 正文行构建全部词项（title/path 恒收，content 受上限约束）
 pub fn build_postings(
     norm_title: &str,
@@ -363,7 +353,6 @@ pub fn build_postings(
         }
     };
 
-    // 标题/路径字段
     for term in path_field_tokens(norm_title) {
         let weight = if term.chars().count() == 1 {
             WEIGHT_SINGLE
@@ -385,7 +374,6 @@ pub fn build_postings(
         return out;
     }
 
-    // 正文字段：Bigram/词元/编号整词/单字，全文档去重后受上限约束
     let joined_lines = body_lines.join("\n");
     let norm_body = normalize_text(&joined_lines);
     let (bigrams, mut words) = tokenize_mixed(&norm_body);
@@ -412,7 +400,6 @@ pub fn build_postings(
     for bigram in bigrams {
         take(bigram, WEIGHT_CONTENT, &mut content, &mut content_seen);
     }
-    // 词元重排：编号整词优先入库（上限截断时保编号召回），其余按词长降序
     words.sort_by_key(|w| {
         (
             std::cmp::Reverse(is_code_word(w)),
@@ -427,7 +414,6 @@ pub fn build_postings(
         };
         take(word, weight, &mut content, &mut content_seen);
     }
-    // 单字（CJK 有界回退）：仅收 CJK（ASCII 单字与标点/空白噪声太大），权重最低
     for c in norm_body.chars() {
         if content.len() >= MAX_CONTENT_TOKENS {
             break;
@@ -447,7 +433,6 @@ pub fn build_postings(
     out
 }
 
-/// 词元是否为专有编号（ac-03 / #39 / 内部 ID；与 domain::search_tokens::classify_code 同口径的词级判定）
 fn is_code_word(word: &str) -> bool {
     crate::domain::search_tokens::classify_code(word)
 }
@@ -505,8 +490,6 @@ pub fn build_search_doc(
     (row, postings)
 }
 
-// ===== 编排：同步与重建 =====
-
 /// 对账尾部入口：差分同步（规则不符自动全量重建）
 pub fn sync_after_reconcile(
     writer: &mut Writer,
@@ -550,14 +533,11 @@ pub fn rebuild_all(
         Ok(())
     })?;
 
-    // 全量文件清单 + 最新版本映射（两条批量轻查询替代逐文件 N+1）
     let files = writer.list_files(workspace_id, true)?;
     let latest: HashMap<String, String> = writer.latest_revision_ids()?.into_iter().collect();
 
     let mut synced = 0usize;
     for chunk in files.chunks(REBUILD_CHUNK) {
-        // 先在事务外完成全部 IO 与分词（快照读取/extracts 解析绝不占写锁持有期），
-        // 再进事务做纯内存落库，与 Office/PDF 派生主流程保持一致。
         let mut built: Vec<(SearchDocRow, Vec<SearchPostingRow>)> = Vec::with_capacity(chunk.len());
         let mut removes: Vec<String> = Vec::new();
         for row in chunk {
@@ -587,7 +567,6 @@ pub fn rebuild_all(
                     ));
                 }
             }
-            // WITHOUT ROWID 主键 (term, field, file_id) 顺序生长——万级全量重建的关键写放大优化
             bulk.sort();
             writer.bulk_insert_search_postings(&bulk)?;
             synced += built.len();
@@ -608,7 +587,6 @@ pub fn rebuild_all(
     })
 }
 
-/// 差分同步指定文件（按 chunk 拆事务）
 fn sync_files(
     writer: &mut Writer,
     workspace_id: &str,
@@ -623,7 +601,6 @@ fn sync_files(
         writer.transaction(|writer| {
             for candidate in chunk {
                 let Some(row) = by_id.get(&candidate.file_id) else {
-                    // 文件已消失：文档与词项一并移除（stale 通道通常先处理，兜底防御）
                     writer.delete_search_doc(&candidate.file_id)?;
                     continue;
                 };
@@ -645,17 +622,12 @@ fn sync_files(
     Ok(())
 }
 
-/// 单文件索引动作（构建与落库分离：全量重建按 chunk 批量有序写词项）
 enum IndexOne {
-    /// 非 active：移除既有检索行
     Remove,
-    /// 无最新版本等：本轮跳过
     Skip,
-    /// 已构建文档行与词项（Box：变体间尺寸差过大，clippy::large_enum_variant）
     Built(Box<(SearchDocRow, Vec<SearchPostingRow>)>),
 }
 
-/// 构建单文件的检索文档与词项（按格式取正文材料；不落库）
 fn build_doc_for_file(
     writer: &Writer,
     workspace_id: &str,
@@ -673,7 +645,6 @@ fn build_doc_for_file(
     let rel_path = normalize_rel_path(&row.current_path);
     let title = row.title.clone();
 
-    // 正文材料（None = 仅标题/路径可检索）
     let body: Option<DocBody> = if rev.snapshot_available == 0 {
         None
     } else if format == "svg" {
@@ -682,7 +653,6 @@ fn build_doc_for_file(
             .and_then(|bytes| String::from_utf8(bytes).ok())
             .and_then(|src| {
                 let lines = svg_text_lines(&src);
-                // 无文本层 SVG：诚实降级为仅文件名可检索
                 if lines.is_empty() {
                     None
                 } else {
@@ -709,7 +679,6 @@ fn build_doc_for_file(
             Some(cached) => match serde_json::from_str::<OfficeExtractRecord>(&cached.extract_json)
             {
                 Ok(record) if record.status == "indexed" => {
-                    // xlsx/xlsm/xltx/xltm 走单元格锚；docx/docm/dotx 走段落锚
                     if format.starts_with("xl") {
                         Some(body_from_xlsx(&record))
                     } else {
@@ -776,8 +745,6 @@ fn refresh_doc_count(writer: &mut Writer, workspace_id: &str) -> Result<(), Guan
         .map_err(internal_sql)?;
     writer.set_meta(META_DOC_COUNT, &n.to_string())
 }
-
-// ===== 单测（纯函数部分；编排部分由 http_tests c02 与 bench 覆盖）=====
 
 #[cfg(test)]
 mod tests {
@@ -857,7 +824,6 @@ mod tests {
 
     #[test]
     fn build_postings_weights_and_caps() {
-        // 标题权重高于正文
         let postings = build_postings(
             &normalize_text("登录方案"),
             &normalize_text("docs/设计/user-auth-service.ts"),
@@ -877,18 +843,15 @@ mod tests {
             .unwrap();
         assert_eq!(title_hit.weight, WEIGHT_TITLE);
         assert_eq!(content_hit.weight, WEIGHT_CONTENT);
-        // 路径缩写词
         assert!(postings
             .iter()
             .any(|p| p.term == "uas" && p.field == FIELD_PATH));
-        // 编号整词（ac_03 下划线式 → classify_code 判定通过）权重更高
         let code_hit = postings
             .iter()
             .find(|p| p.term == "ac_03" && p.field == FIELD_CONTENT)
             .unwrap();
         assert_eq!(code_hit.weight, WEIGHT_CONTENT_CODE);
 
-        // 上限保险丝：超长正文 distinct 词项截断在 MAX_CONTENT_TOKENS
         let huge_line: String = (0..30_000)
             .map(|i| format!("词{i}"))
             .collect::<Vec<_>>()

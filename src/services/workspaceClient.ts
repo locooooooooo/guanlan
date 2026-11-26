@@ -1,18 +1,3 @@
-/**
- * 观澜 Guanlan - /api/v1 查询与写操作客户端
- *
- * 接口文档：native/docs/contract-query-api.md；
- * 类型镜像：src/services/apiTypes.ts。
- *
- * 取数纪律：
- * - 初始化一次 GET /api/v1/bootstrap（短读快照；不含正文、完整版本链、全量关系、历史 SVG 原文）；
- * - files 按分页游标逐页拉取摘要，按 file_id 合并入调用方缓存（侧栏「全部文件」计数与
- *   facets 来自服务，不再假设浏览器持有全量）；
- * - events 窗口分页：游标绑定 snapshot_max_seq 与筛选指纹；CURSOR_STALE / INDEX_STALE 时
- *   以 stale 标记返回，调用方保留已显示数据并重新取当前窗口首页；
- * - 版本链分页（/files/{id}/revisions，seq_asc）+ 按需版本正文（/revisions/{id}/content，
- *   md/svg 文本、pdf raw 流）。
- */
 
 import type {
   BootstrapResponse,
@@ -91,11 +76,8 @@ import type {
   FileRecord,
   Revision,
 } from '../types/guanlan';
-// 批量正文拉取的请求协调与字节预算统一走 revisionContentStore
 import { requestRevisionContentsBatch } from '../utils/revisionContentStore';
 
-// 与既有消费方（graphEvents/taskPackages/GraphCanvasView/TimelineView 等）的导入面保持不变：
-// 类型镜像自 apiTypes.ts（wire 1:1），此处统一再导出。
 export type {
   BootstrapResponse,
   CasConflictDetail,
@@ -165,13 +147,7 @@ export type {
 /** 桶粒度：day（逐日）/ week（周一为桶键）/ month（YYYY-MM） */
 export type EventDayGranularity = EventDaysResult['granularity'];
 
-// ============================================================
-// 基址与底层请求
-// ============================================================
 
-/** 默认同源相对路径；node:test 的本地 http 桩经 setApiBaseUrl 注入绝对地址。
- * 桌面壳（Tauri）在页面脚本运行前注入 window.__GUANLAN_API__（进程内服务的
- * 127.0.0.1 端点），跨源访问同源相对路径在 WebView 下不成立。 */
 const injectedApiBase =
   typeof window !== 'undefined' && typeof (window as { __GUANLAN_API__?: unknown }).__GUANLAN_API__ === 'string'
     ? ((window as { __GUANLAN_API__?: string }).__GUANLAN_API__ as string)
@@ -204,11 +180,8 @@ export interface ErrorEnvelopeBody {
 
 interface RawResponse {
   status: number;
-  /** JSON 解析成功且为对象的响应体；否则 null */
   data: Record<string, unknown> | null;
-  /** !ok 时尽力解析出的错误包络 */
   errorBody: ErrorEnvelopeBody | null;
-  /** 请求被 AbortController 主动取消（如快速切上下文件） */
   aborted?: boolean;
 }
 
@@ -227,7 +200,6 @@ async function requestJson(path: string, signal?: AbortSignal): Promise<RawRespo
         if (!res.ok) errorBody = body as unknown as ErrorEnvelopeBody;
       }
     } catch {
-      /* 非 JSON 响应体（如空 404 页）按无数据处理 */
     }
     return { status: res.status, data: body, errorBody };
   } catch (err) {
@@ -238,19 +210,12 @@ async function requestJson(path: string, signal?: AbortSignal): Promise<RawRespo
   }
 }
 
-/** 网络层失败的提示文案（status 0 = fetch 抛错，多为服务未启动；
- * 保留状态码供排障定位，不向用户暴露底层协议框架词）。 */
 function networkErrorText(raw: RawResponse): string {
   return raw.status === 0
     ? '无法连接观澜读服务（/api/v1）'
     : `读服务暂时不可用（${raw.status}）`;
 }
 
-/** POST 请求（与 requestJson 同形：不抛异常，status 0 = 网络层失败）。
- *
- * 全部前端写操作（索引任务、文件与文件夹操作、拍板回写、草案、checkpoint、挂载……）
- * 共用的 POST 入口。异步写操作返回 202 + job_id，因此成功判定为 2xx 且包络 ok:true。
- */
 async function requestJsonPost(path: string, body: unknown): Promise<RawResponse> {
   try {
     const res = await fetch(`${apiBase}${path}`, {
@@ -267,7 +232,6 @@ async function requestJsonPost(path: string, body: unknown): Promise<RawResponse
         if (!res.ok) errorBody = parsedBody as unknown as ErrorEnvelopeBody;
       }
     } catch {
-      /* 非 JSON 响应体按无数据处理 */
     }
     return { status: res.status, data: parsedBody, errorBody };
   } catch {
@@ -291,7 +255,6 @@ async function requestJsonPatch(path: string, body: unknown): Promise<RawRespons
         if (!res.ok) errorBody = parsedBody as unknown as ErrorEnvelopeBody;
       }
     } catch {
-      /* 非 JSON 响应体按无数据处理 */
     }
     return { status: res.status, data: parsedBody, errorBody };
   } catch {
@@ -299,7 +262,6 @@ async function requestJsonPatch(path: string, body: unknown): Promise<RawRespons
   }
 }
 
-/** DELETE 请求（卸载挂载等用；与 requestJson 同形：不抛异常，status 0 = 网络层失败） */
 async function requestJsonDelete(path: string): Promise<RawResponse> {
   try {
     const res = await fetch(`${apiBase}${path}`, {
@@ -315,7 +277,6 @@ async function requestJsonDelete(path: string): Promise<RawResponse> {
         if (!res.ok) errorBody = parsedBody as unknown as ErrorEnvelopeBody;
       }
     } catch {
-      /* 非 JSON 响应体按无数据处理 */
     }
     return { status: res.status, data: parsedBody, errorBody };
   } catch {
@@ -334,7 +295,6 @@ export type ApiResult<T> =
       ok: false;
       data: null;
       status?: number;
-      /** 错误包络 code（CURSOR_STALE / INDEX_STALE / NOT_FOUND / SNAPSHOT_UNAVAILABLE …） */
       code?: string;
       error?: string;
     };
@@ -362,19 +322,12 @@ function toResult<T>(raw: RawResponse): ApiResult<T> {
   };
 }
 
-// ============================================================
-// bootstrap：一次初始化，短读快照
-// ============================================================
 
 export interface BootstrapQuery {
-  /** 画布聚合桶数上限（≤120，默认 30；前端拉满 120） */
   daysLimit?: number;
-  /** 每桶样本卡片数（1..12，默认 4） */
   daysSamples?: number;
   daysGranularity?: 'day' | 'week' | 'month';
-  /** 首批文件摘要条数（默认 100） */
   filesPageSize?: number;
-  /** 首页事件条数（≤200，默认 50） */
   eventsLimit?: number;
 }
 
@@ -392,19 +345,12 @@ export async function fetchBootstrap(
   return toResult<BootstrapResponse>(await requestJson(`/api/v1/bootstrap${suffix}`));
 }
 
-// ============================================================
-// files 文件摘要分页：relative_path ASC + 游标
-// ============================================================
 
 export interface FileSummariesQuery {
-  /** 目录前缀（相对路径，含子目录） */
   dir?: string;
   format?: FileFormat;
-  /** 事项/角色（files.role） */
   matter?: string;
-  /** 标题或路径 LIKE */
   q?: string;
-  /** 状态筛选：缺省 active；recoverable / trashed / missing / all */
   status?: 'active' | 'trashed' | 'missing' | 'recoverable' | 'all';
   limit?: number;
   cursor?: string | null;
@@ -429,7 +375,6 @@ export async function fetchFileSummaries(
 
 export interface AllFileSummariesResult {
   ok: boolean;
-  /** 按 relative_path ASC 合并的全部已取回摘要 */
   items: FileSummary[];
   total_matched?: number;
   facets?: FileFacets;
@@ -450,13 +395,10 @@ export async function fetchAllFileSummaries(
   const seenIds = new Set<string>();
   let total_matched: number | undefined;
   let facets: FileFacets | undefined;
-  // 续载起点（如 bootstrap 首批签发的游标）；仅第一轮使用——游标失效重走必须从头（新快照）
   const startCursor = query.cursor ?? null;
-  // 游标失效重走最多 3 次（每轮都会把新页合并进 items；按 file_id 去重保证不重复计数）
   for (let attempt = 0; attempt < 3; attempt++) {
     let cursor: string | null = attempt === 0 ? startCursor : null;
     let failed: ApiResult<FileSummaryPage> | null = null;
-    // 页数护栏：分页上限 500/页，遍历上千文件也在个位数页；护栏只为防服务端游标循环
     for (let pageGuard = 0; pageGuard < 1000; pageGuard++) {
       const page = await fetchFileSummaries({ ...query, cursor });
       if (!page.ok) {
@@ -477,7 +419,6 @@ export async function fetchAllFileSummaries(
       }
       cursor = data.next_cursor;
     }
-    // failed 但不是游标失效：直接如实返回失败
     if (failed && failed.code !== 'CURSOR_STALE' && failed.code !== 'INDEX_STALE') {
       return {
         ok: false,
@@ -488,7 +429,6 @@ export async function fetchAllFileSummaries(
         error: failed.error,
       };
     }
-    // 游标失效：下一轮从头重走（cursor 复位为 null，由循环开头赋值）
   }
   return {
     ok: false,
@@ -500,9 +440,6 @@ export async function fetchAllFileSummaries(
   };
 }
 
-// ============================================================
-// events 窗口分页：snapshot_max_seq 绑定
-// ============================================================
 
 export interface EventPageQuery {
   from?: string;
@@ -518,7 +455,6 @@ export interface EventPageQuery {
 
 export interface EventPageResult {
   page: EventPage | null;
-  /** CURSOR_STALE / INDEX_STALE：游标失效。调用方必须保留已显示数据，重取当前窗口首页 */
   stale: boolean;
   code?: string;
   error?: string;
@@ -552,7 +488,6 @@ export interface EventDaysQuery {
   to?: string;
   kinds?: string[];
   format?: FileFormat;
-  /** 时间口径（与 /events 一致）：occurred = 按材料记载时间；observed = 按观澜采集时间 */
   order?: 'occurred' | 'observed';
   granularity?: EventDayGranularity;
   limitDays?: number;
@@ -576,9 +511,6 @@ export async function fetchEventDays(query: EventDaysQuery = {}): Promise<EventD
   return result.ok ? result.data : null;
 }
 
-// ============================================================
-// 版本链分页与按需版本正文
-// ============================================================
 
 export interface FileHistoryRevision {
   revision_id: string;
@@ -646,10 +578,7 @@ export interface FileHistory {
 }
 
 export interface FileRevisionsPageQuery {
-  /** seq_asc | seq_desc（默认 seq_desc；旧 /history wire 为 seq_asc，遍历合并时用 asc） */
   order?: 'seq_asc' | 'seq_desc';
-  /** 逗号分隔：events,statements,edges,aliases——文件级完整集合，仅首页携带
-   *  （服务端只在无游标时返回，续页不再重复查询/传输整文件关联集合） */
   include?: Array<'events' | 'statements' | 'edges' | 'aliases'>;
   limit?: number;
   cursor?: string | null;
@@ -683,7 +612,6 @@ export async function fetchFileHistory(fileId: string): Promise<FileHistory | nu
   let statements: FileHistory['statements'] = [];
   let edges: FileHistory['edges'] = [];
   let aliases: string[] = [];
-  // 游标失效重走一次（版本链是小集合；重走即得新快照）
   for (let attempt = 0; attempt < 2; attempt++) {
     revisions.length = 0;
     events = [];
@@ -696,7 +624,6 @@ export async function fetchFileHistory(fileId: string): Promise<FileHistory | nu
     for (let pageGuard = 0; pageGuard < 1000; pageGuard++) {
       const page = await fetchFileRevisionsPage(fileId, {
         order: 'seq_asc',
-        // 文件级附集合只在首页请求；续页服务端不返回，不再空发参数
         include: cursor ? undefined : ['events', 'statements', 'edges', 'aliases'],
         limit: 200,
         cursor,
@@ -731,7 +658,6 @@ export async function fetchFileHistory(fileId: string): Promise<FileHistory | nu
           snapshot_available: r.snapshot_available,
         }))
       );
-      // 相关事件/陈述/引用是该文件的完整集合（不随版本分页），只在首页携带
       if (!cursor) {
         events = (data.events as FileHistoryEvent[] | undefined) ?? [];
         statements = (data.statements as FileHistory['statements'] | undefined) ?? [];
@@ -764,10 +690,6 @@ export interface RevisionContentResult {
   error?: string;
 }
 
-/**
- * 按版本读取正文；PDF 默认返回可按版本打开的 raw_url，md/svg 返回 utf-8 文本。
- * 快照过保留期返回 SNAPSHOT_UNAVAILABLE，绝不拿当前内容冒充旧版本。
- */
 /** 按版本读取正文的错误码说明：
  *  - `SNAPSHOT_UNAVAILABLE`：快照已过保留期（换仍保留快照的版本阅读）；
  *  - `UNSUPPORTED_CONTENT`：正文超过服务端内联上限（改用 `raw=1` 流式地址）；
@@ -899,18 +821,12 @@ export async function fetchRevisionContentsBatch(
   });
 }
 
-// ============================================================
-// relations（全量文件引用边）
-// ============================================================
 
 /** 全量文件引用边 */
 export async function fetchRelations(): Promise<ApiResult<RelationsResponse>> {
   return toResult<RelationsResponse>(await requestJson('/api/v1/relations'));
 }
 
-// ============================================================
-// wire → 视图模型转换（镜像 server/project.ts 既有投影语义）
-// ============================================================
 
 /** 从 SVG 源提取 <text> 文本节点（镜像 server/project.ts:433-448 extractSvgText） */
 export function extractSvgTextNodes(source: string): string[] {
@@ -939,8 +855,6 @@ export function folderOfRelativePath(relativePath: string): string {
 
 /** 文件摘要 → 资产库 FileRecord（镜像 project.ts:189-206 的 active 投影） */
 export function fileSummaryToFileRecord(item: FileSummary): FileRecord {
-  // 当前版占位版本行：分页摘要不带 revisions[]，阅读器/未读提示等
-  // 消费方按 current_revision_id 找版本，先给一条可判定的占位（详情到达后整链替换）
   const placeholder: Revision | null = item.current_revision_id
     ? {
         revision_id: item.current_revision_id,
@@ -948,8 +862,6 @@ export function fileSummaryToFileRecord(item: FileSummary): FileRecord {
         versionNumber: item.revision_count || 1,
         content_sha256: '',
         observed_at: item.last_observed_at,
-        // 日历「最近 7 天」取 revisions[0].source_time（=最早版本发生时间），
-        // 摘要的 first_source_time 恰是该字段
         source_time: item.first_source_time || undefined,
         sizeBytes: 0,
         snapshotAvailable: item.snapshot_available,
@@ -989,7 +901,6 @@ export function revisionsFromHistory(
   revisions: RevisionSummary[],
   events: FileHistoryEvent[]
 ): Revision[] {
-  // 变更章节（来自 modified 事件的 payload）
   const changedSectionsByRevision = new Map<string, string[]>();
   for (const ev of events) {
     if (!ev.revision_id) continue;
@@ -1036,9 +947,6 @@ export function revisionsFromHistory(
 }
 
 
-// ============================================================
-// 工作区摘要形状与 SSE 通知类型
-// ============================================================
 
 /** 首屏摘要（App 由 bootstrap 的 counts/baseline/time_range 组装；HomeView 消费） */
 export interface WorkspaceSummary {
@@ -1066,18 +974,14 @@ export type WorkspaceSource = 'real' | 'error';
 export interface WorkspaceChangeNotice {
   type: 'hello' | 'workspace-change';
   generation?: number;
-  /** 索引代（workspace-change 载荷） */
   index_generation?: number;
   newEvents?: number;
   newRevisions?: number;
-  /** 后端 snake_case 兼容字段 */
   new_events?: number;
   new_revisions?: number;
   at?: string;
   watching?: boolean;
   paths?: string[];
-  /** 变更类别（watcher/decision_writeback/proposal/l4a/state/task）；
-   *  kinds 含 'proposal' → 草案回写通知条（ProposalToast） */
   kinds?: string[];
 }
 
@@ -1109,7 +1013,6 @@ export function subscribeWorkspaceStream(
       }
       onNotice(parsed);
     } catch {
-      /* 忽略无法解析的心跳 */
     }
   };
   source.addEventListener('open', handleOpen);
@@ -1126,9 +1029,6 @@ export function subscribeWorkspaceStream(
   };
 }
 
-// ============================================================
-// 索引任务与运行状态
-// ============================================================
 
 /** 索引任务类型（外部可提四类）。
  *
@@ -1144,9 +1044,7 @@ export function subscribeWorkspaceStream(
 export type IndexJobKind = 'verify_all' | 'changed_paths' | 'l4a_summary' | 'set_initiative_dirs';
 
 export interface StartIndexJobPayload {
-  /** kind=changed_paths / l4a_summary 时的文件相对路径列表（≤2000 条） */
   paths?: string[];
-  /** kind=set_initiative_dirs 时的专项目录名列表（≤64 条，幂等覆盖） */
   dirs?: string[];
 }
 
@@ -1161,9 +1059,6 @@ export async function startIndexJob(
   );
 }
 
-// ============================================================
-// 身份保真文件操作（重命名 / 跨目录移动 / 移入回收站）
-// ============================================================
 
 export async function postRenameFile(
   fileId: string,
@@ -1204,9 +1099,6 @@ export async function postSetInitiativeDirs(dirs: string[]): Promise<ApiResult<I
   return startIndexJob('set_initiative_dirs', { dirs });
 }
 
-// ============================================================
-// 本地快照占用统计与工作区三档快照配额策略
-// ============================================================
 
 export async function fetchStorageStats(): Promise<ApiResult<StorageStatsResponse>> {
   return toResult<StorageStatsResponse>(await requestJson('/api/v1/storage/stats'));
@@ -1224,9 +1116,6 @@ export async function updateStoragePolicy(
   );
 }
 
-// ============================================================
-// 统一状态机投影（GET /api/v1/state-overview）
-// ============================================================
 
 /** 四视图唯一数据源（专项卡片 / 专项详情下拉 / 星图节点 / 文档顶栏）；
  *  initiative_id 缺省 = 全量专项。 */
@@ -1241,9 +1130,6 @@ export async function fetchStateOverview(
   );
 }
 
-// ============================================================
-// 智能体上下文包（POST /api/v1/context）
-// ============================================================
 
 /** 结构化上下文 + Markdown 导出同源生成（items 缺省/空时由服务端按三入口默认包组装） */
 export async function postContext(body: ContextRequest): Promise<ApiResult<ContextResponse>> {
@@ -1293,9 +1179,6 @@ export function getActiveLoopbackEndpoint(): string {
   return 'http://127.0.0.1:39120';
 }
 
-// ============================================================
-// 陈述与拍板（GET /statements + POST /decisions/{id}/resolve）
-// ============================================================
 
 /** 决策列表：SSE decision_writeback 后取最新决策（不限状态），
  *  生成《最新已拍板决策变更单》；status 传库内词（如「已确认」）时精确过滤。 */
@@ -1348,9 +1231,6 @@ export async function postDecisionResolve(
   );
 }
 
-// ============================================================
-// 修订草案（/api/v1/revision-proposals 全链）
-// ============================================================
 
 /** 草案列表（分页） */
 export async function fetchRevisionProposals(query: {
@@ -1411,9 +1291,6 @@ export async function postRevisionProposalDismiss(
   );
 }
 
-// ============================================================
-// 长任务 DAG 与 Checkpoint（/initiatives/{id}/tasks + /checkpoints）
-// ============================================================
 
 /** 五槽位任务节点（专项详情下拉的数据源；suspended_on_hitl 高亮） */
 export async function fetchInitiativeTasks(
@@ -1453,9 +1330,6 @@ export async function fetchCheckpoints(query: {
   );
 }
 
-// ============================================================
-// 归档与重开
-// ============================================================
 
 /** 专项归档（202；非 Delivered 态归档在 report.warn='当前非已交付态'） */
 export async function postInitiativeArchive(
@@ -1476,9 +1350,6 @@ export async function postInitiativeReopen(
   );
 }
 
-// ============================================================
-// 任务取消与结果（/jobs/{id}/cancel + /jobs/{id}/result）
-// ============================================================
 
 /** 取消任务（queued 立即；running 协作式——写线程阶段间隙检查，
  *  事务提交点不可中断；已结束任务 409 CONFLICT） */
@@ -1498,10 +1369,6 @@ export async function fetchJobResult<R = unknown>(
   );
 }
 
-// ============================================================
-// 语义 Diff（POST /api/v1/diff 走任务队列——大计算异步入队，
-//  202 受理后轮询 /jobs/{id}，result 为 DiffResult）
-// ============================================================
 
 export async function postDiffJob(body: DiffJobRequest): Promise<ApiResult<JobAccepted>> {
   return toResult<JobAccepted>(await requestJsonPost('/api/v1/diff', body));
@@ -1541,9 +1408,6 @@ export async function fetchDiffSummaryViaJob(
   return { ok: true, data: result.data.result as DiffResult, status: result.status };
 }
 
-// ============================================================
-// L4A 摘要（GET /summary/{file_id}）
-// ============================================================
 
 /** 单文件 L4A 摘要（确定性本地摘要；summary=null 且 queued=true 表示已入队未完成） */
 export async function fetchFileSummaryDetail(
@@ -1564,9 +1428,7 @@ export async function fetchIndexJobStatus(
 }
 
 export interface JobPollOptions {
-  /** 轮询间隔（默认 900ms，与 App 重扫轮询同拍） */
   intervalMs?: number;
-  /** 最大尝试次数（默认 40 次 ≈ 36s；拍板回写是写线程短任务，超时即报） */
   maxAttempts?: number;
 }
 
@@ -1691,7 +1553,6 @@ export async function unmountWorkspace(
   );
 }
 
-// ===== 事项资料胶囊（Context Capsule）两阶段预览/脱敏导出/秒开核验 =====
 
 /** 阶段一：POST /api/v1/capsules/preview —— 零副作用预览体积、敏感排除与 confirm token */
 export async function previewCapsule(
@@ -1733,7 +1594,6 @@ export async function readCapsuleFile(
   );
 }
 
-// ===== 全量开放导出、决定证据保护存储瘦身（GC）、SHA-256 核验与脱敏诊断包 ZIP =====
 
 /** GET /api/v1/storage/integrity —— 校验全部活跃快照 SHA-256 并诚实报告受损影响范围 */
 export async function verifyStorageIntegrity(): Promise<
@@ -1778,7 +1638,6 @@ export function diagnosticZipDownloadUrl(): string {
   return resolveApiUrl('/api/v1/storage/diagnostic-zip');
 }
 
-// ===== 真实目录树（含空目录）、文件夹一等操作、新建文档、批量整理与挂载目录树浏览 =====
 
 /** GET /api/v1/folders —— 获取工作区全部真实目录（含空文件夹） */
 export async function fetchWorkspaceFolders(): Promise<
@@ -1887,7 +1746,6 @@ export async function fetchMountedFiles(
   );
 }
 
-// ===== 多项目并存与跨项目总览（Quiet.md 多目录工作台模型）=====
 
 export async function fetchProjects(): Promise<
   ApiResult<import('./apiTypes').ProjectListResponseDto>
@@ -2046,7 +1904,6 @@ export async function postMoveFileInProject(
   );
 }
 
-// ===== 服务端已读基线查询与批量确立/撤销 =====
 
 export async function fetchServerReadingStates(): Promise<
   ApiResult<import('./apiTypes').ReadingStateListResponseDto>

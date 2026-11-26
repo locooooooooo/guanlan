@@ -1,6 +1,3 @@
-/**
- * 全键盘无鼠工作流、来源栈 Esc、FileOpHistory Undo/Redo、画布空间漫游与无障碍动效纯函数单测。
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -56,7 +53,6 @@ function key(
 
 const OPEN_CTX = { editableTarget: false, overlayOpen: false };
 
-// ── 1. keyboardShortcuts ──────────────────────────────────────────────────────
 
 test('keyboardShortcuts：全量 9 个动作键解析与 Escape/?/Space/Alt 方向键正交让位', () => {
   assert.equal(resolveShortcutAction(key('j'), OPEN_CTX), 'event-next');
@@ -78,7 +74,6 @@ test('keyboardShortcuts：全量 9 个动作键解析与 Escape/?/Space/Alt 方�
     'redo-op'
   );
 
-  // 既有监听独占的键恒返回 null，绝不双解析
   assert.equal(resolveShortcutAction(key('Escape'), OPEN_CTX), null);
   assert.equal(resolveShortcutAction(key('?'), OPEN_CTX), null);
   assert.equal(resolveShortcutAction(key(' '), OPEN_CTX), null);
@@ -86,7 +81,6 @@ test('keyboardShortcuts：全量 9 个动作键解析与 Escape/?/Space/Alt 方�
   assert.equal(resolveShortcutAction(key('k', { ctrlKey: true }), OPEN_CTX), null);
   assert.equal(resolveShortcutAction(key('z', { ctrlKey: true, altKey: true }), OPEN_CTX), null);
 
-  // Store 动作集不包含视图级 J/K/H/L
   assert.equal(STORE_SHORTCUT_ACTIONS.has('event-next'), false);
   assert.equal(STORE_SHORTCUT_ACTIONS.has('undo-op'), true);
   assert.equal(STORE_SHORTCUT_ACTIONS.has('open-version-diff'), true);
@@ -105,13 +99,11 @@ test('keyboardShortcuts 停机线①：编辑态（input/textarea/select/content
   assert.equal(resolveShortcutAction(key('c'), editCtx), null);
   assert.equal(resolveShortcutAction(key('j', { isComposing: true }), OPEN_CTX), null);
 
-  // 浮层打开时同样全键让路
   const overlayCtx = { editableTarget: false, overlayOpen: true };
   assert.equal(resolveShortcutAction(key('z', { ctrlKey: true }), overlayCtx), null);
   assert.equal(resolveShortcutAction(key('d'), overlayCtx), null);
   assert.equal(resolveShortcutAction(key('Enter'), overlayCtx), null);
 
-  // 编辑元素鸭子判定覆盖全部四类
   assert.equal(isEditableLikeTarget({ tagName: 'INPUT' } as unknown as EventTarget), true);
   assert.equal(isEditableLikeTarget({ tagName: 'textarea' } as unknown as EventTarget), true);
   assert.equal(isEditableLikeTarget({ tagName: 'SELECT' } as unknown as EventTarget), true);
@@ -135,7 +127,6 @@ test('keyboardShortcuts：原生可激活元素聚焦时只让位 Enter，不阻
   assert.equal(isNativeActivatingTarget(buttonTarget), true);
   assert.equal(isNativeActivatingTarget(roleButtonCard), true);
 
-  // Enter 让位给按钮原生激活 / 卡片本地 Enter
   assert.equal(
     resolveShortcutActionFromEvent({ ...key('Enter'), target: buttonTarget }, OPEN_CTX),
     null
@@ -144,7 +135,6 @@ test('keyboardShortcuts：原生可激活元素聚焦时只让位 Enter，不阻
     resolveShortcutActionFromEvent({ ...key('Enter'), target: roleButtonCard }, OPEN_CTX),
     null
   );
-  // 点击事件卡后再按 J/K/H/L/D/C 或 Ctrl+Z 立即生效
   assert.equal(
     resolveShortcutActionFromEvent({ ...key('j'), target: roleButtonCard }, OPEN_CTX),
     'event-next'
@@ -177,7 +167,6 @@ test('reduced-motion 动效降级纯函数与速查表完整性', () => {
   }
 });
 
-// ── 2. navigationSourceStack ──────────────────────────────────────────────────
 
 test('navigationSourceStack：多层嵌套原路精确返回（星图→文档A→文档B→文档A→星图）与各视图诚实标签', () => {
   assert.equal(defaultNavSourceLabel('home', 'canvas', 'read'), '今日观澜');
@@ -210,7 +199,6 @@ test('navigationSourceStack：多层嵌套原路精确返回（星图→文档A�
   let stack: NavSourceEntry[] = [];
   stack = pushNavSource(stack, eCanvas);
   stack = pushNavSource(stack, eDocA);
-  // 连续压入同落点去重（不重复堆叠）
   stack = pushNavSource(stack, { ...eDocA, atMs: 2500 });
   assert.equal(stack.length, 2);
   assert.equal(describeNavSourceReturn(peekNavSource(stack)!), '返回原段落：方案A · sec_2');
@@ -244,13 +232,11 @@ test('navigationSourceStack：超 32 层按最旧丢弃（有界栈深）', () =
   assert.equal(peekNavSource(stack)?.fileId, `f_${MAX_NAV_SOURCE_DEPTH + 4}`);
 });
 
-// ── 3. fileOpHistory ──────────────────────────────────────────────────────────
 
 test('fileOpHistory：连续 3 次改名/移动后连按 3 次 Ctrl+Z 100% 原路还原路径与 file_id，并支持 3 次 Redo', () => {
   let state: FileOpHistoryState = EMPTY_FILE_OP_HISTORY;
   const fId = 'file_plan_01';
 
-  // 第 1 步：重命名 docs/plan.md → docs/plan-v2.md
   state = recordFileOp(state, {
     kind: 'rename',
     fileId: fId,
@@ -258,7 +244,6 @@ test('fileOpHistory：连续 3 次改名/移动后连按 3 次 Ctrl+Z 100% 原�
     newPath: 'docs/plan-v2.md',
     nowMs: 1000,
   }).state;
-  // 第 2 步：移动 docs/plan-v2.md → archive/plan-v2.md
   state = recordFileOp(state, {
     kind: 'move',
     fileId: fId,
@@ -266,7 +251,6 @@ test('fileOpHistory：连续 3 次改名/移动后连按 3 次 Ctrl+Z 100% 原�
     newPath: 'archive/plan-v2.md',
     nowMs: 2000,
   }).state;
-  // 第 3 步：重命名 archive/plan-v2.md → archive/plan-final.md
   state = recordFileOp(state, {
     kind: 'rename',
     fileId: fId,
@@ -278,7 +262,6 @@ test('fileOpHistory：连续 3 次改名/移动后连按 3 次 Ctrl+Z 100% 原�
   assert.equal(state.undo.length, 3);
   let diskPath = 'archive/plan-final.md';
 
-  // 连按 3 次 Undo
   const u1 = planUndo(state, [{ file_id: fId, relative_path: diskPath }]);
   assert.equal(u1.ok, true);
   if (u1.ok) {
@@ -323,7 +306,6 @@ test('fileOpHistory：连续 3 次改名/移动后连按 3 次 Ctrl+Z 100% 原�
   assert.equal(state.undo.length, 0);
   assert.equal(state.redo.length, 3);
 
-  // 连按 3 次 Redo 原路重放
   const r1 = planRedo(state, [{ file_id: fId, relative_path: diskPath }]);
   assert.equal(r1.ok, true);
   if (r1.ok) {
@@ -373,7 +355,6 @@ test('fileOpHistory：5s 窗口关联动作合并、净零抵消、100 步上限
   assert.equal(r2.state.undo[0].newPath, 'docs/c.md');
   assert.equal(r2.state.undo[0].mergedCount, 2);
 
-  // 窗口内改回原名 docs/a.md → 净零抵消，不留自环
   const rCancel = recordFileOp(r2.state, {
     kind: 'rename',
     fileId: 'f1',
@@ -384,7 +365,6 @@ test('fileOpHistory：5s 窗口关联动作合并、净零抵消、100 步上限
   assert.equal(rCancel.merged, true);
   assert.equal(rCancel.state.undo.length, 0);
 
-  // 100 步上限按最旧丢弃并如实计数
   state = EMPTY_FILE_OP_HISTORY;
   let totalEvicted = 0;
   for (let i = 0; i < MAX_FILE_OP_HISTORY + 4; i += 1) {
@@ -412,17 +392,14 @@ test('fileOpHistory 停机线③：文件缺失 / 外部已改路径 / 目标被
     nowMs: 1000,
   });
 
-  // 1) 文件已被移入回收站（不在索引中）
   const pMissing = planUndo(state, []);
   assert.equal(pMissing.ok, false);
   if (!pMissing.ok) assert.equal(pMissing.reason, 'file-missing');
 
-  // 2) 文件在外部又被改名（路径漂移）
   const pDrift = planUndo(state, [{ file_id: 'f1', relative_path: 'archive/spec-edited.md' }]);
   assert.equal(pDrift.ok, false);
   if (!pDrift.ok) assert.equal(pDrift.reason, 'path-drifted');
 
-  // 3) 原路径已被他人新文件占用（绝不静默覆盖）
   const pOccupied = planUndo(state, [
     { file_id: 'f1', relative_path: 'archive/spec.md' },
     { file_id: 'f_other', relative_path: 'spec.md' },
@@ -433,7 +410,6 @@ test('fileOpHistory 停机线③：文件缺失 / 外部已改路径 / 目标被
     assert.match(pOccupied.message, /绝不覆盖/);
   }
 
-  // 4) 路径正常且原根路径空置：成功且 targetDir === ''（工作区根）
   const pOk = planUndo(state, [{ file_id: 'f1', relative_path: 'archive\\spec.md' }]);
   assert.equal(pOk.ok, true);
   if (pOk.ok) {
@@ -442,7 +418,6 @@ test('fileOpHistory 停机线③：文件缺失 / 外部已改路径 / 目标被
   }
 });
 
-// ── 4. canvasSpatialNav ───────────────────────────────────────────────────────
 
 test('canvasSpatialNav：多分支因果星图四方向稳定沿连线跳转，绝不跳向无连线的更近干扰卡', () => {
   const nodes: SpatialNavNode[] = [
@@ -451,16 +426,15 @@ test('canvasSpatialNav：多分支因果星图四方向稳定沿连线跳转，�
     { id: 'c_down', fileId: 'f_down', x: 490, y: 820 },
     { id: 'c_left', fileId: 'f_left', x: 180, y: 510 },
     { id: 'c_right', fileId: 'f_right', x: 860, y: 495 },
-    // 非常近但没有任何连线的干扰卡：必须被忽略
     { id: 'c_decoy', fileId: 'f_decoy', x: 550, y: 500 },
   ];
 
   const adj = buildSpatialAdjacency([
     { source_id: 'f_center', target_id: 'f_up' },
     { source_id: 'f_center', target_id: 'f_down' },
-    { source_id: 'f_left', target_id: 'f_center' }, // 反向有向边同样可无向漫游
+    { source_id: 'f_left', target_id: 'f_center' },
     { source_id: 'f_center', target_id: 'f_right' },
-    { source_id: 'f_center', target_id: 'f_center' }, // 自环忽略
+    { source_id: 'f_center', target_id: 'f_center' },
   ]);
   const neighbors = adj.get('f_center')!;
   assert.equal(neighbors.has('f_center'), false);
@@ -484,13 +458,11 @@ test('canvasSpatialNav：多分支因果星图四方向稳定沿连线跳转，�
     'c_right'
   );
 
-  // 从右叶节点向右按 Alt+ArrowRight：75° 锥内无连线邻居，诚实返回 null
   const rightNeighbors = adj.get('f_right')!;
   assert.equal(
     pickSpatialNeighbor({ currentNode: nodes[4], nodes, neighborFileIds: rightNeighbors, direction: 'right' }),
     null
   );
-  // 向左则沿连线回到中心节点
   assert.equal(
     pickSpatialNeighbor({ currentNode: nodes[4], nodes, neighborFileIds: rightNeighbors, direction: 'left' })?.id,
     'c_center'

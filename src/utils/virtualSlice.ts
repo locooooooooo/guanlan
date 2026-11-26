@@ -1,11 +1,3 @@
-/**
- * 5,500+ 真实超大工程轻量视窗切片 / 分批渲染与无痛增量事件并入纯函数。
- *
- * 设计原则：
- *  - 零 DOM / 零第三方依赖，Node SSR 与浏览器客户端 100% 同构；
- *  - 低于阈值（目录直接子文件 <= 150 / 日历目录行 <= 48）时零包裹、零开销，保持既有 DOM 与基线不变；
- *  - 超过阈值时将真实渲染节点数严格压制在视窗预算内（如 5,500 份文件单帧仅渲染 ~35 项），稳守 60fps。
- */
 
 import type { EventPage, EventPageItem } from '../services/workspaceClient';
 
@@ -28,34 +20,21 @@ export const CALENDAR_ROW_SLICE_THRESHOLD = 48;
 export const CALENDAR_ROW_SLICE_STEP = 48;
 
 export interface VirtualWindowInput {
-  /** 总条目数 */
   totalCount: number;
-  /** 当前滚动容器 scrollTop（px） */
   scrollTop: number;
-  /** 滚动视窗高度（px） */
   viewportHeight: number;
-  /** 单行固定高度（px） */
   rowHeight: number;
-  /** 上下预渲染缓冲行数（默认 10） */
   overscan?: number;
-  /** 触发虚拟切片的最小条目阈值（默认 150） */
   threshold?: number;
 }
 
 export interface VirtualWindowResult {
-  /** 是否进入虚拟视窗切片态（totalCount > threshold） */
   virtualized: boolean;
-  /** 起始渲染索引（含） */
   startIndex: number;
-  /** 结束渲染索引（不含） */
   endIndex: number;
-  /** 本帧实际渲染节点数 */
   visibleCount: number;
-  /** 顶部占位高度（px） */
   topSpacerPx: number;
-  /** 底部占位高度（px） */
   bottomSpacerPx: number;
-  /** 虚拟列表总高度（px） */
   totalHeightPx: number;
 }
 

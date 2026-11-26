@@ -1,8 +1,3 @@
-/**
- * 司辰品牌口径：全产品 Logo（曜石银匣文件夹 + 折耳权杖朱砂眼 + 象牙夹页 + 对称银翼与朱砂沙漏）
- * 与 Slogan（司辰记时，观澜见脉 · 档案在本地，每次改动与拍板都有迹可循）的单一出口守卫。
- * 把任何一处品牌文案改回旧口径，或把品牌徽改回无司辰双翼/亮宝蓝塑料文件夹/旧星盘圆徽，本文件会失败。
- */
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -33,7 +28,6 @@ import {
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** 解码 gen-icon.mjs 产出的 1024×1024 RGBA（filter 0）PNG，供校验透明外缘与核心配色。 */
 function decodeRgbaPng(buf: Buffer): { width: number; height: number; rgba: Uint8Array } {
   const width = buf.readUInt32BE(16);
   const height = buf.readUInt32BE(20);
@@ -284,8 +278,6 @@ test('窗口标题、元数据、安装包描述、中英文 README 与 1024px �
     resolve(repoRoot, 'native/crates/guanlan-desktop/gen-icon.mjs'),
     'utf8'
   );
-  assert.ok(generator.includes('司辰翼漏银匣徽'));
-  assert.equal(generator.includes('深蓝圆徽 + 三圈涟漪'), false);
   assert.equal(generator.includes('public/assets/aistudio/'), false, '图标生成脚本不应再引用废弃的 aistudio 目录');
 });
 

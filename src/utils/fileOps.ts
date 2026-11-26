@@ -2,14 +2,6 @@ import type { FileMutationResponse } from '../services/apiTypes';
 import { formatClassOf, normalizeFormatToken } from './formatMeta';
 import { normalizeRelativeWorkspacePath } from './workspacePaths';
 
-/**
- * 身份保真文件操作的前端纯函数校验与目录辅助模块（支持格式族兼容重命名）。
- *
- * 与 Rust 内核 `guanlan-core/src/index/file_ops.rs` 和 `collector.rs` 保持同口径：
- * - 拒绝路径穿越（`..`）、绝对路径、盘符、UNC、NTFS 流冒号、控制符、点号隐藏名与 Windows 保留名；
- * - 拒绝移入被排除的构建/依赖目录（避免移入后从索引消失）；
- * - 重命名须保持同一格式族内的兼容扩展名（如 `.md ↔ .markdown`、`.png ↔ .jpg`）。
- */
 
 /** 与 `guanlan-core/src/index/collector.rs::DEFAULT_EXCLUDED` 逐项对齐 */
 export const DEFAULT_EXCLUDED_DIRS = new Set<string>([

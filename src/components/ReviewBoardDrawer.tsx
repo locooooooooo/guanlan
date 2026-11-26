@@ -121,21 +121,15 @@ export interface ReviewBoardRatioSegment {
   label: string;
   color: string;
   count: number;
-  /** 展示用四舍五入整数百分比（分母 = 六态分项和） */
   pct: number;
-  /** 布局权重（= count）：flex-grow 天然守恒，段宽为静态布局、零动画布局属性 */
   weight: number;
-  /** 零态剔除：count === 0 的段不进比例带 */
   visible: boolean;
 }
 
 export interface ReviewBoardRatioBand {
   segments: ReviewBoardRatioSegment[];
-  /** 诚实分母 = 六态分项和；与 counts.total 不符时以分项和为准，不伪装占比 */
   total: number;
-  /** 服务端 total 原样透出（仅对照，不参与占比计算） */
   totalCount: number;
-  /** 分项和为 0 的诚实空态（即便 counts.total 非 0 也不伪造占比） */
   empty: boolean;
 }
 
@@ -213,9 +207,6 @@ const BUCKET_BADGE_STYLE: Record<ReviewBoardBucket, string> = {
     'border-[color:var(--stage-ink-anomaly)] bg-[color:color-mix(in_srgb,var(--stage-ink-anomaly)_12%,transparent)] text-[color:var(--stage-ink-anomaly-text)]',
 };
 
-/** 反馈相位计时（与 motion.css 令牌对齐的 JS 镜像，仅推进相位，不定义样式）：
- *  pulse = 徽记弹出 --dur-2(180ms) + 光环扩散 --dur-3(260ms) + 余量；
- *  exit = 卡片退场 --dur-3(260ms) + 余量。 */
 const ACK_PULSE_PHASE_MS = 520;
 const ACK_EXIT_PHASE_MS = 280;
 
@@ -240,11 +231,7 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
   onRepairOrphan,
 }) => {
   const [filter, setFilter] = useState<ReviewBoardFilter>('all');
-  // 弹簧抽屉两段式入场：首帧偏移态（translateX + opacity:0）→ rAF 翻转终态，
-  // 过渡由 .glx-t-panel 双轨承担（transform→spring / opacity→fade，只动这两属性）。
-  // reduce 用户走 motion.css 既有 .glx-t-panel → transition:none，第二帧瞬时落位。
   const [entered, setEntered] = useState(false);
-  // 正向反馈：后端 CAS 确认成功（notice.kind === 'ok'）后的勾选脉冲与卡片退场
   const [settledAction, setSettledAction] = useState<SettledAction | null>(null);
   const [settledHidden, setSettledHidden] = useState<string[]>([]);
   const prevBusyRef = useRef<string | null>(null);
@@ -261,9 +248,6 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
     return () => window.cancelAnimationFrame(raf);
   }, [isOpen]);
 
-  // 正向反馈唯一触发源：busyKey 释放沿 + store notice.kind === 'ok'
-  // （即 postDecisionResolve → pollJobUntilSettled → completed 且非 CAS 冲突）。
-  // CAS 冲突分支 store 恒记 error → 此处永不触发；点击回调绝不直接触发。
   useEffect(() => {
     const prev = prevBusyRef.current;
     prevBusyRef.current = busyKey;
@@ -278,7 +262,6 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
     }
   }, [busyKey, notice, board]);
 
-  // 相位推进：pulse（徽记弹出 + 光环）→ exit（卡片淡出下沉）→ 隐藏，等数据刷新归位
   useEffect(() => {
     if (!settledAction) return;
     const { initiativeId, phase } = settledAction;
@@ -297,8 +280,6 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
     return () => window.clearTimeout(timer);
   }, [settledAction]);
 
-  // 看板数据刷新到达（refreshReviewBoard 成功分支必发）→ 清空本地退场排除，
-  // 让处理完的专项以新 bucket 重新归位
   useEffect(() => {
     if (lastBoardRef.current !== board) {
       lastBoardRef.current = board;
@@ -352,18 +333,15 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* coss Sheet (variant="inset") 悬浮抽屉材质 + glx-t-panel 弹簧双轨入场 */}
       <div
         data-sheet-variant="inset"
         className="glx-t-panel bg-popover/95 dark:bg-popover/95 backdrop-blur-2xl w-full max-w-2xl h-full flex flex-col overflow-hidden rounded-2xl border border-border/85 text-foreground"
         style={{
-          // 弹簧抽屉入场只动 transform/opacity（glx-t-panel 双轨）；禁动画 right/width
           transform: entered ? 'none' : 'translateX(32px)',
           opacity: entered ? 1 : 0,
           boxShadow: 'var(--glass-shadow-pop)',
         }}
       >
-        {/* Header · 精密悬浮顶栏（明暗双态自适应） */}
         <div
           className="px-6 py-4 bg-card/85 backdrop-blur-md border-b border-border/80 flex items-center justify-between gap-3"
         >
@@ -392,7 +370,6 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
           </div>
         </div>
 
-        {/* 六态比例分布带 + Lane filter bar（比例带替代顶栏冗长文字说明） */}
         <div
           className="px-6 py-3 border-b border-border/75 bg-muted/35 space-y-2.5"
           data-review-board-lanes=""
@@ -464,7 +441,6 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
           </div>
         </div>
 
-        {/* Body */}
         <ScrollArea scrollFade className="flex-1 min-h-0">
         <div className="p-6 space-y-3">
           {notice && (
@@ -522,7 +498,6 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
                   laneTier === 'muted' ? 'p-3' : 'p-4'
                 } ${settled?.phase === 'exit' ? 'glx-card-settle' : ''}`}
               >
-                {/* 翠绿勾选徽记：后端 CAS 确认成功后的唯一正向反馈装饰（aria-hidden 纯装饰层） */}
                 {settled && (
                   <span
                     aria-hidden="true"
@@ -535,7 +510,6 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
                   </span>
                 )}
 
-                {/* Card top row */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -568,7 +542,6 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
                   </span>
                 </div>
 
-                {/* Pending P0/P1 statements: Jump to ReaderView OR one-click 「已知悉」 */}
                 {card.pending_statements.length > 0 && (
                   <div className="space-y-1.5 pt-1">
                     {card.pending_statements.map((stmt) => {
@@ -619,7 +592,6 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
                   </div>
                 )}
 
-                {/* Awaiting Agent drafts */}
                 {card.proposed_drafts.length > 0 && (
                   <div className="space-y-1.5 pt-1">
                     {card.proposed_drafts.map((draft) => (
@@ -659,7 +631,6 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
                   </div>
                 )}
 
-                {/* Honest Unknown Orphan Diagnostic + Safe Repair Entry */}
                 {card.orphan && (
                   <div
                     data-board-orphan={card.orphan.node_id}

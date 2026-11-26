@@ -16,15 +16,6 @@ import {
 import { parsePaletteQuery } from './commandPaletteGrammar';
 import type { PaletteItem } from './commandPaletteResults';
 
-/**
- * 命令面板渲染与双栏检索台口径（SSR 冒烟 + 纯函数直测，与 guanlanEngine.test.ts 同风格）。
- * 键盘闭环逻辑在组件 onKeyDown（客户端交互），此处锁定静态结构契约：
- * esc-layer 标记、输入框、空态键位提示、摘要 2 行 clamp 与全量高亮分段；
- * 含语法胶囊点击补全（纯函数）、Token 微标签 ×移除、lg 双栏右预览渲染
- * （完整路径 / 版本短码 / SVG 微缩图 / 动作提示）。
- * 注意：commandPaletteGrammar / commandPaletteResults 既定口径不变，
- * 组件配套纯函数统一从组件模块导出。
- */
 
 const noop = (): void => {};
 
@@ -66,7 +57,6 @@ function renderPalette(
   );
 }
 
-/** 截取左结果列（list 起点至右预览窗起点）的 HTML，供高亮分段按栏计数 */
 function listHtmlOf(html: string): string {
   const start = html.indexOf('data-command-palette-list');
   const end = html.indexOf('data-command-palette-preview');
@@ -92,7 +82,6 @@ test('palette：文件条目 + 命中摘要 2 行 clamp 与全量高亮分段（
   assert.ok(html.includes('data-command-palette-list'), '结果列表容器');
   assert.ok(html.includes('glx-clamp-2'), '摘要 ≤2 行 CSS clamp');
   assert.ok(html.includes('<mark'), '命中词高亮分段');
-  // 双栏：列表栏与右预览栏各自渲染同一窗口分段——按栏分别锁定「全量高亮 2 处」
   const listHtml = listHtmlOf(html);
   const previewHtml = html.slice(html.indexOf('data-command-palette-preview'));
   assert.equal((listHtml.match(/<mark/g) ?? []).length, 2, '列表栏窗口内两次「登录方案」全量高亮');
@@ -122,7 +111,6 @@ test('palette：待拍板徽标与动作条目渲染', () => {
   assert.ok(html.includes('data-palette-kind="action"'), '动作条目 kind 标记');
 });
 
-// ── 语法胶囊与 Token 微标签纯函数 ──────────────────────────────────
 
 test('parsePaletteTokens：语法 token 拆解（意图分类 / 原文 / 偏移 / 解析成败诚实标注）', () => {
   const now = new Date('2026-11-20T12:00:00');
@@ -145,7 +133,6 @@ test('parsePaletteTokens：语法 token 拆解（意图分类 / 原文 / 偏移 
   assert.equal(tokens[3].value, '登录方案');
   assert.equal(tokens[4].kind, 'keyword');
 
-  // 未知 @词与未知 status：parsed=false 诚实标注（冻结口径：回退为关键词，不吞词）
   const bad = parsePaletteTokens('@下周 status:已归档 方案', now);
   assert.equal(bad[0].kind, 'date');
   assert.equal(bad[0].parsed, false, '未收录日期词诚实标注未解析');
@@ -153,16 +140,13 @@ test('parsePaletteTokens：语法 token 拆解（意图分类 / 原文 / 偏移 
   assert.equal(bad[1].parsed, false, '未知 status 值诚实标注未解析');
   assert.equal(bad[2].kind, 'keyword');
 
-  // 前缀大小写无关（与 parsePaletteQuery 同口径）；type 值归一小写
   const caps = parsePaletteTokens('TYPE:MD', now);
   assert.equal(caps[0].kind, 'type');
   assert.equal(caps[0].value, 'md');
   assert.equal(caps[0].parsed, true);
 
-  // 空查询零 token
   assert.deepEqual(parsePaletteTokens('   ', now), []);
 
-  // 现行语法无区间档：@近7天 在现行口径下诚实 parsed=false
   assert.equal(parsePaletteTokens('@近7天', now)[0].parsed, false);
 });
 
@@ -183,7 +167,6 @@ test('togglePaletteSuggestion / hasPaletteToken：点击补全、再点移除（
   assert.equal(togglePaletteSuggestion('type:md', 'type:svg'), 'type:md type:svg');
   assert.equal(hasPaletteToken('登录 type:md', 'type:md'), true);
   assert.equal(hasPaletteToken('登录 type:mdx', 'type:md'), false, '整词精确匹配，不误伤前缀相同 token');
-  // 补全结果可被现行语法直接解析（不绕过 setQuery 防抖/过期丢弃纪律）
   const parsed = parsePaletteQuery(togglePaletteSuggestion('登录', 'status:待拍板'));
   assert.equal(parsed.pendingDecisionOnly, true);
   assert.equal(parsed.keyword, '登录');
@@ -205,7 +188,6 @@ test('PALETTE_GRAMMAR_SUGGESTIONS：五枚胶囊逐字锁定 + stage-ink 六色�
     ['blueprint', 'blueprint', 'decision', 'deliver', 'anomaly'],
     '色调只用 --stage-ink-* 六色家族（时间蓝图蓝 / 拍板琥珀 / 格式交付绿 / svg 玫红）'
   );
-  // kind(+type 值) → 色调纯函数与胶囊表一致
   assert.equal(paletteTokenTone('date'), 'blueprint');
   assert.equal(paletteTokenTone('status'), 'decision');
   assert.equal(paletteTokenTone('type', 'md'), 'deliver');
@@ -214,7 +196,6 @@ test('PALETTE_GRAMMAR_SUGGESTIONS：五枚胶囊逐字锁定 + stage-ink 六色�
   assert.equal(paletteTokenTone('keyword'), 'neutral');
 });
 
-// ── 右预览窗模型 ────────────────────────────────────────────────
 
 test('palettePreviewModel：完整路径 / 版本短码 / 待拍板 / SVG 微缩图 / 高亮分段 / 诚实空摘要', () => {
   const md = palettePreviewModel(
@@ -263,12 +244,10 @@ test('palettePreviewModel：完整路径 / 版本短码 / 待拍板 / SVG 微缩
   assert.equal(action.revisionShort, null);
   assert.equal(action.path, null);
   assert.ok(action.hints.includes('Enter 执行动作'), '动作条目提示切换为执行口径');
-  // 长版本号截断 + 短版本号原样
   assert.equal(shortRevisionId('a1b2c3d4e5f6g7h8'), 'a1b2c3d4e5f6…');
   assert.equal(shortRevisionId('rev_f1'), 'rev_f1');
 });
 
-// ── 双栏检索台 SSR 结构 ─────────────────────────────────────────
 
 test('SSR 双栏：lg 60/40 右预览窗渲染（路径/版本徽标/缩略图/动作提示）+ 语法胶囊行五枚', () => {
   const items = [
@@ -290,16 +269,13 @@ test('SSR 双栏：lg 60/40 右预览窗渲染（路径/版本徽标/缩略图/�
   assert.ok(html.includes('data-command-palette-preview-snippet'), '命中正文高亮段落');
   assert.ok(html.includes('data-command-palette-preview-hints'), '快捷动作提示');
   assert.ok(html.includes('Ctrl+Enter 定位目录') && html.includes('Tab 加入证据篮'));
-  // 语法胶囊行：五枚常驻胶囊 + aria-pressed 开关语义
   assert.ok(html.includes('data-command-palette-grammar'), '常驻语法胶囊行');
   assert.equal((html.match(/data-palette-suggest=/g) ?? []).length, 5, '五枚胶囊');
   assert.ok(html.includes('data-palette-suggest="@近7天"'));
   assert.ok(html.includes('aria-pressed="false"'));
-  // 输入区 Token 微标签：query 中的 type:md 生成可移除彩色 chip
   assert.ok(html.includes('data-palette-token="type:md"'));
   assert.ok(html.includes('data-palette-token-parsed="true"'));
   assert.ok(html.includes('data-palette-token-remove'), '点 × 一键移除');
-  // 弹窗入场动效（reduce 降级在动效契约中锁定）
   assert.ok(html.includes('glx-popover-in'), '面板 glx-popover-in 柔和缩放淡入');
   assert.ok(html.includes('glx-backdrop-in'), '遮罩淡入');
 });
@@ -311,7 +287,6 @@ test('SSR Token 微标签：未识别诚实标注 + 无语法 token 不渲染 ch
   assert.ok(html.includes('未识别'));
   assert.ok(html.includes('data-palette-token="status:已归档"'));
   assert.ok(html.includes('data-palette-token-parsed="false"'));
-  // 纯关键词查询：零 chip 容器（无占位布局抖动）
   const plain = renderPalette([], { query: '登录' });
   assert.ok(!plain.includes('data-command-palette-tokens'));
   assert.equal(renderPalette([], { isOpen: false }), '');

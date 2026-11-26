@@ -11,8 +11,6 @@ use crate::test_support::{assert_code, cleanup_dir, open_store, FixtureDb};
 const H1: &str = "aa0000000000000000000000000000000000000000000000000000000000aaaa";
 const H2: &str = "bb0000000000000000000000000000000000000000000000000000000000bbbb";
 
-/// A→B→A 夹具：三个版本行（h1→h2→h1），blobs 两行（h1 ref_count=2），磁盘两份快照。
-/// 事件：appeared（r1）、modified（r2）、read_error（路径主体）供 include=events 断言。
 fn setup_chain(tag: &str) -> (FixtureDb, String, ReadonlyStore, String, String, String) {
     let fixture = FixtureDb::new(tag);
     let root = fixture.root();
@@ -110,7 +108,6 @@ fn setup_chain(tag: &str) -> (FixtureDb, String, ReadonlyStore, String, String, 
         "{}",
     );
 
-    // 陈述与引用边供 include 断言
     fixture.statement(
         &ws_id,
         "st_1",
@@ -152,7 +149,6 @@ fn setup_chain(tag: &str) -> (FixtureDb, String, ReadonlyStore, String, String, 
     (fixture, ws_id, store, file_id, r1, r2)
 }
 
-/// 版本链 A→B→A（契约 §5.3）：三版两份内容；默认 seq_desc；分页无重复无遗漏
 #[test]
 fn chain_aba_three_versions_two_contents() {
     let (fixture, _ws, store, file_id, _r1, _r2) = setup_chain("chain-aba");
@@ -161,10 +157,8 @@ fn chain_aba_three_versions_two_contents() {
         file_revisions(&store, &file_id, &FileRevisionsQuery::default()).expect("版本链失败");
     assert!(page.ok);
     assert_eq!(page.total, 3);
-    // 默认 seq_desc：时间机器自上而下 v3→v2→v1（契约 §1.7）
     let seqs: Vec<i64> = page.revisions.iter().map(|r| r.seq).collect();
     assert_eq!(seqs, [3, 2, 1]);
-    // A→B→A：第 1、3 版同哈希；快照不内联下发（project.ts:465）
     assert_eq!(
         page.revisions[0].content_hash,
         page.revisions[2].content_hash
@@ -177,7 +171,6 @@ fn chain_aba_three_versions_two_contents() {
     assert_eq!(page.revisions[2].prev_revision_id, None);
     assert!(page.revisions.iter().all(|r| r.snapshot_available));
 
-    // seq_asc：升序翻页无重复无遗漏
     let mut cursor = None;
     let mut seen = Vec::new();
     loop {
@@ -203,7 +196,6 @@ fn chain_aba_three_versions_two_contents() {
     }
     assert_eq!(seen, vec![1, 2, 3], "升序两页拼接 = [1,2,3]");
 
-    // seq_desc 降序翻页（limit 2 → [3,2] + [1]）
     let p1 = file_revisions(
         &store,
         &file_id,
@@ -232,7 +224,6 @@ fn chain_aba_three_versions_two_contents() {
     cleanup_dir(&fixture.dir);
 }
 
-/// include 三段（契约 §1.7）：事件四路覆盖、陈述、引用边；未 include 不下发
 #[test]
 fn chain_include_sections() {
     let (fixture, _ws, store, file_id, r1, r2) = setup_chain("chain-include");
@@ -252,7 +243,6 @@ fn chain_include_sections() {
     )
     .expect("版本链失败");
 
-    // 事件四路覆盖（project.ts:468-485）：subject_id / revision 链 / payload.file_id / path:
     let events = page.events.as_ref().expect("include=events 应下发");
     let kinds: Vec<&str> = events.iter().map(|e| e.kind.as_str()).collect();
     assert!(
@@ -270,13 +260,11 @@ fn chain_include_sections() {
     assert!(events
         .iter()
         .any(|e| e.revision_id.as_deref() == Some(r2.as_str())));
-    // 事件按 seq ASC（project.ts:483）
     let ev_seqs: Vec<i64> = events.iter().map(|e| e.seq).collect();
     let mut sorted = ev_seqs.clone();
     sorted.sort();
     assert_eq!(ev_seqs, sorted);
 
-    // modified 事件 payload 携带 changed_sections（changedSectionsFromPrev 的数据源）
     let modified = events
         .iter()
         .find(|e| e.kind == "modified")
@@ -309,7 +297,6 @@ fn chain_include_sections() {
     assert_eq!(target_edge.resolution, "collected_version");
     assert!(edges.iter().any(|e| e.target_file_id == "unresolved:外部"));
 
-    // 未 include 时三段不出现于 JSON（skip_serializing_if）
     let bare = file_revisions(&store, &file_id, &FileRevisionsQuery::default()).expect("裸版本链");
     let json = serde_json::to_value(&bare).expect("序列化");
     assert!(json.get("events").is_none(), "未 include 不应出现 events");
@@ -322,13 +309,10 @@ fn chain_include_sections() {
     cleanup_dir(&fixture.dir);
 }
 
-/// 按版本内容定位（契约 §1.8）：路径供流式读取；A→B→A 的两份相同内容共享同一
-/// 快照文件（契约 §3.3-1）；snapshot_available=0 / 磁盘缺失 → SNAPSHOT_UNAVAILABLE
 #[test]
 fn revision_content_locates_snapshot_path() {
     let (fixture, _ws, store, file_id, r1, _r2) = setup_chain("chain-content");
 
-    // 当前版（r3，h1）
     let r3 = format!("{file_id}_r3");
     let current =
         revision_content(&store, &r3, &RevisionContentQuery::default()).expect("定位当前版");
@@ -342,7 +326,6 @@ fn revision_content_locates_snapshot_path() {
     let path3 = current.snapshot_path.expect("当前版应有快照路径");
     assert!(path3.exists());
 
-    // r1 与 r3 同哈希 → 同一快照文件（A→B→A 两份相同内容共享一份盘上快照）
     let first = revision_content(&store, &r1, &RevisionContentQuery::default()).expect("定位 r1");
     assert_eq!(
         first.snapshot_path,
@@ -350,11 +333,9 @@ fn revision_content_locates_snapshot_path() {
         "同哈希共享同一快照文件"
     );
 
-    // 快照文本可从路径读回（服务层流式读取的口径预演）
     let text = std::fs::read_to_string(&path3).expect("读快照");
     assert_eq!(text, "# original A");
 
-    // PDF：raw_url 指向 v1 自身路径（契约 §1.8）
     cleanup_dir(&fixture.dir);
     let pdf_fixture = FixtureDb::new("chain-pdf");
     let pdf_root = pdf_fixture.root();
@@ -391,7 +372,6 @@ fn revision_content_locates_snapshot_path() {
         Some("/api/v1/revisions/f_pdf_r1/content?raw=1"),
         "raw_url 指向 v1 自身路径（revision_id 为 URL 安全字符，无需转义）"
     );
-    // raw=0：服务层只回 JSON 桩，不需要快照路径；raw=1：给出路径供流式返回字节
     assert!(pdf.snapshot_path.is_none(), "PDF JSON 桩不应携带快照路径");
     let pdf_raw = revision_content(&pdf_store, &pdf_rev, &RevisionContentQuery { raw: true })
         .expect("PDF raw 定位");
@@ -410,8 +390,6 @@ fn revision_content_locates_snapshot_path() {
     cleanup_dir(&pdf_fixture.dir);
 }
 
-/// SNAPSHOT_UNAVAILABLE 口径（契约 §0.2/§1.8，现状 REVISION_UNAVAILABLE 改名）：
-/// snapshot_available=0 或快照文件缺失 → 410 码
 #[test]
 fn revision_content_unavailable_cases() {
     let fixture = FixtureDb::new("chain-unavailable");
@@ -419,7 +397,6 @@ fn revision_content_unavailable_cases() {
     let ws_id = fixture.workspace(&root, 0, None);
     let file_id = "f_gap";
     fixture.file(&ws_id, file_id, "gap.md", "md", "方案", "active", None);
-    // 标记不可用的版本
     let r0 = fixture.revision(
         &ws_id,
         file_id,
@@ -432,7 +409,6 @@ fn revision_content_unavailable_cases() {
         0,
         "2026-01-01T00:00:00.000Z",
     );
-    // 有元数据但磁盘无快照文件的版本
     let missing_hash = "dd0000000000000000000000000000000000000000000000000000000000dddd";
     let r1 = fixture.revision(
         &ws_id,
@@ -470,15 +446,11 @@ fn revision_content_unavailable_cases() {
     cleanup_dir(&fixture.dir);
 }
 
-/// 阅读器兼容视图（契约 §1.7 末段）：只返回当前版
-/// （camelCase 派生字段、changedSectionsFromPrev 单版本口径、summaryNote），
-/// 不展开完整版本链、不内联任何正文；附集合限额保留
 #[test]
 fn file_detail_reader_view() {
     let (fixture, ws, store, file_id, _r1, _r2) = setup_chain("chain-detail");
     let detail = file_detail(&store, &file_id).expect("详情失败");
     assert!(detail.ok);
-    // 只返回当前版（last_revision_id → r3），不读完整版本链
     assert_eq!(detail.revisions.len(), 1);
     assert_eq!(detail.revisions[0].version_number, 3);
     assert_eq!(detail.revisions[0].content_sha256, H1);
@@ -491,20 +463,16 @@ fn file_detail_reader_view() {
         Some("2026-01-03T11:00:00.000Z")
     );
     assert!(detail.revisions[0].summary_note.contains("docs/链.md"));
-    // changedSectionsFromPrev 单版本口径：modified 事件挂在 r2，当前版 r3 无 → 缺省
     assert!(detail.revisions[0].changed_sections_from_prev.is_none());
-    // 不内联任何正文（正文一律经 §1.8 按版本端点单独取）
     assert!(detail.revisions.iter().all(|r| r.svg_source.is_none()));
     assert!(detail
         .revisions
         .iter()
         .all(|r| r.svg_extracted_texts.is_none()));
-    // 附集合限额保留（兼容退场策略；本夹具全集 < 200 条不受限）
     assert_eq!(detail.statements.len(), 1);
     assert_eq!(detail.edges.len(), 2);
     let _ = ws;
 
-    // SVG 文件同样不内联（单次响应不随版本数线性增长）
     let hash = "ee0000000000000000000000000000000000000000000000000000000000eeee";
     fixture.blob(hash, 44, 1);
     fixture.write_blob_file(hash, b"<svg><text>A</text><rect/><text>B</text></svg>");

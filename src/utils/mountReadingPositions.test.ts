@@ -7,16 +7,7 @@ import {
   recordMountedReading,
 } from './mountReadingPositions';
 
-/**
- * 外挂资料阅读位置行为锁定：按规范化路径稳定哈希（来源工作区 root_key）
- * 分桶持久保留——
- * · 桶键稳定：同 rootKey 同键（`guanlan.mountReading.v1.<rootKey>`）；
- * · record/load roundtrip：同文件覆盖、不同文件并存、同版本重复记录零写入；
- * · SSR 安全：window 未定义恒空表 / 恒不写入；
- * · 损坏 JSON 恒空表（隐私模式/配额满静默降级语义）。
- */
 
-/** 每测试独立 localStorage 隔离（node 环境无 window，测试内自建桩） */
 function withWindow(fn: (store: Map<string, string>) => void): void {
   const store = new Map<string, string>();
   const fakeWindow = {
@@ -71,13 +62,10 @@ test('record/load roundtrip：同文件覆盖、不同文件并存、同版本�
     const map = loadMountedReadings(rk);
     assert.equal(map.f_ref_a.revision_id, 'f_ref_a_r2', '同文件覆盖');
     assert.equal(map.f_ref_b.title, '架构图', '不同文件并存');
-    // 桶隔离：另一参考工作区互不可见
     assert.deepEqual(loadMountedReadings('rk_other_bucket'), {});
-    // 最近查阅：at 最新优先
     const latest = latestMountedReadings(rk, 5);
     assert.equal(latest.length, 2);
     assert.ok(latest.every((e) => typeof e.at === 'string' && e.at.length > 0));
-    // 存储键即前缀 + rootKey
     assert.equal(store.size, 1);
     assert.ok(store.has('guanlan.mountReading.v1.rk_stable_hash_01'));
   });

@@ -119,7 +119,7 @@ pub fn start(root: String, jobs: IndexJobManager, baseline: WatchBaseline) -> Wa
         let mut fallback_tick =
             tokio::time::interval(Duration::from_millis(FALLBACK_POLL_INTERVAL_MS));
         fallback_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-        fallback_tick.tick().await; // 跳过首拍：服务启动时已提交一次后台启动对账
+        fallback_tick.tick().await;
 
         loop {
             if *stop_rx.borrow() {
@@ -137,7 +137,6 @@ pub fn start(root: String, jobs: IndexJobManager, baseline: WatchBaseline) -> Wa
                         match maybe_sig {
                             Some(sig) => {
                                 coalescer.ingest(sig);
-                                // 非阻塞抽干同一瞬间队列里的积压信号，降低唤醒次数
                                 while let Ok(more) = sig_rx.try_recv() {
                                     coalescer.ingest(more);
                                 }
@@ -225,7 +224,6 @@ fn flush_coalescer(coalescer: &mut EventCoalescer, jobs: &IndexJobManager, handl
     *handle.last_poll_at.lock().expect("轮询时刻锁") = Some(guanlan_core::index::clock::now_iso());
 }
 
-/// 合并防抖状态机（独立纯结构，便于单测验证风暴合并、原子替换识别与溢出兜底）。
 struct EventCoalescer {
     root: PathBuf,
     upserts: HashSet<String>,
@@ -283,7 +281,6 @@ impl EventCoalescer {
                     WatchEventKind::Upsert => {
                         let full = self.root.join(&norm);
                         if full.is_dir() {
-                            // 仅在目录新增/迁入时收集其下受支持文件；普通目录修改事件忽略
                             let mut discovered = HashMap::new();
                             scan_dir(&self.root, &full, &norm, &mut discovered);
                             if !discovered.is_empty() {
@@ -318,8 +315,6 @@ impl EventCoalescer {
         let mut candidates: HashSet<String> = std::mem::take(&mut self.upserts);
         let removals = std::mem::take(&mut self.removals);
 
-        // 若外部编辑器走「删旧→重命名」或「先写临时文件再替换」原子保存，
-        // 防抖落地时目标文件已在磁盘上：归入 changed_paths，绝不误触发全量扫描
         for rel in removals {
             let full = self.root.join(&rel);
             if full.is_file() {
@@ -352,14 +347,12 @@ fn normalize_rel_path(raw: &str) -> String {
     raw.trim().replace('\\', "/").trim_matches('/').to_owned()
 }
 
-/// 路径任一段以 `.` 开头或属默认排除目录（`node_modules` / `.git` / `target` / `dist` 等）一律忽略
 fn should_ignore_rel_path(rel: &str) -> bool {
     rel.split('/').any(|seg| {
         seg.is_empty() || seg.starts_with('.') || collector::DEFAULT_EXCLUDED.contains(&seg)
     })
 }
 
-/// 编辑器临时锁/交换文件（Office `~$*`、Vim `*.swp`/`*.swx`/`*~`、浏览器下载未完）
 fn is_editor_temp_name(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
     lower.starts_with("~$")
@@ -370,8 +363,6 @@ fn is_editor_temp_name(name: &str) -> bool {
         || lower.ends_with('~')
 }
 
-/// 采集白名单放开后，watcher 监听工作区内全部非忽略常规文件
-/// （排除系统/依赖目录黑名单、点前缀、编辑器临时文件及 `.gitignore` 规则）。
 fn is_watchable_path(root: &Path, rel: &str) -> bool {
     if should_ignore_rel_path(rel) {
         return false;
@@ -383,13 +374,11 @@ fn is_watchable_path(root: &Path, rel: &str) -> bool {
     !collector::is_ignored_path(root, rel)
 }
 
-/// 无扩展名视作可能是被整体删掉/重命名的目录名（触发一次轻量 verify_all 兜底）
 fn looks_like_dir_rel(rel: &str) -> bool {
     let name = rel.rsplit('/').next().unwrap_or(rel);
     !name.contains('.')
 }
 
-/// 兜底轻量核验（每 5 分钟或无事件支持的平台使用）
 async fn poll_once_fallback(
     root: &str,
     jobs: &IndexJobManager,
@@ -438,7 +427,6 @@ async fn poll_once_fallback(
     *handle.last_poll_at.lock().expect("轮询时刻锁") = Some(guanlan_core::index::clock::now_iso());
 }
 
-/// 全树 stat 扫描（不哈希——版本判定交给对账；遵循排除目录与 `.gitignore`）
 fn scan_tree(root: &Path, out: &mut HashMap<String, f64>) {
     scan_dir(root, root, "", out);
 }
@@ -512,10 +500,6 @@ impl WatchBaseline {
             .ok()
     }
 }
-
-// ============================================================
-// OS 原生目录事件通道（Windows ReadDirectoryChangesW / Linux inotify）
-// ============================================================
 
 #[cfg(windows)]
 mod os {
@@ -678,7 +662,6 @@ mod os {
         wide.push(0);
 
         // SAFETY: 以共享读写删除模式只读打开目录（绝不锁死外部编辑器/资源管理器重命名），
-        // 仅作 ReadDirectoryChangesW 监听载体。
         let raw_dir = unsafe {
             CreateFileW(
                 wide.as_ptr(),
@@ -703,7 +686,6 @@ mod os {
         }
         let io_handle = WinHandle(raw_io as isize);
 
-        // ReadDirectoryChangesW 要求缓冲区 DWORD 对齐，且 <= 64 KiB 以兼容 SMB/本机卷
         let mut buf = vec![0u32; 16 * 1024];
         let buf_len_bytes = (buf.len() * std::mem::size_of::<u32>()) as u32;
         let filter = FILE_NOTIFY_CHANGE_FILE_NAME
@@ -713,7 +695,6 @@ mod os {
 
         loop {
             // SAFETY: 每次迭代前重置 io_event 与 OVERLAPPED，并在退出前用 CancelIoEx +
-            // GetOverlappedResult(TRUE) 确保内核已归还缓冲区控制权。
             unsafe {
                 ResetEvent(io_handle.0 as *mut c_void);
             }
@@ -787,7 +768,6 @@ mod os {
                 continue;
             }
             if transferred == 0 {
-                // 内核缓冲区溢出（保存风暴超 64KB）：触发一次全量兜底核验，不丢文件
                 let _ = tx.send(WatchSignal::Overflow);
                 continue;
             }
@@ -1148,7 +1128,6 @@ mod tests {
         }
     }
 
-    /// 指纹四态：同文件两次 stat 稳定一致（mtime_ms 口径与 Node 公式同源）
     #[test]
     fn fingerprint_stable_for_unchanged_file() {
         let dir = TempDirGuard::new("fp");
@@ -1161,7 +1140,6 @@ mod tests {
         assert!((first.mtime_ms - first.mtime_ms.trunc()).abs() < 1.0);
     }
 
-    /// 扫描树：全格式常规文件计入、排除目录/点目录/.gitignore 跳过、mtime 与磁盘一致
     #[test]
     fn scan_tree_respects_exclusions_and_formats() {
         let dir = TempDirGuard::new("scan");
@@ -1185,7 +1163,6 @@ mod tests {
         assert!(!out.contains_key("node_modules/x.md"), "排除目录不计");
     }
 
-    /// 事件驱动防抖与风暴上限常量契约（< 300ms 端到端链路）
     #[test]
     fn timing_constants_match_contract() {
         const {
@@ -1195,7 +1172,6 @@ mod tests {
         }
     }
 
-    /// 纯防抖合并器：去重、忽略隐藏/临时文件、原子替换不误触发 VerifyAll、目录删除触发兜底
     #[test]
     fn coalescer_dedups_and_handles_atomic_save() {
         let dir = TempDirGuard::new("coalesce");
@@ -1232,7 +1208,6 @@ mod tests {
             "原子保存替换后文件仍在磁盘，不应触发全量兜底"
         );
 
-        // 真正删除已索引文件 → 触发 verify_all 兜底判定 missing
         std::fs::remove_file(root.join("docs/spec.md")).unwrap();
         c.ingest(WatchSignal::Path {
             rel_path: "docs/spec.md".to_owned(),
@@ -1243,10 +1218,6 @@ mod tests {
         assert!(plan2.need_verify_all);
     }
 
-    /// 端到端实测（事件驱动 watcher 延迟与抗风暴）：
-    /// 1) 外部编辑器保存文件后，SSE `workspace-change` 在 < 300ms 内送达；
-    /// 2) 连续 100 次/秒保存风暴合并入列，绝不丢最终内容、绝不 SQLITE_BUSY；
-    /// 3) 闲置期零多余轮询且 stop() 秒级释放句柄。
     #[tokio::test]
     async fn os_watcher_delivers_sse_under_300ms_and_survives_save_storm() {
         use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -1268,7 +1239,6 @@ mod tests {
         .expect("启动带 OS watcher 的服务");
         let data_dir = svc.data_dir.clone();
 
-        // 等启动后台对账落地，使后续外部保存能独立计测延迟
         let addr = svc.endpoint.trim_start_matches("http://").to_owned();
         let mut sse = BufReader::new(TcpStream::connect(&addr).await.expect("连 SSE"));
         sse.get_mut()
@@ -1302,7 +1272,6 @@ mod tests {
             }
         }
 
-        // 先消费连接握手 hello，以及启动对账完成（可能发出一次 workspace-change）
         let (ev_hello, _) =
             tokio::time::timeout(Duration::from_secs(2), read_next_sse_event(&mut sse))
                 .await
@@ -1310,7 +1279,6 @@ mod tests {
                 .expect("hello");
         assert_eq!(ev_hello, "hello");
 
-        // 等启动 VerifyAll 完成（并发跑全套单测时留足 5s 余量，避免未就绪即写文件）
         let mut startup_settled = false;
         for _ in 0..200 {
             let mut probe = TcpStream::connect(&addr).await.unwrap();
@@ -1333,14 +1301,12 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(25)).await;
         }
         assert!(startup_settled, "启动后台 VerifyAll 未在预期窗口内完成");
-        // 等待刚建完的初始文件在 OS 监听端静默落地，再排空启动期 SSE 通知，避免把初始写入误计入后续编辑
         tokio::time::sleep(Duration::from_millis(160)).await;
         while let Ok(Some(_)) =
             tokio::time::timeout(Duration::from_millis(40), read_next_sse_event(&mut sse)).await
         {
         }
 
-        // 实测 ①：外部保存文件 → 测量 SSE workspace-change 送达耗时（口径：< 300ms）
         let t_edit = std::time::Instant::now();
         std::fs::write(
             &target,
@@ -1373,7 +1339,6 @@ mod tests {
             "外部保存后 SSE 通知必须 < 300ms，实测 {latency}ms"
         );
 
-        // 实测 ②：连续保存风暴（100 次写入 @ ~10ms 间隔 = 100 次/秒），合并入列不丢终态、不锁库
         let storm_start = std::time::Instant::now();
         for i in 1..=100u32 {
             std::fs::write(&target, format!("# Storm Save {i}\n\nfinal-marker-{i}\n")).unwrap();
@@ -1381,7 +1346,6 @@ mod tests {
         }
         let storm_ms = storm_start.elapsed().as_millis();
 
-        // 等待风暴最后一次防抖批次落库完成（通过 HTTP 读接口校验，顺便验证并发读零 SQLITE_BUSY）
         async fn http_get_json(addr: &str, path: &str) -> serde_json::Value {
             use tokio::io::AsyncReadExt;
             let mut sock = TcpStream::connect(addr).await.unwrap();
@@ -1430,8 +1394,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(data_dir);
     }
 
-    /// CLI `guanlan serve` 默认零扫描只读契约：background_index=false 不装配 watcher，
-    /// 磁盘新增/修改文件期间零后台写入、/status watcher.enabled=false
     #[tokio::test]
     async fn background_index_false_keeps_readonly_zero_scan_contract() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -1442,7 +1404,6 @@ mod tests {
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join("init.md"), "# Init\n").unwrap();
 
-        // 先用 Writer 建一个空库（模拟既有只读库）
         let data_dir = guanlan_core::storage::default_data_dir(&root.to_string_lossy()).unwrap();
         {
             let writer = guanlan_core::index::Writer::open_at(&data_dir, &root.to_string_lossy())
@@ -1459,7 +1420,6 @@ mod tests {
         .await
         .expect("只读 serve 启动");
 
-        // 外部写新文件，等 250ms 确认不会主动入库或跑任何任务
         std::fs::write(root.join("new-unwatched.md"), "# Unwatched\n").unwrap();
         tokio::time::sleep(Duration::from_millis(250)).await;
 

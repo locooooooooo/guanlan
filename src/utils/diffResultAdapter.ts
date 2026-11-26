@@ -1,12 +1,3 @@
-/**
- * 语义 Diff 摘要卡适配层（纯函数层）。
- *
- * 数据源 = 任务队列口径的 DiffResult（POST /api/v1/diff 202 → /jobs/{id}/result）：
- * summary{headline, items[{label,count,sign}], checkpoint_id}。
- * 三项指标语义（确定性 v1 口径）：新增交付项 / 关闭未决事项 / 修改接口契约处数。
- * 本层只做展示适配（指标排序、空值兜底、格式化文案），不改语义——服务端 labels
- * 逐字透传。sign 惯例：'+' 增 / '-' 减 / '~' 改。
- */
 
 import type { DiffResult, DiffSummaryMetric } from '../services/apiTypes';
 

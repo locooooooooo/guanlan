@@ -1,9 +1,3 @@
-/**
- * Scene 卡片层 · GraphSceneCards：
- * 承载右侧 280x116 事件卡与任务包分组容器横排（富预览卡）。
- * 数据一律来自 controller ctx；d3 zoom/drag effect 仍在控制器（按 data-node-id /
- * .d3-draggable-node 类选择器跨子组件查询，保持稳定 DOM 结构）。
- */
 import React from 'react';
 import { BookOpen, GitBranch } from 'lucide-react';
 import { ChronosMascotNode } from '../ChronosMascotNode';
@@ -11,7 +5,6 @@ import PackageGroupFrame, { PACKAGE_GROUP_FRAME_H } from '../canvas/PackageGroup
 import RichDocPreviewCard from '../canvas/RichDocPreviewCard';
 import { cleanDisplayText } from '../../utils/displayText';
 import { computeDynamicEdgePath, hasUnreadChanges, unreadStatusLabel } from '../../utils/guanlanEngine';
-// 视口裁剪纯函数（Scene 层消费挂载判定与连接线判定）
 import { shouldDrawGroupConnector } from '../../utils/canvasViewport';
 import {
   artifactStageBadgeText,
@@ -113,8 +106,6 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
     fileById,
     spotlight,
   } = ctx;
-  // 增量聚光灯：当前批阅条目的 file_id（关闭态恒 null，卡面不注入聚光灯样式）。
-  // 游标对列表长度取模（与 GraphSpotlightBar 同一归一式，数据缩胀永不越界）
   const spotlightCurrentFileId = (() => {
     if (!spotlight?.enabled || spotlight.items.length === 0) return null;
     const n = spotlight.items.length;
@@ -124,14 +115,6 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
     Boolean(spotlight?.enabled && fileId && spotlight.dimmedFileIds.has(fileId));
   return (
     <>
-        {/* 10. RIGHT FAN-OUT SUB-AGENT / DOCUMENT NODES（280x116 四行事件卡）
-            行1 flex 两端对齐：左=加粗完整核心文档名（basename，目录前缀不拼名前，
-            dirPrefix 降级为行2 前缀 + hover title）；右=轻量灰胶囊版本跨度（versionSpanCapsule）。
-            行2=11px 浅灰所属专项路径（taskPackageOf(relative_path).id），独立一行不与标题抢位。
-            行3=真实修改内容摘要限 2 行（modified=章节拼接+描述；appeared=extractCoreSummary
-            正文核心结论；皆空回退 headline——严禁只写 +1/-1 行充当摘要）。
-            行4 两端对齐：左=语义标签胶囊（stageOfPath 阶段；决策卡=决策）；右=+N/-M行 · HH:MM。
-            槽位/展开框/命中区统一对齐 EVENT_CARD_W/H（双列 x=468/784、行距 140）。 */}
         {(isFanOutCollapsed && canvasLayoutMode === 'xray'
           ? subAgentCards.slice(0, 2)
           : subAgentCards
@@ -144,19 +127,13 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
             ? hasUnreadChanges(fileRec, readingStates[card.fileId])
             : null;
           const isUnread = unreadInfo?.isUnread ?? false;
-          // 增量聚光灯：已读未变 → 低对比度背景骨架（仅聚光灯开启时注入类）；
-          // 当前批阅条目 → 琥珀描边高亮（行动信号保留全对比度）
           const spotlightDimmed = spotlightDim(card.fileId);
           const spotlightCurrent = Boolean(card.fileId && card.fileId === spotlightCurrentFileId);
           const inTimeSlice = isNodeInActiveTimeSlice(card.timeBucket);
-          // 行4 左：阶段语义胶囊词——优先使用 /state-overview 的六态投影词，
-          // 无投影时回退 stateProjection.artifactStageBadgeText（待分类不渲染）；
-          // 决策/无文件事件展示「决策」。
           const artifactState = artifactStateOf(stateIndex, card.fileId);
           const stageBadgeText = artifactState
             ? DOC_STATE_LABEL[artifactState.state]
             : artifactStageBadgeText(card.packageStage, Boolean(card.decisionId));
-          // 胶囊形制走克制磨砂轻底（淡化满屏重复「草稿」棕框视觉噪点）
           const stageBadgePillClass =
             'shrink-0 rounded-full bg-[color:color-mix(in_srgb,var(--cv-hairline-ink)_6%,transparent)] px-1.5 py-px text-[9.5px] font-mono leading-[1.45] text-[color:var(--cv-ink-meta)]';
           const cardLaneColor = card.decisionId
@@ -168,11 +145,9 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
                 : card.format === 'md'
                   ? LANE_COLORS.md
                   : LANE_COLORS.unknown;
-          // 行1 hover：完整定位串（dirPrefix 存在时补目录前缀——重名拷贝互相可指认）
           const cardTitle = card.dirPrefix
             ? `${card.dirPrefix}/${card.fileName}`
             : card.fileName;
-          // 行2：所属专项路径；同组重名拷贝时前置目录段保住区分度
           const pkgLine = card.dirPrefix
             ? `${card.dirPrefix} · ${card.pkgPath || card.kindLabel || ''}`
             : card.pkgPath || card.kindLabel || '';
@@ -197,7 +172,6 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
                 if (card.fileId) exploreAfterClick(card.fileId, card.revisionId ?? undefined, card.eventId);
               }}
               onDoubleClick={() => {
-                // 双击查看详情（叙事抽屉滑出），「打开原文」在抽屉 footer 首位按钮
                 if (card.fileId) {
                   openNarrativeDrawer({ nodeId: card.id, fileId: card.fileId });
                 } else if (card.decisionId) {
@@ -219,20 +193,14 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
                 });
               }}
             >
-              {/* 3.2：展开某天 → 外框从锚点弹簧 scale+fade 弹出，内部子卡按 40ms 递增浮现。
-                  key 带 springRevealKey：切日期/收起展开/换布局时重挂一次，动画从头播放；
-                  动画挂内层 g（外层 g 的 translate 属性不能被 CSS transform 覆盖） */}
               <g
                 key={`${card.id}-${springRevealKey}`}
                 className="anim-spring-pop"
                 style={{
                   animationDelay: `${cardIdx * SPRING_STAGGER_MS}ms`,
-                  // 锚点 = 卡左缘中心（扇出组从主干那一侧弹出）
                   transformOrigin: 'left center',
                 }}
               >
-              {/* 强选中唯一化：发光圈仅 isSelected 触发（hover 只剩边框），描边用橙色——
-                  全画布同一时刻至多一张卡带橙色发光圈，尺寸与 EVENT_CARD_W/H 同步。 */}
               {isSelected && xrayLaserEnabled && (
                 <rect
                   x="-3"
@@ -282,7 +250,6 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
                       opacity: isSelected ? 1 : 0.65,
                     }}
                   />
-                  {/* 行1 两端对齐：左=加粗完整核心文档名；右=带脉络微点的版本跨度胶囊 */}
                   <div className="flex items-center justify-between gap-2 min-w-0">
                     <span
                       className="text-[12.5px] font-semibold text-[color:var(--cv-ink)] leading-[1.3] truncate min-w-0"
@@ -303,22 +270,16 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
                     )}
                   </div>
 
-                  {/* 行2：所属专项路径（taskPackageOf 链），11px 浅灰独立一行不与标题抢位 */}
                   {pkgLine && (
                     <div className="text-[11px] leading-[1.2] text-[color:var(--cv-ink-meta)] font-mono truncate min-w-0">
                       {pkgLine}
                     </div>
                   )}
 
-                  {/* 行3：真实修改内容摘要（限 2 行）——modified=「变更章节：A / B — 描述」
-                      （canvasChangeDigestLine 单一出口）；appeared=正文核心结论
-                      （extractCoreSummary）；皆空回退 headline detail（诚实呈现，
-                      绝不只写 +1/-1 行充当摘要——行数在行4 右承载）；cleanDisplayText 剥离原始 Markdown 噪声 */}
                   <div className="text-[10.5px] leading-[1.35] line-clamp-2 min-w-0 text-[color:var(--cv-ink-2)]">
                     {cleanDisplayText(card.digestLine || card.detail) || card.digestLine || card.detail}
                   </div>
 
-                  {/* 行4 两端对齐：左=语义标签胶囊 + 悬停直达「溯源/原文」操作轨，右=+N/-M · HH:MM */}
                   <div className="flex items-center justify-between gap-1.5 w-full min-w-0">
                     <div className="flex items-center gap-1 min-w-0">
                       {stageBadgeText ? (
@@ -329,7 +290,6 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
                           {stageBadgeText}
                         </span>
                       ) : null}
-                      {/* 静置零干扰；悬停/选中平滑浮现「溯源」「原文」直达按钮 */}
                       <span
                         className={`d3-no-pan inline-flex items-center gap-1 transition-opacity duration-150 ${
                           isSelected
@@ -372,7 +332,6 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
                     <div className="flex items-center gap-1 shrink-0 min-w-0">
                       {isUnread && !isSelected && unreadInfo && (
                         <span
-                          /* 未读角标措辞统一走 unreadStatusLabel 出口，避免各处自造文案 */
                           title={unreadStatusLabel(unreadInfo.reason)}
                           className="w-1.5 h-1.5 rounded-full bg-[color:var(--cv-unread)] shrink-0"
                         />
@@ -409,15 +368,8 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
           );
         })}
 
-        {/* 11. 任务包分组容器横排（任务空间桌面主场景）：
-            焦点任务包置首，其余按包内最近事件新→旧（buildCanvasPackageGroups 工作流向）；
-            容器间贝塞尔连线（C 命令）+ dasharray 6 18 + .anim-pulse-flow（1.1s linear），
-            光点流动表达「蓝图→交付」工作流向（左→右）。
-            上方事件卡采用 280x116 四行卡（EVENT_CARD_W/H），下方富预览卡在分组容器内
-            承载「不点开就能看懂」的文档摘要（同为 280px 栅格）。 */}
         {canvasLayoutMode === 'xray' &&
           packageGroupLayouts.map(({ group, x, y, width }, groupIdx) => {
-            // 视口外的包不挂载（焦点包除外，由 mountedPkgIds 保证）
             if (!mountedPkgIds.has(group.pkgId)) return null;
             const cards = packageCardsByPkg.get(group.pkgId) ?? [];
             return (
@@ -425,7 +377,6 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
               {groupIdx > 0 &&
                 (() => {
                   const prev = packageGroupLayouts[groupIdx - 1];
-                  // 两端都挂载才画流向线（只挂一端会指向空白，比不画更误导）
                   if (!shouldDrawGroupConnector(prev.group.pkgId, group.pkgId, mountedPkgIds)) {
                     return null;
                   }
@@ -458,16 +409,13 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
                 titleAsOverlay
                 selected={group.pkgId === focusedPkgId}
                 onSelect={() => {
-                  // 选中分组 = 焦点切到包内首位文档（联动 Sources 高亮与叙事抽屉目标）
                   const first = group.docs[0];
                   if (first) onSelectFile(first.fileId);
                 }}
               >
                 {cards.map((doc) => {
-                  // 共享 ID Map 取文件（避免逐卡 files.find）
                   const fileRec = fileById.get(doc.fileId);
                   const isSelectedRich = selectedRichDocFileId === doc.fileId;
-                  // 增量聚光灯：已读未变退骨架 / 当前批阅条目琥珀描边（关闭态两参恒 false，零注入）
                   const richDimmed = spotlightDim(doc.fileId);
                   const richCurrent = Boolean(doc.fileId && doc.fileId === spotlightCurrentFileId);
                   return (
@@ -488,8 +436,6 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
                       dimmed={richDimmed}
                       spotlightCurrent={richCurrent}
                       onClick={() => {
-                        // 单击选中并下钻进事件链（与事件卡同语义）；
-                        // 冒泡截断在卡片组件内部（onClick 不透传事件参数）
                         setSelectedRichDocFileId(doc.fileId);
                         if (fileRec) {
                           onSelectFile(fileRec.file_id);
@@ -497,7 +443,6 @@ export function GraphSceneCards({ ctx }: { ctx: GraphCanvasCtx }) {
                         }
                       }}
                       onDoubleClick={() => {
-                        // 双击查看详情（文件叙事抽屉）
                         openNarrativeDrawer({ fileId: doc.fileId });
                       }}
                       onContextMenu={(e) => {

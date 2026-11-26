@@ -66,7 +66,7 @@ store 反过来从组件导入值（`pageItemToEvent`、`enterEventFrame`、`Tab
 - **桌面壳 absent 时一切降级。** `desktopBridge.ts` 的每个函数都先判断桥是否存在。
 - **构建身份在编译期注入**（`__GUANLAN_APP_VERSION__`、`__GUANLAN_GIT_SHA__`、`__GUANLAN_BUILD_TIME__`）。`appBuildInfo.ts` 在这些常量不存在时（node 测试）回退到兜底字面量。
 - **没有国际化层。** 界面文案是中文字面量，`<html lang="zh-CN">`。
-- **没有 ESLint、Prettier 或任何格式化工具。** `npm run lint` 只是 `tsc --noEmit`。代码里残留的 `eslint-disable` 注释没有对应工具。
+- **没有 ESLint、Prettier 或任何格式化工具。** `npm run lint` 是 `tsc --noEmit` 加注释门禁（`scripts/lint-comments.mjs`）。
 
 ## 样式约定
 

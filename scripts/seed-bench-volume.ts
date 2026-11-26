@@ -36,12 +36,10 @@ const CLEAN = process.argv.includes('--clean');
 const WS_ROOT = root;
 const TARGET = path.resolve(root);
 const mt = (p: string, iso: string): void => {
-  // Node 24 / Windows：utimesSync 必须传 Date 对象（number 时间戳触发 EINVAL -4071）
   const d = new Date(iso);
   fs.utimesSync(p, d, d);
 };
 
-// ---------- 确定性伪随机（LCG，seed 固定可复现） ----------
 let lcgState = 42;
 const rnd = (): number => {
   lcgState = (lcgState * 1103515245 + 12345) % 2147483648;
@@ -50,7 +48,6 @@ const rnd = (): number => {
 const rndInt = (max: number): number => Math.floor(rnd() * max);
 const pad = (n: number, w: number): string => String(n).padStart(w, '0');
 
-// mtime 分散窗口：2026-09-01 ~ 2026-11-18（79 天）
 const DAY0 = Date.UTC(2026, 8, 1);
 const DAY_SPAN_MS = 78 * 24 * 3600 * 1000;
 const dayIso = (i: number): string => {
@@ -67,7 +64,6 @@ function putFile(rel: string, content: Buffer | string, mtimeIso: string): void 
   written.push(rel);
 }
 
-// ---------- CRC-32（zip/PNG 需要；查表实现） ----------
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
   for (let n = 0; n < 256; n++) {
@@ -83,7 +79,6 @@ function crc32(buf: Buffer): number {
   return (c ^ 0xffffffff) >>> 0;
 }
 
-// ---------- stored ZIP 构造（无压缩；条目均为 UTF-8 文本） ----------
 function buildStoredZip(entries: Array<{ name: string; data: Buffer }>): Buffer {
   const chunks: Buffer[] = [];
   const central: Buffer[] = [];
@@ -93,11 +88,11 @@ function buildStoredZip(entries: Array<{ name: string; data: Buffer }>): Buffer 
     const crc = crc32(data);
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0);
-    local.writeUInt16LE(20, 4); // version needed
-    local.writeUInt16LE(0x0800, 6); // UTF-8 flag
-    local.writeUInt16LE(0, 8); // stored
-    local.writeUInt16LE(0, 10); // time
-    local.writeUInt16LE(0x5941, 12); // date (2026-09-01 附近，非零即可)
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0x0800, 6);
+    local.writeUInt16LE(0, 8);
+    local.writeUInt16LE(0, 10);
+    local.writeUInt16LE(0x5941, 12);
     local.writeUInt32LE(crc, 14);
     local.writeUInt32LE(data.length, 18);
     local.writeUInt32LE(data.length, 22);
@@ -130,7 +125,6 @@ function buildStoredZip(entries: Array<{ name: string; data: Buffer }>): Buffer 
   return Buffer.concat([...chunks, cdBuf, eocd]);
 }
 
-// ---------- 最小合法 PNG（1x1 灰度）+ 随机尾填充 ----------
 function pngChunk(type: string, data: Buffer): Buffer {
   const len = Buffer.alloc(4);
   len.writeUInt32BE(data.length, 0);
@@ -140,7 +134,6 @@ function pngChunk(type: string, data: Buffer): Buffer {
   return Buffer.concat([len, typeBuf, data, crc]);
 }
 const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-// 1x1 灰度：IHDR + IDAT(0x78 0x9C 预置 + 原始 filter+pixel 的 deflate 固定哈夫曼流) + IEND
 const IHDR = pngChunk('IHDR', Buffer.from([0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 0, 0, 0]));
 const IDAT = pngChunk('IDAT', Buffer.from([0x78, 0x9c, 0x63, 0x60, 0x60, 0x60, 0x00, 0x00, 0x00, 0x04, 0x00, 0x01]));
 const IEND = pngChunk('IEND', Buffer.alloc(0));
@@ -150,7 +143,6 @@ function buildPng(padBytes: number): Buffer {
   return Buffer.concat([PNG_SIG, IHDR, IDAT, IEND, tail]);
 }
 
-// ---------- 最小多页文本 PDF（PDF 页级抽取真实负载） ----------
 function buildPdf(pages: number, tag: string): Buffer {
   const objects: string[] = [];
   objects.push('<< /Type /Catalog /Pages 2 0 R >>');
@@ -182,7 +174,6 @@ function buildPdf(pages: number, tag: string): Buffer {
   return Buffer.from(out, 'latin1');
 }
 
-// ---------- 最小合法 OOXML（docx / xlsx） ----------
 const OOXML_CT = (defaults: string): string =>
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">${defaults}</Types>`;
@@ -235,7 +226,6 @@ function buildXlsx(sheetName: string, rows: string[][]): Buffer {
   ]);
 }
 
-// ---------- 内容生成器（全部唯一：tag 含路径序号 + 伪随机填充行） ----------
 const filler = (i: number, n: number, w: number): string => {
   const lines: string[] = [];
   for (let k = 0; k < n; k++) lines.push(`<!-- filler ${i}-${k} ${'x'.repeat(8 + rndInt(w))} -->`);
@@ -298,7 +288,6 @@ function jsonDoc(i: number): string {
   );
 }
 
-// ---------- 主流程 ----------
 if (CLEAN) {
   fs.rmSync(TARGET, { recursive: true, force: true });
 }
@@ -307,7 +296,6 @@ fs.mkdirSync(WS_ROOT, { recursive: true });
 console.log(`体量基准夹具生成：${TARGET}（目标 ${TOTAL} 个可见文件）`);
 const t0 = Date.now();
 
-// 配比（合计 = TOTAL）：按比例缩放到任意 total
 const RATIO: Array<[string, number]> = [
   ['md', 2800],
   ['code', 2800],
@@ -323,14 +311,12 @@ const RATIO: Array<[string, number]> = [
 const ratioSum = RATIO.reduce((s, [, n]) => s + n, 0);
 const scale = TOTAL / ratioSum;
 const counts = RATIO.map(([k, n]) => [k, Math.max(k === 'big' ? 1 : 1, Math.round(n * scale))] as const);
-// 修平误差到最大族（md）
 const diff = TOTAL - counts.reduce((s, [, n]) => s + n, 0);
 counts[0] = ['md', (counts[0][1] as number) + diff];
 
 let seq = 0;
 const nextIso = (): string => dayIso(seq++);
 
-// 预解构各族数量（缩放取整后由 md 族修平 TOTAL 误差）
 const mdCount = counts[0][1];
 const codeCount = counts[1][1];
 const pngCount = counts[2][1];
@@ -344,27 +330,23 @@ const csvCount = csvIdx >= 0 ? counts[csvIdx][1] : 195;
 const jsonCount = jsonIdx >= 0 ? counts[jsonIdx][1] : 200;
 const bigCount = counts.find(([k]) => k === 'big')?.[1] ?? 5;
 
-// 1) docs MD（决策标记引用的 PDF 按 pdf 实际数量取模，保证链接可解析）
 for (let i = 0; i < mdCount; i++) {
   const rel = `docs/基准-文档-${pad(i, 5)}.md`;
   putFile(rel, mdDoc(rel, i, pdfCount), nextIso());
 }
 console.log(`  docs MD ×${mdCount}`);
 
-// 2) src 代码
 for (let i = 0; i < codeCount; i++) {
   const ext = CODE_EXTS[i % CODE_EXTS.length];
   putFile(`src/模块${i % 40}/sample_${pad(i, 5)}.${ext}`, codeDoc(i), nextIso());
 }
 console.log(`  src 代码 ×${codeCount}`);
 
-// 3) assets PNG
 for (let i = 0; i < pngCount; i++) {
   putFile(`assets/img/图样-${pad(i, 5)}.png`, buildPng(6 * 1024 + rndInt(2048)), nextIso());
 }
 console.log(`  assets PNG ×${pngCount}`);
 
-// 4) specs PDF
 for (let i = 0; i < pdfCount; i++) {
   const pages = 2 + (i % 5);
   putFile(
@@ -375,14 +357,12 @@ for (let i = 0; i < pdfCount; i++) {
 }
 console.log(`  specs PDF ×${pdfCount}`);
 
-// 5) docs DOCX
 for (let i = 0; i < docxCount; i++) {
   const paras = Array.from({ length: 6 }, (_, k) => `基准方案 ${pad(i, 5)} · 第 ${k + 1} 段（${'内容'.repeat(6)}）`);
   putFile(`docs/方案/基准-方案-${pad(i, 5)}.docx`, buildDocx(paras), nextIso());
 }
 console.log(`  docs DOCX ×${docxCount}`);
 
-// 6) sheets XLSX
 for (let i = 0; i < xlsxCount; i++) {
   const rows = Array.from({ length: 12 }, (_, r) =>
     Array.from({ length: 4 }, (_, c) => String(rndInt(5000) + c))
@@ -391,7 +371,6 @@ for (let i = 0; i < xlsxCount; i++) {
 }
 console.log(`  sheets XLSX ×${xlsxCount}`);
 
-// 7) archives ZIP
 for (let i = 0; i < zipCount; i++) {
   putFile(
     `archives/基准-归档-${pad(i, 5)}.zip`,
@@ -404,7 +383,6 @@ for (let i = 0; i < zipCount; i++) {
 }
 console.log(`  archives ZIP ×${zipCount}`);
 
-// 8) data CSV + JSON
 for (let i = 0; i < csvCount; i++) {
   putFile(`data/表样-${pad(i, 5)}.csv`, csvDoc(i), nextIso());
 }
@@ -413,11 +391,9 @@ for (let i = 0; i < jsonCount; i++) {
 }
 console.log(`  data CSV ×${csvCount} · JSON ×${jsonCount}`);
 
-// 9) media 大二进制（>50MiB 配额线 → 仅记身份与哈希，绝不复制快照）
 const BIG_BYTES = 50 * 1024 * 1024 + 1;
 for (let i = 0; i < bigCount; i++) {
   const buf = Buffer.alloc(BIG_BYTES);
-  // 首尾 64KiB 写入确定性变化字节（中段保持零 → 写盘与哈希仍真实）
   for (let k = 0; k < 65536; k++) {
     buf[k] = (i * 131 + k) % 256;
     buf[buf.length - 1 - k] = (i * 17 + k) % 256;
@@ -426,7 +402,6 @@ for (let i = 0; i < bigCount; i++) {
 }
 console.log(`  media 大二进制 ×${bigCount}（${(BIG_BYTES / 1024 / 1024).toFixed(0)}MiB each）`);
 
-// 10) .gitignore + 被忽略目录（不计入可见数）
 const ignoreList = ['scratch/', 'tmp-build/', '!keep.md'];
 putFile('.gitignore', ignoreList.join('\n') + '\n', dayIso(0));
 for (let i = 0; i < 50; i++) {
@@ -437,7 +412,7 @@ for (let i = 0; i < 30; i++) {
 }
 console.log('  .gitignore + scratch/(50) + node_modules/(30)（忽略与黑名单，不入库）');
 
-const visible = written.length - 80 - 1; // 减去忽略/黑名单 80 份与 .gitignore 本身
+const visible = written.length - 80 - 1;
 const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 console.log(`完成：写入 ${written.length} 份（可见约 ${visible} / 目标 ${TOTAL}）· 耗时 ${elapsed}s`);
 if (Math.abs(visible - TOTAL) > 2) {

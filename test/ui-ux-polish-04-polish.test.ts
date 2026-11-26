@@ -35,33 +35,7 @@ import type { WorkspaceStoreCtx } from '../src/stores/useWorkspaceStore';
 import type { FileRecord, ReadingState, WorkspaceConfig } from '../src/types/guanlan';
 import { computeReadingIslandStats } from '../src/utils/readingIslandStats';
 
-/**
- * 今日观澜首页「司辰今日徽记」与事件走势柱图交互直跳。
- *
- * ① 柱模型纯函数：'' 日期待考桶恒排除、升序取最近 24 桶、只有 day 粒度 + 精确
- *    YYYY-MM-DD 桶可作直跳载荷（week/month 聚合桶诚实禁跳）、count 负值/NaN 钳 0；
- * ② 司辰徽记纯函数：今日新增/演进真实拆分（新增分类与 computeTrunkAccumulation
- *    同一语义出处：appeared/discovered/workspace_baseline）、未命中日诚实降级、
- *    occurred/observed 口径透传绝不混写；
- * ③ SSR 徽记：真实派生摘要渲染、口径显式声明、缺今日桶不出编造数字、绝不复读
- *    meta 胶囊的资产/项目/待拍板统计（信息降密 + 首页不堆统计大数字）；
- * ④ SSR 柱图：day 粒度全柱 button 化（data-home-trend-bar 承载精确 YYYY-MM-DD）、
- *    悬停浮窗「点击前往该日」、近 24 桶截断、聚合桶零按钮零日历直跳；
- * ⑤ 接线（源码级）：柱图/徽记点击精确透传日期；AppMainViews 直跳走 setActiveDate
- *    锁定语义（绝不走「再点同值即清空」的 handleSelectCanvasDate toggle）；日历落点
- *    同步右侧聚焦卡；日历侧既有直跳契约原样保留；
- * ⑥ 交错入场节奏：首页区块 --glx-stagger 唯一递进（0,2,3,4,5，无并列重叠拍）；
- * ⑦ 动效契约：两文件引用的 glx-* 类全部「声明 + reduce 降级」双登记（本轮零新增
- *    动效类）；柱生长只有 glx-bar-rise 的 scaleY，柱高保持 inline 视觉量非动画量；
- *    徽记轻摇走 motion-safe 门控的组件侧变换（不进共享动效层）；
- * ⑧ 令牌纪律：徽记文字 AA 深档（--ink-soft/--ink-strong，--ink-faint 与
- *    --accent-iris 裸值零入）；五段轨底轨收编 --glass-hairline；零 will-change；
- *    首页数据区禁飞类零引用；
- * ⑨ 橱窗微光：MiniDecisionCard 接入既有 glx-sheen-card 与箭头 hover 点亮；
- *    既有签名与 data-feature-card/count 既有锚点零回退。
- */
 
-/** 读 src/ 下源文件（相对 test/ 目录，须带 ../src/ 前缀） */
 function readSrc(path: string): string {
   return readFileSync(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8');
 }
@@ -91,7 +65,6 @@ function daysResult(
   };
 }
 
-/** 本地日历日字符串（相对今天偏移 N 天，YYYY-MM-DD，与 lastSevenDays 同一套本地拼接） */
 function localDayStr(offsetFromToday: number): string {
   const d = new Date();
   d.setDate(d.getDate() + offsetFromToday);
@@ -100,7 +73,6 @@ function localDayStr(offsetFromToday: number): string {
   ).padStart(2, '0')}`;
 }
 
-/** 今日本地日历日（与 HomeView 内 today 同一口径：localDay(ISO) 不引 UTC 日界） */
 const TODAY = localDay(new Date().toISOString());
 assert.equal(TODAY, localDayStr(0), '测试时钟与 localDay 口径一致（无 UTC 漂移）');
 
@@ -126,14 +98,12 @@ function renderHome(
   );
 }
 
-// ───────────────────────── ① 柱模型纯函数 ─────────────────────────
 
 test('柱模型纯函数：日期待考桶排除、升序取最近 24 桶、day 粒度才可直跳、count 钳 0', () => {
-  // 25 个历史 day 桶（-25..-1）+ 今日峰值桶 = 26 组 → 只留最近 24 桶
   const groups: EventDayGroup[] = [];
   for (let i = 0; i < 25; i += 1) groups.push(dayGroup(localDayStr(i - 25), i + 1));
   groups.push(dayGroup(TODAY, 30));
-  groups.push(dayGroup('', 99)); // 日期待考桶混入：恒排除（既有契约，不进图）
+  groups.push(dayGroup('', 99));
 
   const dayBars = buildHomeTrendBars(daysResult('day', groups));
   assert.equal(dayBars.length, HOME_TREND_BAR_LIMIT, '近 24 桶截断');
@@ -147,21 +117,17 @@ test('柱模型纯函数：日期待考桶排除、升序取最近 24 桶、day 
     '严格升序（上新下旧阅读方向）'
   );
 
-  // week / month 聚合桶：日期键即便形如 YYYY-MM-DD 也不可作直跳载荷（apiTypes 契约：
-  // 只有 day 粒度能定位到某日）
   for (const granularity of ['week', 'month'] as const) {
     const bars = buildHomeTrendBars(daysResult(granularity, groups));
     assert.equal(bars.length, HOME_TREND_BAR_LIMIT, `${granularity} 桶照常进图`);
     assert.ok(bars.every((b) => !b.jumpable), `${granularity} 聚合桶诚实禁跳`);
   }
 
-  // count 负值 / NaN 钳 0（诚实下界，不炸不造负柱）
   const clamped = buildHomeTrendBars(
     daysResult('day', [dayGroup('2026-11-01', -5), dayGroup('2026-11-02', Number.NaN)])
   );
   assert.deepEqual(clamped.map((b) => b.count), [0, 0]);
 
-  // null / 空 groups：诚实空数组
   assert.deepEqual(buildHomeTrendBars(null), []);
   assert.deepEqual(buildHomeTrendBars(daysResult('day', [])), []);
 });
@@ -181,10 +147,8 @@ test('精确日校验纯函数：伪日期/未补零/空串拒绝，闰年真实
   assert.equal(isExactDayDate('2026-11-23 '), false, '尾随空白拒绝');
 });
 
-// ───────────────────── ② 司辰徽记纯函数 ─────────────────────
 
 test('徽记摘要纯函数：新增/演进真实拆分（与时光沉淀引擎同分类）、未命中诚实降级、口径透传', () => {
-  // appeared2 + discovered1 + workspace_baseline1 = 新增 4；revision_updated3 = 演进 3
   const found = buildChronosTodaySummary(
     daysResult(
       'day',
@@ -201,7 +165,6 @@ test('徽记摘要纯函数：新增/演进真实拆分（与时光沉淀引擎�
   assert.equal(chronosBadgeLine(found), '今日新增 4 · 演进 3');
   assert.equal(chronosOrderLabel('occurred'), '业务发生');
 
-  // observed 口径透传（徽记显式声明「系统采集」，双口径绝不混写）
   const observed = buildChronosTodaySummary(
     daysResult('day', [dayGroup(TODAY, 2, { appeared: 2 })], 'observed'),
     TODAY
@@ -209,22 +172,18 @@ test('徽记摘要纯函数：新增/演进真实拆分（与时光沉淀引擎�
   assert.equal(observed.order, 'observed');
   assert.equal(chronosOrderLabel(observed.order), '系统采集');
 
-  // clamp：新增类计数超过桶 count 时 added ≤ dayCount，演进归 0
   const clamped = buildChronosTodaySummary(daysResult('day', [dayGroup(TODAY, 5, { appeared: 9 })]), TODAY);
   assert.equal(clamped.addedCount, 5);
   assert.equal(clamped.modifiedCount, 0);
 
-  // by_kind 缺失 → added 0 / 全量记演进（兜底不炸、不造新增数）
   const bare = buildChronosTodaySummary(daysResult('day', [dayGroup(TODAY, 6)]), TODAY);
   assert.equal(bare.addedCount, 0);
   assert.equal(bare.modifiedCount, 6);
 
-  // 零事件日：found 但诚实零文案
   const zeroDay = buildChronosTodaySummary(daysResult('day', [dayGroup(TODAY, 0)]), TODAY);
   assert.equal(zeroDay.found, true);
   assert.equal(chronosBadgeLine(zeroDay), '今日暂无新动态');
 
-  // 无今日桶 / 非日粒度 / null：诚实降级，绝不显示编造的新增/演进
   for (const miss of [
     buildChronosTodaySummary(daysResult('day', [dayGroup('2026-01-01', 3)]), TODAY),
     buildChronosTodaySummary(daysResult('week', [dayGroup(TODAY, 9, { appeared: 9 })]), TODAY),
@@ -260,7 +219,6 @@ test('日历次级落点纯函数：最近一个有事件的直跳日；聚合�
   assert.equal(latestJumpableTrendDate([]), null);
 });
 
-// ───────────────── ③ SSR：司辰今日徽记 ─────────────────
 
 test('SSR 徽记：真实派生摘要 + 口径显式声明 + 直跳目的地；缺今日桶诚实降级；绝不复读 meta 统计', () => {
   const html = renderHome(
@@ -274,14 +232,12 @@ test('SSR 徽记：真实派生摘要 + 口径显式声明 + 直跳目的地；�
   assert.ok(html.includes('motion-safe:hover:-rotate-2'), '悬停轻摇（motion-safe 门控）');
   assert.ok(html.includes('tabular-nums'), '摘要数字等宽唯一出口');
 
-  // 未命中：day 粒度但无今日桶 → idle 诚实降级，不伪造计数
   const idle = renderHome(daysResult('day', [dayGroup('2026-01-01', 3)]));
   assert.ok(idle.includes('data-chronos-badge="idle"'), '降级态锚点');
   assert.ok(idle.includes('今日暂无新动态'), '诚实降级文案');
   assert.ok(!idle.includes('今日新增'), '降级态零编造的新增数字');
   assert.ok(!idle.includes('演进 '), '降级态零编造的演进数字');
 
-  // 徽记与 meta 胶囊分工：徽记段绝不重复资产/项目/待拍板统计（信息降密红线）
   const badgeChunk = html.slice(html.indexOf('data-chronos-badge'));
   assert.ok(!badgeChunk.includes('份资产'), '徽记不重复资产计数');
   assert.ok(!badgeChunk.includes('项待拍板'), '徽记不重复待拍板计数');
@@ -289,7 +245,6 @@ test('SSR 徽记：真实派生摘要 + 口径显式声明 + 直跳目的地；�
   assert.ok(html.includes('份资产') && html.includes('项待拍板') === false, 'meta 胶囊保留既有口径（零待拍板时不出拍板数）');
 });
 
-// ───────────────── ④ SSR：柱图可点击时光入口 ─────────────────
 
 test('SSR 柱图：day 粒度全柱 button 化（精确 YYYY-MM-DD 载荷）、点击前往该日、近 24 桶、日历次级入口', () => {
   const groups: EventDayGroup[] = [];
@@ -319,7 +274,6 @@ test('SSR 柱图：day 粒度全柱 button 化（精确 YYYY-MM-DD 载荷）、�
     '日历次级入口落点=最近活跃直跳日'
   );
   assert.ok(html.includes(`日历看 ${TODAY.slice(5)}`), '日历入口文案带精确日期');
-  // 既有基线锚点不回退：三格统计条不增格
   assert.ok(html.includes('aria-label="事件走势"'), '走势区 aria 锚点');
   for (const cell of ['活跃时段', '日均节奏', '单日峰值']) {
     assert.equal(
@@ -361,7 +315,6 @@ test('SSR 柱图零数据：诚实空态与「等待数据」胶囊不变，零�
   assert.ok(!nullData.includes('data-home-trend-calendar-jump'), '无数据不出日历入口');
 });
 
-// ───────────────── ⑤ 接线（源码级，SSR 无法模拟点击） ─────────────────
 
 test('接线（源码级）：柱图/徽记/日历入口精确透传 YYYY-MM-DD；AppMainViews 锁定语义 ≠ toggle', () => {
   const homeSrc = readSrc('components/HomeView.tsx');
@@ -408,7 +361,6 @@ test('接线（源码级）：柱图/徽记/日历入口精确透传 YYYY-MM-DD�
   );
 });
 
-// ───────────────── ⑥ 交错入场节奏 ─────────────────
 
 test('交错入场节奏：首页区块 --glx-stagger 唯一递进（0,2,3,4,5，消灭并列重叠拍）', () => {
   const html = renderHome(null);
@@ -421,7 +373,6 @@ test('交错入场节奏：首页区块 --glx-stagger 唯一递进（0,2,3,4,5�
   assert.ok(html.includes('glx-hero-reveal'), '区块入场复用既有 glx-hero-reveal 预设');
 });
 
-// ───────────────── ⑦ 动效契约（声明 + reduce 双登记） ─────────────────
 
 test('动效契约：两文件引用的 glx-* 类全部「声明 + reduce 降级」双登记；零新增动效类欠账', () => {
   const motionCss = readFileSync(
@@ -433,12 +384,9 @@ test('动效契约：两文件引用的 glx-* 类全部「声明 + reduce 降级
   );
   const used = new Set<string>();
   for (const src of [readSrc('components/HomeView.tsx'), readSrc('components/FeaturedFocusCards.tsx')]) {
-    // (?<!-)：排除 --glx-stagger / --glx-bar-idx 等交错延迟自定义属性（非类名）
     for (const m of src.matchAll(/(?<![-\w])glx-[a-z0-9-]+/g)) used.add(m[0]);
   }
   assert.ok(used.size >= 5, `应覆盖既有共享动效类（实收 ${used.size} 类）`);
-  // glx-fan-stage 是纯父级 hover 触发器（自身无动画/过渡），子层 glx-fan-front/back
-  // 已逐类降级——登记豁免，与 motion.css §4 块一「逐类降级」口径一致。
   const parentTriggerOnly = new Set(['glx-fan-stage']);
   for (const cls of used) {
     assert.ok(motionCss.includes(`.${cls}`), `motion.css 应声明 .${cls}`);
@@ -446,7 +394,6 @@ test('动效契约：两文件引用的 glx-* 类全部「声明 + reduce 降级
       assert.ok(reduceSection.includes(`.${cls}`), `prefers-reduced-motion 应降级 .${cls}`);
     }
   }
-  // 零新增动效类：motion.css 不引入司辰徽记私类（轻摇走组件侧 motion-safe 变换）
   assert.ok(!motionCss.includes('chronos'), 'motion.css 零 chronos 私类');
   const homeSrc = readSrc('components/HomeView.tsx');
   assert.ok(
@@ -474,11 +421,9 @@ test('柱生长动效：只有既有 glx-bar-rise 的 scaleY（纯 transform）�
   const homeSrc = readSrc('components/HomeView.tsx');
   assert.ok(homeSrc.includes('height: `${heightPct}%`'), '柱高保持 inline height:%（视觉量）');
   assert.ok(homeSrc.includes("'--glx-bar-idx'"), '柱间交错仍走 --glx-bar-idx 延迟');
-  // 数据区禁飞：首页柱图区零位移入场类
   assert.ok(!homeSrc.includes('glx-card-in') && !homeSrc.includes('glx-row-in'), '数据区禁飞类零引用');
 });
 
-// ───────────────── ⑧ 令牌与对比度纪律 ─────────────────
 
 test('令牌纪律：徽记文字 AA 深档、iris 裸值与 --ink-faint 零入徽记；底轨收编 --glass-hairline；零 will-change', () => {
   const homeSrc = readSrc('components/HomeView.tsx');
@@ -511,7 +456,6 @@ test('令牌纪律：徽记文字 AA 深档、iris 裸值与 --ink-faint 零入�
   );
 });
 
-// ───────────────── ⑨ 橱窗微光与既有契约 ─────────────────
 
 test('橱窗微光：MiniDecisionCard 接入既有 glx-sheen-card 扫光与箭头 hover 点亮；既有签名与既有锚点零回退', () => {
   const decisionItems: FeaturedDecisionItem[] = [
@@ -537,7 +481,6 @@ test('橱窗微光：MiniDecisionCard 接入既有 glx-sheen-card 扫光与箭�
     '箭头 hover 点亮（微光回应）'
   );
 
-  // 活跃专项态：五段轨走令牌底轨，卡 B 计数锚点恢复
   const pkgHtml = renderToStaticMarkup(
     createElement(FeaturedFocusCards, {
       decisionItems,
@@ -557,7 +500,6 @@ test('橱窗微光：MiniDecisionCard 接入既有 glx-sheen-card 扫光与箭�
   assert.ok(pkgHtml.includes('data-feature-count="package"'), '待验收计数锚点');
   assert.ok(pkgHtml.includes('v8 · 待用户验收'), '徽标行真实派生透传');
 
-  // C1 签名冻结：props 五字段原样保留
   const src = readSrc('components/FeaturedFocusCards.tsx');
   for (const token of [
     'decisionItems',
@@ -570,26 +512,7 @@ test('橱窗微光：MiniDecisionCard 接入既有 glx-sheen-card 扫光与箭�
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 全局顶栏减负分组 / 阅读岛动效激活 / 琉璃骨架屏体系
-//
-// ① 骨架行宽纯函数（GlassSkeleton.skeletonLineWidths）：首行满宽逐行收窄、
-//    56% 下限、0/负/NaN/∞ 单行兜底；
-// ② GlassSkeleton / ChronosEmptyState SSR：琉璃条 + glx-skeleton 流光载体 +
-//    aria-hidden 纯视觉占位（诚实播报归调用方 role="status"）；
-// ③ 动效契约：四文件引用的 glx-* 类「声明 + reduce 降级」双登记；
-//    glx-skeleton-sweep 关键帧只动 transform（禁 background-position 流光、
-//    禁布局属性、禁写死 ms、零 will-change）；reduce 下流光层 display:none；
-// ④ 阅读岛：环生长纯函数 offset=100-percent 双端钳位（与 glx-ring-draw 目标
-//    同源，周长 100 ≠ 日历侧 82）；三环全部接入描边生长 + 悬停微亮；
-//    展开面板 glx-t-panel 两段式弹簧滑出（anim-spring-pop 跨域借用退役）；
-// ⑤ 顶栏减负分组：核心行动组（检索 ⌘K · 未决决策 · 批阅）/ 静默工具组
-//    （同步状态微点 · 证据篮 · ? · 设置）SSR 分区锚点 + 右区唯一发丝隔线；
-// ⑥ 冷启动首扫：裸旋转图标 → 琉璃骨架；role="status" 与诚实文案保留；
-//    dataError 错误态零骨架（骨架不吞真实错误态）。
-// ═══════════════════════════════════════════════════════════════════════════
 
-// ───────────────── ① 骨架行宽纯函数 ─────────────────
 
 test('骨架行宽纯函数：首行满宽逐行收窄（56% 下限），0/负数/NaN/∞ 单行兜底', () => {
   assert.deepEqual(skeletonLineWidths(3), ['100%', '89%', '78%'], '首行满宽、步长 11% 递减');
@@ -612,7 +535,6 @@ test('骨架行宽纯函数：首行满宽逐行收窄（56% 下限），0/负�
   assert.deepEqual(skeletonLineWidths(Number.POSITIVE_INFINITY), ['100%'], '∞ 单行兜底不炸');
 });
 
-// ───────────────── ② GlassSkeleton / 线稿空态 SSR ─────────────────
 
 test('GlassSkeleton SSR：琉璃条 + glx-skeleton 流光载体 + aria-hidden 纯视觉占位；头像位变体', () => {
   const html = renderToStaticMarkup(createElement(GlassSkeleton, { lines: 3 }));
@@ -656,7 +578,6 @@ test('司辰线稿空态 SSR：单点双圈涟漪线稿（澜青桥色）+ 诚�
   assert.ok(!lineArt.includes('animate'), '线稿纯静态（呼吸语法只属未读/新变化提示）');
 });
 
-// ───────────────── ③ 动效契约（声明 + reduce 双登记） ─────────────────
 
 test('动效契约：四文件引用的 glx-* 类「声明 + reduce 降级」双登记；骨架流光只动 transform、零写死 ms', () => {
   const motionCss = readFileSync(
@@ -673,7 +594,6 @@ test('动效契约：四文件引用的 glx-* 类「声明 + reduce 降级」双
     readSrc('components/ui/GlassSkeleton.tsx'),
     readSrc('components/app/AppBanners.tsx'),
   ]) {
-    // (?<!-)：排除 --glx-ring-offset 等交错/参数自定义属性（非类名）
     for (const m of src.matchAll(/(?<![-\w])glx-[a-z0-9-]+/g)) used.add(m[0]);
   }
   assert.ok(used.has('glx-skeleton'), '本轮新增骨架流光载体类');
@@ -683,8 +603,6 @@ test('动效契约：四文件引用的 glx-* 类「声明 + reduce 降级」双
     assert.ok(reduceSection.includes(`.${cls}`), `prefers-reduced-motion 应降级 .${cls}`);
   }
 
-  // 流光关键帧：只动 transform；§3.29 段（剥注释后的代码级）零布局属性、
-  // 零 background-position、零写死 ms（时长只消费 --dur-pan 令牌倍乘）、零 will-change。
   const u11Section = motionCss
     .slice(motionCss.indexOf('§3.29'), motionCss.indexOf('§4 prefers-reduced-motion'))
     .replace(/\/\*[\s\S]*?\*\//g, '');
@@ -698,7 +616,6 @@ test('动效契约：四文件引用的 glx-* 类「声明 + reduce 降级」双
   assert.ok(u11Section.includes('calc(var(--dur-pan) * 6)'), '扫光时长走 --dur-pan 令牌倍乘');
   assert.ok(!u11Section.includes('will-change'), '零新增常驻 will-change');
 
-  // reduce 覆盖形态：流光纯装饰层 display:none（骨架本体零动画无需停帧）
   const reduceSkeletonIdx = reduceSection.indexOf('.glx-skeleton::after');
   assert.ok(reduceSkeletonIdx >= 0, 'reduce 块登记骨架流光层');
   const reduceSkeletonBlock = reduceSection.slice(
@@ -708,7 +625,6 @@ test('动效契约：四文件引用的 glx-* 类「声明 + reduce 降级」双
   assert.ok(reduceSkeletonBlock.includes('display: none'), 'reduce 下流光层整层隐藏');
 });
 
-// ───────────────── ④ 阅读岛：环生长 + 悬停微亮 + 面板弹簧滑出 ─────────────────
 
 test('环生长纯函数：周长 100 口径 offset=100-percent 双端钳位（与 glx-ring-draw 目标同源）', () => {
   assert.equal(islandRingDashOffset(33), 67, '33% → offset 67（周长 100 ≠ 日历侧 82，不同源）');
@@ -766,7 +682,6 @@ test('三环描边生长 SSR：glx-ring-draw + --glx-ring-offset 与 attribute �
   assert.ok(full.includes('--glx-ring-offset:0'));
 });
 
-// 岛夹具（与 reading-island.test.ts 同构的极小 FileRecord/ReadingState）
 let islandSeq = 0;
 function islandFile(opts: { persisted?: boolean } = {}): FileRecord {
   islandSeq += 1;
@@ -856,15 +771,12 @@ test('展开面板 SSR：glx-t-panel 两段式弹簧滑出（anim-spring-pop 退
   assert.ok(html.includes('glx-t-panel'), '弹簧滑出走 glx-t-panel 双轨');
   assert.ok(html.includes('glass-pop'), '琉璃浮层材质保留（inset 高光 + blur + 双层深影）');
   assert.ok(!html.includes('anim-spring-pop'), '340ms 画布例外档退役，不再跨域借用');
-  // 两段式首帧：SSR（无 rAF）输出右侧偏移态，浏览器第二帧翻转终态
   assert.ok(html.includes('transform:translateX(16px)'), '首帧偏移态（自右缘滑入）');
   assert.ok(html.includes('opacity:0'), '首帧透明态');
-  // 既有结构锚点零回退（reading-island.test.ts 深锁，此处抽查）
   assert.equal(html.split('data-island-doc-row').length - 1, 3, '清单行数不回退');
   assert.ok(html.includes('data-island-section="已读"') && html.includes('data-island-section="未读"'));
 });
 
-// ───────────────── ⑤ 顶栏减负分组 ─────────────────
 
 function headerBaseProps() {
   return {
@@ -922,7 +834,6 @@ test('顶栏减负分组 SSR：核心行动组（检索·未决决策·批阅）
   );
   assert.equal((html.match(/data-header-divider/g) ?? []).length, 1, '右区唯一簇间发丝隔线');
 
-  // 源序：核心行动组 → 隔线 → 静默工具组
   const idxPrimary = html.indexOf('data-header-cluster="primary"');
   const idxDivider = html.indexOf('data-header-divider');
   const idxUtility = html.indexOf('data-header-cluster="utility"');
@@ -957,12 +868,10 @@ test('顶栏分组源码契约：library 筛选随检索同簇；遥测胶囊整
   const radarIdx = headerSrc.indexOf('<DecisionRadar');
   assert.ok(radarIdx > idxPrimary && radarIdx < idxDivider, '决策雷达入核心行动组');
 
-  // 徽标脉冲接线原样保留（证据篮搬簇不搬语义）
   assert.ok(headerSrc.includes("basketPulseSeq > 0 ? 'glx-badge-pop'"));
   assert.ok(headerSrc.includes('data-context-basket-badge'));
 });
 
-// ───────────────── ⑥ 冷启动首扫琉璃骨架 ─────────────────
 
 function bannerCtx(overrides: Record<string, unknown> = {}): WorkspaceStoreCtx {
   return {
@@ -982,7 +891,6 @@ function bannerCtx(overrides: Record<string, unknown> = {}): WorkspaceStoreCtx {
     files: [],
     dataError: null,
     activeTab: 'home',
-    // 挂载点消费：阅读岛（files>0 时渲染）直连 store 真实 readingStates 与 config.quota
     config: EMPTY_WORKSPACE_CONFIG,
     readingStates: {},
     ...overrides,
@@ -1002,14 +910,12 @@ test('冷启动首扫 SSR：裸旋转图标升级琉璃骨架 + 司辰线稿；r
   assert.ok(html.includes('data-chronos-lineart'), '司辰线稿静态语法');
   assert.ok(!html.includes('animate-spin'), '裸旋转图标退役');
 
-  // 骨架不吞真实错误态：dataError 非空时整个首扫块不渲染（错误照旧如实透出）
   const errHtml = renderToStaticMarkup(
     createElement(AppBanners, { ctx: bannerCtx({ dataError: '读取失败' }) })
   );
   assert.ok(!errHtml.includes('data-glass-skeleton'), '错误态零骨架');
   assert.ok(!errHtml.includes('正在读取工作区快照…'), '错误态零加载文案');
 
-  // 非 home 页签 / 已有文件时首扫占位照旧不渲染（既有门控原样）
   const libHtml = renderToStaticMarkup(
     createElement(AppBanners, { ctx: bannerCtx({ activeTab: 'library' }) })
   );
@@ -1017,7 +923,6 @@ test('冷启动首扫 SSR：裸旋转图标升级琉璃骨架 + 司辰线稿；r
 });
 
 test('阅读岛挂载：收编入 TopHeader 静默工具组零遮挡（AppBanners 退役右缘 fixed 压盖）+ 续读复用 openDocResumeReading', () => {
-  // 原 AppBanners 右缘 fixed 亮白悬浮条压盖日历侧栏/时光机右栏，已收编为 TopHeader 横向紧凑微胶囊 + coss Sheet inset
   const bannersSrc = readSrc('components/app/AppBanners.tsx');
   assert.ok(!bannersSrc.includes('<ReadingIsland'), 'AppBanners 不再挂右缘 fixed 压盖岛');
   const headerSrc = readSrc('components/TopHeader.tsx');
@@ -1034,7 +939,6 @@ test('阅读岛挂载：收编入 TopHeader 静默工具组零遮挡（AppBanner
     'App 聚合口径直连 store 真实 files/readingStates 与 openDocResumeReading（零造数）'
   );
 
-  // SSR：files 为空时 TopHeader 不渲染胶囊；数据就绪后渲染横向微胶囊（默认收起态）
   const emptyHeaderHtml = renderToStaticMarkup(
     createElement(TopHeader, {
       ...headerBaseProps(),
@@ -1060,7 +964,6 @@ test('阅读岛挂载：收编入 TopHeader 静默工具组零遮挡（AppBanner
 });
 
 test('三处裸旋转替换收编：阅读器冷加载与文件历史两处琉璃骨架，诚实语义零删减', () => {
-  // ② 阅读器冷加载（readerMarkdownSection.tsx bodyPhase==='loading' 块）
   const readerSrc = readSrc('components/reader/readerMarkdownSection.tsx');
   const loadingIdx = readerSrc.indexOf("bodyPhase === 'loading'");
   assert.ok(loadingIdx > 0);
@@ -1075,10 +978,8 @@ test('三处裸旋转替换收编：阅读器冷加载与文件历史两处琉�
   ]) {
     assert.ok(loadingBlock.includes(copy), `诚实文案/可诊断信息保留：${copy}`);
   }
-  // 决策回执「保存中…」按钮 spinner 属功能流保留（animate-spin 功能流范畴）
   assert.ok(readerSrc.includes('Loader2'), '按钮内操作反馈 spinner 不在本轮收编范围');
 
-  // ③ 文件历史抽屉（版本链拉取 + 版本正文预览两处）
   const timelineSrc = readSrc('components/FileTimelineDrawer.tsx');
   assert.ok(!timelineSrc.includes('Loader2'), 'FileTimelineDrawer 裸旋转全退役');
   assert.equal(timelineSrc.split('<GlassSkeleton').length - 1, 2, '版本链拉取与版本正文预览两处');
@@ -1089,7 +990,6 @@ test('三处裸旋转替换收编：阅读器冷加载与文件历史两处琉�
     2,
     '两处 loading 块均带诚实加载语义'
   );
-  // 错误态不被骨架吞：error / previewError 分支原样在场
   assert.ok(timelineSrc.includes('!loading && error'), '版本链错误态分支保留');
   assert.ok(timelineSrc.includes('previewError'), '版本预览错误态分支保留');
 });

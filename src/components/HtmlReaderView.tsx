@@ -76,7 +76,6 @@ export const HtmlReaderView: React.FC<HtmlReaderViewProps> = ({
   const onContentLoadedRef = useRef(onContentLoaded);
   onContentLoadedRef.current = onContentLoaded;
 
-  // 切文件 / 切版本时读取对应版本快照，并安全复位外链放行开关
   useEffect(() => {
     setLoadError(null);
     setAllowExternalHttps(false);
@@ -115,7 +114,6 @@ export const HtmlReaderView: React.FC<HtmlReaderViewProps> = ({
     };
   }, [currentRev.revision_id, currentRev.markdownContent]);
 
-  // 仅当前最新版本按需预取同工作区相对 CSS / 经典 JS，历史版本绝不混入当前磁盘文件
   const inlineTargets = useMemo(() => {
     if (!htmlBody || !isLatestRevision || !workspaceFiles || workspaceFiles.length === 0) {
       return [];
@@ -212,7 +210,6 @@ export const HtmlReaderView: React.FC<HtmlReaderViewProps> = ({
 
   return (
     <div className={`rounded-xl border overflow-hidden ${cardCls}`} data-html-reader="">
-      {/* 顶部工具栏：页面渲染 / HTML 源码 + 沙盒安全开关 + 视口控制 */}
       <div className={`flex flex-wrap items-center justify-between gap-2.5 px-4 py-2.5 border-b text-xs ${barBgCls}`}>
         <div className="flex flex-wrap items-center gap-2">
           <div
@@ -395,7 +392,6 @@ export const HtmlReaderView: React.FC<HtmlReaderViewProps> = ({
         </div>
       </div>
 
-      {/* 加载态 / 错误态 */}
       {loading && (
         <div className={`p-8 flex items-center justify-center gap-2 text-xs ${mutedCls}`}>
           <Loader2 className="w-4 h-4 animate-spin" />
@@ -410,7 +406,6 @@ export const HtmlReaderView: React.FC<HtmlReaderViewProps> = ({
         </div>
       )}
 
-      {/* 渲染主画布 */}
       {!loading && !loadError && prepared && viewMode === 'render' && (
         <div className="flex flex-col">
           <div
@@ -444,7 +439,6 @@ export const HtmlReaderView: React.FC<HtmlReaderViewProps> = ({
             </div>
           </div>
 
-          {/* 诚实状态脚注：本地资源联结、未内联提示、脚本关闭提示 */}
           {(prepared.resolvedLocalAssetCount > 0 ||
             prepared.unresolvedLocalAssets.length > 0 ||
             prepared.features.hasExternalModuleScript ||
@@ -489,7 +483,6 @@ export const HtmlReaderView: React.FC<HtmlReaderViewProps> = ({
         </div>
       )}
 
-      {/* HTML 源码视图 */}
       {!loading && !loadError && displaySource !== null && viewMode === 'source' && (
         <div className="space-y-2">
           <pre className="p-4 overflow-x-auto max-h-[68vh] overflow-y-auto font-mono text-[12.5px] leading-[1.6] whitespace-pre">

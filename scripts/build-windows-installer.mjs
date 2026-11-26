@@ -1,17 +1,4 @@
 #!/usr/bin/env node
-/**
- * 观澜（Guanlan）Windows 正式 MSI / NSIS 安装包工程化构建与校验脚本。
- *
- * 职责：
- * 1. `--check-only`：零副作用校验打包工程配置完整性（tauri.conf.json / tauri.release.conf.json /
- *    windows-context-menu.nsh / 图标齐备 / 无冗余开发依赖进 dist）；
- * 2. 默认模式（或 `--build`）：
- *    - 构建精简前端生产包（`vite build`，无 devDependencies 残留）；
- *    - 编译发布版 `guanlan.exe` CLI 并按 Tauri target-triple 约定暂存至
- *      `guanlan-desktop/binaries/guanlan-x86_64-pc-windows-msvc.exe`；
- *    - 调用 Tauri v2 构建单包内嵌 `guanlan-service`（进程内联）+ `guanlan.exe` CLI（sidecar）的
- *      正式 MSI 与 NSIS Windows 安装包，并输出体积统计。
- */
 
 import { execFileSync } from 'node:child_process';
 import {
@@ -39,8 +26,6 @@ const argv = process.argv.slice(2);
 const args = new Set(argv);
 const checkOnly = args.has('--check-only');
 const skipBundle = args.has('--stage-only');
-/** 演练用：把 createUpdaterArtifacts 与一个回环更新源叠加进构建配置（不写进仓库里的
- *  发布配置）。只在本地走通更新流程时使用，见 docs/subsystems/release-pipeline.md。 */
 function flagValue(name) {
   const index = argv.indexOf(name);
   if (index < 0) return undefined;
@@ -76,7 +61,6 @@ function validateInstallerConfig() {
   if (!externalBin.includes('binaries/guanlan')) {
     fail('tauri.release.conf.json 必须通过 externalBin 嵌入 binaries/guanlan CLI');
   }
-  // 更新器运行时的公钥在基础配置里；endpoints 生产上暂时留空（见发布参考的「自动更新」）
   const updaterPubkey = baseConf?.plugins?.updater?.pubkey;
   if (typeof updaterPubkey !== 'string' || updaterPubkey.trim() === '') {
     fail('tauri.conf.json 缺少 plugins.updater.pubkey');
@@ -131,10 +115,6 @@ if (checkOnly) {
   process.exit(0);
 }
 
-// 1. 构建精简前端 dist
-// Node ≥18.20/20.12 出于 CVE-2024-27980 直接 spawn `.cmd`/`.bat` 会抛 EINVAL，
-// 且本项目未把 npm 声明为本地依赖——`npm run build` 本义即 `vite build`，
-// 故直接以 process.execPath + node_modules/vite/bin/vite.js 执行（零 shell、零 PATH 依赖）。
 console.log('[guanlan-installer] 1/3 构建精简前端生产包 (vite build)...');
 const viteJs = resolve(guanlanDir, 'node_modules/vite/bin/vite.js');
 if (!existsSync(viteJs)) fail(`缺少 vite 入口：${viteJs}`);
@@ -143,7 +123,6 @@ execFileSync(process.execPath, [viteJs, 'build'], {
   stdio: 'inherit',
 });
 
-// 2. 构建 release 版 guanlan.exe CLI 并暂存为 Tauri externalBin sidecar
 console.log('[guanlan-installer] 2/3 编译并暂存内嵌 guanlan.exe CLI...');
 execFileSync('cargo', ['build', '--release', '--locked', '-p', 'guanlan-service', '--bin', 'guanlan'], {
   cwd: nativeDir,
@@ -168,14 +147,11 @@ if (skipBundle) {
   process.exit(0);
 }
 
-// 3. 调用仓内 vendored @tauri-apps/cli（零 PATH 依赖）或 cargo tauri 生成 MSI + NSIS 安装包
 console.log('[guanlan-installer] 3/3 打包 Windows MSI / NSIS 安装器...');
 const tauriCliJs = resolve(guanlanDir, 'node_modules/@tauri-apps/cli/tauri.js');
 let buildConfigPath = releaseConfPath;
 let tempConfigPath = null;
 if (updaterTestEndpoint) {
-  // 演练：把 createUpdaterArtifacts 与回环更新源叠加到发布配置上，写到临时文件再传给
-  // Tauri CLI；仓库里的发布配置保持干净（endpoints 为空、不产出带签名的更新包）。
   const baseConf = JSON.parse(readFileSync(baseConfPath, 'utf8'));
   const relConf = JSON.parse(readFileSync(releaseConfPath, 'utf8'));
   const merged = {

@@ -2,23 +2,6 @@ import type { FileRecord, ReadingState } from '../types/guanlan';
 import type { ArtifactStateView } from '../services/apiTypes';
 import { hasUnreadChanges } from './guanlanEngine';
 
-/**
- * 「我离开后发生了什么」增量聚光灯纯函数引擎（阅读状态模块单一派生出口）。
- *
- * 一键开启聚光灯后：上次离开前已读且未变的节点退为低对比度背景骨架，仅高亮
- * 三类「读后真实变化」：
- *  - revision_update  新增版本：有阅读基线且当前版更新（updated_since_last_read）；
- *  - pending_decision 新挂起决定：有阅读基线且状态机投影 pending_p0+pending_p1 > 0；
- *  - agent_draft      Agent 新草案：待审草案（mcp/agent）挂在后未批阅。
- *
- * 停机红线护栏：「首次收录」与「读后变更」绝不混同——
- *  - never_read（未读新件）文件【不】进变化清单、【不】参与 M 计数，也不降亮度
- *    （它们是首次收录态，有自己的语义，不属于「我离开后发生的读后变化」）；
- *  - M 只统计读后真实变化处数（一个文件可同时命中多类，按类分条）。
- *
- * 排序契约：「按时间逐条批阅」——atMs 降序（新→旧），无时间的诚实排后；
- * 同 ms 平局按 kind 枚举序再按 title zh 字典序，纯函数两次调用逐项全等（确定性单测锁定）。
- */
 
 /** 读后真实变化三分类（聚光灯高亮语义，与未读两态术语正交：只认读后变更）。 */
 export type SpotlightChangeKind = 'revision_update' | 'pending_decision' | 'agent_draft';
@@ -33,31 +16,24 @@ export function spotlightKindLabel(kind: SpotlightChangeKind): string {
 export interface SpotlightChangeItem {
   file_id: string;
   kind: SpotlightChangeKind;
-  /** 变化排序时间（ms）；时间不可知时为 null（诚实排后，不伪造时间）。 */
   atMs: number | null;
-  /** 排序平局兜底的展示名（文件 title），纯派生不另造词。 */
   title: string;
 }
 
 export interface SpotlightInput {
   files: readonly FileRecord[];
   readingStates: Readonly<Record<string, ReadingState>>;
-  /** /api/v1/state-overview 投影索引（file_id → 行）；null = 投影未就绪（诚实跳过）。 */
   artifactsByFileId: ReadonlyMap<string, ArtifactStateView> | null;
-  /** 待审草案 file_id → 最新 created_at（ISO）；空表 = 无草案数据。 */
   agentDraftAtByFileId: ReadonlyMap<string, string>;
-  /** 排序基准时刻（单测注入固定值保证确定性；仅用于时间解析合法性兜底）。 */
   nowMs: number;
 }
 
-/** ISO → ms；非法/缺失返回 null（诚实排后，绝不伪造时间）。 */
 function parseTimeMs(value: string | null | undefined): number | null {
   if (!value) return null;
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? null : parsed;
 }
 
-/** kind 枚举序（平局第一优先级）。 */
 const KIND_ORDER: Record<SpotlightChangeKind, number> = {
   revision_update: 0,
   pending_decision: 1,
@@ -73,11 +49,8 @@ export function computeSpotlightChanges(input: SpotlightInput): SpotlightChangeI
   const items: SpotlightChangeItem[] = [];
   for (const file of input.files) {
     const st = input.readingStates[file.file_id];
-    // 停机红线护栏：从未读过（无基线）= 未读新件 = 首次收录，不是读后变化，
-    // 三类全部不命中（有基线才判读后变更）
     if (!st || !st.last_read_revision_id) continue;
     const title = file.title;
-    // ① 新增版本：updated_since_last_read（有基线且当前版更新），时间取当前版 observed_at
     if (hasUnreadChanges(file, st).reason === 'updated_since_last_read') {
       const currentRev = file.revisions.find((r) => r.revision_id === file.current_revision_id);
       items.push({
@@ -87,7 +60,6 @@ export function computeSpotlightChanges(input: SpotlightInput): SpotlightChangeI
         title,
       });
     }
-    // ② 新挂起决定：状态机投影 pending_p0+pending_p1>0，时间取 last_activity_at
     const artifact = input.artifactsByFileId?.get(file.file_id) ?? null;
     if (artifact && (artifact.pending_p0 ?? 0) + (artifact.pending_p1 ?? 0) > 0) {
       items.push({
@@ -97,7 +69,6 @@ export function computeSpotlightChanges(input: SpotlightInput): SpotlightChangeI
         title,
       });
     }
-    // ③ Agent 新草案：待审清单命中，时间取草案 created_at
     const draftAt = input.agentDraftAtByFileId.get(file.file_id);
     if (draftAt !== undefined) {
       items.push({
@@ -108,7 +79,6 @@ export function computeSpotlightChanges(input: SpotlightInput): SpotlightChangeI
       });
     }
   }
-  // 按时间新→旧；无时间排最后；平局 kind 枚举序 → title zh 字典序（两次调用逐项全等）
   items.sort((a, b) => {
     if (a.atMs !== null && b.atMs !== null && a.atMs !== b.atMs) return b.atMs - a.atMs;
     if (a.atMs !== null && b.atMs === null) return -1;
@@ -148,7 +118,7 @@ export function computeSpotlightDimmedFileIds(
   for (const file of files) {
     if (changed.has(file.file_id)) continue;
     const st = readingStates[file.file_id];
-    if (!st || !st.last_read_revision_id) continue; // 未读新件：保持原样
+    if (!st || !st.last_read_revision_id) continue;
     if (hasUnreadChanges(file, st).reason === 'up_to_date') dimmed.add(file.file_id);
   }
   return dimmed;

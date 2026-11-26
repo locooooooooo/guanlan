@@ -47,54 +47,29 @@ pub struct DocumentTime {
     pub source: Option<String>,
 }
 
-/// 编译一次、全局复用的正则集
 struct Patterns {
-    /// 格式 A 章节标题：`## N 标题`
     section_a: Regex,
-    /// 章节正文边界：`#{1,3} 标题`
     heading: Regex,
-    /// 格式 B 标题：`### Q01：标题`
     section_b: Regex,
-    /// 编号提取：`Q01`
     code: Regex,
-    /// markdown 大纲标题
     outline: Regex,
-    /// 行内链接
     link: Regex,
-    /// 外链前缀
     external: Regex,
-    /// 状态：已确认
     status_confirmed: Regex,
-    /// 状态：回执状态已确认
     status_receipt_confirmed: Regex,
-    /// 状态：已否决
     status_rejected: Regex,
-    /// 状态：已搁置
     status_shelved: Regex,
-    /// 状态：已取代
     status_superseded: Regex,
-    /// 状态：来源不一致
     status_conflict: Regex,
-    /// 状态：待确认
     status_pending: Regex,
-    /// 状态：[P1 - 已确认] 卡点块回写后的括号形态（仅影响新增版本的派生，
-    /// 维持 EXTRACT_RULE_VERSION 不变，详见 `contract-storage.md` §4.3.5）
     status_bracket_confirmed: Regex,
-    /// 问题归一化时剔除的标点
     question_punctuation: Regex,
-    /// 选项行：`- **选项 A**：…`
     option_line: Regex,
-    /// 确认人
     confirmer: Regex,
-    /// front matter
     front_matter: Regex,
-    /// front matter 内的日期行
     front_matter_date: Regex,
-    /// 文档日期
     doc_date: Regex,
-    /// ISO 日期
     iso_date: Regex,
-    /// 纯日期
     plain_date: Regex,
 }
 
@@ -145,10 +120,8 @@ pub fn derive_statements(input: &DeriveInput<'_>) -> Vec<StatementRow> {
     let mut out: Vec<StatementRow> = Vec::new();
     let mut seen: Vec<String> = Vec::new();
 
-    // 章节正文：跳过围栏，遇到下一个标题即止
     let body_of = |start: usize, end: usize| -> Vec<&str> { section_body(&lines, start, end) };
 
-    // 格式 A：## N 标题 + 沿用编号
     let mut sections: Vec<(String, usize, Vec<&str>)> = Vec::new();
     let mut current_title = String::new();
     let mut current_start = 0usize;
@@ -208,7 +181,6 @@ pub fn derive_statements(input: &DeriveInput<'_>) -> Vec<StatementRow> {
         }
     }
 
-    // 格式 B：### Q01：标题
     for (index, line) in lines.iter().enumerate() {
         let Some(captures) = pat.section_b.captures(line.trim()) else {
             continue;
@@ -240,9 +212,6 @@ pub fn derive_statements(input: &DeriveInput<'_>) -> Vec<StatementRow> {
         );
     }
 
-    // 格式 C：[P0/P1/P2 - 待确认/已确认] 卡点块。
-    // 每块一条陈述，code = 优先级词（P0/P1/P2），detail_json 追加 priority 键；
-    // 身份公式与 A/B 两条路径同源（decision_id_for + stable_key）。
     for block in crate::index::decision_block::parse_decision_blocks(input.content) {
         let body_refs: Vec<&str> = block.body.iter().map(|line| line.as_str()).collect();
         let body_text = body_refs.join("\n");
@@ -272,9 +241,6 @@ pub fn derive_statements(input: &DeriveInput<'_>) -> Vec<StatementRow> {
     out
 }
 
-/// 业务决定 ID（`derive.ts` 口径）：命名空间 + 归一化问题 —— 同问题才同一决定，
-/// 不同问题各自独立。decision_block 解析器与陈述抽取共用，保证卡点块与来源
-/// 陈述归入同一决定。
 pub(crate) fn decision_id_for(namespace_base: &str, question: &str) -> String {
     format!(
         "dec_{}",
@@ -285,11 +251,6 @@ pub(crate) fn decision_id_for(namespace_base: &str, question: &str) -> String {
     )
 }
 
-/// 写入一条陈述（同 code + 行号只保留一条）
-///
-/// `priority`：卡点块来源的陈述携带 `P0|P1|P2`（进 detail_json 供状态机聚合
-/// 未决分级）；既有 A/B 两条抽取路径传 None，detail_json 与 TS 逐字一致
-/// （parity 硬保证）。
 #[allow(clippy::too_many_arguments)]
 fn push_statement(
     out: &mut Vec<StatementRow>,
@@ -344,7 +305,6 @@ fn push_statement(
     });
 }
 
-/// 从编号行提取 `Q01` 形式的编号（去空白、大写、保首次出现序）
 fn extract_codes(code_line: &str) -> Vec<String> {
     let mut codes: Vec<String> = Vec::new();
     for found in patterns().code.find_iter(code_line) {
@@ -361,7 +321,6 @@ fn extract_codes(code_line: &str) -> Vec<String> {
     codes
 }
 
-/// 拼接非空行（TS `body.filter(l => l.trim()).join(' ')`）
 fn join_non_empty(lines: &[&str]) -> String {
     lines
         .iter()
@@ -371,14 +330,12 @@ fn join_non_empty(lines: &[&str]) -> String {
         .join(" ")
 }
 
-/// 状态判定（短路顺序即优先级）
 fn detect_status(text: &str) -> String {
     let pat = patterns();
     let plain = text.replace("**", "").replace('`', "");
     if pat.status_confirmed.is_match(&plain) || pat.status_receipt_confirmed.is_match(&plain) {
         return "已确认".to_owned();
     }
-    // [P1 - 已确认] 卡点块回写后的括号形态
     if pat.status_bracket_confirmed.is_match(&plain) {
         return "已确认".to_owned();
     }
@@ -400,7 +357,6 @@ fn detect_status(text: &str) -> String {
     "未知".to_owned()
 }
 
-/// 归一化问题文本（判定「是否同一项决定」）
 fn normalize_question(question: &str) -> String {
     let pat = patterns();
     let no_space: String = question
@@ -412,7 +368,6 @@ fn normalize_question(question: &str) -> String {
     slice_utf16(&no_prefix.to_lowercase(), 60)
 }
 
-/// 去掉问题开头的编号前缀（TS `replace(/^(Q\d+|q\d+)/, '')`：整段前缀被移除）
 fn strip_decision_prefix(text: &str) -> String {
     let mut chars = text.chars();
     let Some(first) = chars.next() else {
@@ -429,7 +384,6 @@ fn strip_decision_prefix(text: &str) -> String {
     rest[digits.len()..].to_owned()
 }
 
-/// 去掉前缀与其后的可选冒号（TS `replace(/^前缀[：:]?/, '')`）
 fn strip_prefix_with_optional_colon(text: &str, prefix: &str) -> String {
     match text.strip_prefix(prefix) {
         Some(rest) => rest
@@ -441,13 +395,10 @@ fn strip_prefix_with_optional_colon(text: &str, prefix: &str) -> String {
     }
 }
 
-/// 去掉 Markdown 标记
 fn strip_md(text: &str) -> String {
-    // 行首的 - / * / 空白
     let trimmed = text.trim_start_matches(|c: char| c == '-' || c == '*' || c.is_whitespace());
     let no_bold = trimmed.replace("**", "");
     let no_code = no_bold.replace('`', "");
-    // 折叠空白：JS `\s+` → 单空格
     let mut out = String::with_capacity(no_code.len());
     let mut in_space = false;
     for ch in no_code.chars() {
@@ -464,7 +415,6 @@ fn strip_md(text: &str) -> String {
     out.trim().to_owned()
 }
 
-/// 章节正文：跳过围栏，遇到下一个标题即止（`derive.ts:176-186`）
 fn section_body<'a>(lines: &[&'a str], start: usize, end: usize) -> Vec<&'a str> {
     let mut body: Vec<&str> = Vec::new();
     let mut in_fence = false;
@@ -481,14 +431,6 @@ fn section_body<'a>(lines: &[&'a str], start: usize, end: usize) -> Vec<&'a str>
     body
 }
 
-/// 从条目正文提取选项、推荐语与影响范围
-///
-/// 键序固定为 `options, recommendation, impactBlocked, impactAllowed, confirmer`
-/// ——与 TS `JSON.stringify` 的插入序一致（serde_json 的 Map 默认按键排序，
-/// 会与此不同，故手工拼串）。
-///
-/// `priority`：仅卡点块来源的陈述携带（追加 `priority` 键）；既有路径传 None
-/// ——detail_json 键序与 TS 逐字一致是 parity 的硬保证，不得改变既有输出。
 fn extract_detail(
     body_lines: &[&str],
     priority: Option<&str>,
@@ -569,7 +511,6 @@ fn extract_detail(
             },
         ),
     ];
-    // 卡点块来源的陈述追加优先级（键序：追加在 confirmer 之后，确定性）
     if let Some(priority) = priority {
         fields.push(("priority", json_string(priority)));
     }
@@ -662,7 +603,6 @@ fn parse_office_fragment(
     None
 }
 
-/// 解析 `.pdf#page=14` / `.pdf#p=14` / `.pdf#14` 片段（1-based 精确页码）
 fn parse_pdf_fragment(
     resolved_path: &str,
     fragment: &str,
@@ -708,7 +648,6 @@ fn parse_pdf_fragment(
     })
 }
 
-/// 共享的 Markdown 本地锚点链接提取器（Office / PDF 复用，不重复扫描链接循环）
 fn find_linked_anchor_json<A, F>(
     input: &DeriveInput<'_>,
     body_lines: &[&str],
@@ -764,12 +703,10 @@ where
     None
 }
 
-/// 从 Markdown 陈述正文中识别指向工作区内 `.xlsx#Sheet!CellRange` / `.docx#para=N` 的链接
 fn detect_linked_office_evidence(input: &DeriveInput<'_>, body_lines: &[&str]) -> Option<String> {
     find_linked_anchor_json(input, body_lines, "office_anchor", parse_office_fragment)
 }
 
-/// 从 Markdown 陈述正文中识别指向工作区内 `.pdf#page=N` 的链接
 fn detect_linked_pdf_evidence(input: &DeriveInput<'_>, body_lines: &[&str]) -> Option<String> {
     find_linked_anchor_json(input, body_lines, "pdf_anchor", parse_pdf_fragment)
 }
@@ -797,7 +734,6 @@ pub fn derive_edges(input: &DeriveInput<'_>) -> Vec<EdgeRow> {
             let Some((resolved, _)) =
                 resolve_local_href_parts(input.root_path, input.relative_path, href_raw)
             else {
-                // 工作区之外或空锚点：不授予新目录权限
                 continue;
             };
 
@@ -927,7 +863,6 @@ pub fn parse_markdown_outline(markdown: &str) -> Vec<(String, usize)> {
     sections
 }
 
-/// 把原文链接解析成工作区相对路径
 fn resolve_workspace_path(root_path: &str, current_dir: &str, href: &str) -> Option<String> {
     let unix = href.replace('\\', "/");
     let norm_root = root_path
@@ -943,8 +878,6 @@ fn resolve_workspace_path(root_path: &str, current_dir: &str, href: &str) -> Opt
         let lower_unix = unix.to_lowercase();
         let lower_root = norm_root.to_lowercase();
         if lower_unix.starts_with(&format!("{lower_root}/")) {
-            // 根路径前缀的字节长度与原串未必相同（小写化可能改变长度），
-            // 用 get 取剩余部分：切点不是字符边界时返回 None（视为越界）。
             return unix
                 .get(norm_root.len() + 1..)
                 .map(|rest| normalize_join(".", rest));
@@ -960,7 +893,6 @@ fn resolve_workspace_path(root_path: &str, current_dir: &str, href: &str) -> Opt
     Some(normalize_join(current_dir, &unix))
 }
 
-/// 规范化相对路径拼接（`..` 越过根时是空操作）
 fn normalize_join(dir: &str, rel: &str) -> String {
     let combined = match rel.strip_prefix('/') {
         Some(rest) => rest.to_owned(),
@@ -980,7 +912,6 @@ fn normalize_join(dir: &str, rel: &str) -> String {
     stack.join("/")
 }
 
-/// `decodeURIComponent` 等价实现：失败返回 None（调用方保留原串）
 fn decode_uri_component(input: &str) -> Option<String> {
     if !input.contains('%') {
         return Some(input.to_owned());
@@ -1112,14 +1043,10 @@ mod tests {
         assert_eq!(statements[0].namespace, "docs / a");
         assert_eq!(statements[0].line_start, 4);
         assert_eq!(statements[0].line_end, 11);
-        // 身份与 TS 逐字一致（node tsx server/derive 实测值）：
-        // 任何偏差都会与库里既有的 statement/decision 行分裂成第二套身份
         assert_eq!(statements[0].statement_id, "stmt_12ejv4h");
         assert_eq!(statements[1].statement_id, "stmt_5bgu70");
         assert_eq!(statements[0].decision_id.as_deref(), Some("dec_13m2itf"));
-        // 同编号同问题归入同一决定
         assert_eq!(statements[0].decision_id, statements[1].decision_id);
-        // detail_json 的键序固定；「甲」只有一个字，不满足 TS 的 >2 长度门槛
         assert_eq!(
             statements[0].detail_json,
             "{\"options\":[\"乙丙丁\"],\"recommendation\":\"先做甲\",\"impactBlocked\":[\"需要后端接口\"],\"impactAllowed\":[\"不阻断前端\"],\"confirmer\":\"张三\"}"
@@ -1155,7 +1082,6 @@ mod tests {
         assert_eq!(statements[0].status, "已确认");
         assert_eq!(statements[0].line_start, 1);
         assert_eq!(statements[0].line_end, 3);
-        // 身份与 TS 逐字一致（node tsx server/derive 实测值）
         assert_eq!(statements[0].statement_id, "stmt_1ffz02g");
         assert_eq!(statements[0].decision_id.as_deref(), Some("dec_1bm8in4"));
         assert_eq!(statements[0].quote, "状态：已确认 确认人：李四");
@@ -1163,7 +1089,6 @@ mod tests {
             statements[0].detail_json,
             "{\"options\":[],\"recommendation\":\"\",\"impactBlocked\":[],\"impactAllowed\":[],\"confirmer\":\"李四\"}"
         );
-        // 顶层文件的命名空间不带目录前缀
         assert_eq!(statements[0].namespace, "a");
     }
 
@@ -1192,7 +1117,6 @@ mod tests {
         };
         let edges = derive_edges(&input);
         assert_eq!(edges.len(), 2);
-        // 相对路径按当前文档目录解析
         let first = edges
             .iter()
             .find(|e| e.target_file_id == "f_a")
@@ -1200,34 +1124,28 @@ mod tests {
         assert_eq!(first.resolution, "collected_version");
         assert_eq!(first.target_revision_id.as_deref(), Some("f_a_r1"));
         assert_eq!(first.reason, "docs/a.md 第 1 行链接指向 docs/方案.md");
-        // 绝对路径落在工作区内才映射
         let second = edges
             .iter()
             .find(|e| e.target_file_id == "f_b")
             .expect("工作区内绝对链接应有边");
         assert_eq!(second.resolution, "current_path_only");
         assert_eq!(second.reason, "docs/a.md 第 1 行链接指向 docs/b.md");
-        // 外链不成边
         assert!(edges.iter().all(|e| !e.reason.contains("x.dev")));
     }
 
     #[test]
     fn document_time_priority() {
-        // front matter 优先
         let time = derive_document_time("---\ndate: 2026-01-02\n---\n\n文档日期：2026-03-04");
         assert_eq!(time.occurred_at.as_deref(), Some("2026-01-02"));
         assert_eq!(time.precision, "day");
         assert_eq!(time.source.as_deref(), Some("document_self"));
 
-        // 无 front matter 时取文档日期
         let time = derive_document_time("正文\n\n文档日期：2026-03-04\n");
         assert_eq!(time.occurred_at.as_deref(), Some("2026-03-04"));
 
-        // 都没有时取正文前 1200 字符里的首个 ISO 日期
         let time = derive_document_time("开篇 2026-05-06 提了一句");
         assert_eq!(time.occurred_at.as_deref(), Some("2026-05-06"));
 
-        // 没有日期
         let time = derive_document_time("没有任何日期");
         assert_eq!(time.occurred_at, None);
         assert_eq!(time.precision, "unknown");
@@ -1235,7 +1153,6 @@ mod tests {
 
     #[test]
     fn utf16_slice_matches_js() {
-        // JS '😀'.slice(0,1) 留下落单代理项，编码成 UTF-8 时是 U+FFFD
         assert_eq!(slice_utf16("😀", 1), "\u{FFFD}");
         assert_eq!(slice_utf16("😀", 2), "😀");
         assert_eq!(slice_utf16("中文", 1), "中");
@@ -1263,8 +1180,6 @@ mod decision_block_statement_tests {
         (HashMap::new(), HashMap::new())
     }
 
-    /// 格式 C（卡点块）→ StatementRow：code=优先级词、detail_json 追加
-    /// priority 键、status 由括号形态判定；A/B 路径的 detail_json 不受影响
     #[test]
     fn derives_decision_block_statements_with_priority() {
         let pending = "[P1 - 待确认] 属性字典与历史更新策略\n决定：___\n确认人：___\n可选方案：甲方案 / 乙方案\n";
@@ -1290,14 +1205,12 @@ mod decision_block_statement_tests {
         assert_eq!(row.status, "待确认");
         assert_eq!(row.line_start, 1);
         assert_eq!(row.line_end, 4);
-        // detail_json：既有五键序不变、尾部追加 priority（仅卡点块携带）
         assert_eq!(
             row.detail_json,
             "{\"options\":[\"甲方案\",\"乙方案\"],\"recommendation\":\"\",\"impactBlocked\":[],\"impactAllowed\":[],\"confirmer\":\"___\",\"priority\":\"P1\"}"
         );
         let decision_id = row.decision_id.clone().expect("卡点块必有 decision_id");
         assert!(decision_id.starts_with("dec_"));
-        // 与 decision_block 解析器同源：同问题同决定
         let block = crate::index::decision_block::parse_decision_blocks(pending);
         assert_eq!(
             block[0]
@@ -1306,7 +1219,6 @@ mod decision_block_statement_tests {
             decision_id
         );
 
-        // 回写后形态：括号已确认 → status 已确认（detect_status 新括号规则）
         let confirmed =
             "[P1 - 已确认] 属性字典与历史更新策略\n决定：采用两阶段状态锁\n确认人：架构组\n";
         let input = DeriveInput {
@@ -1323,7 +1235,6 @@ mod decision_block_statement_tests {
         );
     }
 
-    /// 既有格式 A/B 的 detail_json 不受 priority 参数影响（parity 硬保证）
     #[test]
     fn format_a_detail_json_unchanged_without_priority() {
         let content = "\

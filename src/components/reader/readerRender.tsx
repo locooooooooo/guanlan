@@ -1,9 +1,3 @@
-/**
- * 阅读器渲染期闭包层：
- * 提供行模型 → JSX 的全部渲染期叠加函数（inline tokens、链接分段、行锚包装、
- * 决策回执可交互行与行模型分支渲染）。解析已前移至 buildMarkdownBlocks，
- * 渲染期仅接收显式传入的易变状态进行样式与回调叠加。
- */
 
 import React from 'react';
 import { formatOfficeAnchorLabel } from '../../utils/officeAnchor';
@@ -25,13 +19,9 @@ import type { FileRecord } from '../../types/guanlan';
 interface ReaderRenderInputs {
   paperLightMode: boolean;
   sourceLine?: number;
-  /** 反向定位闪烁行（决定跳转到达/就近回退落点/批注定位），2.2s 自动摘除 */
   flashSourceLine?: number;
-  /** 本版本 MD 行批注索引（wrapLine 渲染批注徽标） */
   annotationsByLine: Map<number, ReaderAnnotation[]>;
-  /** 块悬停「批注」入口（打开撰写卡） */
   onAnnotateBlock: (line: number, excerpt: string) => void;
-  /** 批注徽标点击 → 打开批注清单 */
   onOpenAnnotations: () => void;
   showLineNumbers: boolean;
   activeSectionId: string;
@@ -85,14 +75,8 @@ export function useReaderRender({
 }: ReaderRenderInputs) {
 
 
-  // ── 渲染期叠加层：仅消费行模型与当前易变态，不再做任何字符串或链接解析；
-  // 解析已前移到 buildMarkdownBlocks（useMemo）。易变输入（paperLightMode /
-  // sourceLine / showLineNumbers / activeSectionId / readingState / 各回调）
-  // 在此处读取最新值，避免闭包捕获过期状态。
 
-  // 渲染纯文本段内的 **bold** 与 `code` 令牌（消费 tokenizeInline 的预切分结果）
   const renderInlineTokens = (tokens: import('./readerMarkdownModel').InlineToken[], keyPrefix: string): React.ReactNode => {
-    // 空片段对应空切分数组，直接返回空串节点
     if (tokens.length === 0) return '';
     const nodes: React.ReactNode[] = [];
     for (const token of tokens) {
@@ -122,9 +106,6 @@ export function useReaderRender({
     return nodes;
   };
 
-  // Resolve relative links inside Markdown lines ([label](relative-path))
-  // （渲染期回放 buildLinkParts 的分段结果：目标已在模型期解析，导航闭包在此用
-  // 最新 activeSectionId/currentRev 构建，永不取旧）
   const renderLinkParts = (parts: LinkPart[], sectionHint?: string): React.ReactNode[] => {
     const nodes: React.ReactNode[] = [];
     for (const part of parts) {
@@ -189,9 +170,6 @@ export function useReaderRender({
     return nodes;
   };
 
-  // 行锚包装：叠加 data-event-source-line 锚点、sourceLine 高亮、showLineNumbers 行号、
-  // 「+引用此段」按钮、批注徽标（有批注的行常驻琥珀数标，点击开清单）、「批注」悬停钮
-  // （打开撰写卡）与反向定位闪烁类（flashSourceLine 到达两轮脉冲，2.2s 后摘除）。
   const wrapLine = (
     lineNum: number,
     node: React.ReactNode,
@@ -270,13 +248,7 @@ export function useReaderRender({
     );
   };
 
-  // 决策回执渲染期：单个表单项 → 可交互行。真实 checkbox（勾选状态走本机持久化）
-  // 与填空槽（_{3,} 保留切分，奇数位换内联输入框）。文本分段仍走 buildLinkParts →
-  // renderLinkParts 既有链路（链接/加粗/代码渲染不降级）；仅在命中行调用，
-  // 未命中行保持原渲染（由调用点分支保证）。
   const renderDecisionItemRow = (item: DecisionFormItem): React.ReactNode => {
-    // 保留分隔符切分：偶数位=文本段，奇数位=原下划线段位置 → 换输入框；
-    // 槽键=`行:槽序`（同版本内稳定，与快照 fills 键一致）
     const segments = item.text.split(/(_{3,})/);
     const nodes: React.ReactNode[] = [];
     segments.forEach((seg, idx) => {
@@ -295,7 +267,6 @@ export function useReaderRender({
           />
         );
       } else if (seg) {
-        // 文本段走既有链接/行内格式渲染（决策行的链接点击导航语义不变）
         nodes.push(
           <React.Fragment key={`seg-${idx}`}>
             {renderLinkParts(buildLinkParts(seg, markdownLinkIndex), activeSectionId)}
@@ -309,9 +280,6 @@ export function useReaderRender({
           ? Boolean(receiptState.checks[item.line])
           : Boolean(item.checkbox.initialChecked);
       return (
-        // label 包裹：点文字即切换勾选（填空输入框属交互后代，浏览器不会把
-        // 点击转发给 checkbox，符合 HTML label 激活行为规范）；单选簇渲染
-        // radio（同 name 供箭头键导航），互斥语义由 toggle 的簇清零保证
         <label className="flex items-start gap-2.5 py-0.5 cursor-pointer">
           <input
             type={item.radio ? 'radio' : 'checkbox'}
@@ -331,7 +299,6 @@ export function useReaderRender({
     return <div className="py-0.5">{nodes}</div>;
   };
 
-  // 行模型 → JSX：仅消费 block 数据与易变渲染态，不持有解析状态。
   const renderMarkdownBlock = (block: MarkdownBlock): React.ReactNode => {
     switch (block.kind) {
       case 'code':
@@ -392,9 +359,6 @@ export function useReaderRender({
                     {row.cells.map((cell, cIdx) => (
                       <td
                         key={cIdx}
-                        // 单元格最小可读宽——纸面窄时表格不再把字挤成
-                        // 逐字竖折，而是撑破 min-content 触发外层
-                        // overflow-x-auto 横向滚动（整行横向阅读）
                         className="py-2.5 px-4 align-top min-w-[8em]"
                       >
                         {renderLinkParts(cell, activeSectionId)}
@@ -411,7 +375,6 @@ export function useReaderRender({
       case 'h1':
         return wrapLine(
           block.line,
-          /* display 档：28/38 serif 700；节距 mt-[34px] mb-[13px] 对应 17px 正文基准的 2em/0.75em */
           <h1 className="font-serif-claude text-[length:var(--text-display)] leading-[var(--lh-display)] font-bold tracking-tight mt-[34px] mb-[13px]">
             {block.title}
           </h1>
@@ -469,8 +432,6 @@ export function useReaderRender({
         );
 
       case 'task': {
-        // 决策回执：命中表单项的行换可交互渲染（真实 checkbox + 填空槽）；
-        // 未命中的任务项保持只读 checkbox（避免把普通 TODO 误激活为可交互表单）
         const decisionItem = decisionFormItems.get(block.line);
         if (decisionItem) {
           return wrapLine(block.line, renderDecisionItemRow(decisionItem), block.excerpt);
@@ -489,7 +450,6 @@ export function useReaderRender({
                 paperLightMode ? 'accent-[#9A6A45]' : 'accent-[#D99B52]'
               }`}
             />
-            {/* 任务项不传 sectionHint，回落使用 activeSectionId */}
             <span>{renderLinkParts(block.parts)}</span>
           </div>,
           block.excerpt
@@ -522,8 +482,6 @@ export function useReaderRender({
         );
 
       case 'ul': {
-        // 决策回执：行号命中表单项（如「- 联系人：___」填空行）换可交互渲染；
-        // 未命中保持原 bullet 渲染
         const decisionItemUl = decisionFormItems.get(block.line);
         if (decisionItemUl) {
           return wrapLine(block.line, renderDecisionItemRow(decisionItemUl), block.excerpt);
@@ -567,8 +525,6 @@ export function useReaderRender({
         );
 
       case 'p': {
-        // 决策回执：□ 选项行/填空行在模型层落为 p 块——行号命中即换可交互渲染；
-        // 未命中的段落逐字回退原渲染（含行内提及「□」的普通文章，绝不强改）
         const decisionItemP = decisionFormItems.get(block.line);
         if (decisionItemP) {
           return wrapLine(block.line, renderDecisionItemRow(decisionItemP), block.excerpt);

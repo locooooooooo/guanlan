@@ -19,18 +19,12 @@ import { Button } from './ui/primitives';
 
 export interface ProposalToastData {
   draftId: string;
-  /** 草案目标文件（查看 Diff / 打开阅读器用） */
   fileId: string;
-  /** 文档名（basename；来自 /revision-proposals 的 path） */
   fileName: string;
-  /** 草案版本标签（如 `v3-agent-draft`；受理初判无版本号时为 null——文案不造假） */
   versionLabel: string | null;
   conflict: boolean;
-  /** Agent 回执摘要（可选） */
   receiptSummary?: string | null;
-  /** 变更说明备注（可选） */
   note?: string | null;
-  /** 提交本草案所依赖的输入上下文哈希清单（可选） */
   inputContextHashes?: string[];
 }
 
@@ -258,24 +252,16 @@ export function summarizeProposalMultimodalDiff(
 export interface ProposalToastProps {
   toast: ProposalToastData | null;
   adopting: boolean;
-  /** 采纳/退回结果提示（成功/失败文案；null=无提示） */
   adoptNotice: { ok: boolean; message: string } | null;
   onAdopt: (draftId: string) => void;
   onViewDiff: (draftId: string) => void;
   onDismiss: () => void;
-  /** 退回重做处理态（可选，保持调用方兼容） */
   rejecting?: boolean;
-  /** 点击「退回重做」正式驳回草案（绝不触碰磁盘原稿） */
   onReject?: (draftId: string) => void;
-  /** 内联多模态 Diff 面板展开状态 */
   diffExpanded?: boolean;
-  /** 内联 Diff 拉取中 */
   diffLoading?: boolean;
-  /** 内联 Diff 错误提示 */
   diffError?: string | null;
-  /** 草案多模态 Diff 载荷 */
   diffContent?: RevisionProposalContentResponse | null;
-  /** 在阅读器中打开全文/历史对比 */
   onOpenInReader?: (fileId: string) => void;
 }
 

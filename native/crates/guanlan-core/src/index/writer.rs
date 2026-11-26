@@ -88,9 +88,6 @@ pub struct CachedPdfRow {
 /// 属于独立变更，不应与「写入侧接管」混在一次提交里。
 pub const EXTRACT_RULE_VERSION: &str = "v0.4.3";
 
-/// 幂等 DDL（`WorkspaceStore.ts:133-284` 原文）。
-///
-/// 全部 `IF NOT EXISTS`——对既有库是空操作，只在首次建库时真正建表。
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS workspaces (
   workspace_id       TEXT PRIMARY KEY,
@@ -493,11 +490,8 @@ pub struct NewEvent {
 /// 快照落盘结果
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SnapshotOutcome {
-    /// 新写了快照文件
     Written,
-    /// 同哈希快照已存在且校验通过（未重写）
     Existing,
-    /// 源文件在采集之后被改写：本轮不落版本，下轮对账会恢复
     Unstable,
 }
 
@@ -554,10 +548,7 @@ impl Writer {
         })?;
         conn.busy_timeout(Duration::from_millis(5000))
             .map_err(|e| GuanlanError::Internal(format!("设置 busy_timeout 失败：{e}")))?;
-        // 高版本只读门禁：在任何写操作（含 WAL PRAGMA / DDL）前先验 PRAGMA user_version，
-        // 遇到更高版本库立即以 SCHEMA_TOO_NEW 拒绝盲写！
         crate::storage::migration::check_schema_version_writable(&conn)?;
-        // journal_mode 必须用字面量赋值：绑定参数在部分 SQLite 版本上不生效
         conn.execute_batch("PRAGMA journal_mode = WAL;")
             .map_err(|e| GuanlanError::Internal(format!("设置 WAL 失败：{e}")))?;
         conn.pragma_update(None, "foreign_keys", 1)
@@ -664,15 +655,12 @@ impl Writer {
         Ok(rows)
     }
 
-    /// 幂等建表 + 增量列迁移（升级前经 SQLite Backup API 自动一致性备份，保留最近 5 份，事务原子回滚）
     fn ensure_schema(&self) -> Result<(), GuanlanError> {
         crate::storage::migration::run_safe_schema_migration(&self.conn, &self.data_dir, |conn| {
             conn.execute_batch(SCHEMA)
                 .map_err(|e| GuanlanError::Internal(format!("按契约 DDL 建表失败：{e}")))?;
-            // 派生检索索引两表（单一来源：crate::index::search_index::SEARCH_DDL）
             conn.execute_batch(crate::index::search_index::SEARCH_DDL)
                 .map_err(|e| GuanlanError::Internal(format!("按契约 DDL 建检索索引失败：{e}")))?;
-            // 早期库缺 detail_json：补列不重建
             let has_detail: i64 = conn
                 .query_row(
                     "SELECT COUNT(*) FROM pragma_table_info('statements') WHERE name = 'detail_json'",
@@ -686,7 +674,6 @@ impl Writer {
                 )
                 .map_err(|e| GuanlanError::Internal(format!("补 detail_json 列失败：{e}")))?;
             }
-            // 早期库 revision_drafts 缺草案分支标签/上下文哈希清单/回执摘要列：幂等补列不重建
             for (col, ddl) in [
                 (
                     "draft_version_label",
@@ -718,7 +705,6 @@ impl Writer {
         Ok(())
     }
 
-    /// 工作区行：按 `root_path` 精确匹配，缺失则新建
     fn ensure_workspace(
         &self,
         resolved: &str,
@@ -785,8 +771,6 @@ impl Writer {
             }
         }
     }
-
-    // ---------- 读取（写入侧复用，只读同一连接） ----------
 
     /// 按路径找文件行
     pub fn find_file_by_path(
@@ -1138,8 +1122,6 @@ impl Writer {
         Ok(rows)
     }
 
-    // ---------- 写入 ----------
-
     /// 新建文件行
     pub fn insert_file(&self, file: &FileRow) -> Result<(), GuanlanError> {
         self.conn
@@ -1329,7 +1311,6 @@ impl Writer {
             )
             .map_err(internal_sql)?;
         if rev.snapshot_available == 0 {
-            // 只记元数据的版本：磁盘上没有快照，也就不该有 blobs 行
             return Ok(());
         }
         let registered: Option<i64> = self
@@ -1374,7 +1355,6 @@ impl Writer {
         );
         match result {
             Ok(_) => {
-                // 关键决定/草案/检查点/治理事件同事务自动封存进防篡改哈希链
                 if crate::storage::ledger::is_ledger_sealed_kind(&event.kind) {
                     let event_seq = self.conn.last_insert_rowid();
                     let snapshot = crate::storage::ledger::LedgerEventSnapshot {
@@ -1394,7 +1374,6 @@ impl Writer {
                 }
                 Ok(true)
             }
-            // 只写 events 表，唯一约束冲突只可能是重复身份或重复 event_id
             Err(err) if is_unique_violation(&err) => Ok(false),
             Err(err) => Err(internal_sql(err)),
         }
@@ -1463,8 +1442,6 @@ impl Writer {
             .map_err(internal_sql)?;
         Ok(())
     }
-
-    // ===== 派生检索索引（search_docs / search_postings；可随时丢弃重建）=====
 
     /// 原子替换单文件的检索文档与全部词项（差分同步与全量重建共用）
     pub fn replace_search_doc(
@@ -1804,8 +1781,6 @@ impl Writer {
         Ok(())
     }
 
-    // ---------- schema v2：状态机与长任务引擎（contract-storage.md §4.3） ----------
-
     /// 取专项行
     pub fn get_initiative(
         &self,
@@ -1894,8 +1869,6 @@ impl Writer {
         Ok(())
     }
 
-    // ===== 候选事项（多信号编织；采纳前绝不写正式归属） =====
-
     /// 重扫编织：整体替换工作区的 candidate 态候选（adopted/dismissed 不动）。
     /// 同 candidate_key 幂等（重扫再生成的簇保持同 id 与 updated_at 刷新）。
     pub fn reweave_candidates(
@@ -1908,7 +1881,6 @@ impl Writer {
         let live_ids: std::collections::HashSet<&str> =
             clusters.iter().map(|c| c.candidate_id.as_str()).collect();
         self.transaction(|tx| {
-                // 清掉本轮未再生成的 candidate 态旧簇（成员已变，旧簇失效）
                 let mut stmt = tx
                     .conn
                     .prepare("SELECT candidate_id FROM initiative_candidates WHERE workspace_id = ? AND state = 'candidate'")
@@ -2482,7 +2454,6 @@ impl Writer {
                 && match (node_id, &row.node_id) {
                     (Some(expected), Some(actual)) => expected == actual,
                     (Some(_), None) => false,
-                    // 不指定节点时，stage 命中即可（含 node_id 为空的提交）
                     (None, _) => true,
                 }
         }))
@@ -2505,7 +2476,6 @@ impl Writer {
             )));
         }
         let node_key = input.node_id.as_deref().unwrap_or("");
-        // seq = 该 (workspace, initiative, stage, node) 已有行数 + 1（DB 派生）
         let mut seq: i64 = self
             .conn
             .query_row(
@@ -2530,7 +2500,6 @@ impl Writer {
                 input.initiative_id, input.stage, node_key, seq
             ))
         );
-        // stable_key 是 32 位哈希：不同元组可能同键；主键已存在则递增 seq 重试
         for _ in 0..64 {
             let exists: Option<i64> = self
                 .conn
@@ -2857,8 +2826,6 @@ impl Writer {
         Ok(self.snapshot_policy())
     }
 
-    // ---------- 快照 ----------
-
     /// 快照路径（契约 §3.2）：`<blobsDir>/<hash 前 2 位>/<完整 hash>`
     pub fn blob_path_for(&self, hash: &str) -> PathBuf {
         self.blobs_dir.join(&hash[..2]).join(hash)
@@ -2894,11 +2861,9 @@ impl Writer {
         }
         let tmp = target.with_extension(format!("tmp-{}-{}", std::process::id(), unique_suffix()));
         stream_to_file(source, &tmp)?;
-        // 重读校验：磁盘上的字节必须与登记的哈希一致
         let actual = hash_file(&tmp)?;
         if actual != hash {
             let _ = fs::remove_file(&tmp);
-            // 源文件在采集之后被改写：本轮不落版本，下轮对账会恢复
             return Ok(SnapshotOutcome::Unstable);
         }
         fs::rename(&tmp, &target).map_err(|e| {
@@ -3358,7 +3323,6 @@ impl Writer {
     }
 }
 
-/// 唯一约束冲突判定（`SQLITE_CONSTRAINT_UNIQUE` = 2067）
 fn is_unique_violation(err: &rusqlite::Error) -> bool {
     const SQLITE_CONSTRAINT_UNIQUE: i32 = 2067;
     if err.sqlite_extended_error_code() == Some(SQLITE_CONSTRAINT_UNIQUE) {
@@ -3372,7 +3336,6 @@ fn is_unique_violation(err: &rusqlite::Error) -> bool {
     }
 }
 
-/// 文件内容 SHA-256（流式）
 fn hash_file(path: &Path) -> Result<String, GuanlanError> {
     let mut file = fs::File::open(path)
         .map_err(|e| GuanlanError::Internal(format!("读取快照失败 {}：{e}", path.display())))?;
@@ -3390,7 +3353,6 @@ fn hash_file(path: &Path) -> Result<String, GuanlanError> {
     Ok(hex::encode(hasher.finalize()))
 }
 
-/// 把源文件流式写入目标文件，返回写入字节数
 fn stream_to_file(source: &Path, target: &Path) -> Result<u64, GuanlanError> {
     let mut input = fs::File::open(source)
         .map_err(|e| GuanlanError::Internal(format!("读取源文件失败 {}：{e}", source.display())))?;
@@ -3418,7 +3380,6 @@ fn stream_to_file(source: &Path, target: &Path) -> Result<u64, GuanlanError> {
     Ok(total)
 }
 
-/// 临时文件后缀（进程号 + 纳秒时钟，避免同目录撞名）
 fn unique_suffix() -> String {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -3433,7 +3394,6 @@ mod tests {
     use crate::index::state_engine::state_machine_recompute;
     use crate::index::state_machine::{initiative_id_of, DocState, Stage};
 
-    /// v2 schema 幂等建表 + user_version 0→2 单向（约束/契约 §4.3）
     #[test]
     fn ensure_schema_creates_v2_tables_and_bumps_user_version_once() {
         let dir = std::env::temp_dir().join(format!(
@@ -3457,7 +3417,6 @@ mod tests {
             .expect("读版本");
         assert_eq!(version, 2, "首次建库应登记 schema v2");
 
-        // 7 张新表全部存在
         for table in [
             "initiatives",
             "artifact_states",
@@ -3478,7 +3437,6 @@ mod tests {
             assert_eq!(count, 1, "新表 {table} 应存在");
         }
 
-        // 重开（幂等迁移路径）：版本不回退、行不丢
         let writer2 = Writer::open_at(&dir, &root).expect("重开写库");
         let version2: i64 = writer2
             .conn()
@@ -3486,7 +3444,6 @@ mod tests {
             .expect("读版本");
         assert_eq!(version2, 2, "重开不回退版本");
 
-        // 人为把版本降回 1（模拟旧 schema 版本库）：ensure_schema 只升不降，升回 2
         writer2
             .conn()
             .execute_batch("PRAGMA user_version = 1;")
@@ -3501,8 +3458,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// checkpoint seq 由库内既有行数派生：重复提交追加新行不撞主键；
-    /// node_id 缺省与给定的 seq 各自独立计数
     #[test]
     fn checkpoint_seq_is_db_derived_and_restart_safe() {
         let dir = std::env::temp_dir().join(format!(
@@ -3553,7 +3508,6 @@ mod tests {
             created_at: clock::now_iso(),
         };
 
-        // 同节点连续两次 SUCCESS：追加两行、主键互异（重启前后同理——seq 来自 COUNT）
         let first = writer
             .insert_checkpoint(&input_of("第一轮"))
             .expect("插第一行");
@@ -3565,7 +3519,6 @@ mod tests {
             "两次提交主键必须互异（seq 由库内行数派生，不得撞主键）"
         );
 
-        // 模拟重启：新写连接（seq 计数仍来自库）
         let reopened = Writer::open_at(&dir, &root).expect("重启后重开");
         let third = reopened
             .insert_checkpoint(&input_of("重启后"))
@@ -3573,7 +3526,6 @@ mod tests {
         assert_ne!(third, first, "重启后同节点再次 SUCCESS 不得复用既有主键");
         assert_ne!(third, second);
 
-        // 恢复查询：最近一次 SUCCESS（按 created_at/rowid 取最新）
         let latest = reopened
             .latest_success_checkpoint(
                 &workspace_id,
@@ -3585,7 +3537,6 @@ mod tests {
             .expect("应有三行里的最新一行");
         assert_eq!(latest.checkpoint_id, third, "恢复应取最近一次 SUCCESS");
 
-        // 未知状态被拒
         let mut bad = input_of("非法状态");
         bad.status = "DONE".to_owned();
         assert!(reopened.insert_checkpoint(&bad).is_err());
@@ -3593,7 +3544,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// initiative_dirs：meta 键幂等覆盖
     #[test]
     fn initiative_dirs_roundtrip_and_cover() {
         let dir = std::env::temp_dir().join(format!(
@@ -3619,7 +3569,6 @@ mod tests {
             writer.initiative_dirs().expect("读 dirs"),
             vec!["BOM与图纸联动方案".to_owned(), "99-手工登记".to_owned()]
         );
-        // 幂等覆盖：整表替换不追加
         writer
             .set_initiative_dirs(&["只此一个".to_owned()])
             .expect("覆盖 dirs");
@@ -3628,7 +3577,6 @@ mod tests {
             vec!["只此一个".to_owned()]
         );
 
-        // recompute 消费 meta dirs（非默认命名的自定义专项目录）
         let mut writer = writer;
         let workspace_id = writer.workspace().expect("ws").workspace_id;
         let outcome =

@@ -28,8 +28,6 @@ use regex::Regex;
 use crate::domain::normalize_rel_path;
 use crate::index::ident::stable_key;
 
-// ---------- 六态文档/专项状态 ----------
-
 /// 统一文档与专项状态机（SSOT）。wire 词为 snake_case。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DocState {
@@ -67,14 +65,11 @@ impl DocState {
     }
 }
 
-// ---------- 六态阶段（提案类文档归入「蓝图」阶段） ----------
-
 /// 专项阶段。wire 词为中文（`current_stage`）。
 /// 排序即流水线次序：待分类 < 蓝图 < 计划 < 决策 < 执行 < 交付
 /// （`current_stage` 取已归类文档的最靠后阶段，详见 `contract-storage.md` §4.3）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Stage {
-    /// 待分类（未归入任何标准阶段的文档；排名最低，不推进专项 current_stage）
     Unclassified,
     Blueprint,
     Plan,
@@ -130,8 +125,6 @@ impl Stage {
     }
 }
 
-// ---------- 任务节点状态（Task DAG） ----------
-
 /// 子任务节点持久态（`task_nodes.state`）。`suspended_on_hitl` 是**节点持久态**，
 /// 只存在于 `task_nodes` 层——job 是瞬时执行载体，不承载挂起语义。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -172,13 +165,9 @@ impl NodeState {
 /// 槽位类型（task_nodes.node_kind，按阶段固定）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SlotKind {
-    /// 蓝图/计划槽：声明式派生（derive 类）
     Derive,
-    /// 决策槽：P0/P1 未决 > 0 → suspended_on_hitl（HITL 门禁）
     AwaitDecision,
-    /// 执行槽：唯一完成通道 = 外部 agent 提交 SUCCESS checkpoint（契约明文交付物）
     Generate,
-    /// 交付槽：清单满且未决清零 → completed
     Deliver,
 }
 
@@ -202,8 +191,6 @@ impl SlotKind {
         }
     }
 }
-
-// ---------- 信号与迁移 ----------
 
 /// 状态迁移信号（纯函数入参；不落持久列，每轮重算）
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -243,11 +230,9 @@ pub fn next_artifact_state(
 ) -> Option<DocState> {
     let blocking_pending = signals.pending_p0 > 0 || signals.pending_p1 > 0;
     match current {
-        // Archived 终态：唯一出口是 reopen（显式写侧操作，迁移函数不处理）
         DocState::Archived => None,
         DocState::Delivered => {
             if blocking_pending {
-                // 逆向回流唯一边
                 Some(DocState::PendingReview)
             } else if user_accepted || signals.last_activity_days > ARCHIVE_AFTER_IDLE_DAYS {
                 Some(DocState::Archived)
@@ -314,8 +299,6 @@ pub fn advance_to_fixpoint(
     path
 }
 
-// ---------- 五槽位声明式重算 ----------
-
 /// 槽位重算输入（各槽位判据，调用方从库内行推导）
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SlotRules {
@@ -339,13 +322,10 @@ pub struct SlotRules {
 /// **幂等性即 running 的持久性**：同输入重算结果稳定——每轮 reconcile 重算
 /// 维持 running，直至完成条件满足或外部 checkpoint 到达。
 pub fn slot_state(kind: SlotKind, r: &SlotRules) -> NodeState {
-    // 前置门禁：前置阶段槽位未 completed → 本槽 queued（所有槽位共用）
     if !r.upstream_completed {
         return NodeState::Queued;
     }
     match kind {
-        // 蓝图/计划槽（derive 类）：无 artifact → queued；有 artifact 且完成条件
-        // （该阶段至少一个文档且有内容）未满足 → running（持久）；满足 → completed
         SlotKind::Derive => {
             if !r.has_artifact {
                 NodeState::Queued
@@ -355,8 +335,6 @@ pub fn slot_state(kind: SlotKind, r: &SlotRules) -> NodeState {
                 NodeState::Completed
             }
         }
-        // 决策槽（await_decision）：P0/P1 未决>0 → suspended_on_hitl（持久）；
-        // 未决=0 且阶段有文档 → completed；无文档 → queued
         SlotKind::AwaitDecision => {
             if r.pending_p0_p1 > 0 {
                 NodeState::SuspendedOnHitl
@@ -366,9 +344,6 @@ pub fn slot_state(kind: SlotKind, r: &SlotRules) -> NodeState {
                 NodeState::Queued
             }
         }
-        // 执行槽（generate）：【契约明文】外部智能体经 commit_checkpoint 提交
-        // SUCCESS checkpoint 是本槽唯一完成通道；无 SUCCESS checkpoint 且阶段有
-        // artifact → running（持久）；无产出 → queued
         SlotKind::Generate => {
             if r.has_success_checkpoint {
                 NodeState::Completed
@@ -378,9 +353,6 @@ pub fn slot_state(kind: SlotKind, r: &SlotRules) -> NodeState {
                 NodeState::Queued
             }
         }
-        // 交付槽（deliver）：阶段有文档且（清单未满或未决>0）→ running；
-        // 清单满（total>0 且 done==total）+ 未决零 → completed；无文档 → queued。
-        // total==0 视为「清单未满」（与文档级 Executing→Delivered 需 total>0 一致）
         SlotKind::Deliver => {
             if !r.has_artifact {
                 NodeState::Queued
@@ -415,8 +387,6 @@ pub fn task_running(generate: NodeState, deliver: NodeState) -> bool {
     generate == NodeState::Running || deliver == NodeState::Running
 }
 
-// ---------- checklist 计数（交付清单） ----------
-
 /// 交付清单计数：markdown 任务列表 `- [ ]` / `- [x]`。
 /// 返回 (已完成, 总数)。跳过代码围栏内的行。
 pub fn derive_checklist(content: &str) -> (u32, u32) {
@@ -446,8 +416,6 @@ pub fn derive_checklist(content: &str) -> (u32, u32) {
     (done, total)
 }
 
-// ---------- 专项识别 ----------
-
 /// 专项识别：默认 `current_path` 首段目录名匹配 `^\d{2}-` 或含「专项」；
 /// `meta` 表键 `initiative_dirs`（JSON 字符串数组）追加目录名。
 /// 返回首段目录名；顶层文件与未匹配目录返回 None。
@@ -469,7 +437,6 @@ pub fn recognize_initiative(relative_path: &str, initiative_dirs: &[String]) -> 
     None
 }
 
-/// `^\d{2}-` 前缀判定（首段目录名的前三个字节：两位数字 + '-'）
 fn looks_numbered_dir(name: &str) -> bool {
     let bytes = name.as_bytes();
     bytes.len() >= 3 && bytes[0].is_ascii_digit() && bytes[1].is_ascii_digit() && bytes[2] == b'-'
@@ -520,10 +487,6 @@ pub fn stage_from_path(relative_path: &str) -> Stage {
     Stage::Unclassified
 }
 
-// ---------- token 估算（前后端同公式锁死） ----------
-
-/// CJK 码位区间（写死，双端一致）：U+3000–U+303F ∪ U+4E00–U+9FFF ∪
-/// U+F900–U+FAFF ∪ U+FF01–U+FF5E（UTF-8 下每字符 3 字节）。
 fn is_cjk_codepoint(cp: u32) -> bool {
     (0x3000..=0x303F).contains(&cp)
         || (0x4E00..=0x9FFF).contains(&cp)
@@ -552,8 +515,6 @@ pub fn estimate_tokens(text: &str) -> u64 {
 mod tests {
     use super::*;
 
-    // ---------- 六态迁移穷举 ----------
-
     fn signals(
         p0: u32,
         p1: u32,
@@ -578,7 +539,6 @@ mod tests {
     #[test]
     fn draft_to_pending_review_on_blocking_pending() {
         let gates = SlotGates::default();
-        // P0 或 P1 > 0 → Draft→PendingReview
         assert_eq!(
             next_artifact_state(
                 DocState::Draft,
@@ -597,7 +557,6 @@ mod tests {
             ),
             Some(DocState::PendingReview)
         );
-        // 仅 P2 未决不阻塞（Draft→PendingReview 只看 P0+P1）
         assert_eq!(
             next_artifact_state(
                 DocState::Draft,
@@ -610,7 +569,6 @@ mod tests {
             ),
             None
         );
-        // 无阻塞级未决维持草稿
         assert_eq!(
             next_artifact_state(
                 DocState::Draft,
@@ -634,7 +592,6 @@ mod tests {
             ),
             Some(DocState::ApprovedRevision)
         );
-        // 仍有阻塞级未决：不推进
         assert_eq!(
             next_artifact_state(
                 DocState::PendingReview,
@@ -644,7 +601,6 @@ mod tests {
             ),
             None
         );
-        // 未决清零但没有选中修订：不推进
         assert_eq!(
             next_artifact_state(
                 DocState::PendingReview,
@@ -681,7 +637,6 @@ mod tests {
 
     #[test]
     fn executing_to_delivered_requires_slots_and_checklist() {
-        // checklist 满 + 未决零 + 执行/交付槽都 completed
         let full = SlotGates {
             exec_completed: true,
             deliver_completed: true,
@@ -695,7 +650,6 @@ mod tests {
             ),
             Some(DocState::Delivered)
         );
-        // 清单未满：不推进
         assert_eq!(
             next_artifact_state(
                 DocState::Executing,
@@ -705,7 +659,6 @@ mod tests {
             ),
             None
         );
-        // checklist_total==0：不推进（契约明文 total>0）
         assert_eq!(
             next_artifact_state(
                 DocState::Executing,
@@ -715,7 +668,6 @@ mod tests {
             ),
             None
         );
-        // 槽位门禁缺一：不推进
         let no_deliver = SlotGates {
             exec_completed: true,
             deliver_completed: false,
@@ -756,7 +708,6 @@ mod tests {
             ),
             Some(DocState::Archived)
         );
-        // 超期 30 天自动归档
         assert_eq!(
             next_artifact_state(
                 DocState::Delivered,
@@ -766,7 +717,6 @@ mod tests {
             ),
             Some(DocState::Archived)
         );
-        // 恰好 30 天：不归档（阈值是 >30）
         assert_eq!(
             next_artifact_state(
                 DocState::Delivered,
@@ -781,8 +731,6 @@ mod tests {
     #[test]
     fn reverse_edge_executing_and_delivered_back_to_pending_review() {
         let gates = SlotGates::default();
-        // 逆向回流唯一边：executing/delivered 出现新的 P0/P1 → PendingReview
-        // （优先于正向边：清单即使已满也先回审）
         let full = SlotGates {
             exec_completed: true,
             deliver_completed: true,
@@ -810,7 +758,6 @@ mod tests {
     #[test]
     fn archived_is_terminal_only_reopen_leaves() {
         let gates = SlotGates::default();
-        // 归档态对一切信号维持（含 user_accepted=true、超期、新未决）
         assert_eq!(
             next_artifact_state(
                 DocState::Archived,
@@ -825,8 +772,6 @@ mod tests {
     #[test]
     fn fixpoint_records_every_single_step() {
         let gates = SlotGates::default();
-        // 多级迁移：pending_review 未决清零 + 选中修订 + task_running →
-        // approved_revision → executing（两单步都必须逐一记账）
         let path = advance_to_fixpoint(
             DocState::PendingReview,
             &signals(0, 0, 0, 0, true, true, 0),
@@ -834,7 +779,6 @@ mod tests {
             false,
         );
         assert_eq!(path, vec![DocState::ApprovedRevision, DocState::Executing]);
-        // 已在目标态：空路径
         assert!(advance_to_fixpoint(
             DocState::Archived,
             &signals(0, 0, 0, 0, false, false, 0),
@@ -843,8 +787,6 @@ mod tests {
         )
         .is_empty());
     }
-
-    // ---------- 五槽位声明式重算穷举 ----------
 
     fn rules(upstream: bool, artifact: bool, content: bool, pending: u32) -> SlotRules {
         SlotRules {
@@ -860,7 +802,6 @@ mod tests {
 
     #[test]
     fn derive_slot_exhaustive() {
-        // 蓝图/计划槽（derive 类）：无 artifact→queued / 有未完成→running / 完成→completed
         assert_eq!(
             slot_state(SlotKind::Derive, &rules(true, false, false, 0)),
             NodeState::Queued
@@ -873,7 +814,6 @@ mod tests {
             slot_state(SlotKind::Derive, &rules(true, true, true, 0)),
             NodeState::Completed
         );
-        // 前置门禁：蓝图槽未 completed → 计划槽 queued（即使已有文档）
         assert_eq!(
             slot_state(SlotKind::Derive, &rules(false, true, true, 0)),
             NodeState::Queued
@@ -882,22 +822,18 @@ mod tests {
 
     #[test]
     fn await_decision_slot_exhaustive() {
-        // 决策槽：P0/P1 未决>0 → suspended_on_hitl（持久，跨轮维持）
         assert_eq!(
             slot_state(SlotKind::AwaitDecision, &rules(true, true, true, 2)),
             NodeState::SuspendedOnHitl
         );
-        // 未决=0 且阶段有文档 → completed
         assert_eq!(
             slot_state(SlotKind::AwaitDecision, &rules(true, true, true, 0)),
             NodeState::Completed
         );
-        // 未决=0 但阶段无文档 → queued（契约只承诺「有文档才 completed」）
         assert_eq!(
             slot_state(SlotKind::AwaitDecision, &rules(true, false, false, 0)),
             NodeState::Queued
         );
-        // 前置计划槽未完成 → queued（即使 P0/P1 未决——门禁优先）
         assert_eq!(
             slot_state(SlotKind::AwaitDecision, &rules(false, true, true, 2)),
             NodeState::Queued
@@ -906,24 +842,20 @@ mod tests {
 
     #[test]
     fn generate_slot_exhaustive() {
-        // 执行槽：SUCCESS checkpoint 是唯一完成通道（契约明文交付物）
         let mut with_ckpt = rules(true, true, true, 0);
         with_ckpt.has_success_checkpoint = true;
         assert_eq!(
             slot_state(SlotKind::Generate, &with_ckpt),
             NodeState::Completed
         );
-        // 无 SUCCESS checkpoint 且阶段有 artifact → running（持久）
         assert_eq!(
             slot_state(SlotKind::Generate, &rules(true, true, true, 0)),
             NodeState::Running
         );
-        // 无产出 → queued
         assert_eq!(
             slot_state(SlotKind::Generate, &rules(true, false, false, 0)),
             NodeState::Queued
         );
-        // 前置决策槽未完成 → queued
         assert_eq!(
             slot_state(SlotKind::Generate, &rules(false, true, true, 0)),
             NodeState::Queued
@@ -942,32 +874,27 @@ mod tests {
             checklist_total: 6,
         };
         assert_eq!(slot_state(SlotKind::Deliver, &full), NodeState::Completed);
-        // 清单未满 → running（持久）
         let open = SlotRules {
             checklist_done: 4,
             ..full
         };
         assert_eq!(slot_state(SlotKind::Deliver, &open), NodeState::Running);
-        // 清单为空（total==0）→ 未满 → running（与文档级 total>0 判据一致）
         let empty = SlotRules {
             checklist_done: 0,
             checklist_total: 0,
             ..full
         };
         assert_eq!(slot_state(SlotKind::Deliver, &empty), NodeState::Running);
-        // 未决>0 → running
         let blocked = SlotRules {
             pending_p0_p1: 1,
             ..full
         };
         assert_eq!(slot_state(SlotKind::Deliver, &blocked), NodeState::Running);
-        // 执行槽未完成 → queued
         let gated = SlotRules {
             upstream_completed: false,
             ..full
         };
         assert_eq!(slot_state(SlotKind::Deliver, &gated), NodeState::Queued);
-        // 无交付文档 → queued
         let none = SlotRules {
             has_artifact: false,
             stage_has_content: false,
@@ -976,7 +903,6 @@ mod tests {
         assert_eq!(slot_state(SlotKind::Deliver, &none), NodeState::Queued);
     }
 
-    /// running 的持久性由幂等性保证：同输入重算结果稳定
     #[test]
     fn slot_recompute_is_idempotent_for_running() {
         let r = rules(true, true, false, 0);
@@ -1005,22 +931,15 @@ mod tests {
         assert_eq!(PIPELINE_STAGES.len(), 5);
     }
 
-    // ---------- checklist 正则 ----------
-
     #[test]
     fn checklist_counts_task_list_items() {
         let content = "- [x] 完成 A\n- [ ] 待办 B\n* [X] 完成 C\n普通文本 [x] 不算\n";
         assert_eq!(derive_checklist(content), (2, 3));
-        // 代码围栏内的不算
         let fenced = "```markdown\n- [x] 不算\n```\n- [x] 算\n";
         assert_eq!(derive_checklist(fenced), (1, 1));
-        // 空内容
         assert_eq!(derive_checklist(""), (0, 0));
-        // 缩进列表
         assert_eq!(derive_checklist("  - [x] 缩进项\n"), (1, 1));
     }
-
-    // ---------- 专项识别 ----------
 
     #[test]
     fn numbered_dir_is_recognized() {
@@ -1032,10 +951,8 @@ mod tests {
             recognize_initiative("01-规划/README.md", &[]),
             Some("01-规划".to_owned())
         );
-        // 非两位数字前缀不匹配
         assert_eq!(recognize_initiative("4-智能体/a.md", &[]), None);
         assert_eq!(recognize_initiative("docs/方案.md", &[]), None);
-        // 顶层文件无首段目录
         assert_eq!(recognize_initiative("README.md", &[]), None);
     }
 
@@ -1045,7 +962,6 @@ mod tests {
             recognize_initiative("BOM专项/联动.md", &[]),
             Some("BOM专项".to_owned())
         );
-        // 不带两位数字前缀也不含「专项」的目录不在默认集——必须经 initiative_dirs 登记
         assert_eq!(recognize_initiative("BOM与图纸联动方案/x.md", &[]), None);
         let dirs = vec!["BOM与图纸联动方案".to_owned()];
         assert_eq!(
@@ -1056,7 +972,6 @@ mod tests {
 
     #[test]
     fn initiative_id_is_stable_per_dir_name() {
-        // 与 decision_id 同源（stable_key），同目录名恒同 ID（幂等可对拍）
         let a = initiative_id_of("04-智能体代码");
         let b = initiative_id_of("04-智能体代码");
         assert_eq!(a, b);
@@ -1082,8 +997,6 @@ mod tests {
         assert_eq!(stage_from_path("docs/随便.md"), Stage::Unclassified);
     }
 
-    // ---------- 节点 ID 与 wire 词 ----------
-
     #[test]
     fn node_id_shape_and_wire_words() {
         let id = node_id_of("init_x", Stage::Executing, SlotKind::Generate);
@@ -1105,10 +1018,6 @@ mod tests {
         assert_eq!(SlotKind::AwaitDecision.as_str(), "await_decision");
     }
 
-    // ---------- token 估算（共享向量：编译期依赖，缺文件=编译错误） ----------
-
-    /// 向量源：`native/testdata/token-vectors.json`（git 内静态文件，
-    /// 路径自 `src/index/` 上行四级到 `native/testdata/`，无需外部夹具）。
     const TOKEN_VECTORS_RAW: &str = include_str!("../../../../testdata/token-vectors.json");
 
     #[test]
@@ -1134,7 +1043,6 @@ mod tests {
 
     #[test]
     fn estimate_tokens_boundary_codepoints() {
-        // 区间边界逐点自检（与向量文件互为印证）
         assert_eq!(estimate_tokens("\u{2FFF}"), 1, "U+2FFF 非区间");
         assert_eq!(estimate_tokens("\u{3000}"), 1, "U+3000 区间内");
         assert_eq!(estimate_tokens("\u{303F}"), 1, "U+303F 区间内");
@@ -1150,12 +1058,6 @@ mod tests {
         assert_eq!(estimate_tokens("\u{FF5F}"), 1, "U+FF5F 非区间");
     }
 
-    // ---------- 阶段分类共享向量（双端同源：TS stageOfPath 镜像锁定） ----------
-
-    /// 向量源：native/testdata/stage-vectors.json（git 内静态文件，
-    /// 与 TS 侧 fs.readFileSync 同源；编译期读取，缺文件=编译错误）。
-    /// agree=双端同判核心；divergent_registered=登记的刻意分叉（只锁 Rust 侧值，
-    /// 前端值由 test/stage-classify-01.test.ts 锁定）。
     const STAGE_VECTORS_RAW: &str = include_str!("../../../../testdata/stage-vectors.json");
 
     #[test]

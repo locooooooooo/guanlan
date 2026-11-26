@@ -33,7 +33,6 @@ pub fn resume_context(
 ) -> Result<ResumeContextResponse, GuanlanError> {
     let ws = store.workspace()?;
     if store.schema_version()? < 2 {
-        // v0/v1 库：长任务表尚未建出；如实返回空恢复上下文，不报「无此表」。
         let prompt_context = render_prompt(initiative_id, None, &[], &[]);
         return Ok(ResumeContextResponse {
             ok: true,
@@ -120,7 +119,6 @@ pub fn resume_context(
                 .map_err(internal_sql)?
                 .collect::<rusqlite::Result<Vec<_>>>()
                 .map_err(internal_sql)?;
-            // 同一文件 checkpoint 后可能有多版：按文件去重，保留最新一版（行按时间升序）。
             let mut by_file: HashMap<String, ResumeDeltaFile> = HashMap::new();
             for row in rows {
                 by_file.insert(row.file_id.clone(), row);
@@ -194,7 +192,6 @@ pub fn resume_context(
     })
 }
 
-/// 恢复上下文文本（外部 Agent 可原样注入下一步 Prompt；引擎不做注入）。
 fn render_prompt(
     initiative_id: &str,
     checkpoint: Option<&ResumeCheckpoint>,

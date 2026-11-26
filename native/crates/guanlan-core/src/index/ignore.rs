@@ -25,20 +25,14 @@
 /// 单条忽略规则。
 #[derive(Debug, Clone)]
 pub struct IgnoreRule {
-    /// 规则所在目录（相对工作区根，正斜杠；根目录为 `""`）。
     base: String,
-    /// 去尾部 `/` 后的 glob 模式（不含前导 `/`）。
     pattern: String,
-    /// 仅对目录生效（模式尾部是 `/`）。
     dir_only: bool,
-    /// 取反规则（模式以 `!` 开头）。
     negated: bool,
-    /// 锚定在规则所在目录（模式含 `/` 或以 `/` 开头）。
     anchored: bool,
 }
 
 impl IgnoreRule {
-    /// 规则是否命中给定路径。
     fn matches(&self, rel_path: &str, is_dir: bool) -> bool {
         if self.dir_only && !is_dir {
             return false;
@@ -86,7 +80,6 @@ impl Gitignore {
                 negated = true;
                 pattern = rest.to_owned();
             }
-            // 转义的首字符（`\!` / `\#`）按字面量处理
             if pattern.starts_with('\\') && pattern.len() > 1 {
                 pattern = pattern[1..].to_owned();
             }
@@ -159,7 +152,6 @@ impl IgnoreStack {
     /// 弹出最近压入的一层（离开某个目录时）。
     pub fn pop(&mut self) {
         if let Some(layer) = self.layers.pop() {
-            // 只有非空层才会被 push，因此这里总能弹出
             let _ = layer;
         }
     }
@@ -183,12 +175,10 @@ impl IgnoreStack {
     }
 }
 
-/// 去掉行尾未被转义的空间（git 语义）
 fn trim_trailing_spaces(line: &str) -> &str {
     let bytes = line.as_bytes();
     let mut end = bytes.len();
     while end > 0 && bytes[end - 1] == b' ' {
-        // 前一个字符是反斜杠 → 空格被转义，停止
         if end >= 2 && bytes[end - 2] == b'\\' {
             break;
         }
@@ -209,7 +199,6 @@ fn match_path_segments(pattern: &[&str], path: &[&str]) -> bool {
         return path.is_empty();
     }
     if pattern[0] == "**" {
-        // `**` 匹配零个或多个路径段
         for skip in 0..=path.len() {
             if match_path_segments(&pattern[1..], &path[skip..]) {
                 return true;
@@ -237,7 +226,6 @@ fn match_segment(p: &[char], mut pi: usize, t: &[char], mut ti: usize) -> bool {
     while pi < p.len() {
         match p[pi] {
             '*' => {
-                // 尝试吞掉 0..=剩余长度
                 for skip in ti..=t.len() {
                     if match_segment(p, pi + 1, t, skip) {
                         return true;
@@ -254,7 +242,6 @@ fn match_segment(p: &[char], mut pi: usize, t: &[char], mut ti: usize) -> bool {
             }
             '[' => {
                 let Some(close) = (pi + 1..p.len()).find(|&idx| p[idx] == ']') else {
-                    // 未闭合的 `[` 按字面量处理
                     if ti >= t.len() || t[ti] != '[' {
                         return false;
                     }
@@ -318,7 +305,6 @@ mod tests {
         let gi = Gitignore::parse("sub", "/root-only.txt\n");
         assert!(gi.is_ignored("sub/root-only.txt", false));
         assert!(!gi.is_ignored("other/root-only.txt", false));
-        // 锚定在 sub 目录：sub 下的同名文件不命中（模式无 `/` 时才是任意层级）
         assert!(!gi.is_ignored("sub/deep/root-only.txt", false));
     }
 
@@ -351,7 +337,6 @@ mod tests {
         assert!(glob_match_path("**/foo", "x/y/foo"));
         assert!(glob_match_path("a/**", "a/b/c"));
         assert!(!glob_match_path("a/**/b", "a/x/y/c"));
-        // `*` 不跨 `/`
         assert!(!glob_match_path("a/*/b", "a/x/y/b"));
     }
 
@@ -373,7 +358,6 @@ mod tests {
         assert!(stack.is_ignored("a.txt", false));
         stack.push(Gitignore::parse("sub", "!a.txt\n"));
         assert!(!stack.is_ignored("sub/a.txt", false));
-        // 父层规则在子目录仍然生效
         assert!(stack.is_ignored("sub/b.txt", false));
         stack.pop();
         assert!(stack.is_ignored("sub/a.txt", false));

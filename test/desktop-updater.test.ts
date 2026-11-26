@@ -1,9 +1,3 @@
-/**
- * 应用内更新的前端接线：注入桥的降级、错误码拆分、进度订阅，以及「关于观澜」里的入口。
- *
- * 桌面壳只在 Tauri 窗口里注入 __GUANLAN_UPDATE_BRIDGE__；node 测试里没有 window，
- * 所以这里先验证「浏览器/CLI 下安全降级」，再放一个假的 EventTarget 当 window 验证正常路径。
- */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -23,7 +17,6 @@ import { WorkspaceSettingsModal } from '../src/components/modals/WorkspaceSettin
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(__dirname, '..');
 
-/** 用假的 window 跑一段，结束后恢复原状（node 里本来没有 window）。 */
 async function withFakeWindow(
   run: (fake: EventTarget & { __GUANLAN_UPDATE_BRIDGE__?: unknown }) => void | Promise<void>,
 ) {
@@ -142,11 +135,9 @@ describe('应用内更新：关于页入口与配置', () => {
   it('桌面壳注册了插件、两个命令与注入桥', () => {
     const main = readFileSync(resolve(repo, 'native', 'crates', 'guanlan-desktop', 'src', 'main.rs'), 'utf8');
     assert.ok(main.includes('tauri_plugin_updater::Builder::new().build()'));
-    // 命令必须出现在 generate_handler! 列表里，光有函数定义不算接线
     const handler = /generate_handler!\[([\s\S]*?)\]/.exec(main)?.[1] ?? '';
     assert.match(handler, /check_desktop_update/, 'check_desktop_update 没有注册进 invoke_handler');
     assert.match(handler, /install_desktop_update/, 'install_desktop_update 没有注册进 invoke_handler');
-    // 必须是真正注入的那一行，注释里提到名字不算
     assert.ok(main.includes('window.__GUANLAN_UPDATE_BRIDGE__ = {'));
     assert.ok(main.includes("'guanlan:update-progress'"));
   });

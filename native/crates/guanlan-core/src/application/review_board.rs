@@ -69,7 +69,6 @@ impl ReviewBoardBucket {
         }
     }
 
-    /// 展示排序权重（紧急度：unknown / pending_decision / awaiting_receipt / agent_running / dispatchable / completed）
     fn urgency_rank(self) -> u8 {
         match self {
             ReviewBoardBucket::Unknown => 0,
@@ -105,7 +104,6 @@ pub struct BoardClassificationResult {
 
 /// 批阅看板确定性状态分类器（Fail-Closed，绝不隐式自动完成或跳过人工审阅）
 pub fn classify_board_bucket(signals: &BoardClassificationSignals) -> BoardClassificationResult {
-    // 1. 停机红线：存在待批阅 Agent 修订草案，必须先由人工审阅采纳或退回，绝不能直接完结
     if signals.pending_proposal_count > 0 {
         return BoardClassificationResult {
             bucket: ReviewBoardBucket::AwaitingReceipt,
@@ -116,7 +114,6 @@ pub fn classify_board_bucket(signals: &BoardClassificationSignals) -> BoardClass
         };
     }
 
-    // 2. 未决 P0/P1 或决策槽挂起（含人工孤儿挂起）→ 待拍板
     let blocking = signals.pending_p0.max(0) + signals.pending_p1.max(0);
     if blocking > 0 || signals.decision_slot_suspended || signals.repair_suspended_hitl {
         let reason = if blocking > 0 {
@@ -135,7 +132,6 @@ pub fn classify_board_bucket(signals: &BoardClassificationSignals) -> BoardClass
         };
     }
 
-    // 3. 失联/无回执/异常未恢复 → 诚实标 unknown（绝不粉饰为已办结或运行中）
     if let Some(reason) = &signals.orphan_reason {
         return BoardClassificationResult {
             bucket: ReviewBoardBucket::Unknown,
@@ -143,7 +139,6 @@ pub fn classify_board_bucket(signals: &BoardClassificationSignals) -> BoardClass
         };
     }
 
-    // 4. 孤儿人工重置为可派发且无新运行信号 → 可派发
     if signals.repair_reset_dispatchable && !signals.has_live_running_slot {
         return BoardClassificationResult {
             bucket: ReviewBoardBucket::Dispatchable,
@@ -151,7 +146,6 @@ pub fn classify_board_bucket(signals: &BoardClassificationSignals) -> BoardClass
         };
     }
 
-    // 5. 存活运行槽 → Agent 运行中
     if signals.has_live_running_slot {
         return BoardClassificationResult {
             bucket: ReviewBoardBucket::AgentRunning,
@@ -159,7 +153,6 @@ pub fn classify_board_bucket(signals: &BoardClassificationSignals) -> BoardClass
         };
     }
 
-    // 6. 严格完结门禁：仅当状态已达 delivered/archived 且零阻塞、零待审、零失联才进已办结
     if matches!(signals.doc_state.as_str(), "delivered" | "archived") {
         let label = if signals.doc_state == "archived" {
             "已归档"
@@ -172,7 +165,6 @@ pub fn classify_board_bucket(signals: &BoardClassificationSignals) -> BoardClass
         };
     }
 
-    // 7. 其余无阻塞事项 → 可派发
     BoardClassificationResult {
         bucket: ReviewBoardBucket::Dispatchable,
         reason: "无阻塞待拍板事项与待审回执，可随时交办下一步执行".to_owned(),
@@ -190,7 +182,6 @@ pub fn validate_orphan_repair_action(action: &str) -> Result<&'static str, Guanl
     }
 }
 
-/// ISO-8601 UTC 时间戳转 epoch 秒（YYYY-MM-DDTHH:MM:SS...，无外部 chrono 依赖）
 pub(crate) fn parse_iso_epoch_secs(raw: &str) -> Option<i64> {
     let s = raw.trim();
     if s.len() < 19 {
@@ -223,7 +214,6 @@ pub(crate) fn parse_iso_epoch_secs(raw: &str) -> Option<i64> {
     Some(days * 86_400 + hour * 3600 + min * 60 + sec)
 }
 
-/// Howard Hinnant civil-to-days 算法（与 clock.rs 同源）
 fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
     let y = if month <= 2 { year - 1 } else { year };
     let era = if y >= 0 { y } else { y - 399 } / 400;
@@ -254,7 +244,6 @@ pub fn query_review_board(
     store.read_txn(|conn| {
         let ws = store.workspace()?.clone();
 
-        // 1. 文件元信息 + 所属专项映射
         let mut file_path_by_id: HashMap<String, String> = HashMap::new();
         {
             let mut stmt = conn
@@ -306,7 +295,6 @@ pub fn query_review_board(
             }
         }
 
-        // 2. 待审 Agent 草案（按专项分组）
         let mut drafts_by_init: HashMap<String, Vec<ReviewBoardDraftBrief>> = HashMap::new();
         {
             let mut stmt = conn
@@ -361,7 +349,6 @@ pub fn query_review_board(
             }
         }
 
-        // 3. 待确认语句（最新版本的待确认 statement，按专项分组）
         let mut pending_stmts_by_init: HashMap<String, Vec<ReviewBoardPendingStatement>> =
             HashMap::new();
         {
@@ -417,7 +404,6 @@ pub fn query_review_board(
             }
         }
 
-        // 4. 检查点最新状态（按 node_id 与 (initiative_id, stage) 索引）
         let mut ckpt_by_id: HashMap<String, (String, String)> = HashMap::new();
         let mut latest_ckpt_by_init_stage: HashMap<(String, String), (String, String, String)> =
             HashMap::new();
@@ -450,7 +436,6 @@ pub fn query_review_board(
             }
         }
 
-        // 5. 任务节点五槽位
         #[allow(clippy::type_complexity)]
         let mut nodes_by_init: HashMap<
             String,
@@ -490,7 +475,6 @@ pub fn query_review_board(
             }
         }
 
-        // 6. 遍历全部专项构造看板卡片
         let mut init_stmt = conn
             .prepare(
                 "SELECT initiative_id, name, root_dir, current_stage, state, artifact_count, pending_p0, pending_p1, pending_p2, updated_at
@@ -572,7 +556,6 @@ pub fn query_review_board(
                 let latest_ckpt_status = ckpt_info.as_ref().map(|(_, st, _)| st.clone());
                 let latest_ckpt_at = ckpt_info.as_ref().map(|(_, _, ts)| ts.as_str());
 
-                // 检查孤儿修复标记（存在且不早于节点最后活跃时间则生效）
                 let repair_meta = serde_json::from_str::<serde_json::Value>(&payload_json)
                     .ok()
                     .and_then(|v| v.get("orphan_repair").cloned());
@@ -607,7 +590,6 @@ pub fn query_review_board(
                     repair_reset_dispatchable = true;
                 }
 
-                // 孤儿 / 失联检测（仅对执行/交付/失败槽做诚实诊断）
                 let is_exec_or_deliver = matches!(node_kind.as_str(), "generate" | "deliver");
                 if state == "failed" || err.is_some() {
                     if !is_reset_to_dispatchable && orphan.is_none() {
@@ -799,7 +781,6 @@ pub fn repair_orphan_node(
         .get_initiative(&workspace_id, initiative_id)?
         .ok_or_else(|| GuanlanError::NotFound(format!("未找到专项 {initiative_id}")))?;
 
-    // 定位目标节点：优先显式 node_id，其次按专项内 running/failed 执行/交付槽自动定位
     let mut target = match node_id.map(str::trim).filter(|s| !s.is_empty()) {
         Some(nid) => writer
             .get_task_node(nid)?
@@ -913,7 +894,6 @@ mod tests {
 
     #[test]
     fn e04_board_classifier_never_skips_human_review_or_auto_completes_pending_work() {
-        // 即使 doc_state 标为 delivered，只要有未审 Agent 草案，必须落在待批阅回执（停机红线）
         let with_draft = classify_board_bucket(&BoardClassificationSignals {
             doc_state: "delivered".to_owned(),
             pending_proposal_count: 1,
@@ -921,7 +901,6 @@ mod tests {
         });
         assert_eq!(with_draft.bucket, ReviewBoardBucket::AwaitingReceipt);
 
-        // 只要存在 P0/P1 未决，必须落在待拍板
         let with_p1 = classify_board_bucket(&BoardClassificationSignals {
             doc_state: "delivered".to_owned(),
             pending_p1: 1,
@@ -929,7 +908,6 @@ mod tests {
         });
         assert_eq!(with_p1.bucket, ReviewBoardBucket::PendingDecision);
 
-        // 失联/无回执一律诚实标 unknown
         let stalled = classify_board_bucket(&BoardClassificationSignals {
             doc_state: "executing".to_owned(),
             orphan_reason: Some("执行槽超时 45 分钟无回执".to_owned()),
@@ -937,7 +915,6 @@ mod tests {
         });
         assert_eq!(stalled.bucket, ReviewBoardBucket::Unknown);
 
-        // 仅当 delivered + 零阻塞 + 零待审 + 零失联才进已办结
         let clean_done = classify_board_bucket(&BoardClassificationSignals {
             doc_state: "delivered".to_owned(),
             ..Default::default()

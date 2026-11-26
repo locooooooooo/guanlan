@@ -11,10 +11,8 @@ use crate::index::pdf::{extract_pdf_from_bytes, PdfExtractRecord};
 use crate::query::files::title_of;
 use crate::storage::{ReadonlyStore, RevisionRow};
 
-/// 只读按需解析兜底的大小上限（32 MiB，与 Office L2 快照上限一致）
 const MAX_ONDEMAND_PDF_BYTES: u64 = 32 * 1024 * 1024;
 
-/// 读取指定 `content_hash` 在 `pdf_extracts` 里的状态（供 `files.rs` 覆盖与徽标判定）
 pub(crate) fn cached_pdf_status(store: &ReadonlyStore, content_hash: &str) -> Option<String> {
     store
         .conn()
@@ -26,7 +24,6 @@ pub(crate) fn cached_pdf_status(store: &ReadonlyStore, content_hash: &str) -> Op
         .ok()
 }
 
-/// 按版本加载 PDF 页级提取结构；未命中缓存时按快照门禁安全兜底解析（只读不写库）
 pub(crate) fn load_pdf_extract_for_revision(
     store: &ReadonlyStore,
     rev: &RevisionRow,
@@ -74,7 +71,6 @@ pub(crate) fn load_pdf_extract_for_revision(
     extract_pdf_from_bytes(&bytes)
 }
 
-/// 生成供 QuickLook 轻预览端点使用的紧凑 PDF 摘要
 pub(crate) fn summarize_pdf(rec: &PdfExtractRecord) -> PdfPreviewSummary {
     let mut text_preview = String::new();
     for ch in rec.plain_text.chars().take(1200) {

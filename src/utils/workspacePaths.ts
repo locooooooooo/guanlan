@@ -1,10 +1,3 @@
-/**
- * 工作区相对/绝对路径解析与路径穿越防线。
- *
- * 与 Rust 端 `guanlan-desktop/src/system_bridge.rs` 保持同口径：
- * - 拒绝绝对路径、盘符、UNC、NTFS 流冒号、`..` 上跳、空字节与系统保留名；
- * - 前端展示与剪贴板统一共享此单一出口，不各处拼接路径。
- */
 
 const WINDOWS_RESERVED_STEMS = new Set([
   'CON',
@@ -93,7 +86,6 @@ export function resolveWorkspaceAbsolutePath(
   let base = cleanRoot;
   if (isWinStyle) {
     base = base.replace(/\//g, '\\');
-    // 保留盘符根如 `C:\`，其余去掉尾部分隔符
     if (!/^[A-Za-z]:\\$/.test(base)) {
       base = base.replace(/\\+$/, '');
     }

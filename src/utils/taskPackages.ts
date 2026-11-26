@@ -1,34 +1,3 @@
-/**
- * 语义聚合层 · 任务包(Task Package)与五阶段生命周期。
- *
- * 从「File-Centric」聚合为「Workflow & Lifecycle-Centric」的纯函数地基：
- *  - 任务包识别：任意 relative_path 经 G1→G2→G3→G5 级联规则 100% 归属一个任务包
- *    （专项目录 / 执行轮次 run-id / 任务码 / 顶层资产桶 / 工作区根），id 永不为空；
- *  - 工具噪音隔离：draw 形态/`_` 前缀段产物在分桶前拦截（isToolNoisePath 单源
- *    documentIdentity，与首页高价值待阅同口径），不进包 docs 统计；
- *  - 五阶段分类：basename 关键词(顺序即优先级) > 容器默认 > 待分类；
- *    dominantStage 以「最远已到达阶段」表达『卡在决策』等生命周期语义；
- *  - 正文摘要：extractCoreSummary 镜像 guanlanEngine 既有范式，再统一过
- *    condenseSummary——去 markdown 标记、去路径与 KB、丢弃服务端元数据串（summaryNote），
- *    压成一行 ≤80 字；拿不到正文返回空串，由调用方显式占位，绝不拿文件属性冒充结论；
- *    多级回退链：显式「核心结论」章节 → 逐章节正文（跳过目录/编号规则等元话语节）
- *    → 原文首段扫描（跳 frontmatter/表格线/系统说明行，2~3 行截断）→ rev.summaryNote，
- *    避免多数文档因无显式核心结论章节而落空；
- *  - 包摘要优先级链（packageConclusionOf）：00-阅读与派发总览 → PLAN*.md → 01-需求单* →
- *    任意首篇 .md → 任意首篇有结论文档，全部扫完无真实正文才返回空串（数据层不造假）；
- *  - 元信息行 formatPackageMetaLine / 徽标行 packageBadgeLine：焦点卡/画廊
- *    消费的一行元信息与版本徽标，全部从 lastActivity / docs 版本 / dominantStage 真实派生，
- *    严禁「暂无事件」式假占位，无数据返回空串由 UI 降级；
- *  - 五阶段计数：stageCountsOf 供看板「蓝图 n → 计划 n → 决策 n → 执行 n → 交付 n」聚合胶囊；
- *  - 同日同文件合并：按 file_id + 本地日历日(localDay(occurred_at||observed_at)) 成桶，
- *    resolveVersion 由调用方注入(EventDayItem 无 versionNumber，禁止伪造)；
- *  - 日泳道：五阶段固定槽位[蓝图,计划,决策,执行,交付]。
- *
- * 铁律：时间语义零改动——只复用 timeFormat 既有导出(localDay/formatLocalClock/formatLocalStamp)，
- * 不写任何 UTC/时区转换（formatPackageMetaLine 的日差用 localDay 字符串比对）；
- * 版本链/版本时光机语义由 file.revisions 与 resolveVersion 承载，本层不触碰。
- * 仅 import 既有 documentIdentity / timeFormat / parseMarkdownOutline，无新依赖。
- */
 
 import type { FileFormat, FileRecord, Revision } from '../types/guanlan';
 import type { TimelineEvent } from '../types/guanlan';
@@ -36,12 +5,9 @@ import type { EventDayItem } from '../services/workspaceClient';
 import { basenameOf, isToolNoisePath, normalizePath } from './documentIdentity';
 import { formatLocalClock, formatLocalStamp, localDay } from './timeFormat';
 import { parseMarkdownOutline } from './guanlanEngine';
-// 统一状态机 SSOT：六阶段词表 StageRole 与阶段徽标短语单一出口在此，
-// 本模块消费、不再自造状态文案；StageRole 定义随 wire 上移 apiTypes（经 stateProjection 再导出）
 import { stageBadgeLine } from './stateProjection';
 import type { StageRole } from './stateProjection';
 
-// ================= 基础类型 =================
 
 /** 六阶段词表：SSOT 在 stateProjection（wire 定义在 apiTypes.StageWire），此处再导出保兼容 */
 export type { StageRole };
@@ -49,31 +15,25 @@ export type PackageKind = 'spec' | 'report' | 'longtask' | 'run' | 'fallback';
 
 export interface PackageDoc {
   fileId: string;
-  title: string; // 核心文档名 = basenameOf(relative_path)
+  title: string;
   format: FileFormat;
-  stage: StageRole; // stageOfPath(relative_path)
-  conclusion: string; // extractCoreSummary(FileRecord)，无结论为空串
-  /**
-   * 当前版版本号：当前修订 versionNumber；无修订为 null。
-   * 可选字段——手构 PackageDoc 不带此字段时按「无版本数据」处理，
-   * packageBadgeLine 返回空串由 UI 降级，绝不造数。
-   */
+  stage: StageRole;
+  conclusion: string;
   versionNumber?: number | null;
 }
 
 export interface TaskPackage {
-  id: string; // 包目录相对路径：G1/G2=容器前缀目录，G3=顶层段，G5='__root__'
-  name: string; // 显示名：目录末段(专项名_日期 / run-id / 任务码 / 顶层段)
+  id: string;
+  name: string;
   kind: PackageKind;
-  stage: StageRole; // dominantStage(docs)
+  stage: StageRole;
   docs: PackageDoc[];
-  eventCount: number; // enrichPackagesWithEvents 回填；未回填为 0
-  lastActivity: string; // 包内最新事件 observed_at(ISO)；无事件为空串
-  latestConclusion: string; // 包摘要优先链(packageConclusionOf)：总览→PLAN→需求单→首篇 md→首篇有结论文档
-  readingOrder: PackageDoc[]; // 推荐阅读顺序：蓝图→计划→决策→执行→交付，阶段内按 basename 自然序
+  eventCount: number;
+  lastActivity: string;
+  latestConclusion: string;
+  readingOrder: PackageDoc[];
 }
 
-// ================= 分组规则(G1→G2→G3→G5 级联，100% 覆盖)===================
 
 export const SPEC_CONTAINERS: readonly string[] = [
   '01-方案文档/产品需求与任务包',
@@ -83,7 +43,6 @@ export const SPEC_CONTAINERS: readonly string[] = [
   '01-方案文档/发布包',
 ];
 
-/** G1 容器 → PackageKind（spec=需求/计划类，report=汇报/发布类，longtask=长任务执行类）。 */
 function containerKindOf(container: string): PackageKind {
   switch (container) {
     case '01-方案文档/产品需求与任务包':
@@ -99,12 +58,6 @@ function containerKindOf(container: string): PackageKind {
   }
 }
 
-/**
- * 命名子专项段识别：段名以大写任务码前缀开头——
- * 如「MECH-WIN-001 机械设计工具独立交付」「OFF-PROD-001 文档中枢」。
- * 小写连字名（agent-a / pdm-long006，G2 run 域同名形态）与日期段（2026-11-06）不命中，
- * 避免把顶层资产桶按任意子目录碎成噪声包（G3 纪律：禁止父目录回退）。
- */
 const NAMED_SUBPROJECT_RE = /^[A-Z][A-Z0-9]*(?:[-_][A-Z0-9]+)+/;
 
 /**
@@ -127,7 +80,6 @@ export function taskPackageOf(relativePath: string): {
     .split('/')
     .filter((seg) => seg.length > 0);
 
-  // G1：01-方案文档/<容器>/<seg3>/…（深度 ≥ 4 才是包目录内的文件；深度 3 的文件是容器直属，不并入包）
   if (segments.length >= 4 && segments[0] === '01-方案文档') {
     const container = `${segments[0]}/${segments[1]}`;
     if (SPEC_CONTAINERS.includes(container)) {
@@ -139,14 +91,10 @@ export function taskPackageOf(relativePath: string): {
     }
   }
 
-  // G2：output/<项目>/<seg3>/…
   if (segments.length >= 4 && segments[0] === 'output') {
     return { id: `output/${segments[1]}/${segments[2]}`, name: segments[2], kind: 'run' };
   }
 
-  // G3：其余深度 ≥ 2 归顶层段（禁止用「父目录」作回退——会碎成噪声包）。
-  // 子锚定例外：目录内有文件（段深 ≥ 3）且子段是命名子专项（任务码前缀自证是交付单元，
-  // 与 G2 把 OFF-PROD-001 作包名同一语义）→ 锚定子专项；其余一律顶层段不变。
   if (segments.length >= 2) {
     if (segments.length >= 3 && NAMED_SUBPROJECT_RE.test(segments[1])) {
       return { id: `${segments[0]}/${segments[1]}`, name: segments[1], kind: 'fallback' };
@@ -154,7 +102,6 @@ export function taskPackageOf(relativePath: string): {
     return { id: segments[0], name: segments[0], kind: 'fallback' };
   }
 
-  // G5：根级文件
   return { id: '__root__', name: '工作区根', kind: 'fallback' };
 }
 
@@ -172,18 +119,8 @@ function packageDocOf(file: FileRecord): PackageDoc {
   };
 }
 
-/**
- * 包摘要多级优先链：按阅读价值优先级扫描包内 docs——
- * 00-阅读与派发总览 → PLAN*.md → 01-需求单* → 任意首篇 .md → 任意首篇有结论文档（svg/pdf 兜底，
- * 图形文字/首页文本也是真实正文）。每级取首个 conclusion 非空者；全部扫完无真实正文才返回
- * 空串——空串由 UI 层诚实占位「暂无正文摘要」，数据层不造假。
- * 级内次序沿用 docs（readingOrder：阶段序→标题自然序），跨渲染稳定。
- * （原实现按 rev.observed_at 时间取最新写入文档——最新写入常是执行记录残页，
- * 把总览的好结论挤成空串，是「满屏暂无正文摘要」的包级根因之一。）
- */
 function packageConclusionOf(docs: PackageDoc[]): string {
   const mdDocs = docs.filter((d) => d.format === 'md');
-  // 注意：PackageDoc.title = basenameOf 去扩展名（无 '.md' 后缀），前缀匹配即锚定文件名
   const levels: PackageDoc[][] = [
     mdDocs.filter((d) => /^00-阅读与派发总览/i.test(d.title)),
     mdDocs.filter((d) => /^PLAN/i.test(d.title)),
@@ -199,7 +136,6 @@ function packageConclusionOf(docs: PackageDoc[]): string {
   return '';
 }
 
-/** 阅读顺序排序键：阶段序[蓝图,计划,决策,执行,交付]，待分类置尾；阶段内按 basename 自然序。 */
 function compareReadingOrder(a: PackageDoc, b: PackageDoc): number {
   const rankA = STAGE_RANK[a.stage];
   const rankB = STAGE_RANK[b.stage];
@@ -286,8 +222,6 @@ export function enrichPackagesWithEvents(
         }
       }
     }
-    // latestConclusion：事件流最新写入文档的结论优先（最新动态承载最新结论，既有口径）；
-    // 该文档无结论或包内无事件时保留 packageConclusionOf 优先链产物（总览→PLAN→需求单→…）。
     let latestConclusion = pkg.latestConclusion;
     if (lastEventFileId !== null) {
       const doc = pkg.docs.find((d) => d.fileId === lastEventFileId);
@@ -297,7 +231,6 @@ export function enrichPackagesWithEvents(
   });
 }
 
-// ================= 五阶段分类 =================
 
 /** 关键词表：顺序即优先级，自上而下首个命中生效(交付>执行>决策>计划>蓝图)。
  *  受决策强信号约束（见 DECISION_BASENAME_KEYWORDS）：basename 命中强信号的
@@ -340,7 +273,6 @@ export const CONTAINER_DEFAULT_STAGE: Readonly<Record<string, StageRole>> = {
  */
 export function stageOfPath(relativePath: string): StageRole {
   const base = basenameOf(relativePath).toLowerCase();
-  // 强信号只认文件名：目录段（容器/专项名）里的「决策/评审」不代表当前文件是决策纸
   const name = basenameOf(relativePath);
   for (const kw of DECISION_BASENAME_KEYWORDS) {
     if (name.includes(kw)) return '决策';
@@ -376,26 +308,16 @@ export function dominantStage(docs: PackageDoc[]): StageRole {
   return '待分类';
 }
 
-// ================= 核心结论 / 正文摘要 =================
 
 /** 摘要单行上限（一行 ≤80 字，超出以省略号「…」收口）。 */
 export const SUMMARY_MAX_CHARS = 80;
 
-/**
- * 文件属性串识别——这些不是结论，是文件元数据，摘要层必须丢弃（降噪）。
- *
- * 唯一产地是服务端 summaryNote 拼装（server/project.ts）：
- *   `v2 · 2026-11-12 13:03:13（文件修改时间） · 9.1 KB · 01-方案文档/README.md`
- * 另有 PDF 未索引占位句与快照淘汰备注，同属状态说明而非正文。
- * 规则只认「整体形态」标记，不按包含关系误伤正文（正文里出现「KB」由 condenseSummary 的
- * 数字+单位剥离处理，不整句判为元数据）。
- */
 const METADATA_PATTERNS: readonly RegExp[] = [
-  /^v\d+\s*[·:：]/, // vN · …（服务端版本摘要串的固定开头）
-  /^v\d+\s*（/, // vN（日期待考…
-  /（(?:原文记载|文件修改时间|文档自述|采集)）/, // 时间口径括注
-  /正文尚未索引/, // PDF 正文未索引占位
-  /仅文件名与元数据可检索/, // 同上（长句）
+  /^v\d+\s*[·:：]/,
+  /^v\d+\s*（/,
+  /（(?:原文记载|文件修改时间|文档自述|采集)）/,
+  /正文尚未索引/,
+  /仅文件名与元数据可检索/,
   /快照已过保留期/,
   /^日期待考$/,
 ];
@@ -421,29 +343,26 @@ export function condenseSummary(raw: string): string {
   if (isFileMetadataText(raw)) return '';
 
   let s = raw.replace(/\r/g, '');
-  s = s.replace(/```[\s\S]*?```/g, ' '); // 围栏代码块整段不是摘要
-  s = s.replace(/!\[[^\]]*\]\([^)]*\)/g, ' '); // 图片
-  s = s.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1'); // 链接只留文字
-  // 表格分隔行 / 水平线（字符类不含 \s，避免把换行吃进来跨行误删）
+  s = s.replace(/```[\s\S]*?```/g, ' ');
+  s = s.replace(/!\[[^\]]*\]\([^)]*\)/g, ' ');
+  s = s.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
   s = s.replace(/^[ \t]*\|?[ \t:|-]{3,}\|?[ \t]*$/gm, ' ');
-  s = s.replace(/^\s{0,3}#{1,6}\s+/gm, ''); // 标题
-  s = s.replace(/^\s{0,3}>\s?/gm, ''); // 引用
-  s = s.replace(/^\s{0,3}(?:[-*+]|\d+[.)])\s+/gm, ''); // 列表符
-  s = s.replace(/\|/g, ' · '); // 表格单元格 → 间隔
-  s = s.replace(/[*_~`]+/g, ''); // 强调 / 行内代码
-  s = s.replace(/<[^>]+>/g, ' '); // HTML 标签
-  s = s.replace(/（(?:原文记载|文件修改时间|文档自述|采集)）/g, ' '); // 残留元数据碎片
-  s = s.replace(/\d+(?:\.\d+)?\s?(?:KB|MB|GB|KiB|MiB)\b/g, ' '); // 体量
+  s = s.replace(/^\s{0,3}#{1,6}\s+/gm, '');
+  s = s.replace(/^\s{0,3}>\s?/gm, '');
+  s = s.replace(/^\s{0,3}(?:[-*+]|\d+[.)])\s+/gm, '');
+  s = s.replace(/\|/g, ' · ');
+  s = s.replace(/[*_~`]+/g, '');
+  s = s.replace(/<[^>]+>/g, ' ');
+  s = s.replace(/（(?:原文记载|文件修改时间|文档自述|采集)）/g, ' ');
+  s = s.replace(/\d+(?:\.\d+)?\s?(?:KB|MB|GB|KiB|MiB)\b/g, ' ');
   s = s
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
     .join(' ');
-  // 折叠成一行后，行内残留的列表符（「A。 - B」这种由多行拼接出来的）一并去掉
   s = s.replace(/(^|\s)[-*+]\s+/g, '$1');
   s = s.replace(/\s+/g, ' ').replace(/\s*·\s*/g, ' · ').trim();
   s = s.replace(/^[·、,，;；:：|\-\s]+/, '').replace(/[·、,，;；:：|\-\s]+$/, '');
-  // 只剩标点/分隔符（无任何字母或数字）→ 视为无摘要
   if (!/[\p{L}\p{N}]/u.test(s)) return '';
   if (s.length > SUMMARY_MAX_CHARS) {
     s = `${s.slice(0, SUMMARY_MAX_CHARS).trimEnd()}…`;
@@ -451,39 +370,27 @@ export function condenseSummary(raw: string): string {
   return s;
 }
 
-// ---------- 元话语识别（目录/编号规则/自动生成声明是「关于文件的话」，不是业务描述） ----------
 
-/** 系统说明行模式：命中任一即视为元话语。锚定「整体形态」短语，不按宽泛词误伤正文。 */
 const META_DISCOURSE_RES: readonly RegExp[] = [
-  /自动生成/, // 「本文件由…自动生成」
-  /本文件由|本文档由/, // 生成方声明
-  /编号规则/, // 「编号规则：PDM-YYYYMMDD-…」
-  /归入目录|目录说明|目录结构/, // 归档/目录说明
-  /^(?:文档|文件)?(?:目录|清单|导航)$/, // 整行就是「目录/文档目录/导航」标题
+  /自动生成/,
+  /本文件由|本文档由/,
+  /编号规则/,
+  /归入目录|目录说明|目录结构/,
+  /^(?:文档|文件)?(?:目录|清单|导航)$/,
 ];
 
-/** 目录/导航链接行：整行是一个 [文字](路径) 链接（可带列表符）——目录页条目，不是叙述。 */
 const TOC_LINK_LINE_RE = /^\s*(?:[-*+]\s+)?\[[^\]]+\]\([^)]*\)\s*$/;
 
 function isMetaDiscourseLine(line: string): boolean {
   return META_DISCOURSE_RES.some((re) => re.test(line));
 }
 
-/** 噪音章节标题：「目录」「编号规则」「使用说明(自动生成)」一类章节不产出业务摘要。 */
 function isJunkSectionTitle(title: string): boolean {
   return /目录|编号规则|自动生成/.test(title);
 }
 
-/** 首段扫描行数上限（2~3 行截断口径：抓满 3 行收口，最终仍由 condenseSummary 压到 ≤80 字）。 */
 const FIRST_PARAGRAPH_MAX_LINES = 3;
 
-/**
- * 原文首段扫描：无标题文档（sections 为空）或全噪音章节时的最后一层正文回退。
- * 跳过：frontmatter（首个非空行恰为 '---' 的块）、围栏代码块、标题行、表格行（结构化数据
- * 不是叙述段，`|---` 分隔线已由 condenseSummary 再兜一道）、水平线、系统元话语行、
- * 目录链接行；遇空行即收口（只取第一段），抓满 3 行截断。
- * 返回未压缩的段落原文（可能含 markdown 标记），交 condenseSummary 统一清洗。
- */
 function firstBusinessParagraph(markdown: string): string {
   const lines = markdown.replace(/\r/g, '').split('\n');
   const picked: string[] = [];
@@ -501,12 +408,12 @@ function firstBusinessParagraph(markdown: string): string {
     }
     if (inCodeFence) continue;
     if (!line) {
-      if (picked.length > 0) break; // 空行 = 段落终结
+      if (picked.length > 0) break;
       continue;
     }
-    const terminate = picked.length > 0; // 已开段后遇结构行一律收口
+    const terminate = picked.length > 0;
     if (!picked.length && /^-{3,}$/.test(line)) {
-      inFrontmatter = true; // 仅文档头第一个 '---' 视为 frontmatter 开栅
+      inFrontmatter = true;
       continue;
     }
     if (line.startsWith('#') || line.startsWith('|')) {
@@ -549,13 +456,6 @@ export function extractCoreSummary(file: FileRecord): string {
     file.revisions[file.revisions.length - 1];
   if (!rev) return '';
 
-  // DerivedSummary 缓存：派生摘要按版本身份（revision_id）缓存，
-  // 输入以引用身份校验——同一版本未变化的正文是同一字符串实例（revisionContentStore
-  // 的 ready 条目每次返回同一实例），引用相等即命中，不再对全部已加载 MD 重跑
-  // parseMarkdownOutline 全文解析（此前每次发布都对已加载文档全量重解析，
-  // 依次打开 K 篇累计 O(K²L)）。同一 revision 的内容不可变；唯一状态跃迁是
-  // 「未加载 → 已加载」：未加载时按 summaryNote 兜底产出，正文到达后引用
-  // 变化触发一次重算，此后复用。
   const cached = derivedSummaryCache.get(rev.revision_id);
   if (
     cached &&
@@ -565,7 +465,6 @@ export function extractCoreSummary(file: FileRecord): string {
     cached.note === rev.summaryNote &&
     cached.reason === file.pdfStatusReason
   ) {
-    // 访问续期（Map 迭代序=插入序 → LRU）
     derivedSummaryCache.delete(rev.revision_id);
     derivedSummaryCache.set(rev.revision_id, cached);
     return cached.summary;
@@ -574,11 +473,8 @@ export function extractCoreSummary(file: FileRecord): string {
   let coreSummary = rev.summaryNote || '';
   if (file.format === 'md' && rev.markdownContent) {
     const sections = parseMarkdownOutline(rev.markdownContent);
-    // ① 显式「核心结论」章节（summaryText 类型可选——parseMarkdownOutline 运行时恒填，
-    // 但按契约判空：空则落回②，不把 undefined 递进 condenseSummary）
     const coreSec = sections.find((s) => s.isExplicitCallout === '核心结论');
     let summary = coreSec?.summaryText ? condenseSummary(coreSec.summaryText) : '';
-    // ② 逐章节回退：跳噪音章节标题，节正文压完非空且非元话语才采纳
     if (!summary) {
       for (const sec of sections) {
         if (sec === coreSec || !sec.summaryText) continue;
@@ -590,9 +486,7 @@ export function extractCoreSummary(file: FileRecord): string {
         }
       }
     }
-    // ③ 原文首段扫描（无标题文档的主回退）
     if (!summary) summary = condenseSummary(firstBusinessParagraph(rev.markdownContent));
-    // ④ summaryNote 兜底：dirty summaryNote 由 condenseSummary 判噪音如实返回空串
     if (!summary) summary = rev.summaryNote || '';
     coreSummary = summary;
   } else if (file.format === 'svg' && rev.svgExtractedTexts && rev.svgExtractedTexts.length > 0) {
@@ -607,7 +501,6 @@ export function extractCoreSummary(file: FileRecord): string {
       '';
   }
   const summary = condenseSummary(coreSummary);
-  // 写缓存（LRU：超出容量按插入序逐最旧；覆盖长会话大量修订轮替的堆积）
   if (derivedSummaryCache.size >= DERIVED_SUMMARY_CACHE_CAPACITY && !derivedSummaryCache.has(rev.revision_id)) {
     const oldest = derivedSummaryCache.keys().next();
     if (!oldest.done) derivedSummaryCache.delete(oldest.value);
@@ -623,7 +516,6 @@ export function extractCoreSummary(file: FileRecord): string {
   return summary;
 }
 
-/** DerivedSummary 缓存条目：输入按引用身份校验 */
 interface DerivedSummaryEntry {
   md?: string;
   svgTexts?: string[];
@@ -633,7 +525,6 @@ interface DerivedSummaryEntry {
   summary: string;
 }
 
-/** 派生摘要缓存：revision_id → 输入指纹 + 产物（会话级，LRU 4096 版） */
 const derivedSummaryCache = new Map<string, DerivedSummaryEntry>();
 const DERIVED_SUMMARY_CACHE_CAPACITY = 4096;
 
@@ -665,13 +556,7 @@ export function stageCountsOf(docs: PackageDoc[]): Record<StageRole, number> {
   return counts;
 }
 
-// ================= 元信息行 / 徽标行 =================
 
-/**
- * 徽标阶段短语：从 dominantStage 派生的进行时短语。词表 SSOT 已上移
- * stateProjection.STAGE_BADGE_PHRASE（专项卡片/下拉/星图/顶栏四视图同词），
- * 本模块只经 stageBadgeLine 组合「v8 · 短语」，不再自持词表。
- */
 
 /**
  * 包整体版本号：包内文档当前版最大 versionNumber（全无修订数据 → null，不造数）。
@@ -712,37 +597,32 @@ export function formatPackageMetaLine(pkg: TaskPackage, now: Date = new Date()):
   const at = pkg.lastActivity;
   if (!at) return `刚收录${tail}`;
 
-  // 解析失败（非 ISO 串）落不到任何一天：按归档形态原样透出（formatLocalStamp 契约：
-  // 解析失败原样返回，不抛错），绝不冒充「刚收录」
   if (Number.isNaN(new Date(at).getTime())) return `${formatLocalStamp(at)} 归档${tail}`;
 
   const day = localDay(at);
   const today = localDay(now.toISOString());
   const diffMs =
     Date.parse(`${today}T00:00:00Z`) - Date.parse(`${day}T00:00:00Z`);
-  // 日历日差取整；时钟偏差导致的负值（未来时刻）夹回 0，按今天处理
   const diffDays = Math.max(0, Math.round(diffMs / 86400000));
   if (diffDays < 7) {
     const relDay = diffDays === 0 ? '今天' : diffDays === 1 ? '昨天' : `${diffDays} 天前`;
     const clock = formatLocalClock(at);
     return clock ? `${relDay} ${clock} 更新${tail}` : `${relDay} 更新${tail}`;
   }
-  // 更早：最近活动日期（纯日期/含时刻一律取本地日历日 MM-DD）
   return `${day.slice(5, 10)} 归档${tail}`;
 }
 
-// ================= 同日同文件合并 =================
 
 export interface DayRevisionMerge {
   fileId: string;
-  day: string; // 本地日历日 YYYY-MM-DD(localDay(occurred_at||observed_at))
-  vFirst: number | null; // 首条(observed_at 最早)事件版本号(resolveVersion 解析，首条不可解析为 null)
-  vLast: number | null; // 末条(observed_at 最晚)事件版本号(末条不可解析为 null)
-  evolutionCount: number; // 今日演进 N 次 = max(0, distinctRevisionCount - 1)
-  headline: string; // 最后一次(observed_at 最大)事件 headline(ask：取最后一次 headline)
-  revisionIds: string[]; // 桶内去重 revision_id，按事件顺序
-  eventCount: number; // 该日该文件事件条数
-  merged: boolean; // eventCount > 1(≥2 条事件才合并，单条原样)
+  day: string;
+  vFirst: number | null;
+  vLast: number | null;
+  evolutionCount: number;
+  headline: string;
+  revisionIds: string[];
+  eventCount: number;
+  merged: boolean;
 }
 
 /**
@@ -778,7 +658,6 @@ export function mergeDayRevisions(
     results.push({
       fileId,
       day: localDay(items[0].occurred_at || items[0].observed_at),
-      // vFirst/vLast = 首末条事件自身的版本号：首条不可解析→vFirst=null，末条不可解析→vLast=null
       vFirst: earliest ? resolveVersion(earliest.revision_id) : null,
       vLast: latest ? resolveVersion(latest.revision_id) : null,
       evolutionCount: Math.max(0, revisionIds.length - 1),
@@ -807,19 +686,17 @@ export function dayMergeLabel(m: DayRevisionMerge): string {
   return '';
 }
 
-// ================= 日泳道 =================
 
 export interface TaskDaySlot {
   role: StageRole;
-  /** 该阶段 readingOrder 首位文档；无该阶段文档→null（契约注释口径，故类型为可空）。 */
   doc: PackageDoc | null;
-  card: DayRevisionMerge | null; // 该文档当日合并记录；该日无事件→null
+  card: DayRevisionMerge | null;
 }
 
 export interface TaskDayLane {
   package: TaskPackage;
-  date: string; // 本地日历日 YYYY-MM-DD
-  slots: TaskDaySlot[]; // 固定顺序：蓝图，计划，决策，执行，交付(各阶段一槽)
+  date: string;
+  slots: TaskDaySlot[];
 }
 
 /** 五阶段槽位固定顺序。日泳道与工作流看板共用同一份常量，禁止各处再抄一遍。 */

@@ -1,8 +1,3 @@
-/**
- * 多模态 Diff 面板渲染契约（SSR 冒烟，与 commandPaletteView.test.ts 同风格）。
- * 交互逻辑（拖拽分隔线/模式切换）在客户端，此处锁定静态结构契约：
- * MD 人类视图三块与源码行折叠 / SVG 双图层+叠加框+模式钮 / 表格变化格高亮+数值 Δ+XLSX 工作表 tab。
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -48,14 +43,14 @@ test('MD 人类视图：标题结构徽标/决定状态变化/勾选翻转/关�
   );
   assert.ok(html.includes('data-machine-md-human'));
   assert.ok(html.includes('标题结构'));
-  assert.ok(html.includes('[修改]')); // 背景章
+  assert.ok(html.includes('[修改]'));
   assert.ok(html.includes('决定 / 待办变化'));
-  assert.ok(html.includes('状态变化')); // P1 存储选型 待确认→已确认
-  assert.ok(html.includes('勾选翻转')); // 评审未完成
+  assert.ok(html.includes('状态变化'));
+  assert.ok(html.includes('勾选翻转'));
   assert.ok(html.includes('新增待办'));
   assert.ok(html.includes('关键增删段'));
-  assert.ok(html.includes('+ 新背景描述（已补充合规要求）')); // 增行
-  assert.ok(html.includes('- 旧背景描述')); // 删行
+  assert.ok(html.includes('+ 新背景描述（已补充合规要求）'));
+  assert.ok(html.includes('- 旧背景描述'));
 });
 
 test('MD 源码行模式：折叠行渲染且变化行全量呈现', () => {
@@ -101,17 +96,14 @@ test('SVG 对比面板：双 data:URI 图层/叠加框/模式钮/清洗不注入
     })
   );
   assert.ok(html.includes('data-machine-svg-compare'));
-  // 两版图层（基底层 + 上层）都以 data:URI <img> 呈现
   const imgCount = (html.match(/data:image\/svg\+xml/g) ?? []).length;
   assert.ok(imgCount >= 2);
-  // sanitize：脚本内容不得原样出现在可执行形态（<script> 被剥离后编码）
   assert.ok(!html.includes('<script>'));
-  assert.ok(html.includes('data-machine-svg-overlays')); // units 已知 → 几何叠加层渲染
+  assert.ok(html.includes('data-machine-svg-overlays'));
   assert.ok(html.includes('data-machine-svg-mode="onion"'));
   assert.ok(html.includes('data-machine-svg-mode="swipe"'));
   assert.ok(html.includes('叠影'));
   assert.ok(html.includes('擦除'));
-  // 改动清单含三类徽标
   assert.ok(html.includes('[修改]'));
   assert.ok(html.includes('[新增]'));
   assert.ok(html.includes('data-machine-svg-changes'));
@@ -140,7 +132,7 @@ test('表格面板：变化格高亮/数值 Δ chip/增删行徽标/汇总 chips
   );
   assert.ok(html.includes('data-machine-table-diff'));
   assert.ok(html.includes('data-machine-table-cell-changed'));
-  assert.ok(html.includes('data-machine-table-delta')); // Δ+50
+  assert.ok(html.includes('data-machine-table-delta'));
   assert.ok(html.includes('Δ+50'));
   assert.ok(html.includes('data-machine-table-row="added"'));
   assert.ok(html.includes('data-machine-table-row="removed"'));

@@ -38,7 +38,6 @@ use crate::watcher::{self, WatchBaseline, WatcherHandle};
 
 const REGISTRY_FILE: &str = "projects.json";
 const REGISTRY_VERSION: i64 = 1;
-/// 后台非激活项目的只读连接池大小（保持轻内存占用；激活项目沿用 pool_size_from_env）
 const BACKGROUND_POOL_SIZE: usize = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,13 +76,12 @@ pub struct ProjectRuntime {
     pub jobs: IndexJobManager,
     pub watcher: Option<WatcherHandle>,
     pub mounts: Arc<MountRegistry>,
-    /// 目录清单缓存（枚举 `read_dir` 整棵树，不能放进只读查询体）
     folders: crate::folders::FolderInventoryCache,
     owned: Mutex<OwnedRuntimeResources>,
 }
 
 impl ProjectRuntime {
-    #[allow(clippy::too_many_arguments)] // 运行期装配参数，逐项拆包会引入无谓的中间结构
+    #[allow(clippy::too_many_arguments)]
     pub fn from_existing(
         project_id: String,
         root_path: String,
@@ -164,15 +162,12 @@ impl ProjectRuntime {
 #[derive(Clone)]
 struct ProjectSlot {
     project_id: String,
-    /// 规范化展示与互斥路径（plain() 语义）
     root_path: String,
-    /// 原始路径（与 Writer/ReadonlyStore 身份口径一致）
     raw_root: String,
     name: String,
     readonly: bool,
     added_at: String,
     last_opened_at: String,
-    /// ready | offline | root_in_use | error
     status: String,
     error: Option<String>,
     runtime: Option<Arc<ProjectRuntime>>,
@@ -266,7 +261,6 @@ impl ProjectHub {
         let primary_id = primary_runtime.project_id.clone();
         let primary_norm = primary_runtime.root_path.clone();
 
-        // 读取已持久化的项目清单（损坏/缺失按空表起步，绝不阻断服务启动）
         let persisted = registry_path
             .as_deref()
             .and_then(read_registry_file)
@@ -276,7 +270,6 @@ impl ProjectHub {
                 projects: Vec::new(),
             });
 
-        // 查找主项目是否已在历史清单中（保留用户自定义别名与只读设置）
         let primary_saved = persisted.projects.iter().find(|p| {
             p.project_id == primary_id
                 || path_relation(&p.root_path, &primary_norm) == PathRelation::Equal
@@ -301,7 +294,6 @@ impl ProjectHub {
 
         let mut initial_slots = vec![primary_slot];
 
-        // 逐条恢复历史登记的其他项目（父子冲突跳过、打不开降级离线，绝不拖垮主服务）
         for saved in persisted.projects {
             if saved.project_id == primary_id
                 || path_relation(&saved.root_path, &primary_norm) == PathRelation::Equal
@@ -365,7 +357,6 @@ impl ProjectHub {
             active_id: RwLock::new(primary_id),
             slots: Mutex::new(initial_slots),
         });
-        // 若已有历史 projects.json，同步写回最新 last_opened_at 与主项目记录
         if hub.registry_path.as_deref().is_some_and(|p| p.exists()) {
             hub.persist_registry();
         }
@@ -472,7 +463,6 @@ impl ProjectHub {
         }
         let target_id = guanlan_core::domain::root_key_of(&normalized)?;
 
-        // 1) 父子互斥与重复校验（Quiet.md 外挂目录隔离纪律）
         {
             let slots = self.slots.lock().expect("项目表锁");
             for existing in slots.iter() {
@@ -502,7 +492,6 @@ impl ProjectHub {
             }
         }
 
-        // 2) 初始化并启动独立运行时（若尚无 index.db 会自动创建并立即入队 VerifyAll）
         let runtime = open_secondary_project_runtime(
             &normalized,
             self.background_index,
@@ -543,7 +532,6 @@ impl ProjectHub {
 
         let duplicate = {
             let mut slots = self.slots.lock().expect("项目表锁");
-            // 并发添加二次去重保护
             if slots.iter().any(|s| s.project_id == created_id) {
                 true
             } else {
@@ -584,7 +572,6 @@ impl ProjectHub {
         &self,
         project_id: &str,
     ) -> Result<ProjectMutationResponse, GuanlanError> {
-        // 先检查是否存在以及是否需要重连离线项目
         let need_reopen: Option<(String, bool)> = {
             let slots = self.slots.lock().expect("项目表锁");
             let slot = slots
@@ -722,7 +709,6 @@ impl ProjectHub {
             }
             let active = self.active_project_id();
             if active == project_id {
-                // 优先切到下一个在线项目；若其余均离线则拒绝移除最后一个在线主区
                 let fallback = slots
                     .iter()
                     .find(|s| s.project_id != project_id && s.runtime.is_some())
@@ -799,7 +785,6 @@ impl ProjectHub {
         } else {
             slot.status.clone()
         };
-        // 目录清单在只读查询体之外取：read_dir 整棵树不能占着连接池
         let listing = tokio::task::spawn_blocking({
             let rt = Arc::clone(&rt);
             move || rt.folder_listing()
@@ -855,7 +840,6 @@ impl ProjectHub {
             }
         }
 
-        // 决策排序：来源不一致优先 → 最近观测时间降序
         all_decisions.sort_by(|a, b| {
             let rank = |s: &str| if s == "来源不一致" { 0u8 } else { 1u8 };
             rank(&a.status)
@@ -864,7 +848,6 @@ impl ProjectHub {
         });
         all_decisions.truncate(20);
 
-        // 近期文档按观测时间降序
         all_recent.sort_by(|a, b| b.observed_at.cmp(&a.observed_at));
         all_recent.truncate(16);
 
@@ -1067,7 +1050,6 @@ async fn build_project_entry(slot: &ProjectSlot, is_active: bool) -> ProjectEntr
     };
 
     let is_scanning = rt.jobs.has_active();
-    // 目录清单在查询体之外取（缓存内的 read_dir 不占只读连接）
     let folder_count = tokio::task::spawn_blocking({
         let rt = Arc::clone(rt);
         move || rt.folder_listing().folders.len() as u64
@@ -1122,7 +1104,6 @@ async fn build_project_entry(slot: &ProjectSlot, is_active: bool) -> ProjectEntr
     }
 }
 
-/// 打开并启动一个附加项目的隔离运行时（自动建库 + 轻量读池 + 可选 watcher + 首次扫描）
 async fn open_secondary_project_runtime(
     root_path: &str,
     background_index: bool,
@@ -1132,7 +1113,6 @@ async fn open_secondary_project_runtime(
     let root_owned = root_path.to_owned();
     let notices_for_blocking = notices.clone();
 
-    // 同步 IO（目录检测 / 排他锁 / SQLite 开库 / 读连接池）放入阻塞线程池
     let opened = tokio::task::spawn_blocking(move || {
         if !Path::new(&root_owned).is_dir() {
             return Err((
@@ -1248,7 +1228,6 @@ async fn open_secondary_project_runtime(
         )
     });
 
-    // 首次接入的新目录（尚无扫描记录）或显式触发时，立刻后台入队一次整库扫描
     if trigger_initial_scan || needs_first_scan || background_index {
         let _ = jobs.submit_kind(JobKind::VerifyAll);
     }
@@ -1374,7 +1353,6 @@ mod multi_project_tests {
         )
         .expect("write gamma");
 
-        // 启动主项目 Alpha（并绑定独立 projects.json 隔离真实用户配置）
         let raw_a = proj_a.to_string_lossy().into_owned();
         let data_a = default_data_dir(&raw_a).expect("data_a");
         let norm_a = normalize_mount_root(&raw_a).expect("norm_a");
@@ -1419,13 +1397,11 @@ mod multi_project_tests {
             projects: Some(Arc::clone(&hub)),
         });
 
-        // 1) 初始列表恰有 Alpha
         let (st, list1) = json_req(&app, "GET", "/api/v1/projects", None).await;
         assert_eq!(st, StatusCode::OK);
         assert_eq!(list1["projects"].as_array().unwrap().len(), 1);
         assert_eq!(list1["active_project_id"].as_str().unwrap(), id_a);
 
-        // 2) 父子嵌套与重复添加被确定性拦截（409 MOUNT_REJECTED / CONFLICT）
         let (st_child, err_child) = json_req(
             &app,
             "POST",
@@ -1446,7 +1422,6 @@ mod multi_project_tests {
         assert_eq!(st_dup, StatusCode::CONFLICT);
         assert_eq!(err_dup["code"], "CONFLICT");
 
-        // 3) 添加全新未扫描的 Beta（读写）与 Gamma（只读保护）
         let (st_b, res_b) = json_req(
             &app,
             "POST",
@@ -1477,7 +1452,6 @@ mod multi_project_tests {
         assert_eq!(st_c, StatusCode::OK, "add gamma: {res_c}");
         let id_c = res_c["project"]["project_id"].as_str().unwrap().to_owned();
 
-        // 等待 Beta/Gamma 首次自动扫描完成
         for _ in 0..40 {
             let (_, tree_b) =
                 json_req(&app, "GET", &format!("/api/v1/projects/{id_b}/tree"), None).await;
@@ -1491,7 +1465,6 @@ mod multi_project_tests {
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
 
-        // 4) 非激活项目 Beta 目录树包含真实空目录 empty_blueprint 及已索引文件
         let (st_tb, tree_b) =
             json_req(&app, "GET", &format!("/api/v1/projects/{id_b}/tree"), None).await;
         assert_eq!(st_tb, StatusCode::OK);
@@ -1507,7 +1480,6 @@ mod multi_project_tests {
         );
         assert!(!tree_b["files"].as_array().unwrap().is_empty());
 
-        // 5) 在非激活项目 Beta 原地新建文件夹与 Markdown 文档
         let (st_mk, mk_json) = json_req(
             &app,
             "POST",
@@ -1528,7 +1500,6 @@ mod multi_project_tests {
         assert_eq!(st_doc, StatusCode::OK, "create doc in beta: {doc_json}");
         assert!(proj_b.join("inbox").join("kickoff.md").is_file());
 
-        // 6) 只读归档项目 Gamma 拒绝写入（403 CROSS_WORKSPACE_FORBIDDEN）
         let (st_ro, ro_json) = json_req(
             &app,
             "POST",
@@ -1539,7 +1510,6 @@ mod multi_project_tests {
         assert_eq!(st_ro, StatusCode::FORBIDDEN);
         assert_eq!(ro_json["code"], "CROSS_WORKSPACE_FORBIDDEN");
 
-        // 7) 跨项目总览与跨项目搜索同时覆盖三项目
         let (st_ov, ov) = json_req(&app, "GET", "/api/v1/projects/overview", None).await;
         assert_eq!(st_ov, StatusCode::OK);
         assert_eq!(ov["total_projects"], 3);
@@ -1558,7 +1528,6 @@ mod multi_project_tests {
             "跨项目搜索应命中 Beta: {sq}"
         );
 
-        // 8) 零重启激活切换到 Beta → /api/v1/folders 与 /api/v1/bootstrap 立即指向 Beta
         let (st_act, act) = json_req(
             &app,
             "POST",
@@ -1582,7 +1551,6 @@ mod multi_project_tests {
             "{af:?}"
         );
 
-        // 9) 移除 Gamma：列表缩为 2 项，且磁盘文件完好无损
         let (st_rm, rm_list) =
             json_req(&app, "DELETE", &format!("/api/v1/projects/{id_c}"), None).await;
         assert_eq!(st_rm, StatusCode::OK);

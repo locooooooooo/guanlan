@@ -1,9 +1,3 @@
-/**
- * 预览缓存状态纪律与字节预算单测：
- * - 区分未加载 / 已加载为空 / 预览就绪，未加载不产生终态缓存命中；
- * - 同版本正文补齐后 MD/SVG 预览及时更新（此前空对象缓存阻止补齐）；
- * - 有效缓存继续 O(1) 复用；字节预算逐出按 LRU；条数上限保留。
- */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
@@ -46,16 +40,13 @@ function fileOf(format: FileRecord['format'], revisions: Revision[]): FileRecord
 
 test('SVG 未加载不落缓存：占位版本行先到不产生终态命中，正文补齐后立即派生', () => {
   clearFilePreviewCacheForTest();
-  // 摘要分页占位：无 svgSource（正文未取回）
   const placeholder = revision({ revision_id: 'rev_svg1', sizeBytes: 0, content_sha256: '' });
   const file = fileOf('svg', [placeholder]);
 
   const first = getFilePreviewEntry(file);
   assert.equal(first.svgDataUri, undefined);
-  // 关键断言：未加载不写缓存（此前缓存空对象 → 同版本补齐后仍命中空对象）
   assert.equal(filePreviewCacheStatsForTest().entries, 0);
 
-  // 同版本正文补齐（App.ensureRevisionContent 并入 svgSource 后的同一 FileRecord）
   const loaded: FileRecord = {
     ...file,
     revisions: [revision({ revision_id: 'rev_svg1', svgSource: '<svg><text>封面</text></svg>' })],
@@ -65,7 +56,6 @@ test('SVG 未加载不落缓存：占位版本行先到不产生终态命中，�
   assert.match(second.svgDataUri ?? '', /^data:image\/svg\+xml/);
   assert.equal(filePreviewCacheStatsForTest().entries, 1);
 
-  // 有效缓存继续复用（同键 O(1) 命中）
   const third = getFilePreviewEntry(loaded);
   assert.equal(third.svgDataUri, second.svgDataUri);
   assert.equal(filePreviewCacheStatsForTest().entries, 1);
@@ -88,7 +78,6 @@ test('MD 同版本正文补齐后 bodyPreview 及时出现；已加载为空为 
   assert.equal(entry.state, 'ready');
   assert.deepEqual(entry.bodyPreview, ['标题', '第一行。', '第二行。']);
 
-  // 已加载为空（正文确实为空内容，独立版本键）：unavailable 终态，缓存生效但不冒充有预览
   const emptyLoaded: FileRecord = {
     ...file,
     revisions: [revision({ revision_id: 'rev_md_empty', markdownContent: '' })],
@@ -111,7 +100,6 @@ test('PDF 恒可判定：首页抽取文字缺失时给元数据占位词，缓�
 
 test('字节预算：大 dataUri 超预算按 LRU 逐最旧，总量回到预算内', () => {
   clearFilePreviewCacheForTest();
-  // 构造大 SVG 源（约 2MB 编码后）塞 20 条 → 超出 24MiB 预算触发逐出
   const bigSource = `<svg>${'<text>字'.repeat(1024 * 1024)}</svg>`;
   for (let i = 0; i < 20; i++) {
     const rid = `rev_big_${i}`;
@@ -121,7 +109,6 @@ test('字节预算：大 dataUri 超预算按 LRU 逐最旧，总量回到预算
   }
   const stats = filePreviewCacheStatsForTest();
   assert.equal(stats.totalBytes <= 24 * 1024 * 1024, true);
-  // 条数上限同样生效
   assert.equal(stats.entries <= 2048, true);
 });
 
@@ -144,7 +131,6 @@ test('markdownBodyPreview 剥离口径回归（迁移自 graphEvents 原实现�
   );
 });
 
-/* ═══ 有界内存：离屏 30s 回收 ═══ */
 
 test('离屏 30s 回收：超时未消费的条目在下次访问时逐出，正在消费的条目永不回收', () => {
   clearFilePreviewCacheForTest();
@@ -152,21 +138,18 @@ test('离屏 30s 回收：超时未消费的条目在下次访问时逐出，正
   setFilePreviewClockForTest(() => clock);
   try {
     const mk = (rid: string) => fileOf('pdf', [revision({ revision_id: rid })]);
-    // 三条就绪条目（pdf 恒可判定，无需正文加载）
     getFilePreviewEntry(mk('rev_a'));
     getFilePreviewEntry(mk('rev_b'));
     getFilePreviewEntry(mk('rev_c'));
     assert.equal(filePreviewCacheStatsForTest().entries, 3);
 
-    // 时间推进 29s：仍在离屏窗口内 → 回访 a 命中（且刷新 a 的 lastAccessAt）
     clock += 29_000;
     const a = getFilePreviewEntry(mk('rev_a'));
     assert.equal(a.state, 'ready');
     assert.equal(filePreviewCacheStatsForTest().entries, 3);
 
-    // 时间推进 31s（b/c 上次消费距今 >30s，a 刚被续期）→ 下次访问（任意键）触发清扫
     clock += 31_000;
-    getFilePreviewEntry(mk('rev_a')); // preserveKey=a：a 不自逐，b/c 被回收
+    getFilePreviewEntry(mk('rev_a'));
     const stats = filePreviewCacheStatsForTest();
     assert.equal(stats.entries, 1, 'b/c 超时被回收，仅 a（刚续期）保留');
     assert.equal(stats.totalBytes <= 24 * 1024 * 1024, true);
@@ -181,7 +164,6 @@ test('离屏回收与 LRU 预算并存：回收不复活超预算逐出，消费
   let clock = 2_000_000;
   setFilePreviewClockForTest(() => clock);
   try {
-    // 大 SVG 条目：单条编码后约 1.1MB，12 条 ≈ 13MB 预算内驻留（既验证 LRU 又验证清扫）
     const bigSource = `<svg>${'<text>字'.repeat(64 * 1024)}</svg>`;
     for (let i = 0; i < 12; i++) {
       const f = fileOf('svg', [revision({ revision_id: `rev_h_${i}`, svgSource: bigSource })]);
@@ -191,7 +173,6 @@ test('离屏回收与 LRU 预算并存：回收不复活超预算逐出，消费
     const hotStats = filePreviewCacheStatsForTest();
     assert.ok(hotStats.entries >= 2 && hotStats.totalBytes <= 24 * 1024 * 1024, '预算内驻留');
 
-    // 时间推进 31s（全部离屏）→ 任一访问清扫全部离屏条目
     clock += 31_000;
     const f0 = fileOf('svg', [revision({ revision_id: 'rev_h_0', svgSource: bigSource })]);
     (f0 as { file_id: string }).file_id = 'f_h_0';

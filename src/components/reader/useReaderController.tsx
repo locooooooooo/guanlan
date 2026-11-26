@@ -1,13 +1,3 @@
-/**
- * ReaderView 行为控制器：
- * 集中管理阅读器的 state / memo / effect / handler 与渲染期闭包（renderMarkdownBlock 等
- * 行模型 → JSX 函数）。单一行为出口 useReaderController(props) 返回 ctx，供分节渲染层消费：
- *  - reader/readerChromeSections.tsx（新版本告警与单行文件头）
- *  - reader/readerDiffSection.tsx（diff 子模式面板）
- *  - reader/readerRelationsSection.tsx（关系子模式面板）
- *  - reader/readerMarkdownSection.tsx（MD 阅读纸与决策动作条）
- *  - reader/readerSvgPdfSections.tsx（SVG / PDF 格式渲染层）
- */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
@@ -27,11 +17,8 @@ import {
   hasUnreadChanges,
   parseMarkdownOutline,
 } from '../../utils/guanlanEngine';
-// 语义聚合层纯函数（任务包 / 五阶段）：所属专项 Stepper 数据来源于此
 import { groupFilesIntoPackages, stageOfPath } from '../../utils/taskPackages';
 import type { PackageDoc, StageRole, TaskPackage } from '../../utils/taskPackages';
-// 统一状态投影：版本「（最新）」后缀词单一出口；文档顶栏与所属专项详情
-// 消费 /state-overview 六态投影（服务端优先，无行回退既有词）。
 import {
   artifactStateOf,
   docStatePillClass,
@@ -41,14 +28,12 @@ import {
   projectInitiativeState,
   revisionVersionLabel,
 } from '../../utils/stateProjection';
-// 首屏渲染预算：正文读取与 shell 解耦；300ms 预算测量/告警（纯函数可单测）
 import {
   READER_FIRST_SCREEN_BUDGET_MS,
   readerFirstScreenNowMs,
   recordReaderFirstScreenSample,
   resolveReaderBodyPhase,
 } from '../../utils/readerFirstScreen';
-// 版本正文统一仓库：与 App/diff 共享请求协调、字节预算与 pin
 import {
   getRevisionContent,
   pinRevisionContent,
@@ -67,8 +52,6 @@ import {
   type JobReportWriteback,
 } from '../../services/workspaceClient';
 import { copyTextWithDesktopFallback } from '../../services/desktopBridge';
-// Inline 拍板闭环：卡点块解析（[P0/P1/P2 - 待确认]）与原位拍板表单；
-// .md 占位符替换由后端拍板 job 完成，本层只组装载荷与展示结果
 import {
   buildDecisionResolvePayload,
   extractDecisionOptions,
@@ -81,7 +64,6 @@ import {
 import DecisionResolveCard from '../DecisionResolveCard';
 import type { StatementDetailDTO, StateOverviewResponse } from '../../services/apiTypes';
 import { useReaderRender } from './readerRender';
-// observed_at 相对时间（「X 分钟前/今天 HH:mm」），单一事实源在 utils/timeFormat.ts
 import { formatRelativeObservedAt } from '../../utils/timeFormat';
 import { FileSystemActionBar, type DesktopFileActionCallbacks } from '../FileContextMenu';
 import {
@@ -100,8 +82,6 @@ import {
   saveDecisionReceiptSnapshot,
   type DecisionFormItem,
 } from './readerDecisionModel';
-// 阅读器锚点批注层：本地独立证据表（按版本哈希绑定）+ 决定项插入文本 +
-// 框选区域几何。读写全部纯函数/薄壳，批注绝不改写用户原始 SVG/PDF 字节。
 import {
   annotationsOfVersion,
   buildDecisionBlockInsertion,
@@ -124,8 +104,6 @@ import {
   type MarkdownBlock,
   type MarkdownLinkIndex,
 } from './readerMarkdownModel';
-// 阅读器 chrome 纯函数层（进度光条换算 / 迷你版本轴映射 / Zen 状态机）。
-// 纯函数住在 chrome 分节文件里（渲染层与行为层共用单一出处），本文件只消费不重算。
 import {
   buildMiniVersionAxis,
   canOpenTimeMachine,
@@ -136,7 +114,6 @@ import {
   type ZenToggleTrigger,
 } from './readerChromeSections';
 import type { ReaderSubMode } from './readerShared';
-// 全局快捷键纪律：编辑面一切键让路 + 浮层内键归浮层自己（只读引用，不改判定口径）
 import {
   hasBlockingDomOverlay,
   isEditableLikeTarget,
@@ -145,14 +122,9 @@ import { getResolvedAppTheme, subscribeAppTheme } from '../../stores/appThemeSto
 
 export interface ReaderViewProps {
   sourceLine?: number;
-  /** 从决定证据或 Markdown `#Sheet!Range` / `#para=N` 跳入 Office 文档时的精确结构化锚点 */
   officeAnchor?: OfficeEvidenceAnchor | null;
-  /** 从决定证据或 Markdown `#page=N` 跳入 PDF 时的精确页码锚点（1-based） */
   pdfAnchor?: PdfEvidenceAnchor | null;
-  /** 「继续阅读」定位目标——上次读到的章节标题（ReadingState.last_section_id） */
   focusSectionId?: string;
-  /** 「继续阅读」的读行恢复——上次离开时的滚动百分比基线。定位时经大纲反查该行，
-   *  章节名找不到/删节时安静留在定位点，不二次猜测；为 0/NaN/缺失时不干扰既有章节定位。 */
   openToScrollPercent?: number;
   files: FileRecord[];
   activeFile: FileRecord;
@@ -164,7 +136,6 @@ export interface ReaderViewProps {
   onMarkReadHere: (fileId: string, revisionId: string, sectionId?: string) => void;
   onMarkFullyRead: (fileId: string, revisionId: string) => void;
   onMarkUnread?: (fileId: string) => void;
-  /** 阅读器真实滚动发生的回调——把换算后的滚动百分比回传，父级持久化到 ReadingState.scrollPercent */
   onScrollProgress: (fileId: string, scrollPercent: number) => void;
   onToggleBookmark: (fileId: string) => void;
   onNavigateLinkedFile: (
@@ -180,28 +151,17 @@ export interface ReaderViewProps {
   onSelectDecision: (decisionId: string) => void;
   onAddEvidencePointer: (pointer: EvidencePointer) => void;
   indexGeneration: number;
-  /** App 级 /state-overview 唯一数据源。 */
   stateOverview?: StateOverviewResponse | null;
-  /** 所属专项上下文（可选）。 */
   packageContext?: TaskPackage | null;
-  /** 右上角 ⓘ「溯源与关联」入口的开合状态——显隐 state 归 App 级。 */
   inspectorOpen?: boolean;
   onToggleInspector?: () => void;
-  /** 专注纸面（Zen）状态变化通知——App 层据此收起/恢复左右侧栏。 */
   onZenModeChange?: (zenMode: boolean) => void;
-  /** 直达「版本时光机」画布——只做视图跳转，不改任何只读语义。 */
   onOpenTimeMachine?: () => void;
-  /**
-   * 阅读中的新事件提示。并入文件头指挥条，不再另起通栏。
-   * 缺省不渲染；暂收状态由文件头自己记住，不回写全景页的横幅。
-   */
   readingNotice?: { count: number; at: string } | null;
   onSilentMergeNotice?: () => void;
   silentMergingNotice?: boolean;
   onRefreshNoticeWindow?: () => void;
-  /** 决策回执（可选）：把已勾选决策/填空加入证据篮。 */
   onAddDecisionToBasket?: (payload: import('./readerDecisionModel').DecisionReceiptBasketPayload) => void;
-  /** Inline 拍板闭环：拍板回写成功后回调。 */
   onDecisionResolved?: (payload: {
     decisionId: string;
     statementId: string;
@@ -213,9 +173,7 @@ export interface ReaderViewProps {
     lineStart?: number;
     lineEnd?: number;
   }) => void;
-  /** 当前文档阻塞性事项（P0/P1）全部拍板清零——App 渲染长任务恢复横幅。 */
   onBlockingCleared?: (payload: { fileId: string }) => void;
-  /** 桌面文件操作回调：资源管理器定位 / 默认应用打开 / 复制路径 / 右键菜单 */
   systemActions?: DesktopFileActionCallbacks;
 }
 
@@ -246,25 +204,20 @@ export function useReaderController({
   onAddEvidencePointer,
   indexGeneration,
   packageContext,
-  // 右侧「溯源与关联」检查器开合（App 级 RightInspector 显隐）；缺省收起保证组件独立可渲染
   inspectorOpen = false,
   onToggleInspector = () => {},
-  // 专注纸面（Zen）状态通知 + 直达版本时光机（可选；未传则对应入口无操作）
   onZenModeChange,
   onOpenTimeMachine,
   readingNotice = null,
   onSilentMergeNotice,
   silentMergingNotice = false,
   onRefreshNoticeWindow,
-  // 决策回执：证据篮回调可选——未传只隐藏「加入证据篮」按钮，其余功能完整
   onAddDecisionToBasket,
-  // Inline 拍板闭环：回调可选——未传只更新本组件内状态
   onDecisionResolved,
   onBlockingCleared,
   stateOverview,
   systemActions,
 }: ReaderViewProps) {
-  // 长文阅读支持纸面浅色与深色中性模式，随全站主题平滑衔接并保留阅读器顶栏独立切换权
   const [paperLightMode, setPaperLightMode] = useState<boolean>(
     () => getResolvedAppTheme() !== 'dark'
   );
@@ -275,13 +228,9 @@ export function useReaderController({
   }, []);
   const [showLineNumbers, setShowLineNumbers] = useState<boolean>(false);
   const [activeSectionId, setActiveSectionId] = useState<string>('');
-  // 提要条折叠态（默认收起，仅控制显隐）
   const [calloutsCollapsed, setCalloutsCollapsed] = useState<boolean>(true);
-  // 章节大纲侧栏开合态——默认收起，避免窄屏下挤压正文行宽；可经「大纲」按钮一键开合
   const [outlineOpen, setOutlineOpen] = useState<boolean>(false);
-  // 溯源明细已收敛至 App 级 RightInspector（右侧滑出面板），开合状态经 inspectorOpen/onToggleInspector 传入
   const [diffLayout, setDiffLayout] = useState<'split' | 'unified'>('split');
-  // 顶栏文件操作收拢为「⋯」轻浮层，避免 7 枚系统操作按钮另占整行挤压正文首屏
   const [fileActionsOpen, setFileActionsOpen] = useState(false);
   const fileActionsRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -308,16 +257,11 @@ export function useReaderController({
     };
   }, [fileActionsOpen]);
 
-  // ── 专注纸面（Zen）───────────────────────────────────────────────────────
-  // 状态归阅读器控制器（唯一行为出口）；App 层只负责「收起/恢复左右侧栏」这一外部动作
-  // （onZenModeChange 回调），两侧状态由本层单向驱动，避免壳层与阅读面各记一份。
   const [zenMode, setZenMode] = useState<boolean>(false);
   const zenNotifyRef = useRef<((zen: boolean) => void) | undefined>(onZenModeChange);
   useEffect(() => {
     zenNotifyRef.current = onZenModeChange;
   }, [onZenModeChange]);
-  // 阅读器卸载（切概览/切 tab）时若仍处 Zen 态，通知壳层恢复左右侧栏——
-  // 否则左栏会永久停在收起态（壳层与阅读面状态脱钩）。
   useEffect(
     () => () => {
       zenNotifyRef.current?.(false);
@@ -325,7 +269,6 @@ export function useReaderController({
     []
   );
 
-  /** Zen 切换唯一入口：判定走 resolveZenToggle 纯函数（按钮恒切；快捷键按护栏让路）。 */
   const zenStateRef = useRef<{ zenMode: boolean; subMode: ReaderSubMode }>({
     zenMode: false,
     subMode: 'read',
@@ -348,9 +291,6 @@ export function useReaderController({
     return result;
   };
 
-  // 快捷键：Z 切换专注纸面（阅读器域内快捷键，与全局 J/K/H/L/D/C 正交；
-  // 编辑面 / 浮层打开 / 非阅读态一律让路——判定口径与全局快捷键同源）。
-  // 监听只注册一次：最新态经 zenStateRef 读取（避免每帧重挂监听）。
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'z' && event.key !== 'Z') return;
@@ -363,17 +303,12 @@ export function useReaderController({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- toggleZen 经 ref 读最新态
   }, []);
 
-  // ── 文档迷你版本轴（点版本胶囊展开的玻璃微型修订链）────────────────────────
   const [versionAxisOpen, setVersionAxisOpen] = useState(false);
   useEffect(() => {
     setVersionAxisOpen(false);
   }, [activeFile.file_id]);
-  // Esc / outside-click 关闭迷你版本轴（与文件操作菜单同级守卫）：
-  // 弹层锚在 header 根节点下（避让 Row2），触发器在元信息行——两处均以
-  // data-reader-version-axis* 属性识别，命中其一不关，其余点击一律收口。
   useEffect(() => {
     if (!versionAxisOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -399,7 +334,6 @@ export function useReaderController({
     };
   }, [versionAxisOpen]);
 
-  // Custom revision comparison selectors
   const defaultFromRev =
     readingState?.last_read_revision_id &&
     readingState.last_read_revision_id !== activeFile.current_revision_id
@@ -408,22 +342,14 @@ export function useReaderController({
   const [customFromRevId, setCustomFromRevId] = useState<string>(defaultFromRev);
   const [customToRevId, setCustomToRevId] = useState<string>(activeFile.current_revision_id);
 
-  // SVG 阅读器控制项
   const [svgZoom, setSvgZoom] = useState<number>(100);
   const [svgFullWidth, setSvgFullWidth] = useState<boolean>(false);
   const [showSvgSourceDiff, setShowSvgSourceDiff] = useState<boolean>(false);
-  // SVG 可提取文字检索层默认折叠，点击展开文字气泡列表
   const [svgTextsExpanded, setSvgTextsExpanded] = useState<boolean>(false);
 
-  // PDF 阅读器控制项
   const [activePdfPage, setActivePdfPage] = useState<number>(1);
-  // PDF 双视图模式——raw=原版版式（iframe）；structured=页级文本（/pdf 端点结构化视图）
   const [pdfViewMode, setPdfViewMode] = useState<'raw' | 'structured'>('raw');
 
-  // ── 2px 琉璃阅读进度光条（命令式直写）────────────────────────────────────
-  // 光条只动 transform（scaleX，GPU 合成器无重排）；数据源唯一＝下方 handleMarkdownScroll
-  // 已算好的 pct——禁在滚动事件里另起第二套换算口径（防两套口径漂移）。
-  // 采用命令式直写（不进 React state）：滚动期零重渲染，长文档不掉帧。
   const readerProgressBarRef = useRef<HTMLDivElement | null>(null);
   const readerProgressTrackRef = useRef<HTMLDivElement | null>(null);
   const readingProgressRef = useRef<number>(0);
@@ -440,19 +366,12 @@ export function useReaderController({
     }
   }, []);
 
-  // 切换文件时重置随文件变化的状态：旧文件的 revision_id / 章节定位 / PDF 页码不能带入新文件
-  // （否则「历史快照对比」会拿上一个文件的版本号对新文件做 diff，得到 NOT_FOUND 错误态）
   useEffect(() => {
     setActiveSectionId('');
     setActivePdfPage(1);
-    // 换文档滚动复位：切文件时把阅读纸滚回文首——
-    // 阅读纸容器跨文件常驻保活，不复位则新文档停在旧文档的滚动深度。
-    // 本 effect 先于「继续阅读」恢复链路（openToScrollPercent / focusSectionId 的
-    // effect 声明在后、经 rAF 定位），纯换文档复位不覆盖续读定位。
     if (markdownScrollRef.current) {
       markdownScrollRef.current.scrollTop = 0;
     }
-    // 换文档时将阅读进度归零（光条与纸面滚动同源，不残留上一份文档的进度）
     applyReadingProgress(0);
     setCustomToRevId(activeFile.current_revision_id);
     setCustomFromRevId(
@@ -461,14 +380,8 @@ export function useReaderController({
         ? readingState.last_read_revision_id
         : activeFile.revisions[0]?.revision_id || activeFile.current_revision_id
     );
-    // 仅在切换文件时重置：阅读状态更新不应打断用户正在进行的版本选择
   }, [activeFile.file_id, applyReadingProgress]);
 
-  // ── 锚点反向定位闪烁（决定/批注跳转到达信号）──────────────────────────────
-  // 到达即闪两轮琥珀描边（.glx-anchor-flash，CSS 动画），2.2s 后自动摘除——
-  // 残影不落 DOM：flash 为 null 时各消费面不渲染任何闪烁属性/类名。
-  // MD 行由 wrapLine 消费 flashSourceLine（含就近回退落点）、PDF 页由
-  // ReaderPdfSection 页级容器消费 flashPdfPage、SVG/PDF 批注条目由 anchorFlash.annotationId 消费。
   const [anchorFlash, setAnchorFlash] = useState<{
     kind: 'md' | 'pdf' | 'svg';
     line?: number;
@@ -495,18 +408,14 @@ export function useReaderController({
     anchorFlash?.kind === 'pdf' && anchorFlash.page ? anchorFlash.page : undefined;
   const flashAnnotationId = anchorFlash?.annotationId ?? null;
 
-  // 决定/Markdown 证据传入 pdfAnchor 时：自动切到页级文本视图并跳到目标页，
-  // 到达即对页级容器闪两轮琥珀描边（anchorFlash，2.2s 自动摘除）作为定位到达信号。
   useEffect(() => {
     if (pdfAnchor?.kind === 'pdf_page' && pdfAnchor.page > 0) {
       setPdfViewMode('structured');
       setActivePdfPage(pdfAnchor.page);
       flashAnchor({ kind: 'pdf', page: pdfAnchor.page });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- flashAnchor 经 ref 稳定
   }, [pdfAnchor]);
 
-  // 局部关系图跳数控制（1-Hop / 2-Hop）
   const [graphHopDepth, setGraphHopDepth] = useState<1 | 2>(1);
 
   const currentRev =
@@ -522,9 +431,6 @@ export function useReaderController({
   const unreadStatus = hasUnreadChanges(activeFile, readingState);
   const rollbackInfo = detectRollbackRevision(activeFile.revisions, currentRev.revision_id);
 
-  // ── 文档迷你版本轴（修订链序 vN → … → v1）─────────────────────────────────
-  // 数据源＝文件自带版本集（activeFile.revisions）；映射走 chrome 纯函数层，
-  // 与版本时光机「按修订链」同一叙事（绝不改按日期排序）。
   const miniVersionAxis: MiniVersionAxisNode[] = useMemo(
     () =>
       buildMiniVersionAxis(
@@ -535,17 +441,14 @@ export function useReaderController({
     [activeFile.revisions, currentRev.revision_id, latestRev.revision_id]
   );
 
-  /** 该文档格式是否可直达「版本时光机」（非时光机格式不显示该入口，不做假入口）。 */
   const canOpenTimeMachineNow = canOpenTimeMachine(activeFile.format);
 
-  /** 迷你版本轴·切版：把阅读器钉到该版本（只读呈现，不改未读基线）。 */
   const selectMiniVersion = (revisionId: string) => {
     if (!revisionId) return;
     onChangeRevision(revisionId);
     setVersionAxisOpen(false);
   };
 
-  /** 迷你版本轴·一键切版比对：以当前阅读版为基准、该版为目标，进入历史快照对比。 */
   const compareMiniVersion = (revisionId: string) => {
     if (!revisionId) return;
     setCustomFromRevId(currentRev.revision_id);
@@ -554,14 +457,11 @@ export function useReaderController({
     setVersionAxisOpen(false);
   };
 
-  /** 迷你版本轴·进入版本时光机：只做视图跳转，不改任何只读语义。 */
   const openVersionTimeMachine = () => {
     setVersionAxisOpen(false);
     onOpenTimeMachine?.();
   };
 
-  // 首屏渲染计时起点——按 screenKey（文件 + 钉住版本）变更重置；shell
-  // 提交后由下方 effect 记录耗时。ref 只作测量戳，不参与渲染输出、不触发重渲染。
   const firstScreenKey = `${activeFile.file_id}::${currentRev.revision_id}`;
   const firstScreenStartRef = useRef<{ key: string; start: number } | null>(null);
   const firstScreenRecordedRef = useRef<string | null>(null);
@@ -571,9 +471,6 @@ export function useReaderController({
     firstScreenRecordedRef.current = null;
   }
 
-  // 所属专项上下文——经 taskPackages 现算 activeFile 归属包。
-  // packageContext 未传 → 不渲染；传入的包不含 activeFile 时
-  // （用户在专项间跳转）经 groupFilesIntoPackages(files) 重算真实归属包；未命中 → 不渲染。
   const activePackage = useMemo<TaskPackage | null>(() => {
     if (packageContext === undefined || packageContext === null) return null;
     if (packageContext.docs.some((d) => d.fileId === activeFile.file_id)) {
@@ -583,12 +480,8 @@ export function useReaderController({
     return pkgs.find((p) => p.docs.some((d) => d.fileId === activeFile.file_id)) ?? null;
   }, [packageContext, files, activeFile.file_id]);
 
-  // 当前阅读文档自身的阶段（Stepper 上标「当前阅读」位置，与包主导阶段区分；
-  // 上下游「阅读顺序」跳转入口由 App 级 RightInspector 承载）
   const activeFileStage = stageOfPath(activeFile.relative_path);
 
-  // /state-overview 投影——文档顶栏按 artifact.file_id 取六态；
-  // 所属专项详情条按包解析 initiative 行（服务端优先，无行回退 dominantStage）。
   const stateIndex = useMemo(() => indexStateOverview(stateOverview), [stateOverview]);
   const artifactState = artifactStateOf(stateIndex, activeFile.file_id);
   const activePackageProjection = useMemo(() => {
@@ -616,27 +509,19 @@ export function useReaderController({
     navigateToPackageDoc(doc);
   };
 
-  // 按 revision_id 按需从本地服务读取版本快照正文（fetchRevisionContent），
-  // 失败时显示错误态，绝不拿磁盘当前文件内容冒充钉住的历史版本正文；
-  // 请求协调统一走 revisionContentStore——App/Reader/diff 同版并发读取合并为一次
-  // 底层请求；本组件保留本地镜像（渲染同步用），正文预算与重试在 store。
   const [fetchedContent, setFetchedContent] = useState<Record<string, string>>({});
   const [fetchError, setFetchError] = useState<Record<string, string>>({});
-  // 冷启动对账期间按版本读取可能较慢——shell 先渲染，正文区用纸面内 loading；
-  // 首屏耗时由 readerFirstScreen 测量监控（<300ms），正文到达后自动显示。
   const [fetchPending, setFetchPending] = useState<Record<string, boolean>>({});
   const contentKey = `${activeFile.file_id}::${currentRev.revision_id}`;
   useEffect(() => {
     if (activeFile.format !== 'md') return;
     if (currentRev.markdownContent !== undefined) return;
     if (fetchedContent[contentKey] !== undefined || fetchError[contentKey] !== undefined) return;
-    // store 已有 ready 条目（此前读过的版本）直接回填，不再发请求
     const stored = getRevisionContent(currentRev.revision_id);
     if (stored?.state === 'ready') {
       setFetchedContent((prev) => ({ ...prev, [contentKey]: stored.text ?? '' }));
       return;
     }
-    // failed 态不自动重试（终态提示如实呈现），仅在无条目时发起（in-flight 由 store 合并）
     if (stored?.state === 'failed') {
       setFetchError((prev) => ({ ...prev, [contentKey]: stored.error || '按版本读取正文失败' }));
       return;
@@ -671,9 +556,6 @@ export function useReaderController({
     fetchError,
   ]);
 
-  // 首屏渲染测量——shell 提交后记录一次（每个 screenKey 一次）；正文是否
-  // 已内联不影响本样本（contentPending 如实标记「shell 先到、正文后到」）。
-  // 超 300ms 预算只告警、不阻塞交互；属性挂在根节点供诊断读取。
   useEffect(() => {
     const start = firstScreenStartRef.current;
     if (!start || start.key !== firstScreenKey) return;
@@ -698,7 +580,6 @@ export function useReaderController({
     }
   }, [firstScreenKey, activeFile.file_id, currentRev.revision_id, currentRev.markdownContent]);
 
-  // 当前阅读版本 pin 在字节预算内不被逐出；切走后解除上一版 pin
   const pinnedRevisionRef = useRef<string | null>(null);
   useEffect(() => {
     const prevPinned = pinnedRevisionRef.current;
@@ -710,19 +591,12 @@ export function useReaderController({
   const markdownContent =
     currentRev.markdownContent ?? fetchedContent[contentKey] ?? '';
 
-  // 正文三态判定——正文未内联时错误优先于 loading；
-  // 无论哪一态，外层标题/工具栏/纸面 shell 都已渲染，正文读取不阻塞首屏。
   const bodyPhase = resolveReaderBodyPhase({
     hasInlineContent: Boolean(currentRev.markdownContent),
     hasError: Boolean(fetchError[contentKey]),
     pending: Boolean(fetchPending[contentKey]),
   });
 
-  // 证据行定位 + 就近回退：目标行有锚点时 querySelector 命中即居中滚动；
-  // 未命中时（围栏内部行/表格分隔行/空行无锚）按 pickNearestSourceLineAnchor 的
-  // 确定性规则回退：之前最近锚点 → 之后最近锚点 → 全无锚不滚动。
-  // 回退发生时展示中性横幅（缺的是定位点，不是正文；绝不出现「无正文」）；
-  // 回退提示是非阻断横幅，随 sourceLine/内容/子模式变化即重算或清除。
   const [sourceLineFallback, setSourceLineFallback] = useState<{
     target: number;
     landed: number;
@@ -733,8 +607,6 @@ export function useReaderController({
       return;
     }
     const frame = requestAnimationFrame(() => {
-      // 有锚点路径：querySelector 命中即居中滚动，不出任何提示；
-      // 同时闪两轮琥珀描边（决定跳转到达信号），2.2s 自动摘除。
       const exact = document.querySelector(
         '[data-event-source-line="' + sourceLine + '"]'
       );
@@ -749,7 +621,6 @@ export function useReaderController({
         sourceLine
       );
       if (landed === null) {
-        // 全文件无锚点：不滚动、不出提示，绝不假装定位成功
         setSourceLineFallback(null);
         return;
       }
@@ -757,11 +628,9 @@ export function useReaderController({
         .querySelector('[data-event-source-line="' + landed + '"]')
         ?.scrollIntoView({ block: 'center' });
       setSourceLineFallback({ target: sourceLine, landed });
-      // 空行/围栏内部行回退：闪烁落在实际到达的最近有效锚点（不是目标行）
       flashAnchor({ kind: 'md', line: landed });
     });
     return () => cancelAnimationFrame(frame);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- flashAnchor 经 ref 稳定
   }, [sourceLine, subMode, markdownContent, contentKey]);
 
   const outline = useMemo(() => {
@@ -769,9 +638,6 @@ export function useReaderController({
     return parseMarkdownOutline(markdownContent);
   }, [activeFile.format, markdownContent]);
 
-  // 链接解析索引——App 侧 files 是 useState 数组直传（App.tsx files={files}），
-  // 身份稳定，索引只在 files 变化时重建（一遍 O(n)）；href 解析结果缓存在
-  // 索引内随文件集复用，正文换版本（同文件集）时不重扫。
   const markdownLinkIndex = useMemo<MarkdownLinkIndex>(() => {
     const exactPath = new Map<string, FileRecord>();
     const firstExactIdx = new Map<string, number>();
@@ -790,19 +656,11 @@ export function useReaderController({
     };
   }, [files, activeFile.relative_path]);
 
-  // markdownContent → 行模型。deps 仅 [markdownContent, 链接索引]——
-  // sourceLine 高亮 / activeSectionId / showLineNumbers / paperLightMode /
-  // readingState / 各回调等易变输入全部留在渲染期叠加（见 renderMarkdownBlock），
-  // 纸面浅色切换、章节高亮、行号开关、证据跳转不再触发全量重解析；
-  // 非 md 文件 markdownContent 恒空串 → 空模型，无解析成本。
   const markdownBlocks = useMemo(
     () => buildMarkdownBlocks(markdownContent, markdownLinkIndex),
     [markdownContent, markdownLinkIndex]
   );
 
-  // 决策回执：命中表单项的行号覆盖层——与主行模型并存（buildMarkdownBlocks 零改动），
-  // 渲染期 renderMarkdownBlock 按 block.line 查此 Map 决定是否换可交互渲染；
-  // 未命中行（绝大多数）走原分支逐字渲染。非 md 文件恒空 Map。
   const decisionFormItems = useMemo<Map<number, DecisionFormItem>>(
     () =>
       activeFile.format === 'md'
@@ -811,10 +669,6 @@ export function useReaderController({
     [activeFile.format, markdownContent]
   );
 
-  // ── Inline 拍板闭环 ───────────────────────────────────────────────────────
-  // 卡点块解析：[P0/P1/P2 - 待确认] 标记行 + 标准字段行（决定/确认人/角色/
-  // 现·新运行条件/生效范围与日期），行号锚定与块模型同坐标系。仅待确认块出
-  // 拍板卡；已定案块原文照旧渲染（回写落地后新版本自然消失）。
   const pendingDecisionBlocks = useMemo<DecisionBlock[]>(
     () =>
       activeFile.format === 'md'
@@ -823,16 +677,11 @@ export function useReaderController({
     [activeFile.format, markdownContent]
   );
 
-  // 决定下拉预设：从文档「可选方案/推荐理由」自动提取，与
-  // statement.options / 决策级 options 在卡片渲染处按块合并去重
   const docDecisionOptions = useMemo<string[]>(
     () => (activeFile.format === 'md' ? extractDecisionOptions(markdownContent) : []),
     [activeFile.format, markdownContent]
   );
 
-  // 服务端陈述（GET /statements?file_id=&status=pending）：拍板端点的 statement_id
-  // 来源与 options/recommendation/confirmer_hint/impact 字段的数据源。
-  // 端点不可用 → null，表单诚实降级为可预填不可提交
   const [pendingStatements, setPendingStatements] = useState<StatementDetailDTO[] | null>(null);
   useEffect(() => {
     if (activeFile.format !== 'md' || !activeFile.file_id || !markdownContent) {
@@ -853,7 +702,6 @@ export function useReaderController({
     };
   }, [activeFile.file_id, activeFile.format, markdownContent]);
 
-  // 区块 ↔ 陈述匹配（statement.line_start ∈ 卡点块行范围，取首条）
   const statementByBlockLine = useMemo<Map<number, StatementDetailDTO>>(() => {
     const map = new Map<number, StatementDetailDTO>();
     if (pendingStatements) {
@@ -865,8 +713,6 @@ export function useReaderController({
     return map;
   }, [pendingStatements, pendingDecisionBlocks]);
 
-  // 卡片锚点：原文行保持逐字渲染（卡点块行零改写），拍板卡追加在块范围内
-  // 最后一个块之后（与回执层「行号覆盖渲染」互补，buildMarkdownBlocks 零改动）
   const resolveCardByAnchor = useMemo<Map<number, DecisionBlock>>(() => {
     const map = new Map<number, DecisionBlock>();
     if (pendingDecisionBlocks.length === 0) return map;
@@ -880,14 +726,11 @@ export function useReaderController({
     return map;
   }, [pendingDecisionBlocks, markdownBlocks]);
 
-  // 拍板回写流（每卡一条）：submitting（202 已受理，轮询中）→ ok / conflict / error。
-  // 端点恒返回 202（无 409 路径）——CAS 冲突通过 completed 终态的 report.writeback.cas_ok=false 表达
   const [resolveFlow, setResolveFlow] = useState<{
     blockLine: number;
     phase: 'submitting' | 'ok' | 'conflict' | 'error';
     message: string;
   } | null>(null);
-  // 本会话已拍板的卡点标记行（用于阻塞项清零判定；新版本内容到达后由 parse 自然剔除）
   const [resolvedBlockLines, setResolvedBlockLines] = useState<ReadonlySet<number>>(new Set());
 
   const handleSubmitDecision = (block: DecisionBlock, values: DecisionResolveFormValues) => {
@@ -896,7 +739,6 @@ export function useReaderController({
     const payload = buildDecisionResolvePayload(values);
     setResolveFlow({ blockLine: block.line, phase: 'submitting', message: '' });
     void (async () => {
-      // 三步原子操作之①：调后端回写端点（恒 202；占位符替换与状态变更在写线程 CAS 完成）
       const accepted = await postDecisionResolve(statement.statement_id, payload);
       if (!accepted.ok) {
         setResolveFlow({
@@ -909,7 +751,6 @@ export function useReaderController({
         });
         return;
       }
-      // ②：轮询 job 至终态，读 report.writeback 分支（恒 202 → report，无 409）
       const settled = await pollJobUntilSettled(accepted.data.job_id);
       if (!settled.ok) {
         setResolveFlow({
@@ -933,7 +774,6 @@ export function useReaderController({
           ? extractJobBranch<JobReportWriteback>(job, 'writeback')
           : null;
       if (!writeback || writeback.cas_ok === false) {
-        // CAS 冲突：『处理拍板请求』本身成功（检测冲突并存草案），引导版本对比
         setResolveFlow({
           blockLine: block.line,
           phase: 'conflict',
@@ -941,7 +781,6 @@ export function useReaderController({
         });
         return;
       }
-      // ③：cas_ok=true——本组件内记账 + 上抛 App（未决计数实时 -1、清零恢复提示）
       setResolveFlow({
         blockLine: block.line,
         phase: 'ok',
@@ -973,7 +812,6 @@ export function useReaderController({
     const linkedDecision = statement?.decision_id
       ? decisions.find((d) => d.decision_id === statement.decision_id)
       : undefined;
-    // 预设合并：文档「可选方案」提取 ∪ statement.options ∪ 决策级 options（去重）
     const presetOptions = [
       ...new Set([
         ...docDecisionOptions,
@@ -1005,9 +843,6 @@ export function useReaderController({
     );
   };
 
-  // 决策回执：勾选/填空本机持久化。state 自带 key（file_id::revision_id）——
-  // 切文件/切版本时「载入 effect 先跑、保存 effect 后跑」的同一 commit 里，
-  // 旧文件的 state 带旧 key ≠ 当前 key → 保存 effect 跳过，杜绝旧勾选写进新文件键。
   const [receiptState, setReceiptState] = useState<{
     key: string;
     checks: Record<string, boolean>;
@@ -1016,7 +851,6 @@ export function useReaderController({
   const receiptStorageKey = `${activeFile.file_id}::${currentRev.revision_id}`;
   useEffect(() => {
     const snapshot = loadDecisionReceiptSnapshot(receiptStorageKey);
-    // 基线种子：原文已选态（☑/☒/[x]）先行；快照有记录则覆盖（用户上次的手选为准）
     const seedChecks: Record<string, boolean> = {};
     decisionFormItems.forEach((item, line) => {
       if (item.checkbox) seedChecks[line] = item.checkbox.initialChecked;
@@ -1029,7 +863,6 @@ export function useReaderController({
   }, [receiptStorageKey, decisionFormItems]);
   useEffect(() => {
     if (!receiptState || receiptState.key !== receiptStorageKey) return;
-    // 即时写（小体量 JSON；打字逐键写可接受，换 300ms 反抖会引入关窗丢尾写风险）
     saveDecisionReceiptSnapshot(receiptStorageKey, {
       checks: receiptState.checks,
       fills: receiptState.fills,
@@ -1043,8 +876,6 @@ export function useReaderController({
         ...prev.checks,
         [line]: !prev.checks[line],
       };
-      // 单选互斥簇：选中某项时清零同簇其他项（zoneId 由 parse 期门控标注；
-      // 取消勾选不触发互斥——允许点选中的项取消，不锁死读者）
       if (nextChecks[line]) {
         const zone = decisionFormItems.get(line)?.radio?.zoneId;
         if (zone !== undefined) {
@@ -1065,11 +896,7 @@ export function useReaderController({
     });
   };
 
-  // 读行恢复——按停留比例精确滚回上次离开的读行（scrollTop = pct% × 可滚动量），
-  // 而非只到章节首行。同 (文件, 比例) 只恢复一次；切版本/无关重渲染不再把读者拽走。
-  // 比例非法（0/NaN/100）时交给下方 focusSectionId 章节定位，不做猜测。
   const appliedScrollPercentRef = useRef<{ fileId: string; pct: number } | null>(null);
-  // 真实滚动采集——MD 阅读纸面的滚动容器引用（换算并持久化滚动百分比）
   const markdownScrollRef = useRef<HTMLDivElement | null>(null);
   const scrollSaveTimerRef = useRef<number | null>(null);
   useEffect(() => {
@@ -1085,15 +912,12 @@ export function useReaderController({
     if (!el) return;
     const max = el.scrollHeight - el.clientHeight;
     if (max <= 0) {
-      // 正文不足一屏：没有可滚动距离 → 进度视为到底（不写持久化，语义与既有逻辑一致）
       applyReadingProgress(100);
       return;
     }
     const pct = Math.round((el.scrollTop / max) * 100);
-    // 同一口径复用：光条与落盘共用这一个 pct（禁另算一套）
     applyReadingProgress(pct);
-    const fid = activeFile.file_id; // 滚动发生时即捕获，防止反抖截止前切文件写错目标
-    // 反抖落盘：快速滚动的中间帧不逐次写本地存储
+    const fid = activeFile.file_id;
     if (scrollSaveTimerRef.current !== null) {
       window.clearTimeout(scrollSaveTimerRef.current);
     }
@@ -1116,11 +940,10 @@ export function useReaderController({
     const el = markdownScrollRef.current;
     if (!el) return false;
     const max = el.scrollHeight - el.clientHeight;
-    if (max <= 0) return false; // 正文尚未就绪/不可滚动，等下次触发（markdownContent 变化）
+    if (max <= 0) return false;
     const key = { fileId: activeFile.file_id, pct: openToScrollPercent };
     const applied = appliedScrollPercentRef.current;
     if (applied && applied.fileId === key.fileId && applied.pct === key.pct) return true;
-    // 反查比例所在章节用于大纲高亮（仅视觉，不改变滚动目标 = 精确比例）
     const totalLines = Math.max(1, (markdownContent || '').split('\n').length - 1);
     const secAt = outline.find((s) => s.startLine / totalLines >= openToScrollPercent / 100);
     if (secAt) setActiveSectionId(secAt.title);
@@ -1131,8 +954,6 @@ export function useReaderController({
   useEffect(() => {
     if (!openToScrollPercent || openToScrollPercent <= 0 || openToScrollPercent >= 100) return;
     if (sourceLine || subMode !== 'read' || activeFile.format !== 'md') return;
-    // 同步执行：在本 commit 的 effect 阶段即设好 marker 与 scrollTop，
-    // 使随后同一轮渲染的 focusSection 章节定位看到 marker 而跳过，避免互相覆盖
     restoreByScrollPercent();
   }, [
     openToScrollPercent,
@@ -1144,8 +965,6 @@ export function useReaderController({
     outline,
   ]);
 
-  // 正文到达/换版后同步一次光条进度（续读定位把 scrollTop 直接赋值时，
-  // scroll 事件可能尚未派发；此处按同一口径补一次，滚动期仍以 handleMarkdownScroll 为准）。
   useEffect(() => {
     const el = markdownScrollRef.current;
     if (!el) {
@@ -1160,13 +979,8 @@ export function useReaderController({
     applyReadingProgress(Math.round((el.scrollTop / max) * 100));
   }, [markdownContent, contentKey, applyReadingProgress]);
 
-  // 「继续阅读」点开后直达上次读到的章节首行（不再停在文首）；
-  // 章节标题找不到（改名/删节）时安静地留在文首，不做二次猜测。
-  // 同一（文件, 章节）只定位一次：切版本或无关重渲染不再把读者拽走。
-  // 若真实滚动恢复（精确读行）已应用在本文件上，则本次不再用章节首行覆盖
   const appliedFocusRef = useRef('');
   useEffect(() => {
-    // 证据跳转（sourceLine）优先：两者同时存在时不让章节定位覆盖行定位
     if (!focusSectionId || sourceLine || subMode !== 'read' || activeFile.format !== 'md') return;
     if (!markdownContent) return;
     const key = `${activeFile.file_id}::${focusSectionId}`;
@@ -1188,14 +1002,8 @@ export function useReaderController({
   const effectiveToRevId =
     subMode === 'diff_since_read' ? activeFile.current_revision_id : customToRevId;
 
-  // 差异计算与对比正文预取只按 diff 子模式启用——阅读/关系子模式不预算 diff
-  // （避免普通阅读为未展示的二维 LCS 付费）
   const diffPanelActive = subMode === 'diff_since_read' || subMode === 'diff_versions';
 
-  // 只有真的建立过阅读基线（last_read_revision_id）才叫「上次阅读版本」；
-  // 从未读过时基线是最早收录的版本（revisions[0]，不一定是文档真实 v1），文案必须如实。
-  // 单版本文件没有可对照的历史版本 → 禁用；已读基线等于当前版本仍可进入
-  // （结果如实显示「无变化」，不是拿空 diff 冒充）
   const hasReadBaseline = Boolean(readingState?.last_read_revision_id);
   const compareBaselineRevId =
     readingState?.last_read_revision_id || activeFile.revisions[0]?.revision_id;
@@ -1204,9 +1012,6 @@ export function useReaderController({
     Boolean(compareBaselineRevId) &&
     (hasReadBaseline || compareBaselineRevId !== activeFile.current_revision_id);
 
-  // /scan 不内联 MD 正文时，差异所需的两版正文按需拉取（镜像上方 fetchedContent 模式）；
-  // 快照已淘汰的版本不再请求（computeMarkdownDiff 对其返回 REVISION_UNAVAILABLE 错误态）；
-  // 仅 diff 子模式才预取对比正文，普通阅读不预取仅供对比的历史正文
   const [diffContents, setDiffContents] = useState<Record<string, string>>({});
   const [diffFetchFailed, setDiffFetchFailed] = useState<Record<string, boolean>>({});
   useEffect(() => {
@@ -1244,7 +1049,6 @@ export function useReaderController({
     diffFetchFailed,
   ]);
 
-  // 非 diff 子模式返回 null，避免无条件运行二维 LCS 计算
   const diffResult = useMemo<ReturnType<typeof computeMarkdownDiff> | null>(() => {
     if (!diffPanelActive) return null;
     return computeMarkdownDiff(
@@ -1255,10 +1059,6 @@ export function useReaderController({
     );
   }, [diffPanelActive, activeFile, effectiveFromRevId, effectiveToRevId, diffContents]);
 
-  // ── 语义 Diff 摘要卡：版本历史区（diff_versions）的任务队列口径摘要 ────────
-  // POST /diff 202 → 轮询 → result.summary 三项指标 + Checkpoint。
-  // 服务端不可用时 error 如实展示（本地 computeMarkdownDiff 快路径不受影响）；
-  // 只在历史对比子模式且两版齐全时发起（阅读/关系子模式零开销）
   const [semanticDiff, setSemanticDiff] = useState<{
     loading: boolean;
     result: DiffResult | null;
@@ -1292,7 +1092,6 @@ export function useReaderController({
     };
   }, [subMode, activeFile.format, activeFile.file_id, effectiveFromRevId, effectiveToRevId]);
 
-  // 对比基线/目标版本同样 pin（diff 面板两版正文不被预算逐出）
   const pinnedDiffRef = useRef<string[]>([]);
   useEffect(() => {
     const next = [effectiveFromRevId, effectiveToRevId].filter(
@@ -1305,15 +1104,11 @@ export function useReaderController({
     pinnedDiffRef.current = next;
   }, [effectiveFromRevId, effectiveToRevId]);
 
-  // 大纲「自上次读变更」高亮走章节指纹按需计算（O(m+n)，零 DP）；
-  // 当前版正文由阅读器现成提供，基线正文仅在 diffContents 已取回时参与——
-  // 未取回时返回 []（诚实未知，不高亮、不误报全文档变更）
   const changedSectionsOutline = useMemo<string[]>(() => {
     return computeChangedSectionsSinceRead(activeFile, readingState, {
       ...diffContents,
       ...(markdownContent ? { [currentRev.revision_id]: markdownContent } : {}),
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     activeFile,
     readingState,
@@ -1322,8 +1117,6 @@ export function useReaderController({
     markdownContent,
   ]);
 
-  // 只有进入「关系」子模式才构建局部图谱——普通阅读不为未展示内容付费
-  // （消费点全部位于 subMode==='relations' 渲染门内，null 由下方兜底常量吸收）
   const localGraphOrNull = useMemo<ReturnType<typeof buildLocalRelationGraph> | null>(() => {
     if (subMode !== 'relations') return null;
     return buildLocalRelationGraph(
@@ -1345,7 +1138,6 @@ export function useReaderController({
       canExpandTwoHop: false,
     } as ReturnType<typeof buildLocalRelationGraph>);
 
-  // 把当前小节或摘录加入证据篮
   const handleAddSectionToContext = (
     startLine: number,
     endLine: number,
@@ -1373,9 +1165,6 @@ export function useReaderController({
     });
   };
 
-  // ── 决策回执：动作条数据与动作 ───────────────────────────────────────────
-  // 已选统计只数当前模型内的表单项（模型外残留快照不计数、不触发动作条）；
-  // 换文件/换版本的过渡 commit 里 state.key ≠ 当前键 → 一律按 0 项处理（条隐藏）。
   const decisionSelectedOptions: string[] = [];
   decisionFormItems.forEach((item, line) => {
     if (
@@ -1395,14 +1184,10 @@ export function useReaderController({
       return item ? { prompt: fillPromptOf(item.text), value: value.trim() } : null;
     })
     .filter((v): v is { prompt: string; value: string } => v !== null);
-  // 已选总数 = 勾选项 + 非空填空（填空也是拍板：有内容即触发动作条与回写）
   const decisionSelectedCount =
     decisionSelectedOptions.length + decisionFillValues.length;
 
-  // 「生成决策指令并复制」：复制成功反馈走 RightInspector「已复制」同款
-  // （真实写入 .then 才进入反馈态，2s 后回落；失败静默不打断阅读——CopyIdButton 同口径）
   const [decisionCopied, setDecisionCopied] = useState<boolean>(false);
-  // 切文件/切版本时复位复制反馈态（2s 计时未到就换文档时不残留「已复制」）
   useEffect(() => {
     setDecisionCopied(false);
   }, [receiptStorageKey]);
@@ -1431,9 +1216,6 @@ export function useReaderController({
     });
   };
 
-  // ── 保存回写原文件（桌面壳命令桥）：状态与错误就地承载 ───────────────────
-  // saved 态持续到切文档（切文件/换版本由 receiptStorageKey effect 复位）；
-  // 冲突（CONFLICT）不落任何字节——磁盘内容与阅读快照不一致时引导重开文档。
   const decisionSaveBridge = readDecisionSaveBridge();
   const [decisionSave, setDecisionSave] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [decisionSaveError, setDecisionSaveError] = useState<string>('');
@@ -1450,7 +1232,6 @@ export function useReaderController({
       fills: receiptState?.key === receiptStorageKey ? receiptState.fills : {},
     });
     if (newContent === markdownContent) {
-      // 没有任何落笔（无勾选/无填空变化）就不发写请求——诚实零变更
       setDecisionSaveError('没有可回写的变更：先勾选项或填写空栏。');
       return;
     }
@@ -1484,9 +1265,6 @@ export function useReaderController({
       });
   };
 
-  // ── 本地锚点批注层（独立证据表，按版本哈希绑定）────────────────────────────
-  // 版本哈希未就绪（bootstrap 摘要占位行 content_sha256=''）时诚实空清单并禁用
-  // 撰写——绝不把批注挂到空哈希桶冒充当前版。换版本互不可见（键含 sha）。
   const [annotationStoreRev, setAnnotationStoreRev] = useState(0);
   const annotations = useMemo<ReaderAnnotation[]>(() => {
     if (
@@ -1497,12 +1275,9 @@ export function useReaderController({
       return [];
     }
     if (!currentRev.content_sha256) return [];
-    // annotationStoreRev 手动失效：批注落盘后 bump 重读本地证据表
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     return annotationsOfVersion(loadAnnotationStore(), activeFile.file_id, currentRev.content_sha256);
   }, [activeFile.file_id, activeFile.format, currentRev.content_sha256, annotationStoreRev]);
 
-  /** MD 行锚索引（wrapLine 消费：批注徽标）。 */
   const annotationsByLine = useMemo<Map<number, ReaderAnnotation[]>>(() => {
     const map = new Map<number, ReaderAnnotation[]>();
     for (const a of annotations) {
@@ -1524,13 +1299,11 @@ export function useReaderController({
     return map;
   }, [annotations]);
 
-  /** 批注清单抽屉开合（ReaderView 挂载点；关闭态零 DOM）。 */
   const [annotationsOpen, setAnnotationsOpen] = useState(false);
   useEffect(() => {
     setAnnotationsOpen(false);
   }, [activeFile.file_id, currentRev.revision_id]);
 
-  /** 撰写卡目标（null=关闭）：MD 行 / SVG 框选区 / PDF 页+摘录。 */
   const [annotationComposer, setAnnotationComposer] = useState<{
     target: ReaderAnnotationLocator;
     notice: { kind: 'ok' | 'error'; message: string } | null;
@@ -1541,13 +1314,11 @@ export function useReaderController({
     setAnnotationBusy(false);
   }, [activeFile.file_id, currentRev.revision_id]);
 
-  /** SVG 框选模式（ReaderSvgSection 工具栏开合；叠加层 crosshair 由它驱动）。 */
   const [svgAnnotateMode, setSvgAnnotateMode] = useState(false);
   useEffect(() => {
     setSvgAnnotateMode(false);
   }, [activeFile.file_id, currentRev.revision_id]);
 
-  /** 版本哈希未就绪 → 撰写/转换统一禁用的诚实理由。 */
   const annotationReady = Boolean(currentRev.content_sha256);
   const annotationConvertAvailable = annotationReady && Boolean(decisionSaveBridge);
   const annotationConvertDisabledReason = !annotationReady
@@ -1560,20 +1331,16 @@ export function useReaderController({
     setAnnotationComposer({ target, notice: null });
   };
   const closeAnnotationComposer = () => setAnnotationComposer(null);
-  /** MD 块悬停「批注」入口（readerRender wrapLine 消费）。 */
   const annotateFromBlock = (line: number, excerpt: string) => {
     openAnnotationComposer({ kind: 'md', startLine: line, excerpt: excerpt.slice(0, 480) });
   };
-  /** SVG 框选完成入口（SvgAnnotationOverlay onRegionSelected）。 */
   const annotateFromSvgRegion = (region: { fx: number; fy: number; fw: number; fh: number }) => {
     openAnnotationComposer({ kind: 'svg', ...region });
   };
-  /** PDF 页批注入口（页钮 / 选中文字）。 */
   const annotateFromPdfPage = (page: number, quote: string) => {
     openAnnotationComposer({ kind: 'pdf', page, quote: quote.slice(0, 480) });
   };
 
-  /** 落盘批注并刷新本地清单（薄壳：load→mutate→persist→bump 重读）。 */
   const mutateAnnotationStore = (
     mutate: (store: ReturnType<typeof loadAnnotationStore>) => ReturnType<typeof loadAnnotationStore>
   ) => {
@@ -1588,12 +1355,6 @@ export function useReaderController({
     );
   };
 
-  /**
-   * 提交批注（保存 / 一键转决定项）。
-   * MD 转决定项：桌面壳 save_workspace_file CAS 桥——originalContent=当前阅读版正文，
-   * 磁盘不一致即 CONFLICT 诚实拒绝（绝不静默覆盖）；SVG/PDF 转决定项：只落本地
-   * 决定草案（停机条款：绝不改写原始二进制字节）。
-   */
   const submitAnnotation = (noteRaw: string, convert: boolean) => {
     const target = annotationComposer?.target;
     if (!target || annotationBusy) return;
@@ -1697,7 +1458,6 @@ export function useReaderController({
         });
       return;
     }
-    // 保存批注；SVG/PDF 的「转决定项」也在此分支——本地决定草案，零字节回写
     const { store: nextStore, dropped } = upsertAnnotation(
       loadAnnotationStore(),
       activeFile.file_id,
@@ -1727,7 +1487,6 @@ export function useReaderController({
     });
   };
 
-  /** 批注清单「定位」：滚动 + 闪烁（MD 行 / PDF 页 / SVG 区域）。 */
   const jumpToAnnotation = (annotation: ReaderAnnotation) => {
     const loc = annotation.locator;
     if (loc.kind === 'md') {
@@ -1743,8 +1502,6 @@ export function useReaderController({
     }
   };
 
-  // ── 渲染期闭包（抽至 readerRender.tsx；易变态经显式参数传入）──────────────
-  // 调用点需位于批注块之后：wrapLine 消费 annotationsByLine / flashSourceLine / annotateFromBlock。
   const {
     renderInlineTokens,
     renderLinkParts,
@@ -1776,7 +1533,6 @@ export function useReaderController({
   });
 
   return {
-    // props 透传
     sourceLine,
     officeAnchor,
     pdfAnchor,
@@ -1802,7 +1558,6 @@ export function useReaderController({
     onToggleInspector,
     onAddDecisionToBasket,
     systemActions,
-    // state
     paperLightMode,
     setPaperLightMode,
     showLineNumbers,
@@ -1818,10 +1573,8 @@ export function useReaderController({
     fileActionsOpen,
     setFileActionsOpen,
     fileActionsRef,
-    // 专注纸面（Zen）
     zenMode,
     toggleZen,
-    // 文档迷你版本轴
     versionAxisOpen,
     setVersionAxisOpen,
     miniVersionAxis,
@@ -1851,7 +1604,6 @@ export function useReaderController({
     setPdfViewMode,
     graphHopDepth,
     setGraphHopDepth,
-    // 派生
     currentRev,
     latestRev,
     hasNewerRevisionWhileReading,
@@ -1895,14 +1647,11 @@ export function useReaderController({
     fetchError,
     setFetchError,
     contentKey,
-    // refs
     firstScreenRootRef,
     markdownScrollRef,
-    // 阅读进度光条（命令式直写，滚动期零重渲染）
     readerProgressBarRef,
     readerProgressTrackRef,
     readingProgressRef,
-    // handlers 与渲染期闭包
     handleMarkdownScroll,
     toggleDecisionCheck,
     setDecisionFillValue,
@@ -1917,7 +1666,6 @@ export function useReaderController({
     handleAddDecisionToBasket,
     handleSaveDecisionReceipt,
     jumpToStageDoc,
-    // 锚点批注层与反向定位闪烁
     anchorFlash,
     flashSourceLine,
     flashPdfPage,

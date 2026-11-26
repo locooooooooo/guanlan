@@ -9,7 +9,6 @@ import {
   resolveRelativeDay,
 } from './commandPaletteGrammar';
 
-/** 命令面板查询语法与摘要口径单测。 */
 
 test('parsePaletteQuery：语法 token 拆解与关键词合并', () => {
   const now = new Date('2026-11-20T12:00:00');
@@ -21,18 +20,15 @@ test('parsePaletteQuery：语法 token 拆解与关键词合并', () => {
   assert.equal(q.dateTo, '2026-11-19');
   assert.equal(q.pendingDecisionOnly, false);
 
-  // 多 type 交集 + 待拍板
   const q2 = parsePaletteQuery('STATUS:待拍板 type:md type:docx 依据', now);
   assert.equal(q2.pendingDecisionOnly, true);
   assert.deepEqual(q2.types, ['md', 'docx']);
   assert.equal(q2.keyword, '依据');
 
-  // 未知 status / @词 诚实回退为关键词
   const q3 = parsePaletteQuery('status:已归档 @下周 方案', now);
   assert.equal(q3.pendingDecisionOnly, false);
   assert.equal(q3.keyword, 'status:已归档 @下周 方案');
 
-  // 空查询
   const q4 = parsePaletteQuery('   ');
   assert.equal(q4.keyword, '');
   assert.equal(q4.types.length, 0);
@@ -48,23 +44,20 @@ test('resolveRelativeDay：相对词与绝对日期（本地日归属）', () =>
   assert.equal(resolveRelativeDay('2026-09-01', now), '2026-09-01');
   assert.equal(resolveRelativeDay('上周', now), null);
   assert.equal(resolveRelativeDay('', now), null);
-  // 本地日边界：Date 构造按本地时区
   assert.equal(localDayOf(new Date(2026, 10, 20)), '2026-11-20');
 });
 
 test('buildSnippet：首个命中词前 16 字起、≤2 行、全量高亮', () => {
-  const filler = '后续展开'.repeat(60); // 240 字 filler，保证窗口 200 字上限裁断触发
+  const filler = '后续展开'.repeat(60);
   const longLine = `这是一段很长的前置铺垫文字用来验证窗口起点，核心结论：登录网关统一由 AC-03 承载，${filler}`;
   const r = buildSnippet(longLine, '登录网关');
   const text = r.segments.map((s) => s.text).join('');
-  // 首命中词前 16 字起点
   const hitIdx = longLine.indexOf('登录网关');
   assert.ok(text.includes('登录网关'), '命中词必须可见');
   assert.equal(text.slice(0, 16), longLine.slice(hitIdx - 16, hitIdx), '窗口起点=命中词前 16 字');
   assert.equal(r.clippedHead, true);
   assert.equal(r.clippedTail, true, '窗口 200 字上限裁断长段');
   assert.ok(text.length <= 213, `窗口不超过 200 字（实得 ${text.length}）`);
-  // 全量高亮：命中词分段 hit=true 且恰一次出现
   const hits = r.segments.filter((s) => s.hit);
   assert.equal(hits.length, 1);
   assert.equal(hits[0].text, '登录网关');

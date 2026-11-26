@@ -91,7 +91,6 @@ impl RunningService {
     pub async fn join(mut self) {
         if let Some(server) = self.server.take() {
             if let Err(e) = server.await {
-                // JoinError 罕见（任务 panic）；照 CLI 口径输出一行诊断
                 eprintln!("服务任务结束: {e}");
             }
         }
@@ -99,7 +98,6 @@ impl RunningService {
 
     /// 优雅停机并释放全部项目的工作区锁、监听套接字、写线程、watcher 与 SSE 连接（切换/退出零泄漏）。
     pub async fn shutdown(mut self) {
-        // 先行通知所有项目写线程协作中止（大工作区全量扫描可在毫秒级退出，不拖住停机）
         self.projects.signal_shutdown();
         self.notices.close();
         if let Some(tx) = self.shutdown_tx.take() {
@@ -152,18 +150,10 @@ pub async fn start_service_with_projects_file(
         )));
     }
 
-    // 1) 数据目录解析（契约 contract-storage.md §3.1：GUANLAN_DATA_DIR 整体替换 base）
     let data_dir = guanlan_core::storage::default_data_dir(&root)?;
-    // 主区根 plain() 规范化（挂载互斥基准；主区 root_key 身份口径不受影响）
     let root_normalized = guanlan_core::domain::mounts::normalize_mount_root(&root)?;
-    // 2) 同工作区 OS 级排他锁
     let lock = runtime::acquire_workspace_lock(&data_dir)?;
-    // 3) 写侧就位：打开（或创建）可写库，确保 schema 与工作区行存在，
-    //    写连接随后移交专用写线程（「唯一写入线程」，contract-storage.md §4.2）；
-    //    首次运行时由写入侧建库，桌面壳因此可以在没有历史库时直接启动。
     let writer = guanlan_core::index::Writer::open_at(&data_dir, &root)?;
-    // SSE 通知中枢（contract-query-api.md §2.2）：写线程处理函数经桥（同步 mpsc）投递，
-    // 桥泵线程转发给 NoticeHub（broadcast::send 为同步调用，无需 async）
     let notices = runtime::NoticeHub::new();
     let (bridge_tx, bridge_rx) = std::sync::mpsc::channel::<index_jobs::SseNotice>();
     let notice_bridge = {
@@ -182,9 +172,6 @@ pub async fn start_service_with_projects_file(
         Some(bridge_tx),
         cfg.background_index,
     );
-    // 4) 只读打开并认领工作区行（契约 §2.2/§4-2：只按库内已有行认领，不新建）；
-    //    连接池按 GUANLAN_QUERY_POOL_SIZE（默认 4）开 N 条独立只读连接，
-    //    各自认领同一工作区行——轻量读取不再互等（有界执行见 http::query_exec）
     let pool_size = http::query_exec::pool_size_from_env().max(1);
     let primary = match ReadonlyStore::open_for_root(&root) {
         Ok(store) => store,
@@ -194,8 +181,6 @@ pub async fn start_service_with_projects_file(
             return Err(e);
         }
     };
-    // 4.5) 认领身份核对（契约 §2.2 root_path 精确匹配语义）：不拒绝服务（只读认领
-    //      语义不变），但 stderr 告警一行，避免只能从事后 bootstrap 比对里察觉
     let requested_key = guanlan_core::domain::resolve_root(&root)
         .map(|resolved| guanlan_core::domain::root_key_of_resolved(&resolved))?;
     if let Ok(claimed) = primary.workspace() {
@@ -219,7 +204,6 @@ pub async fn start_service_with_projects_file(
         }
     }
 
-    // 5) 绑定监听后再生成实例身份（携带实际端口，随机端口口径下才有意义）
     let addr = SocketAddr::from(([127, 0, 0, 1], cfg.port));
     let listener = match tokio::net::TcpListener::bind(addr).await {
         Ok(l) => l,
@@ -234,11 +218,7 @@ pub async fn start_service_with_projects_file(
     let root_path = PathBuf::from(&root);
     let instance_id = runtime::generate_instance_id(&root_path, local.port());
 
-    // 6) 组装应用状态与路由（dist 存在才挂静态资源；桌面壳为 WebView 放行 CORS）
-    // watcher 只在显式启用后台索引时启动（见 ServeConfig::background_index）：
-    // 未启用时保持「打开已有数据零扫描」的既有契约，读路径不产生任何写入。
     let watcher_handle = if cfg.background_index {
-        // watcher 基线执行器：独立一条只读连接（ReadonlyStore 不可 Clone，不与查询池互借）
         let watcher_store = match ReadonlyStore::open_for_root(&root) {
             Ok(s) => s,
             Err(e) => {
@@ -281,15 +261,12 @@ pub async fn start_service_with_projects_file(
 
     let state = http::AppState {
         exec: primary_exec,
-        // 响应字节预算（GUANLAN_RESPONSE_BUDGET_MIB / _MAX_MIB 可调）
         budget: Arc::new(http::ResponseBudget::from_env()),
         instance_id: instance_id.clone(),
         dist: runtime::resolve_dist_dir(),
         jobs: jobs.clone(),
         watcher: watcher_handle.clone(),
         notices: Some(notices.clone()),
-        // 只读参考工作区挂载注册表（侧车 mounts.json 装载 + 离线降级；
-        // 挂载互斥以规范化后的主区根为基准，严禁外挂目录与主区互为父子）
         mounts: primary_mounts,
         projects: Some(Arc::clone(&project_hub)),
     };
@@ -299,14 +276,8 @@ pub async fn start_service_with_projects_file(
         http::build_router(state)
     };
 
-    // 7) 启动后台对账（「打开已有工作区先显示已保存的数据，后台对账
-    //    不阻塞正文读取与事件查询」）：读路径立即可用，写线程随后把最新文档并进来。
-    //    重启孤儿闭合：先重入队上轮遗留的 queued/running 任务（job_runs
-    //    持久化），再排整库核验——其收尾 recompute 对全部 suspended/running 节点
-    //    幂等重判，『决策已清零但唤醒未执行』与『作业挂起中重启』两类孤儿都被闭合。
     if cfg.background_index {
         let workspace_id = {
-            // 写线程忙于重入队任务前先取工作区 id（读侧同源）
             let probe = guanlan_core::index::Writer::open_at(&data_dir, &root)?;
             probe.workspace()?.workspace_id
         };
@@ -323,7 +294,6 @@ pub async fn start_service_with_projects_file(
         );
     }
 
-    // axum 服务任务：支持优雅停机信号（切换工作区时立即断开 SSE、停机并释放端口与锁）
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let server = tokio::spawn(async move {
         let graceful = axum::serve(listener, app).with_graceful_shutdown(async move {
@@ -373,9 +343,6 @@ mod lifecycle_tests {
         let base = TempDirGuard::new("rebind");
         let data_base = base.0.join("data");
         std::fs::create_dir_all(&data_base).expect("data");
-        // 注意：default_data_dir 读取 GUANLAN_DATA_DIR 整体替换时多个 root 会撞同一目录；
-        // 测试不同 rootKey 需各自独立，或直接不设 GUANLAN_DATA_DIR，而是在独立目录下各自测。
-        // 这里用三份独立 root，使用默认 data_dir 太慢/污染 LOCALAPPDATA？不会，我们只清理对应目录。
         let ws_a = base.0.join("ws-a");
         let ws_b = base.0.join("ws-b");
         let ws_c = base.0.join("ws-c");
@@ -384,7 +351,6 @@ mod lifecycle_tests {
             std::fs::write(ws.join("README.md"), format!("# Workspace {name}\n")).expect("写文档");
         }
 
-        // 启动 A → 验证同目录第二实例报 RootInUse → shutdown A → 再启动 A 成功
         let svc_a = start_readonly_service(ServeConfig {
             root: ws_a.to_string_lossy().into_owned(),
             port: 0,
@@ -416,7 +382,6 @@ mod lifecycle_tests {
         let a_data_dir = svc_a.data_dir.clone();
         svc_a.shutdown().await;
 
-        // A → B → C → A 连续切换，验证锁与端口零泄漏
         let svc_b = start_readonly_service(ServeConfig {
             root: ws_b.to_string_lossy().into_owned(),
             port: 0,

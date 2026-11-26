@@ -1,15 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { Archive, ArrowRight, Compass, FileText, FileCode, FileSpreadsheet, Info, Sparkles, X } from 'lucide-react';
 import type { FileRecord, TimelineEvent, FileFormat } from '../types/guanlan';
-// 密度栅格的事件日按本地日历日（纯日期不换算）
 import { localDay } from '../utils/timeFormat';
 import type { DesktopFileActionCallbacks } from './FileContextMenu';
 import { getCalendarFormatColor } from '../utils/formatMeta';
 import { Badge, ScrollArea } from './ui';
 
-// 密度五档（热力档 AA 对比度修正：数据编码保留五级有序，文字全档 --ink-strong——
-// 原最高档实心薰衣草＋白字 4.17 违 AA，改「底 /45＋2px --accent-iris 边框＋600」。
-// 图例复用同一组类，与格子逐一对应。）
 const DENSITY_LEVEL_BGS = [
   'bg-muted/85',
   'bg-[color:color-mix(in_srgb,var(--accent-iris)_12%,transparent)]',
@@ -25,7 +21,6 @@ export interface CalendarSidePanelsProps {
   recentItems: CalendarRecentItem[];
   onOpenDocument: (fileId: string) => void;
   systemActions?: DesktopFileActionCallbacks;
-  /** 跨栏联动状态（可选：独立渲染/SSR 测试时缺省安全降级） */
   focusedDate?: string | null;
   hoveredDate?: string | null;
   onFocusDate?: (date: string | null) => void;
@@ -38,10 +33,8 @@ interface DensityMonth { month: string; cells: DensityDay[]; total: number; acti
 
 const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'] as const;
 
-/** 最多常驻多少个「有事件月份」；更早的折叠成一行可展开按钮（防 158 个月 × 31 格再爆一次 DOM） */
 const DENSITY_MONTH_CAP = 24;
 
-// 文档/事件定位日期一律取 source_time 的本地日历日（localDay）；observed_at 是采集时间，任何统计禁止使用（date-rule）。
 function localToday(): string {
   const now = new Date();
   const y = now.getFullYear();
@@ -61,7 +54,6 @@ function dayLevelClass(n: number, isToday: boolean): string {
           : n <= 6
             ? 'border-border/75 bg-[color:color-mix(in_srgb,var(--accent-iris)_45%,transparent)] text-[color:var(--ink-strong)]'
             : 'bg-[color:color-mix(in_srgb,var(--accent-iris)_45%,transparent)] border-2 border-[color:var(--accent-iris)] text-[color:var(--ink-strong)] font-semibold';
-  // today 格把 border-border/75 换成 iris 60% 边（最高档自带 iris 边框，无需替换）
   return isToday ? base.replace('border-border/75', 'border-[color:color-mix(in_srgb,var(--accent-iris)_60%,transparent)]') : base;
 }
 
@@ -166,12 +158,10 @@ export function CalendarSidePanels({
   const [showAllMonths, setShowAllMonths] = useState(false);
   const fileById = useMemo(() => new Map(files.map((f) => [f.file_id, f])), [files]);
 
-  // 卡①：密度栅格数据——只枚举有事件的日，并按自然月分组；
-  // 跳过零事件月份，避免跨年稀疏数据产生大量空月格子导致 DOM 膨胀
   const density = useMemo(() => {
     const counts = new Map<string, number>();
     for (const ev of events) {
-      if (!ev.source_time) continue; // 采集时间 observed_at 禁作事件日（date-rule）
+      if (!ev.source_time) continue;
       const day = localDay(ev.source_time);
       if (!day) continue;
       counts.set(day, (counts.get(day) ?? 0) + 1);
@@ -186,7 +176,6 @@ export function CalendarSidePanels({
       };
     }
 
-    // 有事件月份（按时间序、连续同月去重）
     const monthKeys: string[] = [];
     for (const d of activeDayKeys) {
       const m = d.slice(0, 7);
@@ -194,7 +183,6 @@ export function CalendarSidePanels({
     }
     const activeSet = new Set(monthKeys);
 
-    // 全量月份跨度只用于**统计**被跳过的空月（不产出任何 DOM 格子）
     const skippedMonths: string[] = [];
     const firstMonth = activeDayKeys[0].slice(0, 7);
     const lastMonth = activeDayKeys[activeDayKeys.length - 1].slice(0, 7);
@@ -210,11 +198,10 @@ export function CalendarSidePanels({
       }
     }
 
-    // 有事件的月份：渲染该月完整日历格（1..月末），按周一为列首做真实星期对齐
     const months: DensityMonth[] = monthKeys.map((month) => {
       const [y, m] = month.split('-').map(Number);
-      const lastDayOfMonth = new Date(y, m, 0).getDate(); // day 0 = 上月末，即本月天数
-      const firstDowMon = (new Date(y, m - 1, 1).getDay() + 6) % 7; // 0=周一 .. 6=周日
+      const lastDayOfMonth = new Date(y, m, 0).getDate();
+      const firstDowMon = (new Date(y, m - 1, 1).getDay() + 6) % 7;
       const cells: DensityDay[] = [];
       let total = 0;
       let active = 0;
@@ -232,34 +219,26 @@ export function CalendarSidePanels({
       months,
       activeDayCount: activeDayKeys.length,
       skippedMonths,
-      // 默认定位口径 = 活跃日期集合的最大月份（如 2026-11），避免停在早期异常月
       latestMonth: latestActiveMonth(activeDayKeys),
     };
   }, [events]);
 
-  // 渲染序采用「新→旧」——最新活跃月排在列表第一块（默认定位即落在它，
-  // 不依赖滚动容器把早期月份滚出视口）
   const orderedMonths = useMemo(() => [...density.months].reverse(), [density.months]);
-  // 默认只常驻最近 DENSITY_MONTH_CAP 个有事件月份；更早的按需展开
-  // （新序取前 N 个 = 最近 N 个，与旧序 slice(-N) 是同一集合、只是方向反转）
   const visibleMonths =
     showAllMonths || orderedMonths.length <= DENSITY_MONTH_CAP
       ? orderedMonths
       : orderedMonths.slice(0, DENSITY_MONTH_CAP);
   const foldedMonthCount = density.months.length - visibleMonths.length;
-  // 超 12 个连续空月的远古跨度在列表中插入「更早归档」断层胶囊，避免顶部出现大量跳过空月提示
   const partitionedMonths = useMemo(
     () => partitionCalendarDensityMonths(visibleMonths),
     [visibleMonths]
   );
-  // 默认高亮最新活跃月份（初始值口径 = activeDayKeys 的最大月份）
   const focusMonth = density.latestMonth;
   const skippedRange =
     density.skippedMonths.length > 0
       ? `${density.skippedMonths[0]} ~ ${density.skippedMonths[density.skippedMonths.length - 1]}`
       : '';
 
-  // 卡②：三条进度数值——文档 / 事件 / 版本（全部来自 props 实算，禁止写死）
   const progress = useMemo(() => {
     const totalDocs = files.length;
     const datedDocs = files.filter((f) => Boolean(f.revisions[0]?.source_time)).length;
@@ -270,7 +249,6 @@ export function CalendarSidePanels({
     return { datedDocs, totalDocs, datedEvents, totalEvents, datedRevisions, totalRevisions };
   }, [files, events]);
 
-  // 卡⓪：聚焦日沉淀速览（点击主板脉冲柱 / 迷你月历任意日期时弹簧滑入）
   const focusedDayDetail = useMemo(() => {
     if (!focusedDate) return null;
     const docs = files.filter((f) => {
@@ -283,14 +261,13 @@ export function CalendarSidePanels({
 
   const docCoveragePct =
     progress.totalDocs > 0 ? Math.round((progress.datedDocs / progress.totalDocs) * 100) : 0;
-  const ringCircumference = 2 * Math.PI * 11.5; // ≈ 72.26
+  const ringCircumference = 2 * Math.PI * 11.5;
   const ringOffset = Number((ringCircumference * (1 - docCoveragePct / 100)).toFixed(2));
 
   return (
     <aside className="w-[276px] shrink-0 h-full">
       <ScrollArea scrollFade className="h-full" viewportClassName="pt-2.5 pr-3.5 pb-3.5 pl-0">
       <div className="flex flex-col gap-2.5">
-        {/* 卡⓪ 当日沉淀聚焦卡（选中某日时弹簧滑入：直览当日文档 + 一键飞向司辰星图） */}
         {focusedDayDetail && (
           <section
             key={`focus-${focusedDayDetail.date}`}
@@ -369,7 +346,6 @@ export function CalendarSidePanels({
           </section>
         )}
 
-        {/* 卡① 最近 7 天 · 列表（悬停同步主板纵贯光束 + 轻盈滑移箭头） */}
         <section className="depth-2-card !rounded-[16px] p-3.5">
           <div className="flex items-center justify-between gap-2 mb-1.5">
             <p className="text-[length:var(--text-item-title)] leading-[var(--lh-item-title)] font-semibold text-[color:var(--ink-strong)]">最近 7 天</p>
@@ -431,7 +407,6 @@ export function CalendarSidePanels({
           )}
         </section>
 
-        {/* 卡② 纳入概览 · 环形琉璃仪表 + 动态增长三列指标带 */}
         <section className="depth-2-card !rounded-[16px] p-3.5">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 min-w-0">
@@ -446,7 +421,6 @@ export function CalendarSidePanels({
                 <Info className="h-3.5 w-3.5" />
               </span>
             </div>
-            {/* 琉璃环形覆盖度微仪表 */}
             <div
               className="relative w-7 h-7 flex items-center justify-center shrink-0"
               title={`已纳入有日期文档 ${progress.datedDocs} / ${progress.totalDocs}（${docCoveragePct}%）`}
@@ -508,7 +482,6 @@ export function CalendarSidePanels({
           </div>
         </section>
 
-        {/* 卡③ 活跃月份 · 交互式迷你热力月历（周一~周日真实对齐 + 点击/悬停跨栏联动主板） */}
         <section className="depth-2-card !rounded-[16px] p-3.5">
           <div className="flex items-baseline justify-between gap-2">
             <p className="text-[length:var(--text-item-title)] leading-[var(--lh-item-title)] font-semibold text-[color:var(--ink-strong)]">{density.activeDayCount} 天有事件</p>

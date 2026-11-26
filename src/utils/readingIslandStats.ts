@@ -1,7 +1,5 @@
 import type { FileFormat, FileRecord, WorkspaceConfig } from '../types/guanlan';
 import { hasUnreadChanges, type UnreadReason } from './guanlanEngine';
-// 右缘悬浮岛聚合口径：已读/未读复用未读三态判定，落盘复用快照可用性，
-// 区分前缀复用文档身份工具——本文件只做聚合与排序，不改写任何判定本身。
 import { minimalDirPrefix } from './documentIdentity';
 import { readingRecency, type ReadingStateMap } from './readingStateStore';
 
@@ -26,17 +24,13 @@ export type IslandReadStatus = 'read' | 'unread';
 
 export interface IslandDocEntry {
   fileId: string;
-  /** 当前版本 revision_id（用于抽屉内单文档 1-click 标为已读） */
   currentRevisionId?: string;
   title: string;
-  /** 同标题拷贝的最小区分前缀（父目录尾链）；无重名冲突为 '' */
   dirPrefix: string;
   format: FileFormat;
   readStatus: IslandReadStatus;
   unreadReason: UnreadReason;
-  /** 当前版本快照仍在存档区（未被配额淘汰） */
   persisted: boolean;
-  /** 阅读滚动百分比 0-100；无阅读记录为 0 */
   scrollPercent: number;
 }
 
@@ -44,13 +38,10 @@ export interface ReadingIslandStats {
   total: number;
   read: number;
   unread: number;
-  /** 当前版本快照已落盘的份数 */
   persisted: number;
-  /** 组内按最近阅读降序；无记录靠后，同序按路径保证跨渲染稳定 */
   entries: IslandDocEntry[];
 }
 
-/** 当前版本回退口径与 RightInspector 同款：先按 current_revision_id 查，缺失取末版 */
 function currentRevisionOf(file: FileRecord) {
   return (
     file.revisions.find((r) => r.revision_id === file.current_revision_id) ||
@@ -67,7 +58,6 @@ export function computeReadingIslandStats(
   files: FileRecord[],
   readingStates: ReadingStateMap
 ): ReadingIslandStats {
-  // 同标题拷贝的碰撞集：为每份文档算最小区分前缀（与 RightInspector 引用卡同源口径）
   const sameTitlePathsByTitle = new Map<string, string[]>();
   for (const file of files) {
     const bucket = sameTitlePathsByTitle.get(file.title);

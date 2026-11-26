@@ -126,22 +126,18 @@ describe('多工作区独立状态与桌面桥接', () => {
     const filesB = [makeFile('b1', 'b.md')];
     const filesC = [makeFile('c1', 'c.md')];
 
-    // 切到 A 并剪枝（淘汰 staleA，绝不碰 B/C）
     const prunedA = pruneReadingStates(loadReadingStates('ws-a'), filesA);
     saveReadingStates(prunedA, 'ws-a');
     assert.deepEqual(Object.keys(prunedA), ['a1']);
 
-    // 切到 B 并剪枝
     const prunedB = pruneReadingStates(loadReadingStates('ws-b'), filesB);
     saveReadingStates(prunedB, 'ws-b');
     assert.deepEqual(Object.keys(prunedB), ['b1']);
 
-    // 切到 C 并剪枝
     const prunedC = pruneReadingStates(loadReadingStates('ws-c'), filesC);
     saveReadingStates(prunedC, 'ws-c');
     assert.deepEqual(Object.keys(prunedC), ['c1']);
 
-    // 切回 A/B/C 验证全部保留且互不窜改
     assert.equal(loadReadingStates('ws-a').a1.personalNote, 'Alpha 笔记');
     assert.equal(loadReadingStates('ws-b').b1.personalNote, 'Beta 笔记');
     assert.equal(loadReadingStates('ws-c').c1.personalNote, 'Gamma 笔记');
@@ -158,7 +154,6 @@ describe('多工作区独立状态与桌面桥接', () => {
     setApiBaseUrl('http://127.0.0.1:41001/');
     assert.equal(getApiBaseUrl(), 'http://127.0.0.1:41001');
 
-    // 模拟切换工作区清理
     clearRevisionContentStore();
     clearFilePreviewCache();
     setApiBaseUrl('http://127.0.0.1:41002');

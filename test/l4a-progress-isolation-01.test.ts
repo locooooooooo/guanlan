@@ -14,20 +14,6 @@ import {
   subscribeL4aProgress,
 } from '../src/utils/l4aProgressStore';
 
-/**
- * 后台语义整理的进度与扫描中的多项目刷新不能拖着重子树重渲。
- *
- * 事故形态：进度此前是 useWorkspaceStore 的 useState。1,397 篇队列、写线程每批
- * 3 篇发一条 l4a 事件，前端每收一条就打一次 /status 并 setState，另有 2.5 秒轮询
- * 兜底——约 466 次整棵 App 树重渲，阅读器正文与星图画布跟着进度条一起重渲。
- * 扫描中的项目列表每 1.2 秒刷新一次，还附带重拉所有已展开项目的整棵目录树。
- *
- * 规则：
- *  ① 进度活值住 utils/l4aProgressStore，只有横幅叶子用 useSyncExternalStore 订阅；
- *  ② 同值不通知（轮询回到同一进度时不重渲）；
- *  ③ total=0 或 queue_depth 归 0 即视为排空，横幅收起，不造 100% 假进度；
- *  ④ 扫描中的列表轮询只刷列表与计数，目录树在扫描结束后补一次。
- */
 
 function readSrc(path: string): string {
   return readFileSync(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8');
@@ -44,7 +30,6 @@ test('L4A 进度：同值短路，排空后回到 null', () => {
   assert.equal(notified, 1);
   assert.equal(getL4aProgress()?.done, 3);
 
-  // 下一拍轮询拿到的是新对象、数值没变：不能通知，否则横幅每 2.5 秒白重渲一次
   setL4aProgress({ done: 3, total: 1397, percent: 0, queue_depth: 1394 });
   assert.equal(notified, 1, '进度没变时不通知订阅者');
 
@@ -64,7 +49,6 @@ test('L4A 进度：同值短路，排空后回到 null', () => {
 test('L4A 进度：total=0 与 queue_depth 归 0 都算排空', () => {
   assert.equal(isL4aProgressActive(null), false);
   assert.equal(isL4aProgressActive({ done: 0, total: 0, percent: 100 }), false);
-  // 缺失快照被标 failed：done < total 但队列已空，不能永久悬挂
   assert.equal(
     isL4aProgressActive({ done: 12, total: 1397, percent: 1, queue_depth: 0 }),
     false
@@ -73,7 +57,6 @@ test('L4A 进度：total=0 与 queue_depth 归 0 都算排空', () => {
     isL4aProgressActive({ done: 12, total: 1397, percent: 1, queue_depth: 1385 }),
     true
   );
-  // 老服务端没有 queue_depth 时退回 done < total
   assert.equal(isL4aProgressActive({ done: 12, total: 1397, percent: 1 }), true);
   assert.equal(isL4aProgressActive({ done: 1397, total: 1397, percent: 100 }), false);
 });

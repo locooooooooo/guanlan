@@ -1,17 +1,3 @@
-/**
- * 阅读器浮动 Chrome 层：
- * 承载新版本告警横幅、紧凑单行文件头（文档身份 + 查看模式分段 + 所属专项五阶段胶囊 +
- * 阅读操作与文件菜单）、文档迷你版本轴、专注纸面（Zen）状态机与 2px 阅读进度光条换算。
- *
- * · 顶栏减密：CopyIdButton 与超长相对路径移入标题悬浮信息卡与「···」菜单，
- *   主行保留核心视觉锚点（衬线标题 / 版本演化胶囊 / 标为已读 / Zen·溯源·昼夜）。
- * · 文档迷你版本轴：点版本胶囊展开玻璃微型修订链（vN → … → v1，按修订链序，
- *   禁改按日期排），支持一键切版比对与「进入版本时光机 →」直达时光机画布。
- * · 专注纸面（Zen）：状态机纯函数 + 顶栏一键入口 + 快捷键。
- * · 阅读进度光条：2px 琉璃光条的唯一换算出口 computeReadingProgressScaleX
- *   （百分比 → scaleX；数据源复用 handleMarkdownScroll 已算好的 pct）。
- * 纯函数计算无 DOM 依赖，可直接由测试 import。
- */
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -35,11 +21,9 @@ import {
   Sun,
   X,
 } from 'lucide-react';
-// 阅读器 chrome 统一走字阶令牌与基础件（Button primary/ghost 双态）
 import { Button } from '../ui/primitives';
 import { Group, GroupSeparator, Toolbar } from '../ui';
 import { FileSystemActionBar } from '../FileContextMenu';
-// observed_at 相对时间（「X 分钟前/今天 HH:mm」），单一事实源在 utils/timeFormat.ts
 import { formatLocalClock, formatRelativeObservedAt, localDay } from '../../utils/timeFormat';
 import {
   DOC_STATE_LABEL,
@@ -53,9 +37,6 @@ import { CopyIdButton } from './readerShared';
 import type { ReaderCtx } from './useReaderController';
 import type { ReaderSubMode } from './readerShared';
 
-/* ══════════════════════════════════════════════════════════════════════════
-   纯函数层（无 DOM 依赖，测试直接 import）
-   ══════════════════════════════════════════════════════════════════════════ */
 
 /**
  * ① 阅读进度光条的唯一换算出口：百分比 → scaleX。
@@ -83,15 +64,10 @@ export interface MiniVersionAxisRevision {
 export interface MiniVersionAxisNode {
   revisionId: string;
   versionNumber: number;
-  /** 版本徽标（vN，不带「（最新）」后缀——最新态由 isLatest 单独表达）。 */
   label: string;
-  /** 是否为当前正在阅读（钉住）的版本。 */
   isCurrent: boolean;
-  /** 是否为该文档的最新版本。 */
   isLatest: boolean;
-  /** 采集时刻相对时间（observed_at 口径，绝不与 occurred_at 混写）。 */
   observedLabel: string;
-  /** 变动概览（章节级变更 / 快照淘汰 / 无变更记录，如实三选一）。 */
   changeSummary: string;
   changedSectionCount: number;
   snapshotAvailable: boolean;
@@ -156,9 +132,7 @@ export interface ZenToggleInput {
   zenMode: boolean;
   trigger: ZenToggleTrigger;
   subMode: ReaderSubMode;
-  /** 焦点在文本编辑面（input/textarea/select/contenteditable）。 */
   editableTarget: boolean;
-  /** 任一浮层/对话框打开（data-esc-layer="open" 或 role="dialog"）。 */
   overlayOpen: boolean;
 }
 
@@ -263,11 +237,8 @@ export function ReaderTopBannerSection({ ctx }: { ctx: ReaderCtx }) {
 export interface ReaderMiniVersionAxisProps {
   nodes: MiniVersionAxisNode[];
   paperLightMode: boolean;
-  /** 切版：把阅读器钉到该版本。 */
   onSelect: (revisionId: string) => void;
-  /** 一键切版比对：以当前版为基准、该版为目标，进入历史快照对比。 */
   onCompare: (revisionId: string) => void;
-  /** 进入版本时光机（仅在可直达的格式下提供）。 */
   onOpenTimeMachine?: () => void;
   canOpenTimeMachine?: boolean;
 }
@@ -287,9 +258,6 @@ export function ReaderMiniVersionAxis({
       data-reader-version-axis=""
       data-esc-layer="open"
       className="glass-pop glx-popover-in absolute left-5 top-full z-50 mt-2 w-[320px] rounded-[14px] p-3"
-      // 双态就地换底（实机走查修复）：① 夜航下 .glass-pop 固定白玻璃与浅字相撞不可读；
-      // ② 白玻璃原 0.95 透率会让正文 H1 笔画透印（实测复合亮度 247/255 ≈1.05:1），
-      //    提到 0.985 后复合亮度 252.6/255（Δ2.4 级）——1× 下不可辨。
       style={
         paperLightMode
           ? { background: 'rgba(255, 254, 250, 0.985)' }
@@ -384,11 +352,6 @@ export function ReaderMiniVersionAxis({
   );
 }
 
-/**
- * 所属专项紧凑胶囊 + 悬浮五阶段 Stepper 下拉（减密升级）：
- * 默认收拢为「专项名 · 当前阶段 ▾」单枚轻胶囊（不再在每份源码/文档顶栏铺满 5 步胶囊并重复状态徽标）；
- * 点击展开完整五阶段进度与跨阶段快速跳转。
- */
 function InitiativeStageDropdown({ ctx }: { ctx: ReaderCtx }) {
   const { activeFile, activePackage, activePackageProjection, activeFileStage, jumpToStageDoc, paperLightMode } = ctx;
   const [open, setOpen] = useState(false);
@@ -523,10 +486,6 @@ function InitiativeStageDropdown({ ctx }: { ctx: ReaderCtx }) {
   );
 }
 
-/**
- * 新事件并入阅读指挥条：不再独占一行横幅。
- * 条上只留计数和两个动词；「保持当前位置 / 进入新窗口」写在按钮的 title 里，任何宽度都在。
- */
 function ReaderChangeNoticeChip({
   count,
   at,
@@ -597,17 +556,11 @@ function ReaderChangeNoticeChip({
  * （first_source_time），不能冒充当前版文档日期，此时同样回退采集时刻。
  */
 export interface ReaderDocTimeView {
-  /** 可见时间取自哪一口径；SSR 测试锚点 data-reader-doc-time 同值。 */
   basis: 'source_time' | 'observed_at';
-  /** 口径词：「文档日期 」/「采集于 」。 */
   prefix: string;
-  /** 时间值（日期或相对时刻），用更深一档的字色保证可扫读。 */
   value: string;
-  /** 可见文案（prefix + value，含口径词；供纯函数测试与读屏）。 */
   label: string;
-  /** <time datetime> 的机器可读值。 */
   dateTime: string;
-  /** 悬浮说明：同时列出两个口径，避免把采集时刻误当文章日期。 */
   title: string;
 }
 
@@ -619,7 +572,6 @@ export function buildReaderDocTimeView(
   const observedLabel = formatRelativeObservedAt(observedAt);
   const declared = sourceReliable ? (sourceTime?.trim() ?? '') : '';
   const declaredDay = declared ? localDay(declared) : '';
-  // 只接受 YYYY-MM-DD 形状：坏值不冒充日期，回退到可核验的采集时刻。
   if (/^\d{4}-\d{2}-\d{2}$/.test(declaredDay)) {
     return {
       basis: 'source_time',
@@ -671,7 +623,6 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
     canCompareSinceRead,
     hasReadBaseline,
     activePackage,
-    // ── Zen 专注纸面 / 迷你版本轴 / 阅读进度 ──
     zenMode,
     toggleZen,
     versionAxisOpen,
@@ -692,8 +643,6 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
   const docTime = buildReaderDocTimeView(
     currentRev.source_time,
     currentRev.observed_at,
-    // 摘要占位版本行（content_sha256 为空）的 source_time 是最早版本时间，
-    // 不能冒充当前版文档日期；回退采集时刻，等 /revisions 详情到达后再切回。
     currentRev.content_sha256 !== '',
   );
   return (
@@ -717,7 +666,6 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
         });
       }}
     >
-      {/* 左侧身份区：返回来源胶囊 + 标题身份 + 版本徽标 + 状态胶囊（长标题弹性截断，绝不挤破单行） */}
       <div className="flex-1 min-w-0 flex items-center gap-1.5">
         {returnBreadcrumb && (
           <button
@@ -736,7 +684,6 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
             <span className="max-w-[8.5rem] truncate">{returnBreadcrumb.label}</span>
           </button>
         )}
-        {/* 衬线文档标题 + 轻悬浮信息卡（长路径与文件 ID 移入卡内以保持顶栏简洁） */}
         <div className="relative group inline-flex min-w-0 items-center gap-0.5">
           <h1
             title={activeFile.title}
@@ -772,9 +719,6 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
           <span
             data-reader-file-info=""
             className="invisible absolute left-0 top-full z-40 mt-1.5 w-[min(320px,88vw)] rounded-[var(--r-card)] p-3 text-left opacity-0 transition-opacity glass-pop group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
-            // 双态就地换底（同迷你版本轴口径）：夜航下白玻璃与浅字相撞不可读；
-            // 0.985/0.985 双档封堵正文笔画透印（浅档复合亮度 ≥252/255、
-            // 夜航档亮笔画穿透 1.5% 复合 Δ≈3 级，1× 均不可辨）
             style={
               paperLightMode
                 ? { background: 'rgba(255, 254, 250, 0.985)' }
@@ -805,7 +749,6 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
             </span>
           </span>
         </div>
-        {/* 元信息行：单版本轻淡显示 v1，多版本以微胶囊高亮并可展开迷你版本轴 */}
         <div className="shrink-0 flex items-center gap-1 text-[length:var(--text-micro)] leading-[var(--lh-micro)] tabular-nums text-[color:var(--ink-soft)]">
           <div>
             <button
@@ -835,9 +778,6 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
               {DOC_STATE_LABEL[artifactState.state]}
             </span>
           )}
-          {/* 文档时间常驻主行：从待拍板跳进证据原文时，第一眼就能判断材料新鲜度。
-              source_time（文档日期）优先；无记载回退 observed_at 并显式标注「采集于」，
-              不把采集时刻冒充文章日期。 */}
           <span
             data-reader-doc-time={docTime.basis}
             title={docTime.title}
@@ -868,8 +808,6 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
         </div>
       </div>
 
-      {/* 指挥条右段：新事件胶囊 + 查看方式 + 阅读动作。
-          关系 / 溯源 / 专注只留图标，名字在 aria-label 与 title 里，避免和「标为已读」抢同一行。 */}
       <div className="shrink-0 flex items-center gap-2">
         {visibleNotice && (
           <ReaderChangeNoticeChip
@@ -886,7 +824,6 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
             zenMode ? 'opacity-70' : ''
           }`}
         >
-          {/* 所属专项 + 五阶段 Stepper 收拢为紧凑下拉胶囊，按需展开五阶段跳转 */}
           {activePackage && <InitiativeStageDropdown ctx={ctx} />}
 
           <div
@@ -969,9 +906,6 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
         >
           <Group aria-label="阅读状态与收藏" className="gap-0.5 border-0 bg-transparent p-0 shadow-none">
             {(() => {
-              // 单一真相源：以 unreadStatus.isUnread 判定是否已读，
-              // 确保手工「标为已读」、「确立已读基线」与服务端水合态完全一致；
-              // 浏览历史版本时绝不将已读基线倒退到旧版本，始终面向 latestRev。
               const isUpToDateRead = !unreadStatus.isUnread;
               const isUpdatedAfterRead = unreadStatus.reason === 'updated_since_last_read';
               const canToggleUnread = isUpToDateRead && Boolean(onMarkUnread);
@@ -1067,8 +1001,6 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
                 }
               >
                 <PanelLeft className="w-3.5 h-3.5" />
-                {/* 主行单行化：1440（xl..2xl）下收文字只留图标（aria-label 提供可读名），
-                    ≥2xl 恢复全标签；与昼夜钮合计省 ~104px，保证目录栏展开时主行不换行 */}
                 <span className="max-2xl:hidden">{outlineOpen ? '收起大纲' : '大纲'}</span>
               </Button>
             )}
@@ -1113,7 +1045,6 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
               <span className="sr-only">溯源</span>
             </Button>
 
-            {/* 专注纸面（Zen）：一键收起左右侧栏 + 居中黄金阅读行宽（快捷键 Z） */}
             <Button
               variant={zenMode ? 'primary' : 'ghost'}
               size="sm"
@@ -1156,7 +1087,6 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
                     aria-label="文件操作菜单"
                     data-esc-layer="open"
                     className="glass-pop glx-popover-in absolute right-0 top-full mt-2 w-[312px] rounded-[14px] p-3 z-50 space-y-2"
-                    // 双态就地换底（同迷你版本轴口径）：夜航可读 + 封堵正文笔画透印
                     style={
                       paperLightMode
                         ? { background: 'rgba(255, 254, 250, 0.985)' }
@@ -1174,7 +1104,6 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
                         {activeFile.relative_path}
                       </span>
                     </div>
-                    {/* 文件 ID 从主行移入此处，避免长 ID 占用顶栏视线 */}
                     <div
                       data-reader-file-id-entry=""
                       className="flex items-center justify-between gap-2 rounded-[8px] bg-[color:color-mix(in_srgb,var(--ink-strong)_4%,transparent)] px-2 py-1"
@@ -1233,8 +1162,6 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
         </Toolbar>
       </div>
 
-      {/* 迷你版本轴弹层挂头部根节点末尾：锚单行 header 底沿向下展开，
-          绝不盖住任何头部控件——弹层只覆盖正文纸面（非交互区）。关闭态零 DOM；outside-click 与 Esc 由控制器收口。 */}
       {versionAxisOpen && (
         <ReaderMiniVersionAxis
           nodes={miniVersionAxis}

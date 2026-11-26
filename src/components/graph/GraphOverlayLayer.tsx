@@ -1,11 +1,3 @@
-/**
- * 屏幕空间 Overlay 覆盖层：
- *
- * 承载画布 stage 内的屏幕空间覆盖件：任务包标题层（恒定像素字号、缩放不模糊、
- * 按缩放后容器宽自动省略、双击原位改名固化至 packageTitleStore）、泳道图例气泡、
- * 司辰摘要气泡、节点悬停预览卡、右上小地图、快捷键轻弹层与叙事抽屉本体。
- * 所有坐标折算均在屏幕空间完成（zoomTransform 反算），数据一律来自 controller ctx。
- */
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
@@ -22,11 +14,6 @@ import CanvasNarrativeDrawer from '../canvas/CanvasNarrativeDrawer';
 import { LANE_COLORS } from './geometry';
 import type { GraphCanvasCtx } from './useGraphCanvasController';
 
-/* ═══ 任务包标题 Overlay（屏幕空间恒定像素字号层）═══
- * 几何同源：foreignObject 头行 = 容器 padding 14 + dot 8 + gap 8 起（world），
- * 纵向中心 = y + 12(top pad) + 10(head half) = y + 22；
- * 本层订阅 controller 帧级缩放流（subscribeZoomFrame），每帧直接写入 DOM style，
- * 零 React 重渲的同时与 SVG 容器 100% 像素锁定（消除缩放/平移/时光流转期间的漂移脱位）。 */
 
 /** 任务包标题 Overlay（挂在 stage 内，绝对定位；单点=选中分组、双击=原位改名） */
 export function GraphPackageTitleOverlay({ ctx }: { ctx: GraphCanvasCtx }) {
@@ -73,7 +60,6 @@ export function GraphPackageTitleOverlay({ ctx }: { ctx: GraphCanvasCtx }) {
       {mountedLayouts.map(({ group, x, y, width }) => {
         const rawName = group.name;
         const displayName = pkgTitleOverrides[group.pkgId] ?? rawName;
-        // 头行文本带宽（world）：容器 LR padding 14×2 − dot 8 − gap 8 − gap 8 → 文本带
         const bandWorld = Math.max(40, width - 28 - 8 - 8 - 8);
         const screenLeft = liveT.x + (x + 14 + 8 + 8) * k;
         const screenCenterY = liveT.y + (y + 22) * k;
@@ -390,7 +376,6 @@ export function GraphHoverPreviewCard({ ctx }: { ctx: GraphCanvasCtx }) {
 
           <div className="mt-3 pt-2 border-t border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_6%,transparent)] flex items-center justify-between text-[10.5px] font-mono text-[color:var(--cv-ink-dim)]">
             <span>D3 自由拖拽节点</span>
-            {/* 双击语义提示文案（双击滑出叙事抽屉查看详情） */}
             <span className="text-[color:var(--cv-brand)]">单击进入事件链 · 双击查看详情</span>
           </div>
         </>
@@ -412,7 +397,6 @@ export function GraphMiniMapSection({ ctx }: { ctx: GraphCanvasCtx }) {
     narrativeDrawerOpen,
   } = ctx;
   if (!(stageWidth > 0 && stageHeight > 0)) return null;
-  // 叙事抽屉（340px）展开时，宽屏平滑左移让位（仍可交互）；窄屏平滑退隐防拥挤
   const drawerPosClass = narrativeDrawerOpen
     ? stageWidth >= 820
       ? 'right-[356px] opacity-100'

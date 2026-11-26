@@ -11,12 +11,10 @@ import type { DiffResult } from '../services/apiTypes';
  */
 
 export interface DiffSummaryCardProps {
-  /** 语义 Diff 结果（null=尚未取得） */
   result: DiffResult | null;
   loading: boolean;
   error: string | null;
   paperLightMode?: boolean;
-  /** 卡面标题（版本历史区/时光机下钻可自定义） */
   title?: string;
 }
 

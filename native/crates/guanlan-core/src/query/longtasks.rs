@@ -34,7 +34,6 @@ pub fn map_status_wire(raw: Option<&str>) -> Option<String> {
     }
 }
 
-/// detail_json 的 priority 键解析（无证据按 P2——contract-storage.md §4.3.6-6）
 pub(crate) fn statement_priority(detail_json: &str) -> String {
     serde_json::from_str::<serde_json::Value>(detail_json)
         .ok()
@@ -148,7 +147,6 @@ pub fn statements(
     })
 }
 
-/// 下划线占位判定（与 decision_block 同口径：全占位字符串不是确认人）
 fn is_placeholder(text: &str) -> bool {
     !text.is_empty()
         && text
@@ -194,8 +192,6 @@ pub fn checkpoints(
             .map_err(internal_sql)?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(internal_sql)?;
-        // output_artifact_version（版本号如 v2）：由产出修订的 per-file seq
-        // 派生（与 versionNumber = revision.seq 同源口径）；缺产出修订 → null
         let mut version_stmt = conn
             .prepare("SELECT seq FROM revisions WHERE revision_id = ?")
             .map_err(internal_sql)?;
@@ -232,7 +228,6 @@ pub fn checkpoints(
             ok: true,
             index_generation: ws.index_generation,
             items,
-            // created_at DESC 定长页，不提供续页游标（limit 上限 200 足以覆盖恢复场景）
             next_cursor: None,
         })
     })
@@ -289,7 +284,6 @@ pub fn revision_drafts(
 ) -> Result<DraftsPage, GuanlanError> {
     let ws = store.workspace()?;
     let limit = clamp(limit, 50, 200);
-    // 键游标 = base64url(offset)：created_at 倒序的定长偏移（列表无更新语义，偏移安全）
     let offset: i64 = cursor
         .map(cursor::decode_key_cursor_offset)
         .transpose()?
@@ -411,7 +405,6 @@ pub fn revision_draft_content(
         Some(String::from_utf8_lossy(&bytes).into_owned())
     };
 
-    // 1. 草案快照内容（首选 snapshot_rel_path，沙箱限在 data_dir 内；回退 content_hash）
     let proposed_bytes = crate::storage::sandbox::resolve_existing_file_in_dir_jail(
         store.data_dir(),
         &row.snapshot_rel_path,
@@ -426,14 +419,12 @@ pub fn revision_draft_content(
     });
     let proposed_text = proposed_bytes.and_then(|b| decode_bounded(b, &mut truncated));
 
-    // 2. 基准版快照内容（不冒充磁盘现态）
     let base_bytes = store
         .snapshot_path_for_hash(&row.base_content_hash)
         .ok()
         .and_then(|p| std::fs::read(p).ok());
     let base_text = base_bytes.and_then(|b| decode_bounded(b, &mut truncated));
 
-    // 3. 磁盘当前实时内容 + 实时 CAS 冲突判定（沙箱限在授权工作区目录内）
     let disk_bytes = if path.is_empty() {
         None
     } else {
@@ -498,7 +489,6 @@ pub fn file_summary(
             .ok();
         let (revision_id, content_hash) = file_meta.unwrap_or_default();
 
-        // 该文件当前内容哈希对应的最新摘要任务行
         let row = conn
             .prepare(
                 "SELECT summary_json, state FROM summary_jobs
@@ -566,7 +556,6 @@ pub fn build_summary_detail(
         .into_iter()
         .take(50)
         .map(|(title, line)| {
-            // level = 该行行首井号数（parse_markdown_outline 已剥掉井号，回查原行）
             let level = content_lines
                 .get(line.saturating_sub(1))
                 .map(|raw| raw.trim_start().matches('#').count().max(1) as u32)
@@ -608,7 +597,6 @@ pub fn build_summary_detail(
             _ => {}
         }
     }
-    // 核心摘要：确定性口径 = 大纲标题串联 + 决策计数（不依赖外部模型调用）
     let core = if outline.is_empty() {
         format!(
             "本文档共 {} 项已确认决定、{} 项未决事项（P0 {} / P1 {}）。",
@@ -634,7 +622,6 @@ pub fn build_summary_detail(
     }
 }
 
-/// limit clamp（默认 default，上限 max）
 fn clamp(limit: Option<u32>, default: u32, max: u32) -> i64 {
     let value = limit.unwrap_or(default).min(max);
     i64::from(value).max(1)
@@ -692,7 +679,6 @@ pub fn initiative_state(
 
 /// L4A 队列进度（`done`/`total`/`percent`，`total = 0` 时 `percent = 100`）
 pub fn l4a_progress(store: &ReadonlyStore) -> Result<crate::dto::L4aProgress, GuanlanError> {
-    // schema 版本低于 2 的旧库尚无 summary_jobs 表：返回中性值，与 state_overview 同口径
     if store.schema_version()? < 2 {
         return Ok(crate::dto::L4aProgress {
             done: 0,
@@ -769,7 +755,6 @@ mod tests {
     use super::*;
     use crate::test_support::{cleanup_dir, FixtureDb};
 
-    /// wire 词映射表逐字断言
     #[test]
     fn status_wire_mapping() {
         assert_eq!(map_status_wire(Some("pending")).as_deref(), Some("待确认"));
@@ -787,7 +772,6 @@ mod tests {
         assert_eq!(map_status_wire(Some("全部")), None, "非词表值=全部");
     }
 
-    /// priority 兜底：无键按 P2（contract-storage.md §4.3.6-6）
     #[test]
     fn statement_priority_defaults_to_p2() {
         assert_eq!(statement_priority(r#"{"priority":"P0"}"#), "P0");
@@ -795,7 +779,6 @@ mod tests {
         assert_eq!(statement_priority("不是 JSON"), "P2");
     }
 
-    /// summary 组装：大纲 + 决策摘要（确定性口径）
     #[test]
     fn build_summary_digest_counts() {
         let mut statement = sample_statement("已确认");
@@ -838,7 +821,6 @@ mod tests {
         crate::index::ident::stable_key(input)
     }
 
-    // 防止未使用导入告警（FixtureDb 在集成测试里用）
     #[allow(dead_code)]
     fn unused(fixture: &FixtureDb) {
         let _ = fixture;

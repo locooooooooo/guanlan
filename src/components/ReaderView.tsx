@@ -1,21 +1,5 @@
-/**
- * ReaderView 分层薄装配层。
- *
- * 具体实现按层拆分在 reader/ 目录下：
- *  - reader/readerMarkdownModel.ts      纯函数 Markdown 行模型层（零 UI 依赖、可单测）
- *  - reader/useReaderController.tsx     单一行为控制器（state/memo/effect/handler + 行渲染闭包 → ctx）
- *  - reader/readerChromeSections.tsx    浮动 Chrome（返回横幅/新版本告警/双层文件头）
- *  - reader/readerDiffSection.tsx        diff 子模式面板
- *  - reader/readerRelationsSection.tsx   relations 子模式面板
- *  - reader/readerMarkdownSection.tsx   MD 阅读纸（格式插件层 · markdown）
- *  - reader/readerSvgPdfSections.tsx    SVG / PDF 格式插件层
- *  - reader/readerShared.tsx            共享类型 + CopyIdButton
- *
- * 本文件保留测试兼容再导出（保持既有单测导入路径不变）与各分节装配结构。
- */
 
 import React from 'react';
-// 测试兼容再导出：纯函数层单一出处（reader/readerMarkdownModel.ts）
 export {
   buildLinkParts,
   buildMarkdownBlocks,
@@ -48,11 +32,8 @@ export type {
   MarkdownBlock,
   MarkdownLinkIndex,
 } from './reader/readerMarkdownModel';
-// 测试兼容再导出：共享类型与轻组件
 export { CopyIdButton } from './reader/readerShared';
 export type { ReaderSubMode, ReturnBreadcrumb } from './reader/readerShared';
-// 旧名兼容再导出：RightInspector.tsx:31 仍从本模块 import formatObservedAt（相对时间口径，
-// 与迁移前逐字一致）；改名与迁址只动了事实源位置，不改任何输出。
 export { formatRelativeObservedAt as formatObservedAt } from '../utils/timeFormat';
 export type { ReaderViewProps, ReaderCtx } from './reader/useReaderController';
 import type { ReaderViewProps } from './reader/useReaderController';
@@ -64,7 +45,6 @@ import { ReaderDiffSection } from './reader/readerDiffSection';
 import { ReaderRelationsSection } from './reader/readerRelationsSection';
 import { ReaderMarkdownSection } from './reader/readerMarkdownSection';
 import { ReaderPdfSection, ReaderSvgSection } from './reader/readerSvgPdfSections';
-// 锚点批注层挂载点（最薄接线：组件本体在 reader/readerAnchorLayer.tsx）
 import {
   ReaderAnnotationComposer,
   ReaderAnnotationDrawer,
@@ -89,11 +69,9 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     systemActions,
     onAddEvidencePointer,
     indexGeneration,
-    // 专注纸面（Zen）与阅读进度光条
     zenMode,
     readerProgressBarRef,
     readerProgressTrackRef,
-    // 锚点批注层
     annotations,
     annotationsOpen,
     setAnnotationsOpen,
@@ -123,18 +101,10 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
           : 'bg-[#101218] text-[#F2F1EC]'
       }`}
     >
-      {/* 1. Return Breadcrumb & Non-Intrusive New Version Alert Banner（浮动 Chrome） */}
       <ReaderTopBannerSection ctx={ctx} />
 
-      {/* 2. 紧凑单行文件头（浮动 Chrome） */}
       <ReaderFileHeaderSection ctx={ctx} />
 
-      {/* 2.5 顶部 2px 琉璃阅读进度光条（紧贴顶栏下沿）：
-          只动 transform:scaleX（GPU 合成器无重排，禁动画 width）；
-          百分比由 useReaderController.handleMarkdownScroll 已算好的 pct 单向直写，
-          滚动期零 React 重渲染；正文文字节点永不挂本文件任何动效类。
-          轨道常驻可见（--ink-faint，随 data-reader-dark 换档，满足 ≥3:1 图形对比度），
-          正文停在 scrollTop=0（scaleX(0) 零宽）时轨道仍可见，滚动后鸢尾紫填充随之推进。 */}
       <div
         ref={readerProgressTrackRef}
         role="progressbar"
@@ -153,17 +123,13 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
         />
       </div>
 
-      {/* 3. Main Content Area by SubMode */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* === SUBMODE A: DIFF VIEW === */}
+      <div data-reader-content="" className="flex-1 flex overflow-hidden">
         {(subMode === 'diff_since_read' || subMode === 'diff_versions') && (
           <ReaderDiffSection ctx={ctx} />
         )}
 
-        {/* === SUBMODE B: LOCAL RELATION GRAPH === */}
         {subMode === 'relations' && <ReaderRelationsSection ctx={ctx} />}
 
-        {/* === SUBMODE C: PRIMARY READING MODE (MD / SVG / PDF 格式插件层) === */}
         {subMode === 'read' && (
           <>
             {activeFile.format === 'md' && <ReaderMarkdownSection ctx={ctx} />}
@@ -187,9 +153,6 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
         )}
       </div>
 
-      {/* 锚点批注层（抽屉切换钮/清单抽屉/撰写卡）：
-          阅读子模式 + md/svg/pdf 三格式才挂载；无批注时切换钮不渲染
-          （发现路径=段落悬停「批注」/SVG「框选批注」/PDF「批注此页」） */}
       {anchorLayerActive && (
         <>
           {!annotationsOpen && !annotationComposer && annotations.length > 0 && (

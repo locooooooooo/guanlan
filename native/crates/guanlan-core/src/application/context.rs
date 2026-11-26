@@ -32,12 +32,9 @@ use crate::index::derive::parse_markdown_outline;
 use crate::index::state_machine::estimate_tokens;
 use crate::storage::{internal_sql, ReadonlyStore};
 
-/// 单快照读取上限（估 token 与内联都按此截断；与 diff 单版上限同量级）
 const SNAPSHOT_READ_CAP: usize = 8 * 1024 * 1024;
-/// 仅变更 Diff 粒度单条输出上限（行数 / 字节数），防超大 diff 撑爆上下文预算
 const DIFF_SNIPPET_MAX_LINES: usize = 120;
 const DIFF_SNIPPET_MAX_BYTES: usize = 16 * 1024;
-/// 上游规范引用片段上限（条数 / 单条字符数）
 const UPSTREAM_SNIPPET_CAP: usize = 4;
 const UPSTREAM_SNIPPET_MAX_CHARS: usize = 520;
 /// 脱敏替换令牌（停机红线护栏：本机密钥/环境变量绝不进入上下文包）
@@ -151,7 +148,6 @@ pub struct ContextItemInput {
     pub granularity: ContextGranularity,
 }
 
-/// 库内投影快照（一次读事务内组装完毕）
 struct WorkspaceView {
     workspace_id: String,
     workspace_root: String,
@@ -277,7 +273,6 @@ pub fn assemble_context(
             }
         }
 
-        // ---------- 默认包 / 显式清单 ----------
         let mut selected: Vec<(String, Option<String>, ContextGranularity)> = Vec::new();
         if request.items.is_empty() {
             selected = default_items(conn, &ws.workspace_id, &view, request)?;
@@ -296,7 +291,6 @@ pub fn assemble_context(
                 ));
             }
         }
-        // 去重（同 file 保留首个粒度）
         let mut seen: Vec<String> = Vec::new();
         selected.retain(|(file_id, _, _)| {
             if seen.contains(file_id) {
@@ -307,7 +301,6 @@ pub fn assemble_context(
             }
         });
 
-        // 决策范围：document=焦点文件及所属专项（无专项仅焦点文件）；initiative=专项内全部；global=全工作区
         let initiative_id = resolve_initiative_id(&view, request)?;
         let decision_scope: Option<Vec<String>> = match request.intent {
             ContextIntent::Document => {
@@ -331,7 +324,6 @@ pub fn assemble_context(
         let (pending, confirmed) =
             collect_decisions(conn, &ws.workspace_id, &view, decision_scope.as_deref())?;
 
-        // ---------- 条目组装（est_chars / est_tokens / 脱敏护栏 / 内容内联） ----------
         let mut items: Vec<ContextItem> = Vec::new();
         let mut est_total: u64 = 0;
         let mut est_chars_total: u64 = 0;
@@ -359,7 +351,6 @@ pub fn assemble_context(
                 .map(|artifact| artifact.state.clone())
                 .unwrap_or_else(|| "draft".to_owned());
 
-            // 停机红线护栏：敏感凭证路径（如 .env / *.pem / *.key）即使用户显式传入也强制脱敏为占位说明
             let sensitive_path = is_sensitive_secret_path(&meta.path);
             let (est_chars, est, content, snippet) = if sensitive_path {
                 redacted_total += 1;
@@ -471,7 +462,6 @@ pub fn assemble_context(
             });
         }
 
-        // ---------- 上游规范引用片段（edges 自动抽取 + 脱敏护栏） ----------
         let selected_pairs: Vec<(String, ContextGranularity)> = selected
             .iter()
             .map(|(id, _, g)| (id.clone(), *g))
@@ -490,7 +480,6 @@ pub fn assemble_context(
             est_chars_total += up.est_chars;
         }
 
-        // ---------- 推荐挂载（edges 血缘 + 命名关联） ----------
         let recommended = collect_recommended(
             store,
             conn,
@@ -500,7 +489,6 @@ pub fn assemble_context(
             request,
         )?;
 
-        // ---------- Token 预算 ----------
         let mut downgrade: Vec<(String, u64)> = items
             .iter()
             .filter(|item| item.granularity == "full")
@@ -514,7 +502,6 @@ pub fn assemble_context(
             Vec::new()
         };
 
-        // ---------- 模式 A Markdown / 模式 B payload ----------
         let initiative_meta = initiative_id.as_deref().and_then(|id| view.initiatives.get(id));
         let markdown = if request.mode.has_markdown() {
             let raw_md = render_markdown(
@@ -567,7 +554,6 @@ pub fn assemble_context(
     })
 }
 
-/// 专项 id 解析：显式 > 焦点文件所属 > None
 fn resolve_initiative_id(
     view: &WorkspaceView,
     request: &ContextRequest,
@@ -589,7 +575,6 @@ fn resolve_initiative_id(
     Ok(None)
 }
 
-/// 专项内文件过滤集（决策范围用）
 fn initiative_file_filter(view: &WorkspaceView, initiative_id: Option<&str>) -> Vec<String> {
     view.artifacts
         .iter()
@@ -598,7 +583,6 @@ fn initiative_file_filter(view: &WorkspaceView, initiative_id: Option<&str>) -> 
         .collect()
 }
 
-/// 三入口默认包（零空态自动预选：当前定稿全文 + 专项核心 + 上游规范引用）
 fn default_items(
     conn: &rusqlite::Connection,
     workspace_id: &str,
@@ -628,7 +612,6 @@ fn default_items(
                 return Err(GuanlanError::NotFound(format!("未找到文件 {focus}")));
             }
             push_unique(&mut items, focus.to_owned(), ContextGranularity::Full);
-            // 所属专项的 README / 核心定位（摘要粒度）
             let initiative_id = view
                 .artifacts
                 .get(focus)
@@ -638,7 +621,6 @@ fn default_items(
                     push_unique(&mut items, companion, ContextGranularity::Summary);
                 }
             }
-            // 上游规范/引用文档自动预选（最多 2 篇，摘要粒度）
             if let Some(meta) = view.files.get(focus) {
                 if let Some(rev_id) = meta.last_revision_id.as_deref() {
                     let upstream_ids = upstream_target_file_ids(conn, workspace_id, focus, rev_id)?;
@@ -647,7 +629,6 @@ fn default_items(
                     }
                 }
             }
-            // 兜底补位：若焦点文档所属专项还有其他活跃文档且当前 <2 项，自动补齐 1 篇
             if items.len() < 2 {
                 if let Some(init_id) = initiative_id.as_deref() {
                     let mut mates: Vec<(&String, &FileMeta)> = view
@@ -672,7 +653,6 @@ fn default_items(
                     "intent=initiative 需要 initiative_id 或 focus_file_id".to_owned(),
                 )
             })?;
-            // 各阶段最新定版文档摘要（每阶段一篇，按路径取首篇）
             let mut by_stage: HashMap<String, Vec<(&String, &FileMeta)>> = HashMap::new();
             let mut all_init_files: Vec<(&String, &FileMeta)> = Vec::new();
             for (file_id, artifact) in &view.artifacts {
@@ -699,7 +679,6 @@ fn default_items(
                 .unwrap_or_else(|| "待分类".to_owned());
             for stage in ["蓝图", "计划", "决策", "执行", "交付"] {
                 if stage == current_stage {
-                    // 当前阶段走全量（下方 current_files），阶段摘要不重复挂载
                     continue;
                 }
                 if let Some(mut metas) = by_stage.remove(stage) {
@@ -709,7 +688,6 @@ fn default_items(
                     }
                 }
             }
-            // 当前阶段全量正文
             let mut current_files: Vec<(String, &FileMeta)> = view
                 .artifacts
                 .iter()
@@ -728,7 +706,6 @@ fn default_items(
             for (file_id, _) in current_files {
                 push_unique(&mut items, file_id, ContextGranularity::Full);
             }
-            // 零空态兜底：若专项内文件处于非标准阶段（如「待分类」），仍自动预选核心材料
             if items.is_empty() && !all_init_files.is_empty() {
                 for (idx, (file_id, _)) in all_init_files.into_iter().take(6).enumerate() {
                     let g = if idx == 0 {
@@ -741,7 +718,6 @@ fn default_items(
             }
         }
         ContextIntent::Global => {
-            // 最近活跃 Top-3 专项核心摘要
             let mut initiative_ids: Vec<&String> = view.initiatives.keys().collect();
             initiative_ids.sort();
             for initiative_id in initiative_ids.into_iter().take(3) {
@@ -767,7 +743,6 @@ fn default_items(
                     push_unique(&mut items, fallback, ContextGranularity::Summary);
                 }
             }
-            // 零空态兜底：扁平目录无已识别专项时，按路径序预选前 3 篇活跃非敏感文档
             if items.is_empty() {
                 let mut active: Vec<(&String, &FileMeta)> = view
                     .files
@@ -784,7 +759,6 @@ fn default_items(
     Ok(items)
 }
 
-/// 专项核心文档（README / 核心定位 / 兜底首篇），排除焦点文件本身
 fn initiative_core_doc(
     view: &WorkspaceView,
     initiative_id: &str,
@@ -816,7 +790,6 @@ fn initiative_core_doc(
         .map(|(file_id, _)| (*file_id).clone())
 }
 
-/// 读快照文本（截断到 [`SNAPSHOT_READ_CAP`]；缺快照返回空串——est_tokens=0 如实）
 fn read_snapshot_text(
     store: &ReadonlyStore,
     revision_id: Option<&str>,
@@ -832,14 +805,12 @@ fn read_snapshot_text(
     Ok(String::from_utf8_lossy(capped).into_owned())
 }
 
-/// 摘要粒度的注入文本（仅大纲与结论：标题大纲 + 核心结论/决定行 + 首段摘要）
 fn summary_text(content: &str) -> String {
     let outline = parse_markdown_outline(content);
     let mut out = String::new();
     for (title, line) in outline.iter().take(30) {
         out.push_str(&format!("- {title}（L{line}）\n"));
     }
-    // 抽取关键结论/决定行（最多 8 条）
     let mut conclusions: Vec<&str> = Vec::new();
     for line in content.lines() {
         let trimmed = line.trim();
@@ -861,7 +832,6 @@ fn summary_text(content: &str) -> String {
     for line in &conclusions {
         out.push_str(&format!("结论：{line}\n"));
     }
-    // 首个非标题非空段落（若未重复）
     if let Some(paragraph) = content.lines().find(|line| {
         let t = line.trim();
         !t.is_empty() && !t.starts_with('#') && !t.starts_with("```") && !conclusions.contains(&t)
@@ -871,7 +841,6 @@ fn summary_text(content: &str) -> String {
     out
 }
 
-/// decisions_only 粒度的注入文本（已拍板决定 + 未决约束清单）
 fn decisions_only_text(pending: &[PendingDecision], confirmed: &[ConfirmedDecision]) -> String {
     let mut out = String::new();
     for decision in confirmed {
@@ -886,8 +855,6 @@ fn decisions_only_text(pending: &[PendingDecision], confirmed: &[ConfirmedDecisi
     out
 }
 
-/// 未决/已确认决策汇总（决策最新状态口径：同 decision_id 取最新 observed_at——
-/// 与 record_decision_events 的聚合一致）
 #[allow(clippy::type_complexity)]
 fn collect_decisions(
     conn: &rusqlite::Connection,
@@ -925,7 +892,6 @@ fn collect_decisions(
         .collect::<rusqlite::Result<Vec<_>>>()
         .map_err(internal_sql)?;
 
-    // (statement_id, code, question, status, file_id, observed_at, line_start, detail_json, quote)
     type Latest = (
         String,
         String,
@@ -1041,7 +1007,6 @@ fn collect_decisions(
             .then(a.line_start.cmp(&b.line_start))
             .then(a.decision_id.cmp(&b.decision_id))
     });
-    // 确定性排序：消除 HashMap 遍历顺序随机性，保证预览/复制/MCP 逐字节一致
     confirmed.sort_by(|a, b| {
         a.decision_id
             .cmp(&b.decision_id)
@@ -1050,9 +1015,6 @@ fn collect_decisions(
     Ok((pending, confirmed))
 }
 
-/// 推荐挂载（edges 血缘）：焦点/已选文件的边 → 目标文件；
-/// reason：焦点文件自身的直接引用=本文引用(3)、目标与来源同专项=同专项引用(3)、
-/// 跨专项=跨专项引用(2)、unresolved=命名关联(1)。排序：rank desc → est desc → path asc。
 fn collect_recommended(
     store: &ReadonlyStore,
     conn: &rusqlite::Connection,
@@ -1062,7 +1024,6 @@ fn collect_recommended(
     request: &ContextRequest,
 ) -> Result<Vec<RecommendedItem>, GuanlanError> {
     let selected_ids: Vec<&str> = selected.iter().map(|(id, _)| id.as_str()).collect();
-    // 来源版本：焦点文件优先，否则全部已选文件的当前版本
     let mut source_revisions: Vec<(String, String)> = Vec::new();
     if let Some(focus) = &request.focus_file_id {
         if let Some(meta) = view.files.get(focus) {
@@ -1084,7 +1045,7 @@ fn collect_recommended(
         return Ok(Vec::new());
     }
 
-    let mut edges: Vec<(String, String, String)> = Vec::new(); // (source_file_id, target, resolution)
+    let mut edges: Vec<(String, String, String)> = Vec::new();
     {
         let mut stmt = conn
             .prepare(
@@ -1112,7 +1073,6 @@ fn collect_recommended(
     let mut ranked: Vec<(u8, RecommendedItem)> = Vec::new();
     let mut seen_targets: Vec<String> = Vec::new();
     for (source_file_id, target_file_id, _resolution) in edges {
-        // unresolved 目标（`unresolved:<path>`）：没有 file_id，v1 不成条目
         let Some(target_id) = target_file_id
             .strip_prefix("unresolved:")
             .map_or_else(|| Some(target_file_id.clone()), |_| None)
@@ -1202,9 +1162,6 @@ fn recommended_ranked_push(
     ranked.push((rank, item));
 }
 
-// ---------- 模式 A / 模式 B ----------
-
-/// DocState wire 词 → 中文标签
 fn state_label(state: &str) -> &'static str {
     match state {
         "draft" => "草稿",
@@ -1228,7 +1185,6 @@ fn granularity_label(granularity: &str) -> &'static str {
     }
 }
 
-/// 模式 A：`<guanlan_context>` XML 结构 Markdown（与预览/复制/MCP 同源）
 fn render_markdown(
     workspace_root: &str,
     initiative_name: Option<&str>,
@@ -1390,7 +1346,6 @@ fn render_markdown(
     out
 }
 
-/// XML 属性转义（& < > "）
 fn xml_attr(text: &str) -> String {
     text.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -1398,7 +1353,6 @@ fn xml_attr(text: &str) -> String {
         .replace('"', "&quot;")
 }
 
-/// 模式 B：guanlan-mcp/v1 JSON 载荷
 fn render_payload(
     store: &ReadonlyStore,
     view: &WorkspaceView,
@@ -1414,7 +1368,6 @@ fn render_payload(
         .iter()
         .map(|item| {
             let granularity = match item.granularity.as_str() {
-                // 模式 B 结构化载荷口径：summary 映射为 summary_only
                 "summary" => "summary_only",
                 other => other,
             };
@@ -1463,7 +1416,6 @@ fn render_payload(
     })
 }
 
-/// 该专项最近一次 SUCCESS checkpoint（模式 B session_checkpoint_id）
 fn latest_success_checkpoint_id(
     store: &ReadonlyStore,
     workspace_id: &str,
@@ -1488,9 +1440,6 @@ fn latest_success_checkpoint_id(
     })
 }
 
-// ================= 四档粒度内容派生、上游规范片段与密钥/环境变量脱敏护栏 =================
-
-/// 查询版本真实 content_hash（用于 payload hash 与草案 input_context_hashes 对齐）
 fn lookup_revision_hash(conn: &rusqlite::Connection, revision_id: &str) -> Option<String> {
     conn.query_row(
         "SELECT content_hash FROM revisions WHERE revision_id = ?",
@@ -1501,7 +1450,6 @@ fn lookup_revision_hash(conn: &rusqlite::Connection, revision_id: &str) -> Optio
     .filter(|h| !h.trim().is_empty())
 }
 
-/// `metadata_only` 粒度渲染：仅路径、版本、状态与短哈希（极低 Token 占用）
 fn metadata_only_text(
     path: &str,
     version_label: Option<&str>,
@@ -1516,7 +1464,6 @@ fn metadata_only_text(
     format!("{path} | {ver} | {}{hash_part}", state_label(state))
 }
 
-/// `diff_only` 粒度渲染：自动比对当前版与其前驱版本，输出有界变更摘要与增删行
 fn diff_only_text(
     store: &ReadonlyStore,
     conn: &rusqlite::Connection,
@@ -1527,7 +1474,6 @@ fn diff_only_text(
         return Ok("（尚无已采集版本，无变更 Diff）".to_owned());
     };
     let cur_text = read_snapshot_text(store, Some(cur_rev))?;
-    // 找前驱版本：优先 prev_revision_id，兜底按 seq 找上一版
     let prev_rev: Option<String> = conn
         .query_row(
             "SELECT prev_revision_id, seq FROM revisions WHERE revision_id = ?",
@@ -1613,7 +1559,6 @@ fn diff_only_text(
     Ok(out)
 }
 
-/// 查焦点文件当前版的直接上游引用目标 file_id（用于默认包自动预选上游规范）
 fn upstream_target_file_ids(
     conn: &rusqlite::Connection,
     workspace_id: &str,
@@ -1647,7 +1592,6 @@ fn upstream_target_file_ids(
     Ok(out)
 }
 
-/// 抽取上游规范/引用片段（从焦点/已选文档的出边自动溯源，按规范优先级排序并强制脱敏）
 fn collect_upstream_snippets(
     store: &ReadonlyStore,
     conn: &rusqlite::Connection,
@@ -1686,7 +1630,6 @@ fn collect_upstream_snippets(
         )
         .map_err(internal_sql)?;
 
-    // (rank, path, target_id, rel_type, reason)
     let mut candidates: Vec<(u8, String, String, String, String)> = Vec::new();
     let mut seen_targets: Vec<String> = Vec::new();
     for (src_id, rev_id) in &source_revs {
@@ -1874,7 +1817,6 @@ fn is_sensitive_env_key(raw_key: &str) -> bool {
     if key.is_empty() || key.len() > 64 {
         return false;
     }
-    // 排除纯中文自然语言说明，要求 ASCII 标识形态
     if !key
         .bytes()
         .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b'.')
@@ -1944,7 +1886,6 @@ fn is_placeholder_value(val: &str) -> bool {
 }
 
 fn redact_sensitive_kv_line(line: &str) -> (String, usize) {
-    // 支持 KEY=VALUE（.env / export）与 KEY: VALUE（YAML / JSON）
     for sep in ['=', ':'] {
         if let Some(pos) = line.find(sep) {
             let left = &line[..pos];
@@ -2041,7 +1982,6 @@ fn redact_known_secret_tokens(line: &str) -> (String, usize) {
     let mut i = 0usize;
     let mut hits = 0usize;
     while i < bytes.len() {
-        // Bearer <token>
         if line[i..].starts_with("Bearer ") {
             let tok_start = i + "Bearer ".len();
             let mut tok_end = tok_start;

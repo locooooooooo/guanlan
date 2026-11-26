@@ -1,9 +1,3 @@
-/**
- * App 主视图分节：
- * 今日观澜首页 / 资产库空态 / 全景溯源三态（星图舷窗 / 列表 / 日历）。
- * 数据一律来自 useWorkspaceStore ctx；模块常量（INITIAL_CANVAS_THEME /
- * timelineReturnBreadcrumb）从 store 单一出处导入。
- */
 
 import React, { useMemo, useState } from 'react';
 import { BookMarked } from 'lucide-react';
@@ -42,22 +36,18 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
     eventPage, eventPageLoading, undatedOnly, eventOrder, toggleEventOrder, loadMoreEvents,
     refreshEvents, toggleUndatedEvents, dateFilter, applyDayFilter, eventKindFilter,
     applyKindFilter, resetEventFilters, handleOpenFileTimeline, openQuickPreview,
-    // 增量聚光灯（司辰旁导航条 + 画布骨架降亮度）
     spotlightEnabled, spotlightItems, spotlightDimmedFileIds, spotlightCursor,
     handleSpotlightToggle, handleSpotlightCursor,
     multiProjects,
     retryingConnection, handleRetryConnection,
   } = ctx;
 
-  // 日历主板 ↔ 右侧迷你月历联动状态（悬停驱动纵贯光束，点击锁定聚焦卡并可一键飞向司辰星图）
   const [calendarFocusedDate, setCalendarFocusedDate] = useState<string | null>(null);
   const [calendarHoveredDate, setCalendarHoveredDate] = useState<string | null>(null);
-  // 星图 / 日历 / 列表三视图同源排除工作区私有「目录静默清单」（左栏与 Ctrl+K 仍完全可见可阅读）
   const unmutedPanorama = useMemo(
     () => filterOutMutedFolders(files, events, mutedFolders),
     [files, events, mutedFolders]
   );
-  // 全景顶栏共享域过滤（日历 / 星图 / 列表同源消费，复用 formatMeta 13 族分类单一数据源，严格 MECE 守恒）
   const [panoramaDomain, setPanoramaDomain] = useState<AssetDomainFilter>('all');
   const domainCounts = useMemo(
     () => countAssetsByDomain(unmutedPanorama.files),
@@ -132,17 +122,11 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
     setPanoramaMode('canvas');
   };
 
-  // 首页「司辰今日徽记」/事件走势柱图 → 全景直跳。
-  // 锁定语义用 setActiveDate 直写——handleSelectCanvasDate 是「再点同值即清空」的
-  // toggle（只属于画布内自点）；首页直跳要的是锁定聚焦，绝不让用户点一次柱子后
-  // 聚焦反被清掉（直跳语义不同于画布内 toggle）。
   const handleJumpFromHomeToStarMap = (date: string) => {
     setActiveDate(date);
     setActiveTab('panorama');
     setPanoramaMode('canvas');
   };
-  // 日历落点：锁定 activeDate 并同步右侧「当日沉淀聚焦卡」（calendarFocusedDate 为
-  // 本组件本地态，首页直跳可直接写入，无需抬升进 store）
   const handleJumpFromHomeToCalendar = (date: string) => {
     setActiveDate(date);
     setCalendarFocusedDate(date);
@@ -152,8 +136,6 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
 
   return (
     <>
-      {/* PRIMARY VIEW 1: 今日观澜首页——轻数据（bootstrap 快照 + /events/days）先行渲染，
-          files/events 分页续拉到达后统计卡与任务动态自动补齐；初始化 loading 态由上方进度块接管 */}
       {activeTab === 'home' && !(dataSource === 'loading' && files.length === 0 && !dataError) && (
         <main key="view-home" className="glx-view-enter flex-1 flex min-h-0 flex-col overflow-hidden">
           <HomeView
@@ -167,9 +149,6 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
             dataError={dataError}
             retryingConnection={retryingConnection}
             onRetryConnection={() => void handleRetryConnection()}
-            // 专题卡 A 数据面——decisions 原始数组进 HomeView，卡内按
-            // DecisionRadar 同口径过滤取前 2（FeaturedFocusCards 组件自身零造数）；
-            // 斜叠决策卡点击复用决策引用跳证据原文链路
             decisions={decisions}
             decisionsUnresolvedTotal={decisionsUnresolvedTotal}
             onOpenDecision={handleOpenDecisionReference}
@@ -184,7 +163,6 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
               setActiveTab('panorama');
               setPanoramaMode('canvas');
             }}
-            // 柱图/徽记带日期直跳——精确 YYYY-MM-DD 锁定进星图/日历聚焦态
             onOpenPanoramaAt={handleJumpFromHomeToStarMap}
             onOpenCalendarAt={handleJumpFromHomeToCalendar}
             onOpenChronosDigest={() => ctx.setIsChronosDigestOpen(true)}
@@ -229,7 +207,6 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
         </main>
       )}
 
-      {/* 接口失败或工作区为空时：知识资产库三栏必须有可渲染的空态，不得崩溃 */}
       {activeTab === 'library' && !activeFile && (
         <main className="flex-1 flex items-center justify-center p-8">
           <div className="max-w-md text-center space-y-2">
@@ -256,9 +233,6 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
         </main>
       )}
 
-      {/* PRIMARY VIEW 2: 全景溯源——星图 hidden 保活常驻：
-          切列表/日历或去其他工作区都不卸载，画布选中态/力导向布局不丢 */}
-      {/* 轻数据（eventDays）就绪即可渲染画布，文件元数据由 bootstrap 首批 + files 分页续拉补齐 */}
       <main
         className={
           activeTab === 'panorama' && panoramaMode === 'canvas'
@@ -269,11 +243,6 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
         {activeFile || (eventDays && eventDays.groups.length > 0) ? <div
           ref={portholeRef}
           className="dark-porthole relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-[20px]"
-          // 主题作用域挂舷窗唯一安装点——一处属性覆盖 KnowledgeGraph /
-          // GraphCanvasView / ChronosMascotNode / eventGraph.css / 时光机全部后代。
-          // 不挂 html（避免作用域过宽），不挂 GraphCanvasView 根 div（避免漏掉 eventGraph 消费方）。
-          // React 仅写入首帧初值常量，后续切换经 handleCanvasThemeChange 命令式写 dataset，
-          // 初值常量不变因此后续重渲不会覆写命令式切换结果。
           data-canvas-theme={INITIAL_CANVAS_THEME}
         >
         <KnowledgeGraph
@@ -283,7 +252,6 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
           root={config.rootPath}
           stateOverview={stateOverview}
           systemActions={systemActions}
-          // 资产域切换与静默目录提示以原生 flex 插槽并入星图顶栏，避免绝对定位遮盖工具栏按钮
           topBarSlot={
             domainCounts.code > 0 || mutedFolders.length > 0 ? (
               <div className="flex items-center gap-1.5 min-w-0">
@@ -302,10 +270,7 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
               </div>
             ) : undefined
           }
-          // 画布主题切换回调经 GraphCanvasViewProps 透传给画布；
-          // 当前主题值不再经 props 传递（避免画布因主题切换整树重渲），分段钮/页签直接订阅 store
           onCanvasThemeChange={handleCanvasThemeChange}
-          // 三态切换回调经 KnowledgeGraph 透传给画布
           panoramaMode={panoramaMode}
           onPanoramaModeChange={setPanoramaMode}
           onOpenChronosDigest={() => ctx.setIsChronosDigestOpen(true)}
@@ -338,13 +303,10 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
           indexGeneration={config.runtimeStatus.indexGeneration}
           eventDays={panoramaEventDays}
           activeDate={activeDate}
-          // 再次点击当前刻度/日期可取消选中（undefined 回到画布自选最新一天）
           onSelectDate={handleSelectCanvasDate}
-          // 标尺粒度（月/周/日）切换与聚合刻度下钻到日
           granularity={dayGranularity}
           onGranularityChange={handleGranularityChange}
           onDrillToBucket={handleDrillToBucket}
-          // 日期组 / 「N 条待展开」一步切到全景列表态看当天全部（from=to 服务端下推）
           onOpenDayInTimeline={handleJumpToDayInTimeline}
           selectedEventId={selectedEventId}
           onSelectEvent={(eventId) => {
@@ -365,7 +327,6 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
         /> </div> : <p className="m-auto text-sm text-[var(--ink-soft)]">当前工程还没有可浏览的资料。</p>}
       </main>
 
-      {/* 全景溯源 列表态：与星图顶栏同一浮动玻璃卡片语言，消除切换星图/列表/日历时的视觉跳变 */}
       {activeTab === 'panorama' && panoramaMode === 'list' && (
         <main key="view-panorama-list" className="glx-view-enter flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="mx-3.5 mt-2.5 px-4 py-1.5 rounded-[14px] depth-2-card flex items-center justify-between gap-3 shrink-0">
@@ -414,26 +375,21 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
             onToggleUndated={toggleUndatedEvents}
             files={domainFiltered.files}
             readingStates={readingStates}
-            // 日期筛选选项来自 /events/days 全量日期；筛选值受控并下推服务端
             eventDays={panoramaEventDays}
             dateFilter={dateFilter.from || 'all'}
             onDateFilterChange={(d) => void applyDayFilter(d === 'all' ? undefined : d)}
-            // 类型筛选同样受控并下推服务端（kinds 参与游标指纹）
             kindFilter={eventKindFilter}
             onKindFilterChange={(kind) => void applyKindFilter(kind)}
             onResetFilters={() => void resetEventFilters()}
             selectedEventId={selectedEventId}
             onSelectEvent={(ev) => {
               setSelectedEventId(ev.event_id);
-              // workspace_baseline/decision 等事件无关联文件（file_id 为空）：
-              // 跳过选中回写，避免阅读器悬空打开兜底文件
               if (ev.file_id) {
                 setActiveFileId(ev.file_id);
                 setPinnedRevisionId(ev.revision_id);
               }
             }}
             onOpenFileFromTimeline={handleOpenFileFromTimelineOrGraph}
-            // 文件时间线抽屉入口
             onOpenFileTimeline={handleOpenFileTimeline}
             onQuickPreview={openQuickPreview}
             onOpenDecisionFromTimeline={handleOpenDecisionReference}
@@ -443,7 +399,6 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
         </main>
       )}
 
-      {/* 全景溯源 日历态：与星图/列表同一浮动三态切换顶栏 + 域过滤 Toolbar */}
       {activeTab === 'panorama' && panoramaMode === 'calendar' && (
         <main key="view-panorama-calendar" className="glx-view-enter flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="mx-3.5 mt-2.5 px-4 py-1.5 rounded-[14px] depth-2-card flex items-center justify-between gap-3 shrink-0">

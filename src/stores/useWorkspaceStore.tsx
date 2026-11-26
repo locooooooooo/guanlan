@@ -1,13 +1,3 @@
-/**
- * 单一工作区状态 Store：集中管理全局 state / memo / effect / handler 与模块级常量。
- *
- * 单一出口 useWorkspaceStore() 返回 ctx，供装配层与各分节渲染层按需解构消费：
- *  - App.tsx（薄装配：TopHeader / 工作区门禁 / 分节组合）
- *  - components/app/AppBanners.tsx（横幅栈 + 冷启动进度）
- *  - components/app/AppMainViews.tsx（首页 / 全景三态）
- *  - components/app/AppLibraryStage.tsx（知识资产库三栏）
- *  - components/app/AppModalsStack.tsx（抽屉与弹窗栈）
- */
 
 import React, {
   useCallback,
@@ -86,7 +76,6 @@ import {
   type WorkspaceSummary,
   type WorkspaceStatusResponse,
 } from '../services/workspaceClient';
-// 统一状态机投影 wire DTO（App 级唯一取数，四视图共享）
 import type {
   OrphanRepairAction,
   ReviewBoardDraftBrief,
@@ -94,8 +83,6 @@ import type {
   StateOverviewResponse,
 } from '../services/apiTypes';
 import { bucketRange } from '../utils/graphEvents';
-// 版本正文统一仓库——App/Reader/diff 共享请求协调（in-flight 合并）、
-// 失败可重试与字节预算；晚到 FileDetail 经 mergeDetailRevisionsPreservingContent 不再覆盖已加载正文
 import {
   clearRevisionContentStore,
   getRevisionContent,
@@ -103,7 +90,6 @@ import {
   requestRevisionContent,
 } from '../utils/revisionContentStore';
 import { clearFilePreviewCache } from '../utils/filePreviewCache';
-// L4A 进度不住 React 状态：每批 3 篇一条事件，整树重渲会把阅读器与星图一起拖下水
 import { isL4aProgressActive, resetL4aProgress, setL4aProgress } from '../utils/l4aProgressStore';
 import {
   copyTextWithDesktopFallback,
@@ -127,14 +113,10 @@ import {
   normalizeRelativeWorkspacePath,
   validateImportTargetDir,
 } from '../utils/workspacePaths';
-// 弹窗提交前的 old→new 路径映射重建（fileNameOf 取真实路径段而非显示 title）
 import { fileNameOf } from '../utils/fileOps';
-// 任务包语义层（分组 / 单文件归属反查）——阅读页与看板共用同一份纯函数口径
 import { extractCoreSummary, groupFilesIntoPackages, taskPackageOf } from '../utils/taskPackages';
 import type { TaskPackage } from '../utils/taskPackages';
-// 新事件提示时刻 / 文档日期统一按本地时区取值
 import { formatLocalClock, localDay } from '../utils/timeFormat';
-// 日历窗口事件取数（只取最近 90 天的一页，不排空历史游标）
 import { calendarWindowEventQuery } from '../utils/calendarEventWindow';
 import {
   applyBatchMarkUnread,
@@ -148,7 +130,6 @@ import {
   restoreReadingStatesSnapshot,
   saveReadingStates,
 } from '../utils/readingStateStore';
-// 阅读状态落盘合批（滚动进度高频更新，整表序列化不能每帧做）
 import { createCoalescedPersist, type CoalescedPersist } from '../utils/coalescedPersist';
 import {
   loadMutedFolders,
@@ -156,7 +137,6 @@ import {
   saveMutedFolders,
   toggleMutedFolderList,
 } from '../utils/sidebarTree';
-// 智能体上下文清单：三入口默认包组装 + 模式 A/B 决策段行类型
 import {
   buildAgentContextPreset,
   type AgentContextPreset,
@@ -171,15 +151,12 @@ import type {
   GuanlanContextBlockerLine,
   GuanlanContextDecisionLine,
 } from '../utils/agentContextExport';
-// 回写通知条：SSE kinds 含 proposal → 右下角非侵入提示
 import type { ProposalToastData } from '../components/ProposalToast';
-// 拍板完成 → 向上下文清单推送《最新已拍板决策变更单》
 import {
   buildDecisionChangeNote,
   decisionChangeNoteFromAssertion,
   type DecisionChangeNote,
 } from '../utils/decisionChangeNote';
-// 未决口径共用出口（DecisionRadar/HomeView/上下文清单 pending 段同源）
 import {
   DECIDED_DECISION_STATUSES,
   DOC_STATE_LABEL,
@@ -188,15 +165,12 @@ import {
   initiativeStateOfPackage,
   isUnresolvedDecision,
 } from '../utils/stateProjection';
-// Delivered 一键归档提示 / Archived 重开入口的纯判定
 import {
   deliveredInitiativesOf,
   initiativeArchiveWarn,
 } from '../utils/initiativeLifecycle';
 import { basenameOf } from '../utils/documentIdentity';
 import { isTimeMachineFormat } from '../utils/formatMeta';
-// 画布主题（舷窗局部，非全局）：活值存 canvasThemeStore，
-// Store 仅通过 portholeRef 命令式直写舷窗 DOM 属性，避免触发整棵 App 树重渲染
 import {
   applyCanvasTheme,
   getCanvasTheme,
@@ -204,7 +178,6 @@ import {
   type CanvasTheme,
 } from '../utils/canvasThemeStore';
 import { LibraryMode, PrimaryTab } from '../components/TopHeader';
-// wire→视图事件转换与 TimelineView 列表态共用同一份（bootstrap/分页事件并入累计事件表）
 import { pageItemToEvent } from '../components/TimelineView';
 import type { PanoramaMode } from '../components/GraphCanvasView';
 import { enterEventFrame, type EventFrame } from '../components/KnowledgeGraph';
@@ -213,8 +186,6 @@ import {
   ReaderSubMode,
   ReturnBreadcrumb,
 } from '../components/ReaderView';
-// 决策回执入篮接线：篮子装配只消费 payload 形状，指令组装（buildDecisionReceiptInstruction）
-// 归 ReaderView 剪贴板链路，Store 侧不重复造
 import type { DecisionReceiptBasketPayload } from '../components/ReaderView';
 import type {
   FileContextMenuState,
@@ -229,7 +200,6 @@ import {
   type PendingCrossProjectTarget,
 } from '../hooks/useMultiProjects';
 import { collectMergedFolderOptions } from '../utils/sidebarTree';
-// 文件操作专属 Undo/Redo 账本 + 全局快捷键分发层 + 导航来源栈
 import { useFileOpHistory } from '../hooks/useFileOpHistory';
 import { useGlobalShortcuts } from '../hooks/useGlobalShortcuts';
 import { mergeIncrementalEventPage } from '../utils/virtualSlice';
@@ -246,9 +216,7 @@ import {
   pushNavSource,
   type NavSourceEntry,
 } from '../utils/navigationSourceStack';
-// 引用路径修复（确认制清单 + 桌面壳 CAS 写回）——受影响引用清单零 IO 收集
 import { useReferencePathRepair } from '../hooks/useReferencePathRepair';
-// 五类智能视图（徽标/列表/画布过滤单一数据源派生 → 100% 守恒）
 import {
   computeSmartViewFiles,
   isSmartViewScope,
@@ -256,7 +224,6 @@ import {
   SMART_VIEWS,
   type SmartViewId,
 } from '../utils/smartViews';
-// 增量聚光灯（读后真实变化三类派生 + 降亮度集合，纯函数单一出口）
 import {
   computeSpotlightChanges,
   computeSpotlightDimmedFileIds,
@@ -268,11 +235,9 @@ import { recordMountedReading } from '../utils/mountReadingPositions';
 import { localDayOf } from '../utils/commandPaletteGrammar';
 import type { PaletteFileLite, PaletteItem } from '../utils/commandPaletteResults';
 import { useQuickPreview } from '../hooks/useQuickPreview';
-// 全景切换采用 Tabs 标线组件
 import { Tabs } from '../components/ui/primitives';
 import { toastManager } from '../components/ui/toast';
 
-// 数据未接通前的中性空配置：不再使用演示样本兜底，接口失败时各视图展示空状态与错误横幅
 export const EMPTY_WORKSPACE_CONFIG: WorkspaceConfig = {
   rootPath: '',
   rootKey: '',
@@ -307,29 +272,16 @@ export const EMPTY_WORKSPACE_CONFIG: WorkspaceConfig = {
   },
 };
 
-// 全工程时间覆盖：按桶聚合取数拉满服务端上限 120（不再 30 天静默截断）；
-// 取数窗口由 /events/time-range 的真实区间驱动，超出上限的更早历史由画布「更早 N 天/周/月」刻度明示
 export const DAYS_QUERY_LIMIT = 120;
 
-// 舷窗 data-canvas-theme 的首帧初值（模块导入即完成本机水合，无首帧闪烁）。
-// 保持为模块级常量——翻转由 handleCanvasThemeChange 命令式改 DOM 属性，React 重渲 diff
-// 值相同不会覆写命令式写入；避免放进 useState 导致每次切换触发整棵 App 树重渲染。
 export const INITIAL_CANVAS_THEME = readCanvasTheme();
 
-/** 全景溯源 星图/列表/日历 三态选项（文案恒定；canvas 态的按钮由 GraphCanvasView 渲染） */
 const PANORAMA_MODE_OPTIONS: { value: PanoramaMode; label: string }[] = [
   { value: 'canvas', label: '星图' },
   { value: 'list', label: '列表' },
   { value: 'calendar', label: '日历' },
 ];
 
-/**
- * 来源 → 返回目标 的单一映射表。
- * 所有 timeline 家族入口（星图/画布开文档、搜索结果命中、事件链续读）共用同一来源码
- * ——返回「全景溯源星图」（activeTab=panorama + panoramaMode=canvas）。
- * 搜索结果命中从 canvas 语境下钻、无独立来源视图，显式归入本家族，
- * 返回处理 handleFollowReturnBreadcrumb 一律查此表，禁止在调用点散落硬编码目标。
- */
 const TIMELINE_RETURN_TARGET: { activeTab: PrimaryTab; panoramaMode: PanoramaMode } = {
   activeTab: 'panorama',
   panoramaMode: 'canvas',
@@ -341,7 +293,6 @@ export const timelineReturnBreadcrumb = (label: string): ReturnBreadcrumb => ({
   label,
 });
 
-/** 画布聚合取数窗口：下钻窗口优先；否则取当前口径下的真实时间区间（time-range 驱动） */
 function daysWindow(
   order: 'occurred' | 'observed',
   range: EventTimeRange | null,
@@ -354,12 +305,6 @@ function daysWindow(
   return { from: min || undefined, to: max || undefined };
 }
 
-/**
- * 画布查询窗口指纹比较（粒度/口径/下钻）：eventDays 无游标与代际体系，落地守卫只能
- * 用「发起时刻 dayQueryRef 快照 vs 落地时刻现值」比对——期间切粒度/下钻/口径的旧
- * days 响应不得覆盖新窗口（refreshEvents / toggleEventOrder / handleGranularityChange /
- * handleDrillToBucket 四处共用）。
- */
 function sameDayQuery(
   a: {
     granularity: EventDayGranularity;
@@ -380,7 +325,6 @@ function sameDayQuery(
   );
 }
 
-/** 根据 Tauri 拖拽事件 CSS 逻辑坐标命中带 `[data-drop-folder]` 的目录树/文件夹卡 */
 function detectDropFolderAt(x: number, y: number): string | null {
   if (typeof document === 'undefined' || typeof document.elementFromPoint !== 'function') {
     return null;
@@ -391,11 +335,6 @@ function detectDropFolderAt(x: number, y: number): string | null {
   return folderEl.getAttribute('data-drop-folder') ?? null;
 }
 
-/**
- * 增量聚光灯：待审草案行 → file_id → 最新 created_at 索引。
- * 同文件多枚草案取 created_at 最大的那一枚（聚光灯按时间逐条批阅要真时间）；
- * created_at 非法/缺失的草案行不进索引（诚实缺时间，排序侧排后不伪造）。
- */
 function draftTimestampIndex(items: { file_id: string; created_at: string }[]): Map<string, string> {
   const index = new Map<string, string>();
   for (const item of items) {
@@ -408,10 +347,8 @@ function draftTimestampIndex(items: { file_id: string; created_at: string }[]): 
   return index;
 }
 
-/** 聚光灯关闭态的降亮度集合（共享空集常量，避免每渲染新 Set 触发下游 memo） */
 const SPOTLIGHT_EMPTY_DIMMED: ReadonlySet<string> = new Set<string>();
 
-/* eslint-disable react-hooks/exhaustive-deps -- 保持既有 hook 依赖列表与行为一致 */
 
 export function useWorkspaceStore() {
   const [desktopSession, setDesktopSession] = useState<DesktopSessionState | null>(() =>
@@ -422,12 +359,9 @@ export function useWorkspaceStore() {
   const hasActiveBackend = !desktopSession || desktopSession.status === 'ready';
   const [workspaceEpoch, setWorkspaceEpoch] = useState(0);
   const [switchingWorkspace, setSwitchingWorkspace] = useState(false);
-  // 同步镜像 switchingWorkspace：在 switch_workspace 关闭旧服务的同一瞬间，
-  // 抑制旧后端在途请求与 SSE 断连误报成全局故障红条。
   const switchingWorkspaceRef = useRef(false);
   const [workspaceSwitchError, setWorkspaceSwitchError] = useState<string | null>(null);
   const readingWorkspaceIdRef = useRef<string | null>(null);
-  // 右键系统操作菜单、拖放导入引导浮层与非侵入反馈条
   const [fileContextMenu, setFileContextMenu] = useState<FileContextMenuState | null>(null);
   const [systemToast, setSystemToast] = useState<SystemActionFeedbackToast | null>(null);
   const systemToastSeqRef = useRef(0);
@@ -441,57 +375,38 @@ export function useWorkspaceStore() {
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [decisions, setDecisions] = useState<DecisionAssertion[]>([]);
-  // 服务端全库活跃文件未决待拍板真实总数（不受 limit=100 分页截断）
   const [decisionsUnresolvedTotal, setDecisionsUnresolvedTotal] = useState<number | null>(null);
   const [relations, setRelations] = useState<RelationEdge[]>([]);
-  // 文件不再整表下发——按 file_id 缓存摘要 + 游标分页续拉，
-  // 渲染数组从缓存投影（relative_path ASC，与服务端分页序一致）
   const fileCacheRef = useRef(new Map<string, FileRecord>());
-  // 已并入版本链详情的 file_id：后续摘要翻页不再覆盖其 revisions
   const detailLoadedIdsRef = useRef(new Set<string>());
-  // 按需正文拉取的请求协调与重试策略统一由 revisionContentStore 承担
-  // （in-flight 合并 + failed 可重试 + 字节预算）
-  // 服务侧「全部文件」计数与侧栏筛选 facets（不再用 files.length 冒充全量）
   const [filesTotal, setFilesTotal] = useState(0);
   const [fileFacets, setFileFacets] = useState<FileFacets | null>(null);
-  // 阅读状态按 workspace_id 独立分桶持久化；首次水合由 bootstrap 拿到 workspace_id 后落位
   const [readingStates, setReadingStates] = useState<Record<string, ReadingState>>(() =>
     desktopSession ? {} : loadReadingStates()
   );
   const readingStatesRef = useRef(readingStates);
   readingStatesRef.current = readingStates;
-  // 防止快速切换文档时 openDocResumeReading 异步 ensureFileDetail 返回顺序竞态覆盖后点的文档
   const resumeReqSeqRef = useRef(0);
-  // 防止目录级「全部标已读 / 全部标未读」快速连点并发竞态
   const readingBatchBusyRef = useRef(false);
-  // 工作区私有「目录静默清单（Muted Folders）」（存观澜私有状态，磁盘零写入用户业务目录）
   const [mutedFolders, setMutedFolders] = useState<string[]>(() =>
     desktopSession ? [] : loadMutedFolders()
   );
 
-  // 真实数据接入状态（loading 期间不把空态装成真实数据）
   const [dataSource, setDataSource] = useState<'loading' | WorkspaceSource>('loading');
   const [dataError, setDataError] = useState<string | null>(null);
   const [scanSummary, setScanSummary] = useState<string>('');
 
-  // 工程画布的按日事件（与 Timeline 共用同一持久查询）
   const [eventDays, setEventDays] = useState<EventDaysResult | null>(null);
   const [activeDate, setActiveDate] = useState<string | undefined>(undefined);
-  // Timeline 与 Graph 共用同一持久查询：事件页 + 游标
   const [eventPage, setEventPage] = useState<EventPage | null>(null);
   const [eventPageLoading, setEventPageLoading] = useState(false);
   const [undatedOnly, setUndatedOnly] = useState(false);
   const [eventOrder, setEventOrder] = useState<'occurred' | 'observed'>('occurred');
-  // 列表态事件类型筛选——下推服务端 kinds（与 total_in_window/游标指纹同口径）
   const [eventKindFilter, setEventKindFilter] = useState<TimelineEventKind | 'all'>('all');
-  // 每次 fetchEventPage 都必须带同一份 kinds：游标指纹含 kinds，漏传会被判 CURSOR_STALE；
-  // ref 供异步闭包（后台续拉后的刷新）读到最新筛选值
   const eventKindFilterRef = useRef<TimelineEventKind | 'all'>('all');
   const currentEventKinds = () =>
     eventKindFilterRef.current === 'all' ? undefined : [eventKindFilterRef.current];
 
-  // 画布标尺粒度（day 逐日 / week 周聚合 / month 月聚合）与点聚合刻度下钻的日窗口；
-  // ref 供异步闭包（首屏轻数据、bootstrap 后的续载刷新）读取最新取数参数
   const [dayGranularity, setDayGranularity] = useState<EventDayGranularity>('day');
   const [drillRange, setDrillRange] = useState<{ from: string; to: string } | null>(null);
   const dayQueryRef = useRef<{
@@ -499,21 +414,15 @@ export function useWorkspaceStore() {
     order: 'occurred' | 'observed';
     drill: { from: string; to: string } | null;
   }>({ granularity: 'day', order: 'occurred', drill: null });
-  // 监听提示：新事件先提示，用户确认后才进入新的查询窗口
   const [changeNotice, setChangeNotice] = useState<{ count: number; at: string } | null>(null);
 
-  // ── 索引任务与数据时效 ──────────────────────────────────────────────────
-  // 服务端启动时会跑一轮后台对账；用户也可手动点「重新扫描」。两者共用同一条
-  // 通路：提交任务 → 轮询状态 → 完成后重新取数（bootstrapNonce + 1）。
   const [rescanState, setRescanState] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [rescanError, setRescanError] = useState<string>('');
   const [activeJobId, setActiveJobId] = useState<string>('');
-  // 同步防重锁：在慢网 / 4x CPU 限速下阻止连点并发提交多个异步请求
   const rescanInFlightRef = useRef(false);
   const lifecycleInFlightRef = useRef(false);
   const silentMergeInFlightRef = useRef(false);
   const retryInFlightRef = useRef(false);
-  // 断网与 SSE 断连可恢复状态
   const [networkOffline, setNetworkOffline] = useState<boolean>(() =>
     typeof navigator !== 'undefined' && navigator.onLine === false
   );
@@ -521,70 +430,40 @@ export function useWorkspaceStore() {
   const streamEverConnectedRef = useRef(false);
   const streamDisconnectedRef = useRef(false);
   const [retryingConnection, setRetryingConnection] = useState<boolean>(false);
-  // 轮询节拍：任务未结束时 +1 触发下一次轮询（effect 依赖它）
   const [pollTick, setPollTick] = useState(0);
-  // bootstrap 世代号：+1 触发一次完整重新取数（对账完成后用）
   const [bootstrapNonce, setBootstrapNonce] = useState(0);
-  // 服务运行状态（含进行中的索引任务与索引代）
   const [serviceStatus, setServiceStatus] = useState<WorkspaceStatusResponse | null>(null);
-  // /state-overview 六态投影——App 级唯一取数，专项卡片 / 专项详情 /
-  // 星图节点 / 文档顶栏四处共享同一份响应（null = 未接线/断连，视图回退既有阶段词）
   const [stateOverview, setStateOverview] = useState<StateOverviewResponse | null>(null);
-  // 智能视图「Agent 待审草案」数据源：待审草案（mcp/agent）的 file_id 集合。
-  // 初始与 SSE proposal 事件时各拉一次（limit 100 单页即可；空集＝诚实无草案视图计数 0）
   const [agentDraftFileIds, setAgentDraftFileIds] = useState<Set<string>>(new Set());
-  // 增量聚光灯数据源：草案 file_id → 最新 created_at（同文件多草案取最新一枚的
-  // created_at——聚光灯「按时间逐条批阅」排序要真时间，绝不伪造）
   const [agentDraftAtByFileId, setAgentDraftAtByFileId] = useState<Map<string, string>>(
     new Map()
   );
-  // 增量聚光灯 UI 态：一键开（重返工作区后用户手动开，绝不自动暗化打扰）+
-  // J/K 游标（循环步进，消费侧按 items.length 取模防列表缩胀越界）
   const [spotlightEnabled, setSpotlightEnabled] = useState(false);
   const [spotlightCursor, setSpotlightCursor] = useState(0);
-  // L4A 沉淀进度住在 utils/l4aProgressStore（横幅叶子订阅），不进 React 状态：
-  // null = 服务未下发 l4a_progress 或当前无进行中的沉淀——横幅不渲染，不造进度
 
-  // 一次 GET /api/v1/bootstrap 即得 event_days/events 首页/time_range/counts/baseline，
-  // 文件元数据由 files 分页续拉补齐
   const [eventDataReady, setEventDataReady] = useState(false);
   const [workspaceSummary, setWorkspaceSummary] = useState<WorkspaceSummary | null>(null);
   const [eventRange, setEventRange] = useState<EventTimeRange | null>(null);
-  // Timeline 服务端日期窗口（from=to=该日；空对象 = 全域），ref 供异步闭包读取最新值
   const [dateFilter, setDateFilter] = useState<{ from?: string; to?: string }>({});
   const dateFilterRef = useRef<{ from?: string; to?: string }>({});
-  // 事件查询代际号（游标竞态守卫）：
-  // 首页/筛选/刷新每次发起即 +1；续页（loadMoreEvents）在响应到达时比对代际，
-  // 不一致说明期间筛选已变，旧游标窗口的页作废，不得 append 进新筛选窗口
   const eventFetchGenRef = useRef(0);
-  // 文件时间线抽屉（版本链 + 相关事件）
   const [historyFileId, setHistoryFileId] = useState<string>('');
 
-  // 默认首页落在「今日观澜」仪表盘；全景溯源星图/知识资产库经顶栏页签进入
   const [activeTab, setActiveTab] = useState<PrimaryTab>('home');
-  // 全景溯源内部三态（星图/列表/日历）
   const [panoramaMode, setPanoramaMode] = useState<PanoramaMode>('canvas');
-  // 画布主题（夜航/纸面，作用域为 .dark-porthole 舷窗局部，非全局）：
-  // 活值保存在 canvasThemeStore，本 handler 直接命令式写舷窗 DOM（portholeRef），
-  // 避免放进 React state 触发整棵 App 树与数千 SVG 节点重渲染导致切换卡顿。
   const portholeRef = useRef<HTMLDivElement>(null);
   const handleCanvasThemeChange = (next: CanvasTheme) => {
     if (next === getCanvasTheme()) return;
     const porthole = portholeRef.current;
     if (porthole) {
-      // morph 类常驻并在翻转同任务内摘+挂：transition 声明前后不变，浏览器不作废子树，
-      // 每次翻转仅触发 data-canvas-theme 变更这一次样式计算（避免定时摘类二次卡顿）；
-      // 类只改 transition 声明，不影响任何稳态视觉。
       porthole.classList.remove('theme-morphing');
       porthole.classList.add('theme-morphing');
       porthole.dataset.canvasTheme = next;
     }
-    applyCanvasTheme(next); // 活值 + 本机持久化 + 通知订阅叶子（分段钮 / 页签 theme）
+    applyCanvasTheme(next);
   };
-  // 知识资产库内部两态（阅读/概览）
   const [libraryMode, setLibraryMode] = useState<LibraryMode>('read');
   const [eventTrail, setEventTrail] = useState<EventFrame[]>([]);
-  // 选中态初始为空：等真实数据到达后指向第一个可读对象，避免悬空的演示 ID
   const [activeFileId, setActiveFileId] = useState<string>('');
   const [pinnedRevisionId, setPinnedRevisionId] = useState<string>('');
   const [readerSubMode, setReaderSubMode] = useState<ReaderSubMode>('read');
@@ -595,25 +474,20 @@ export function useWorkspaceStore() {
     officeAnchor?: OfficeEvidenceAnchor;
     pdfAnchor?: PdfEvidenceAnchor;
   } | null>(null);
-  // 「继续阅读」点开时要求阅读器滚到上次读到的章节首行（一次性定位目标）
   const [readerFocusSection, setReaderFocusSection] = useState<{
     fileId: string;
     sectionId: string;
   } | null>(null);
-  // 「继续阅读」重开时的滚动百分比基线（真实滚动采集后使用），ReaderView 据此滚回上次读行。
-  // 绑定 file_id：避免把 A 文件的停留比例误用到随后打开的 B 文件上
   const readerScrollPercentRef = useRef<{ fileId: string; scrollPercent: number } | undefined>(undefined);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [selectedDecisionId, setSelectedDecisionId] = useState<string>('');
   const [returnBreadcrumb, setReturnBreadcrumb] =
     useState<ReturnBreadcrumb | null>(null);
-  // Esc「按来源栈精确返回」——记录进入阅读器/证据定位/跨视图时光机/日列表前的真实来源
   const [navSourceStack, setNavSourceStack] = useState<NavSourceEntry[]>([]);
   const navSourceStackRef = useRef<NavSourceEntry[]>([]);
   const trailEnteredFromStackRef = useRef(false);
   const prevTrailLenRef = useRef(0);
 
-  // Search & 4D Sidebar Filters (for Reader / Library mode)
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sidebarFilters, setSidebarFilters] = useState<SidebarFilters>({
     quickScope: 'all',
@@ -623,13 +497,10 @@ export function useWorkspaceStore() {
     topic: 'all',
   });
 
-  // Modals & Agent Context Basket & Responsive Drawers
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isMcpConsoleOpen, setIsMcpConsoleOpen] = useState<boolean>(false);
   const [isContextDrawerOpen, setIsContextDrawerOpen] = useState<boolean>(false);
-  // 轻量「批阅看板」抽屉状态（五态精简版 + unknown 孤儿修复）
   const [isReviewBoardOpen, setIsReviewBoardOpen] = useState<boolean>(false);
-  // 「司辰手记」今日/近7日沉淀简报抽屉状态
   const [isChronosDigestOpen, setIsChronosDigestOpen] = useState<boolean>(false);
   const [reviewBoard, setReviewBoard] = useState<ReviewBoardResponse | null>(null);
   const [reviewBoardLoading, setReviewBoardLoading] = useState<boolean>(false);
@@ -641,24 +512,13 @@ export function useWorkspaceStore() {
   } | null>(null);
   const [isMobileLeftOpen, setIsMobileLeftOpen] = useState<boolean>(false);
   const [isMobileRightOpen, setIsMobileRightOpen] = useState<boolean>(false);
-  // 阅读态右侧「所选对象详情」检查器默认收起——通过 ReaderView 右上角「溯源与关联」切换；
-  // 概览态维持 xl+ 常驻，移动端按钮（isMobileRightOpen）行为不变
   const [libraryInspectorOpen, setLibraryInspectorOpen] = useState<boolean>(false);
-  // `]` 快捷键在资产库概览态亦可折叠右侧检查器（默认不折叠）
   const [overviewInspectorCollapsed, setOverviewInspectorCollapsed] = useState<boolean>(false);
-  // 无痛静默并入增量事件运行态
   const [silentMergingEvents, setSilentMergingEvents] = useState<boolean>(false);
-  // 左栏主导航「未决决策」的雷达受控展开信号——递增计数单向触发
-  // DecisionRadar 受控展开（展开/关闭逻辑归雷达本体，TopHeader 只做转发不加工）
   const [decisionRadarSignal, setDecisionRadarSignal] = useState<number>(0);
   const [contextPointers, setContextPointers] = useState<EvidencePointer[]>([]);
-  // 操作提示 ？ 浮窗（全部操作提示的唯一渲染点，三工作区共用）
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
 
-  // ---------- Ctrl+K 时空命令面板（Omnibox）----------
-  // 只持开关与结果组装；执行回调在下方 systemActions 附近定义（依赖既有 handler）。
-  // recentWorkspaces 取桌面会话最近列表（浏览器环境空列表 → 动作行自动隐藏）。
-  // FileRecord 视图模型 → 面板最小源（@日期过滤取版本链最新 observed_at）
   const paletteFileLite = useMemo<PaletteFileLite[]>(
     () =>
       files.map((f) => ({
@@ -673,9 +533,7 @@ export function useWorkspaceStore() {
       })),
     [files]
   );
-  // 只读参考工作区挂载状态（列表 / 挂载 / 卸载 / 错误透出；面板与跨库检索共用）
   const mountedWs = useMountedWorkspaces();
-  // 多项目并存数量镜像（供 Ctrl+K 并发跨项目检索，无 hook 顺序耦合）
   const [multiProjectCount, setMultiProjectCount] = useState(1);
   const multiProjectsRefreshRef = useRef<(() => void) | null>(null);
   const palette = useCommandPalette({
@@ -685,17 +543,12 @@ export function useWorkspaceStore() {
     artifacts: stateOverview?.artifacts ?? [],
     recentWorkspaces:
       desktopSession?.recentWorkspaces?.map((w) => w.root).filter((r): r is string => Boolean(r)) ?? [],
-    // 挂载参考工作区（有在线挂载时全文层并发跨库检索）
     mountedWorkspaces: mountedWs.mounts,
     multiProjectCount,
   });
   const { isOpen: isPaletteOpen, close: closePalette } = palette;
-  // 挂载管理面板开合（入口：命令面板动作行「挂载参考工作区」）
   const [isMountPanelOpen, setMountPanelOpen] = useState(false);
 
-  // 阅读状态按当前 workspace_id 独立写回；切换过渡态（ref=null）不落盘，避免写窜。
-  // 落盘合批 800ms：滚动进度会高频更新整张表，整表 JSON.stringify 不能每帧做。
-  // 语义不变——每次变化后的最终状态都会被写出（尾沿、页面隐藏或切换工作区时补写）。
   const readingPersistRef = useRef<CoalescedPersist | null>(null);
   if (readingPersistRef.current === null) {
     readingPersistRef.current = createCoalescedPersist(() => {
@@ -709,7 +562,6 @@ export function useWorkspaceStore() {
     if (!readingWorkspaceIdRef.current) return;
     readingPersist.schedule();
   }, [readingPersist, readingStates]);
-  // 页面隐藏/卸载前补写：合批窗口内的最后一次变化不丢
   useEffect(() => {
     const flush = () => readingPersist.flush();
     const onVisibility = () => {
@@ -724,21 +576,12 @@ export function useWorkspaceStore() {
     };
   }, [readingPersist]);
 
-  // 静默目录清单按 workspace_id 独立写回观澜私有存储（绝不触碰用户工作区磁盘）
   useEffect(() => {
     if (!readingWorkspaceIdRef.current) return;
     saveMutedFolders(mutedFolders, readingWorkspaceIdRef.current);
   }, [mutedFolders]);
 
-  // ---------- 文件缓存与按需详情/正文（wire → 视图模型转换的宿主） ----------
 
-  // 把缓存投影成渲染数组（relative_path ASC 与服务端分页序一致）——150ms 尾沿防抖合批。
-  // 为什么防抖：单文件详情/正文合并与逐页摘要续拉每次都触发全量投影，2200 文档 ≈ 12 轮
-  // setFiles，每轮级联重算 packageList/filteredFiles/searchHits/最近项/画布分组等全部
-  // [files] memo。重复调用只重置定时器，flush 时仍取 fileCacheRef 全量排序投影——语义
-  // 零变化（fileCacheRef 始终是事实源，剪枝路径直读缓存不受影响）；选时间窗防抖而非
-  // 微任务，是为了把「逐页到达的 12 轮」真正合并。取舍：首屏文件投影延后 ≤150ms
-  // （本地读服务下各页到达间隔远小于该窗口）。
   const publishTimerRef = useRef<number | null>(null);
   const publishFiles = useCallback(() => {
     if (publishTimerRef.current !== null) {
@@ -752,7 +595,6 @@ export function useWorkspaceStore() {
       setFiles(list);
     }, 150);
   }, []);
-  // 卸载时丢掉挂起的投影定时器（组件已卸载，flush 只是无谓的残留 setState）
   useEffect(() => {
     return () => {
       if (publishTimerRef.current !== null) {
@@ -762,11 +604,6 @@ export function useWorkspaceStore() {
     };
   }, []);
 
-  // 正文发布粒度：正文补齐走目标化行替换——relative_path 序不因
-  // 正文变化而变，不再全量重排序投影；除目标文件外的行保持引用身份（memo 化卡片
-  // 不失效）。行未进入投影时（摘要页未到）静默跳过：正文已在缓存，元数据发布
-  // （applyFileSummaries/ensureFileDetail）时会带上。派生摘要的重算由
-  // taskPackages 的 DerivedSummary 缓存按版本身份消化。
   const publishContentFor = useCallback((fileId: string) => {
     const updated = fileCacheRef.current.get(fileId);
     if (!updated) return;
@@ -779,16 +616,12 @@ export function useWorkspaceStore() {
     });
   }, []);
 
-  // 摘要页合并入缓存（missing / trashed 文件不进活动资产库，同旧 /scan active 投影口径，server/project.ts:73）
   const applyFileSummaries = useCallback(
     (items: FileSummary[]) => {
       for (const item of items) {
         if (item.status === 'missing' || item.status === 'trashed') continue;
         const existing = fileCacheRef.current.get(item.file_id);
         const next = fileSummaryToFileRecord(item);
-        // 已并入版本链详情的条目仅在当前版本未前进时保留 revisions；
-        // 若磁盘改动带来了新版本（current_revision_id 变化），必须失效旧详情缓存并并入新版本占位，
-        // 避免阅读器停留在旧版本导致「标为已读」标错旧版而永远清不掉未读。
         if (existing && detailLoadedIdsRef.current.has(item.file_id)) {
           const hasCurrent =
             !next.current_revision_id ||
@@ -811,8 +644,6 @@ export function useWorkspaceStore() {
     [publishFiles]
   );
 
-  // 事件页 → TimelineEvent 合并（去重、新页在前；页内 seq DESC 与旧 /scan 事件序一致）。
-  // TimelineView 的列表消费 eventPage；星图/日历/首页消费这份累计事件表
   const mergeEventsPage = useCallback((items: EventPageItem[]) => {
     if (!items.length) return;
     setEvents((prev) => {
@@ -822,19 +653,13 @@ export function useWorkspaceStore() {
     });
   }, []);
 
-  // 阅读器入口：版本链元数据走 /revisions 分页端点（fetchFileHistory 整链遍历），
-  // 服务端不逐版本内联 SVG，单次打开不随完整版本数线性增长。已并入的文件直接返回缓存。
   const ensureFileDetail = useCallback(
     async (fileId: string): Promise<FileRecord | null> => {
       const cached = fileCacheRef.current.get(fileId);
       if (cached && detailLoadedIdsRef.current.has(fileId)) return cached;
       const history = await fetchFileHistory(fileId);
       if (!history) return null;
-      // snake_case 分页 wire → 版本行（seq/occurred_at/size_bytes 口径），
-      // changedSectionsFromPrev 由 modified 事件 payload 归档（revisionsFromHistory 内）
       const incoming = revisionsFromHistory(fileId, history.revisions, history.events);
-      // 合并保留已加载正文（store ready 条目兜底回填）；
-      // pdf 走 'md' 分支无副作用（pdf 版本行没有 markdownContent/store 条目）
       const revisions = mergeDetailRevisionsPreservingContent(
         cached?.revisions ?? [],
         incoming,
@@ -871,10 +696,6 @@ export function useWorkspaceStore() {
     [publishFiles]
   );
 
-  // 阅读器正文：md 正文 / svg 源文本按 revision_id 拉取后并入缓存版本行，
-  // 使 ReaderView / 检视器 / 本地搜索都能读到「已取回」的内容。
-  // 请求协调统一走 revisionContentStore——同版本并发读取合并为一次底层请求；
-  // 失败不永久标记，下次显式调用可重试（SNAPSHOT_UNAVAILABLE 的终态提示仍由调用方 UI 如实呈现）
   const ensureRevisionContent = useCallback(
     async (fileId: string, revisionId: string) => {
       const file = fileCacheRef.current.get(fileId);
@@ -882,10 +703,10 @@ export function useWorkspaceStore() {
       if (!file || !rev || !rev.snapshotAvailable) return;
       if (file.format === 'md' && rev.markdownContent !== undefined) return;
       if (file.format === 'svg' && rev.svgSource !== undefined) return;
-      if (file.format !== 'md' && file.format !== 'svg') return; // pdf 无文本正文，走 raw iframe
+      if (file.format !== 'md' && file.format !== 'svg') return;
       const format = file.format === 'svg' ? 'svg' : 'md';
       const text = await requestRevisionContent(revisionId, fetchRevisionContent, format);
-      if (text === null) return; // 失败留在 store（failed 态），不并入缓存；可重试
+      if (text === null) return;
       const current = fileCacheRef.current.get(fileId);
       if (!current) return;
       const revisions = current.revisions.map((r) => {
@@ -898,23 +719,16 @@ export function useWorkspaceStore() {
           : { ...r, svgSource: text, svgExtractedTexts: extractSvgTextNodes(text) };
       });
       fileCacheRef.current.set(fileId, { ...current, revisions });
-      // 目标化发布（不再全量重排序，纯元数据行保持引用身份）
       publishContentFor(fileId);
     },
     [publishContentFor]
   );
 
-  // 初始化：一次 GET /api/v1/bootstrap 获取短读快照；
-  // 空工作区（首次建索引）各计数为 0、baseline:false，按「尚未覆盖」渲染而非报错；
-  // 文件摘要首批随 bootstrap 到达，余页后台续拉；全量关系走 /api/v1/relations
   useEffect(() => {
     if (!hasActiveBackend) return;
     let cancelled = false;
     (async () => {
       const dq = dayQueryRef.current;
-      // bootstrap 与 /state-overview 并行取数——六态投影是四视图唯一数据源，与主数据同轮到达；
-      // 端点失败（旧库/断连）置 null，视图回退既有阶段词。
-      // 同轮并行拉取服务端已读基线（GET /api/v1/reading-state，旧库无表零写返空）。
       const [boot, overview, serverReadingRes] = await Promise.all([
         fetchBootstrap({
           daysLimit: DAYS_QUERY_LIMIT,
@@ -928,7 +742,6 @@ export function useWorkspaceStore() {
       ]);
       if (cancelled) return;
       setStateOverview(overview.ok ? overview.data : null);
-      // 智能视图「Agent 待审草案」：只统计 status=proposed 的待批阅草案
       void (async () => {
         const proposals = await fetchRevisionProposals({ status: 'proposed', limit: 100 });
         if (cancelled) return;
@@ -937,7 +750,6 @@ export function useWorkspaceStore() {
             ? new Set(proposals.data.items.map((item) => item.file_id))
             : new Set()
         );
-        // 增量聚光灯：草案时间索引同步落位（聚光灯按时间逐条批阅的排序源）
         setAgentDraftAtByFileId(
           proposals.ok ? draftTimestampIndex(proposals.data.items) : new Map()
         );
@@ -945,13 +757,11 @@ export function useWorkspaceStore() {
       if (!boot.ok || !boot.data) {
         if (switchingWorkspaceRef.current) return;
         setDataSource('error');
-        // 面向用户的错误文案：状态句 + 影响句 + 恢复路径（不暴露内部阶段名）
         setDataError(boot.error || '启动对账未完成：读服务无响应。可重启观澜后重试。');
         return;
       }
       const b = boot.data;
       const serverReadingItems = serverReadingRes.ok ? serverReadingRes.data.items : [];
-      // 按 workspace_id 水合各自独立的阅读状态桶、服务端已读基线与目录静默清单
       if (readingWorkspaceIdRef.current !== b.workspace.workspace_id) {
         readingWorkspaceIdRef.current = b.workspace.workspace_id;
         const localLoaded = loadReadingStates(b.workspace.workspace_id);
@@ -966,7 +776,6 @@ export function useWorkspaceStore() {
           mergeServerReadingStates(prev, serverReadingItems, { authoritative: true })
         );
       }
-      // 重新取数时把事件列表清空：mergeEventsPage 只增不删，陈旧行会留存
       if (bootstrapNonce > 0) {
         setEvents([]);
         setChangeNotice(null);
@@ -991,8 +800,6 @@ export function useWorkspaceStore() {
         time_range: b.time_range,
       });
       mergeEventsPage(b.events.items);
-      // 本轮见过的 file_id：重新取数完成后据此裁掉服务端已不再列出的文件
-      // （merge/apply 都只增不删，陈旧行会一直留在侧栏与资产库里）
       const seenFileIds = new Set<string>();
       const applyRound = (items: FileSummary[]) => {
         for (const item of items) seenFileIds.add(item.file_id);
@@ -1013,13 +820,11 @@ export function useWorkspaceStore() {
           .filter(Boolean)
           .join(' · ')
       );
-      // 选中态：决策取 bootstrap 首批；首选文件等分页到齐后再定（与旧 /scan 后选中时点一致）
       if (b.decisions.length > 0) {
         setSelectedDecisionId((prev) => prev || b.decisions[0].decision_id);
       }
       setSelectedEventId((prev) => prev || b.events.items[0]?.event_id || '');
 
-      // 后台续拉：文件摘要余页（游标失效由客户端重走，可变列表语义）
       const rest = await fetchAllFileSummaries(
         { limit: 200, cursor: b.files.next_cursor || undefined },
         (page) => {
@@ -1030,19 +835,15 @@ export function useWorkspaceStore() {
         }
       );
       if (cancelled) return;
-      // 续拉完整性判定（与下方阅读状态剪枝同口径）
       const restComplete =
         rest.ok &&
         (typeof rest.total_matched !== 'number' || seenFileIds.size === rest.total_matched);
-      // 清单完整时裁掉服务端已不再列出的文件（重新取数后的去陈旧）
       if (restComplete) {
         for (const id of Array.from(fileCacheRef.current.keys())) {
           if (!seenFileIds.has(id)) fileCacheRef.current.delete(id);
         }
         publishFiles();
       }
-      // 全列表到齐后：选中第一个可读文件（避免悬空 ID），并按已知 file_id 剪枝阅读状态
-      // （不清空阅读状态——其他工作区/已删除文件的记录自然淘汰）
       const all = Array.from(fileCacheRef.current.values()).sort((x, y) =>
         x.relative_path < y.relative_path ? -1 : x.relative_path > y.relative_path ? 1 : 0
       );
@@ -1051,28 +852,17 @@ export function useWorkspaceStore() {
         setActiveFileId((prev) => prev || firstReadable.file_id);
         setPinnedRevisionId((prev) => prev || firstReadable.current_revision_id);
       }
-      // 剪枝完整性守卫：后台续拉失败时 workspaceClient 返回 {ok:false, items, total_matched}
-      // （只含已取回页），缓存此时是不完整清单——直接按它剪枝会把未拉到页文件的进度/收藏/
-      // 本地批注永久删除，且本 effect 仅启动跑一次、readingStates 每次变更即写回本机，
-      // 剪枝结果马上落盘、无补救机会。故仅当「续拉成功且清单完整」（服务端给出计数时
-      // 与缓存条数对得上；未给计数视为可信）才执行剪枝；不完整轮次保留全量，等下次
-      // 成功全量到齐再自然淘汰。
       if (restComplete) {
         setReadingStates((prev) =>
           pruneReadingStates(prev, all, b.recoverable_file_ids ?? [])
         );
       }
-      // 续拉非游标类失败不置全局错误态（首批已可用），留缓存缺口由后续操作按需补
 
-      // 全量引用关系
       const rel = await fetchRelations();
       if (!cancelled && rel.ok) {
         setRelations(rel.data.items);
       }
 
-      // ── 数据时效与后台对账 ────────────────────────────────────────────────
-      // 服务端在启动时已排了一轮后台对账。这里看运行状态：有任务在跑就接管它，
-      // 任务结束后自动重新取数；若对账恰好在本轮 bootstrap 之后结束，则立刻重取。
       const status = await fetchWorkspaceStatus();
       if (cancelled || !status.ok) return;
       setServiceStatus(status.data);
@@ -1082,7 +872,6 @@ export function useWorkspaceStore() {
         setRescanError('');
         setRescanState('running');
       } else if (status.data.index_generation > b.workspace.index_generation) {
-        // 对账在本轮取数之后完成：我们手里是旧快照 → 重新取一次
         setBootstrapNonce((n) => n + 1);
       }
     })();
@@ -1091,10 +880,6 @@ export function useWorkspaceStore() {
     };
   }, [applyFileSummaries, bootstrapNonce, hasActiveBackend, mergeEventsPage, publishFiles, workspaceEpoch]);
 
-  // ── L4A 沉淀进度轮询（非阻塞横幅）────────────────────────────────────────
-  // 沉淀期间不锁定任何交互——横幅只陈述进度，阅读/批注/扫描全部照常。
-  // /status 是轻端点：沉淀进行中高频轮询，空闲或服务未下发 l4a_progress 时 15s 慢轮询保活；
-  // total=0 或已完成 → 置 null 收起横幅（诚实缺省，不造 100% 假进度）。
   const l4aWasActiveRef = useRef(false);
   const pollL4aRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -1110,8 +895,6 @@ export function useWorkspaceStore() {
       const status = await fetchWorkspaceStatus();
       if (cancelled) return;
       const progress = status.ok ? (status.data.l4a_progress ?? null) : null;
-      // 以 queue_depth > 0 为真正进行中口径（缺失快照标 failed 后 queue_depth 归 0，
-      // 绝不因 done < total 永久悬挂横幅）；total=0 不造 100% 假进度。
       const active = isL4aProgressActive(progress);
       if (l4aWasActiveRef.current && !active && progress && progress.done > 0) {
         toastManager.add({
@@ -1134,8 +917,6 @@ export function useWorkspaceStore() {
     };
   }, [hasActiveBackend, switchingWorkspace, workspaceEpoch]);
 
-  // ── 索引任务轮询 ────────────────────────────────────────────────────────
-  // 启动后台对账与手动「重新扫描」共用这一条通路：任务结束即重新取数。
   useEffect(() => {
     if (!hasActiveBackend || switchingWorkspace || rescanState !== 'running' || !activeJobId) return;
     let cancelled = false;
@@ -1159,7 +940,6 @@ export function useWorkspaceStore() {
         setRescanState('error');
         setRescanError(job.error || '索引任务失败');
       } else {
-        // 仍在跑：推进节拍，触发下一次轮询
         setPollTick((t) => t + 1);
       }
     }, 900);
@@ -1169,7 +949,6 @@ export function useWorkspaceStore() {
     };
   }, [activeJobId, hasActiveBackend, pollTick, rescanState, switchingWorkspace, workspaceEpoch]);
 
-  // ── 手动重新扫描（同步 ref 锁，防止慢网/4x CPU 连点重复提交） ────────────
   const handleRescan = useCallback(async () => {
     if (switchingWorkspaceRef.current || rescanInFlightRef.current || rescanState === 'running') {
       return;
@@ -1191,7 +970,6 @@ export function useWorkspaceStore() {
     setActiveJobId(accepted.data.job_id);
   }, [rescanState]);
 
-  // 浏览器离线/在线监听：中途断网即时反馈，恢复在线自动重试同步
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handleOffline = () => setNetworkOffline(true);
@@ -1208,7 +986,6 @@ export function useWorkspaceStore() {
     };
   }, []);
 
-  // 手动重试连接（断网恢复 / 读服务报错后点击重试，防重提交）
   const handleRetryConnection = useCallback(async () => {
     if (switchingWorkspaceRef.current || retryInFlightRef.current) return;
     retryInFlightRef.current = true;
@@ -1237,22 +1014,17 @@ export function useWorkspaceStore() {
     }
   }, [rescanState]);
 
-  // 扫描完成的提示短暂驻留后收起（不长期占位一条横幅）
   useEffect(() => {
     if (rescanState !== 'done') return;
     const timer = window.setTimeout(() => setRescanState('idle'), 4000);
     return () => window.clearTimeout(timer);
   }, [rescanState]);
 
-  // 阅读器：选中文件变化即并入版本链元数据——先展示指定版本的版本信息，
-  // 正文随后由下方内容效果按需补
   useEffect(() => {
     if (!activeFileId) return;
     void ensureFileDetail(activeFileId);
   }, [activeFileId, ensureFileDetail]);
 
-  // 阅读器正文：钉住版本（缺省当前版）的 md/svg 正文按需拉取并并入缓存，
-  // 绝不整库批量下载；快照过保留期（SNAPSHOT_UNAVAILABLE）由 ReaderView 展示错误态
   useEffect(() => {
     if (!activeFileId) return;
     const file = fileCacheRef.current.get(activeFileId);
@@ -1269,20 +1041,15 @@ export function useWorkspaceStore() {
   }, [activeFileId, files, pinnedRevisionId, ensureRevisionContent]);
 
 
-  // Esc 严格按「关浮层 → 清搜索 → 退事件链 → 清日期 → 回星图」逐级生效，一次只做一件事
-  // （帮助浮窗逐字写着同一句；两边必须同步改）
-  // perf：handleKeyDown 每次渲染提交后经 ref 同步最新闭包，window 监听只在挂载时 add 一次
   const escKeyDownHandlerRef = useRef<(e: KeyboardEvent) => void>(() => {});
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // 快捷键：Ctrl+\ / Cmd+\ 一键折叠或展开全局常驻目录侧栏
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key === '\\') {
         e.preventDefault();
         dirShell.toggleSidebarCollapsed();
         return;
       }
       if (e.key === 'Escape') {
-        // 命令面板是最高浮层（z-[90]），Esc 首先关它（面板根节点 data-esc-layer="open"）
         if (isPaletteOpen) {
           closePalette();
           return;
@@ -1300,7 +1067,6 @@ export function useWorkspaceStore() {
           closeQuickPreview();
           return;
         }
-        // 挂载管理面板（z-[85]，浮层级仅次于命令面板）
         if (isMountPanelOpen) {
           setMountPanelOpen(false);
           return;
@@ -1313,10 +1079,7 @@ export function useWorkspaceStore() {
           closeFileOp();
           return;
         }
-        // ① 关浮层：文件时间线抽屉全屏覆盖，Esc 只关它（抽屉自己监听 onClose，这里让位，
-        //    不关其它浮层、不切页签、不清搜索）
         if (historyFileId !== '') return;
-        // 其余浮层一次只关一层
         if (isSettingsOpen) {
           setIsSettingsOpen(false);
           return;
@@ -1341,12 +1104,10 @@ export function useWorkspaceStore() {
           setIsHelpOpen(false);
           return;
         }
-        // ② 清搜索
         if (searchQuery) {
           setSearchQuery('');
           return;
         }
-        // ③ 按来源栈精确返回（面包屑优先；无面包屑时直接弹出来源栈回到真实来源视图）
         if (returnBreadcrumb) {
           handleFollowReturnBreadcrumb();
           return;
@@ -1360,11 +1121,6 @@ export function useWorkspaceStore() {
             return;
           }
         }
-        // ④ 清日期（逐级退出，一次按键只清一层）：列表侧服务端日期窗口在前——
-        //    dateFilter 有筛选（from 存在）时先走 applyDayFilter(undefined)（空对象=清筛选，
-        //    与 TimelineView 日期下拉选「全部日期」同一入口，会 bump gen 并重取未过滤页）
-        //    并 return；下一按才清画布选中（undefined 才是「未选」，'' 是「日期待考」语义），
-        //    最后才落⑤回星图。帮助文案「清日期」覆盖这两层，无需改动。
         if (dateFilterRef.current.from) {
           void applyDayFilter(undefined);
           return;
@@ -1373,16 +1129,13 @@ export function useWorkspaceStore() {
           setActiveDate(undefined);
           return;
         }
-        // ⑤ 回星图：已在全景溯源时不跳走（不强行改 panoramaMode）
         if (activeTab !== 'panorama') {
           setActiveTab('panorama');
         }
       } else if (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        // 输入框/文本域/下拉框/可编辑区里打问号是正常输入，不触发浮窗
         if (isEditableLikeTarget(e.target)) {
           return;
         }
-        // 其它阻塞浮层/对话框打开时不从背后弹出帮助浮层（已打开的帮助浮层仍可按 ? 关闭）
         if (!isHelpOpen && hasBlockingDomOverlay()) {
           return;
         }
@@ -1398,10 +1151,6 @@ export function useWorkspaceStore() {
     return () => window.removeEventListener('keydown', listener);
   }, []);
 
-  // ---------- 五类智能视图成员（单一数据源派生；LeftSidebar 徽标与下面
-  // filteredFiles 过滤消费同一输出 → 计数=徽标=画布过滤节点数 100% 守恒） ----------
-  // stateOverviewIndex 定义在下方，此处内联同款投影索引避免 TDZ；
-  // 两者同源（同一 /state-overview 响应），守恒不受影响
   const smartViewArtifactsByFileId = useMemo(
     () => indexStateOverview(stateOverview)?.artifactsByFileId ?? null,
     [stateOverview]
@@ -1425,10 +1174,6 @@ export function useWorkspaceStore() {
     [activeSmartView, smartViewFiles]
   );
 
-  // ---------- 增量聚光灯派生（「我离开后发生了什么」） ----------
-  // 三类读后真实变化（新增版本/新挂起决定/Agent 新草案）按时间逐条排序，
-  // 纯函数单一出口（readingSpotlight.ts）：「首次收录（未读新件）」绝不混入——
-  // 有阅读基线才判读后变更，不将两态混同。
   const spotlightItems = useMemo(
     () =>
       computeSpotlightChanges({
@@ -1440,7 +1185,6 @@ export function useWorkspaceStore() {
       }),
     [agentDraftAtByFileId, files, readingStates, smartViewArtifactsByFileId]
   );
-  // 降亮度集合仅在聚光灯开启时产出（关闭态恒空集——画布零样式注入，像素基线零扰动）
   const spotlightDimmedFileIds = useMemo(
     () =>
       spotlightEnabled
@@ -1450,7 +1194,7 @@ export function useWorkspaceStore() {
   );
   const handleSpotlightToggle = useCallback(() => {
     setSpotlightEnabled((v) => {
-      if (!v) setSpotlightCursor(0); // 开启时游标归零，从最新一处开始批阅
+      if (!v) setSpotlightCursor(0);
       return !v;
     });
   }, []);
@@ -1458,12 +1202,9 @@ export function useWorkspaceStore() {
     setSpotlightCursor(cursor);
   }, []);
 
-  // Filtered files according to 4D sidebar filters
   const filteredFiles = useMemo(() => {
     return files.filter((f) => {
       const st = readingStates[f.file_id];
-      // 智能视图作用域（读后有更新/等我拍板/近7天/Agent 草案/游离）——
-      // 成员判定走同一纯函数集合，与左栏徽标同源守恒
       if (activeSmartMemberIds && !activeSmartMemberIds.has(f.file_id)) {
         return false;
       }
@@ -1481,7 +1222,6 @@ export function useWorkspaceStore() {
         f.folder !== sidebarFilters.folder &&
         !f.folder.startsWith(`${sidebarFilters.folder}/`)
       ) {
-        // 层级文件夹树：选中目录时包含其全部子目录的文件
         return false;
       }
       if (sidebarFilters.format !== 'all' && f.format !== sidebarFilters.format) {
@@ -1504,9 +1244,6 @@ export function useWorkspaceStore() {
     return files.find((f) => f.file_id === activeFileId) || files[0];
   }, [files, activeFileId]);
 
-  // 所属专项上下文——files 只在 files 变化时分组一次（避免每帧重算全量路径判定），
-  // 再按 activeFile 反查所属包：先命中 groupFilesIntoPackages 的包 id（与分组同源），
-  // 兜底按 docs 含 file_id；未命中传 null（ReaderView 未命中即不渲染，不回退造包）。
   const packageList = useMemo<TaskPackage[]>(
     () => groupFilesIntoPackages(files),
     [files]
@@ -1521,9 +1258,6 @@ export function useWorkspaceStore() {
     );
   }, [packageList, activeFile]);
 
-  // 上下文模式 A/B 的专项焦点——按当前路由聚焦（文档正文页=activePackage；
-  // 专项概览筛选=对应目录的任务包；首页总览/全景未选中=null，不把工作区或后台首文档伪装为专项焦点）。
-  // 优先取 /state-overview 的真实 initiative（id/name/current_stage）；无服务端行时回退任务包投影。
   const stateOverviewIndex = useMemo(() => indexStateOverview(stateOverview), [stateOverview]);
   const focusedContextTarget = useMemo<{
     fileId: string | null;
@@ -1552,7 +1286,6 @@ export function useWorkspaceStore() {
 
   const activeInitiative = useMemo(() => {
     const pkg = focusedContextTarget.pkg;
-    // 根级散文件或总览无焦点时如实 null，不把「工作区根」伪装成 initiative。
     if (!pkg || pkg.id === '__root__') return null;
     const row = initiativeStateOfPackage(stateOverviewIndex, pkg);
     return {
@@ -1563,17 +1296,12 @@ export function useWorkspaceStore() {
     };
   }, [focusedContextTarget.pkg, stateOverviewIndex]);
 
-  // 引用行版本/状态标签——版本取 files 版本链 versionNumber，状态取
-  // /state-overview artifact 六态；任一缺失返回 null（抽屉侧如实省略，不造标签）。
   const referenceMetaOf = useCallback((p: EvidencePointer) => {
     const file = fileCacheRef.current.get(p.file_id);
     const revisions = file?.revisions ?? [];
-    // 只按指针携带的 revision_id 精确取版本；缺失/已淘汰时如实 null，不拿当前版冒充
     const rev = revisions.find((r) => r.revision_id === p.revision_id);
     const versionLabel =
       typeof rev?.versionNumber === 'number' ? `v${rev.versionNumber}` : null;
-    // 文档六态是「当前文档状态」，仅当前版指针才配对展示；历史版只给 vN，
-    // 不把当前状态贴到历史版本上。
     const isCurrentRevision = file?.current_revision_id === p.revision_id;
     const artifact = artifactStateOf(stateOverviewIndex, p.file_id);
     return {
@@ -1582,8 +1310,6 @@ export function useWorkspaceStore() {
     };
   }, [stateOverviewIndex]);
 
-  // 模式 B session_checkpoint_id——抽屉打开时取当前专项最新 SUCCESS checkpoint；
-  // 无专项/无记录/查询失败如实 null（不伪造 checkpoint id）。
   const [contextSessionCheckpointId, setContextSessionCheckpointId] = useState<string | null>(null);
   const activeInitiativeId = activeInitiative?.id ?? null;
   useEffect(() => {
@@ -1606,8 +1332,6 @@ export function useWorkspaceStore() {
     };
   }, [hasActiveBackend, isContextDrawerOpen, activeInitiativeId, workspaceEpoch]);
 
-  // ── 智能体上下文：路由上下文自动感知组装器 ─────────────────────────────
-  // 任务包投影（agentContextPresets 输入形状）：README/核心定位文档取 basename 命中
   const packageInfos = useMemo<PresetPackageInfo[]>(
     () =>
       packageList.map((p) => ({
@@ -1622,8 +1346,6 @@ export function useWorkspaceStore() {
       })),
     [packageList]
   );
-  // 未决决策引用：首条证据挂文件（无证据决策不进上下文，不造文件）；
-  // isBlocking：有明确阻塞影响面或为 P0/P1 阻塞级待确认项
   const unresolvedDecisionRefs = useMemo<PresetUnresolvedDecision[]>(
     () =>
       decisions
@@ -1638,7 +1360,6 @@ export function useWorkspaceStore() {
         .filter((d) => d.fileId),
     [decisions]
   );
-  // 星图血缘边投影：只保留 file→file 边（decision_id 端点不入上下文推荐）
   const relationRefs = useMemo<PresetRelationRef[]>(
     () =>
       relations
@@ -1665,7 +1386,6 @@ export function useWorkspaceStore() {
     [focusedContextTarget.fileId, focusedPackageInfo, packageInfos, unresolvedDecisionRefs, relationRefs]
   );
 
-  // 候选 → 证据篮条目（fileCache 反查当前版；无版本的候选如实跳过，绝不伪造 revision）
   const candidateToPointers = useCallback(
     (candidates: readonly ContextCandidate[]): EvidencePointer[] => {
       const out: EvidencePointer[] = [];
@@ -1717,9 +1437,6 @@ export function useWorkspaceStore() {
     });
   }, []);
 
-  // 三入口默认包「默认自动勾选」——打开抽屉前先挂载预设条目，与
-  // setIsContextDrawerOpen 同批提交，抽屉首帧即 N 项已选（不再先显示 0 项、
-  // 也不再要求用户再点一次「带入默认上下文」）。
   const openContextDrawer = useCallback(() => {
     if (presetPointers.length > 0) handleMountPointers(presetPointers);
     setIsContextDrawerOpen(true);
@@ -1734,7 +1451,6 @@ export function useWorkspaceStore() {
     []
   );
 
-  // 未决决策段：问题原文 + 首条证据路径
   const pendingBlockerLines = useMemo<GuanlanContextBlockerLine[]>(
     () =>
       decisions
@@ -1752,7 +1468,6 @@ export function useWorkspaceStore() {
     [decisions]
   );
 
-  // ── 回写通知条（双向回写闭环：CAS 安全网与独立草案分支）────────────────────
   const [proposalToast, setProposalToast] = useState<ProposalToastData | null>(null);
   const [proposalAdopting, setProposalAdopting] = useState(false);
   const [proposalRejecting, setProposalRejecting] = useState(false);
@@ -1763,10 +1478,6 @@ export function useWorkspaceStore() {
   const [proposalDiffContent, setProposalDiffContent] =
     useState<RevisionProposalContentResponse | null>(null);
 
-  // ── 最新已拍板决策变更单 ───────────────────────────────────────────────
-  // Inline 拍板完成 / SSE decision_writeback 到达 → 生成变更单并推送到上下文清单：
-  // decisionChangeNote 常驻抽屉（打开即见），decisionChangeToast 做非侵入告知。
-  // 同一决策 10s 内的本地+SSE 双通道只推一次（保留信息更全的 inline 版本）。
   const [decisionChangeNote, setDecisionChangeNote] = useState<DecisionChangeNote | null>(null);
   const [decisionChangeToast, setDecisionChangeToast] = useState<DecisionChangeNote | null>(null);
   const lastPushedDecisionRef = useRef<{ decisionId: string; at: number } | null>(null);
@@ -1781,14 +1492,10 @@ export function useWorkspaceStore() {
     });
     if (!duplicate) setDecisionChangeToast(note);
   }, []);
-  // 抽屉打开即视为用户已查看变更单，收起右下角推送通知（卡片仍在抽屉内置顶）
   useEffect(() => {
     if (isContextDrawerOpen) setDecisionChangeToast(null);
   }, [isContextDrawerOpen]);
 
-  // 模式 A 已确认决策段：取 confirmationBasis 记录文本（未决段见上）。
-  // 最新变更单与当前决策同 id 时，优先用变更单的决定文本/确认人/生效日期
-  // 回填（本地 Inline 拍板后 confirmationBasis 尚未经下一轮 bootstrap 回填）。
   const confirmedDecisionLines = useMemo<GuanlanContextDecisionLine[]>(
     () =>
       decisions
@@ -1797,7 +1504,6 @@ export function useWorkspaceStore() {
         .map((d) => {
           const note = decisionChangeNote?.decisionId === d.decision_id ? decisionChangeNote : null;
           return {
-            // DecisionAssertion 无独立优先级字段，优先级位以决策编号承载
             priority: d.code || 'D',
             statusLabel: '已确认',
             text: note?.decisionText || d.confirmationBasis?.recordText || d.question,
@@ -1811,11 +1517,6 @@ export function useWorkspaceStore() {
     [decisions, decisionChangeNote]
   );
 
-  // SSE 订阅：
-  //  - kinds 含 'proposal' → 拉最新草案弹通知条；
-  //  - kinds 含 'decision_writeback' → 拉最新决策（不限状态），生成变更单推送上下文清单；
-  //  - kinds 含 'state' → 刷新 /state-overview（Delivered 一键归档提示随之出现/消失）。
-  // 服务未就绪时静默（无数据不造提示）。
   useEffect(() => {
     if (!hasActiveBackend || switchingWorkspace) return;
     return subscribeWorkspaceStream((notice) => {
@@ -1839,11 +1540,9 @@ export function useWorkspaceStore() {
       }
       if (kinds.includes('proposal')) {
         void (async () => {
-          // 草案事件只刷新仍处于 proposed 态的待审草案清单
           const full = await fetchRevisionProposals({ status: 'proposed', limit: 100 });
           if (full.ok) {
             setAgentDraftFileIds(new Set(full.data.items.map((item) => item.file_id)));
-            // 增量聚光灯：草案时间索引同步刷新（与待审草案集合同源同帧）
             setAgentDraftAtByFileId(draftTimestampIndex(full.data.items));
             if (full.data.items.length === 0) {
               setProposalToast(null);
@@ -1876,8 +1575,6 @@ export function useWorkspaceStore() {
       }
       if (kinds.includes('decision_writeback')) {
         void (async () => {
-          // 不按 status 过滤：decision_writeback 也可能是否决/搁置；取最近 20 条中
-          // 第一条已拍板（服务端按 observed_at 排序），跳过回写前后新插入的待确认行。
           const res = await fetchDecisions({ limit: 20 });
           if (!res.ok) return;
           if (typeof res.data.unresolved_total === 'number') {
@@ -1887,10 +1584,7 @@ export function useWorkspaceStore() {
           const latest = res.data.items.find((d) =>
             DECIDED_DECISION_STATUSES.includes(d.status)
           );
-          // CAS 冲突/未决回写（status 仍为待确认/来源不一致）不产生「已拍板」变更单：
-          // 服务端对冲突也发 decision_writeback kind，但决策并未真正落地。
           if (!latest) return;
-          // 本地 decisions 同步到服务端最新行，上下文清单 confirmed_decisions 段随之为最新
           setDecisions((prev) => {
             const idx = prev.findIndex((d) => d.decision_id === latest.decision_id);
             if (idx < 0) return [...prev, latest];
@@ -1947,7 +1641,6 @@ export function useWorkspaceStore() {
     });
   }, [hasActiveBackend, pushDecisionChangeNote, switchingWorkspace, workspaceEpoch]);
 
-  // 批阅看板数据拉取 + 打开/初始刷新 + 一键「已知悉」/ 孤儿修复 / 跳转原文 / 查看草案
   const refreshReviewBoard = useCallback(async () => {
     if (!hasActiveBackend) return;
     setReviewBoardLoading(true);
@@ -2114,7 +1807,6 @@ export function useWorkspaceStore() {
             ? extractJobBranch<JobReportAdopt>(settled.data, 'adopt')
             : null;
         if (!report || report.cas_ok === false) {
-          // CAS 冲突：绝不覆盖人工编辑；同步标记冲突并自动展开实时磁盘↔草案 Diff
           setProposalToast((prev) =>
             prev && prev.draftId === draftId ? { ...prev, conflict: true } : prev
           );
@@ -2233,7 +1925,6 @@ export function useWorkspaceStore() {
     setProposalDiffError(null);
   }, []);
 
-  // ---------- 筛选变化时阅读态自动切到概览，并保住阅读现场 ----------
   const sidebarFilterActive =
     sidebarFilters.quickScope !== 'all' ||
     sidebarFilters.folder !== 'all' ||
@@ -2241,8 +1932,6 @@ export function useWorkspaceStore() {
     sidebarFilters.role !== 'all' ||
     sidebarFilters.topic !== 'all';
 
-  // 顶部筛选条的条件摘要：与左栏/顶栏共用同一份 sidebarFilters（概览里不再做二次过滤）。
-  // 智能视图作用域进摘要（同一张 SMART_VIEWS 词表，与左栏标签逐字一致）
   const activeSmartViewDef =
     activeSmartView !== null
       ? (SMART_VIEWS.find((v) => v.id === activeSmartView) ?? null)
@@ -2269,14 +1958,11 @@ export function useWorkspaceStore() {
     });
   };
 
-  // 当前文章是否仍在筛选结果内（决定阅读态提示，不自动换文章）
   const activeFileInFilter = useMemo(
     () => filteredFiles.some((f) => f.file_id === activeFile?.file_id),
     [filteredFiles, activeFile?.file_id]
   );
 
-  // 阅读器常驻（hidden 切换）后：切走前记录内部滚动容器位置，切回后还原
-  // （display:none 不保证浏览器记住 scrollTop，只靠挂载保活会回顶）
   const readerPaneRef = useRef<HTMLDivElement | null>(null);
   const readerScrollRef = useRef<{
     fileId: string;
@@ -2305,7 +1991,6 @@ export function useWorkspaceStore() {
     setLibraryMode(mode);
   };
 
-  // 切回阅读态：还原滚动；文件/版本已变则不还原，避免把新文章拽到旧位置
   useLayoutEffect(() => {
     if (libraryMode !== 'read') return;
     const snapshot = readerScrollRef.current;
@@ -2329,7 +2014,6 @@ export function useWorkspaceStore() {
     return () => cancelAnimationFrame(frame);
   }, [libraryMode, activeFile?.file_id, pinnedRevisionId]);
 
-  // 只在筛选真正变化、且新筛选生效时自动切概览：挂载 / 点「阅读」/ 清空筛选都不误切
   const sidebarFilterKey = `${sidebarFilters.quickScope}|${sidebarFilters.folder}|${sidebarFilters.format}|${sidebarFilters.role}|${sidebarFilters.topic}`;
   const prevSidebarFilterKeyRef = useRef(sidebarFilterKey);
   useEffect(() => {
@@ -2341,10 +2025,6 @@ export function useWorkspaceStore() {
     setLibraryMode('overview');
   }, [sidebarFilterKey, sidebarFilterActive, libraryMode, captureReaderScroll]);
 
-  // 搜索防抖（perf）：每键入一字全量 searchWorkspace（2200 文件扫一遍）改为 150ms 尾沿
-  // 防抖——searchQuery 本体保持即时更新（TopHeader 受控输入 value={searchQuery} 的回显、
-  // Esc 清搜索、命中面板开合判断均不受影响），全库扫描走防抖镜像 debouncedSearchQuery。
-  // 空串立即同步清零，避免清搜索后命中面板残留旧命中。
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   useEffect(() => {
     if (!searchQuery) {
@@ -2355,9 +2035,6 @@ export function useWorkspaceStore() {
     return () => window.clearTimeout(timer);
   }, [searchQuery]);
 
-  // 顶栏快速检索基于已取回的本地数据（文件名/路径/标题 + 已并入缓存的正文）；
-  // 全库全文检索由命令面板经 /api/v1/search 有界检索端点承接。
-  // 命中总数有上限（TOPBAR_SEARCH_LIMIT），超出时界面写明「未列全」。
   const searchResult = useMemo(
     () => searchWorkspaceCapped(files, debouncedSearchQuery),
     [files, debouncedSearchQuery]
@@ -2369,9 +2046,6 @@ export function useWorkspaceStore() {
       .length;
   }, [files, readingStates]);
 
-  // 日历页右栏「最近 7 天」列表：文档日期取最早版本 revisions[0].source_time（=文档记载日期，
-  // server/project.ts 按 seq ASC）；observed_at 是采集时间，严禁当文档日期。
-  // 窗口用本地日期手工拼接（勿用 toISOString，避免 UTC 偏移把本地今天算进昨天）
   const recentItems = useMemo(() => {
     const toDay = (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -2396,7 +2070,6 @@ export function useWorkspaceStore() {
       }));
   }, [files]);
 
-  // 导航来源栈辅助函数（快照当前真实视图、恢复来源视图、同步面包屑）
   const breadcrumbFromNavSource = (entry: NavSourceEntry): ReturnBreadcrumb =>
     entry.activeTab === 'library' && entry.libraryMode === 'read' && entry.fileId
       ? {
@@ -2451,7 +2124,6 @@ export function useWorkspaceStore() {
     }
   };
 
-  // 手动点击顶栏主导航页签时清空过期的来源栈与面包屑，避免 Esc 跳回陈旧历史页
   const handleSelectPrimaryTab = (tab: PrimaryTab) => {
     if (tab !== activeTab) {
       navSourceStackRef.current = [];
@@ -2462,7 +2134,6 @@ export function useWorkspaceStore() {
     setActiveTab(tab);
   };
 
-  // 跨视图按 D 进入多模态时光机后，退出时光机（eventTrail 1→0）自动弹栈回到真实来源视图
   useEffect(() => {
     const prev = prevTrailLenRef.current;
     prevTrailLenRef.current = eventTrail.length;
@@ -2475,10 +2146,8 @@ export function useWorkspaceStore() {
         restoreNavSourceEntry(popped.entry);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventTrail.length]);
 
-  // Handlers
   const handleSelectSearchHit = (hit: SearchHit) => {
     const match = files.find(file => file.file_id === hit.file_id);
     if (activeTab === 'panorama' && panoramaMode === 'canvas' && match) {
@@ -2503,7 +2172,6 @@ export function useWorkspaceStore() {
     revisionId: string,
     mode: 'read' | 'diff_since_read' | 'relations' | 'history'
   ) => {
-    // mode 'history' 打开文件时间线抽屉（版本链 + 相关事件），不打断当前视图
     if (mode === 'history') {
       setHistoryFileId(fileId);
       return;
@@ -2513,23 +2181,16 @@ export function useWorkspaceStore() {
     setActiveFileId(fileId);
     setPinnedRevisionId(revisionId);
     setReaderSubMode(mode);
-    // 按真实来源生成面包屑并入来源栈（首页/时间轴/日历/星图/资产库全部精确还原）
     setReturnBreadcrumb(breadcrumbFromNavSource(source));
     setActiveTab('library');
     setLibraryMode('read');
   };
 
-  // 日历页（pill / 最近列表）打开文档：复用既有 Timeline/Graph 打开链路，
-  // mode 'read' 会记录来源栈 + setReaderSubMode('read') + setActiveTab('library') + 写返回面包屑
   const openDocFromCalendar = (fileId: string) => {
     const t = files.find((f) => f.file_id === fileId);
     if (t) handleOpenFileFromTimelineOrGraph(t.file_id, t.current_revision_id, 'read');
   };
 
-  // 左栏目录与右缘悬浮岛共用的续读入口：仅在确实有未读完的章节/滚动进度时，
-  // 若上次读到的版本仍在版本链且快照未淘汰才钉回该版本；否则直接打开当前最新版本，
-  // 避免纯已读基线或已读完旧版的文档在更新后打开反而被拽回旧版。
-  // 版本链按需并入（ensureFileDetail）后再判 snapshotAvailable，先导航后钉版本
   const openDocResumeReading = async (fileId: string, sectionId?: string) => {
     const listed = files.find((f) => f.file_id === fileId);
     if (!listed) return;
@@ -2563,8 +2224,6 @@ export function useWorkspaceStore() {
         : target.current_revision_id;
     setPinnedRevisionId(resumeRevisionId);
     setReaderFocusSection(sectionId ? { fileId: target.file_id, sectionId } : null);
-    // 真实滚动采集后，「继续阅读」重开回到上次读行（滚动百分比基线）。
-    // ReaderView 优先用它反查章节并滚到该行；无比例/比例非法时退回章节定位
     readerScrollPercentRef.current = {
       fileId: target.file_id,
       scrollPercent: st?.scrollPercent ?? 0,
@@ -2583,7 +2242,6 @@ export function useWorkspaceStore() {
       return;
     }
     if (returnBreadcrumb?.fromType === 'markdown_paragraph' && returnBreadcrumb.fileId) {
-      // 同步弹出匹配栈顶，防止同一层重复回退
       const top = peekNavSource(stack);
       let nextStack = stack;
       if (top && top.activeTab === 'library' && top.fileId === returnBreadcrumb.fileId) {
@@ -2623,13 +2281,11 @@ export function useWorkspaceStore() {
         return;
       }
     }
-    // 兜底：无来源栈条目时回退至 TIMELINE_RETURN_TARGET 默认映射
     setActiveTab(TIMELINE_RETURN_TARGET.activeTab);
     setPanoramaMode(TIMELINE_RETURN_TARGET.panoramaMode);
     setReturnBreadcrumb(null);
   };
 
-  // 阅读器内部链接跳关联文档（同时压来源栈 + 写原段落面包屑，支持多层嵌套 Esc 原路返回）
   const handleNavigateLinkedFile = (
     targetFileId: string,
     origin: { fileId: string; revisionId: string; title: string; sectionId?: string },
@@ -2673,12 +2329,10 @@ export function useWorkspaceStore() {
     }
   };
 
-  // 文件时间线入口与「打开某时点版本」共用既有 onOpenFileFromTimeline 模式
   const handleOpenFileTimeline = (fileId: string) => {
     setHistoryFileId(fileId);
   };
 
-  // 决策引用跳证据原文：打开阅读器中栏并定位到证据行或 Office/PDF 结构化锚点（供 handleOpenDecisionReference 复用）
   const handleJumpToSourceEvidence = (
     fileId: string,
     revisionId: string,
@@ -2698,18 +2352,13 @@ export function useWorkspaceStore() {
     setLibraryMode('read');
   };
 
-  // 再次点击当前刻度/日期可取消选中（undefined = 画布自选最新一天）
   const handleSelectCanvasDate = (date?: string) => {
     setActiveDate((prev) => (prev !== undefined && prev === date ? undefined : date));
   };
 
-  // 把日期筛选下推服务端（/events 支持 from/to），一次看到某天的全部事件。
-  // 单日窗口用 200（服务端单页上限），避免当天事件超过 50 条时还要翻页
   const applyDayFilter = async (date?: string) => {
     const next = date ? { from: date, to: date } : {};
-    eventFetchGenRef.current += 1; // 在途续页作废（竞态纪律，见 eventFetchGenRef 注释）
-    // 完成侧守卫：bump 后立即快照代际，落地不一致（期间又切了类型/日期/口径）丢弃响应——
-    // 避免慢请求的整页结果覆盖新筛选窗口（同 loadMoreEvents 的发起代际比对纪律）
+    eventFetchGenRef.current += 1;
     const gen = eventFetchGenRef.current;
     dateFilterRef.current = next;
     setDateFilter(next);
@@ -2730,13 +2379,8 @@ export function useWorkspaceStore() {
     }
   };
 
-  // 类型筛选下推服务端——首屏即该类型的真实首页，页脚 total_in_window 同口径；
-  // 不再对已返回的一页做本地过滤（第 1 页没有 ≠ 窗口里没有）
   const applyKindFilter = async (kind: TimelineEventKind | 'all') => {
-    eventFetchGenRef.current += 1; // 在途续页作废（竞态纪律，见 eventFetchGenRef 注释）
-    // 完成侧守卫：bump 后立即快照代际，落地不一致（期间又切了日期/类型/口径）丢弃响应——
-    // 避免 kind 在途时改日期等慢请求的整页结果覆盖新筛选窗口
-    // （同 applyDayFilter/loadMoreEvents 的发起代际比对纪律）
+    eventFetchGenRef.current += 1;
     const gen = eventFetchGenRef.current;
     eventKindFilterRef.current = kind;
     setEventKindFilter(kind);
@@ -2750,7 +2394,6 @@ export function useWorkspaceStore() {
       kinds: kind === 'all' ? undefined : [kind],
     });
     setEventPageLoading(false);
-    // 连续切换类型/日期时丢弃过期响应，避免慢的那次把新筛选窗口的页覆盖掉
     if (result.page && eventFetchGenRef.current === gen) {
       setEventPage(result.page);
       mergeEventsPage(result.page.items);
@@ -2758,9 +2401,8 @@ export function useWorkspaceStore() {
     }
   };
 
-  // 空态「重置时间线筛选」：类型 + 日期合并成一次查询，避免两次请求互相覆盖
   const resetEventFilters = async () => {
-    eventFetchGenRef.current += 1; // 在途续页作废（竞态纪律，见 eventFetchGenRef 注释）
+    eventFetchGenRef.current += 1;
     eventKindFilterRef.current = 'all';
     setEventKindFilter('all');
     dateFilterRef.current = {};
@@ -2773,7 +2415,6 @@ export function useWorkspaceStore() {
       kinds: undefined,
     });
     setEventPageLoading(false);
-    // 期间用户又切了类型/日期：丢弃这次「全部」响应，避免旧页覆盖新筛选
     if (
       result.page &&
       eventKindFilterRef.current === 'all' &&
@@ -2786,7 +2427,6 @@ export function useWorkspaceStore() {
     }
   };
 
-  // 画布日期组 / 「N 条待展开」/ 命令面板「跳到今天」一步切到全景溯源列表态看当天全部（from=to 服务端下推）
   const handleJumpToDayInTimeline = (date: string) => {
     if (activeTab !== 'panorama' || panoramaMode !== 'list') {
       pushCurrentNavSource();
@@ -2801,8 +2441,6 @@ export function useWorkspaceStore() {
     _revisionId: string,
     sectionId?: string
   ) => {
-    // 仅记录当前读到的章节定位，绝不静默推进 last_read_revision_id：
-    // 否则「读后有更新」文档点击大纲任一章节时，会瞬间清掉全部「★ 上次读后有改动」高亮与未读状态。
     setReadingStates((prev) => {
       const existing = prev[fileId];
       const base = existing || {
@@ -2848,7 +2486,6 @@ export function useWorkspaceStore() {
     }
   };
 
-  /** 将单个文件标为未读（清除已读基线，完整保留收藏/批注/滚动进度，并同步服务端 SQLite）。 */
   const handleMarkUnread = (fileId: string) => {
     if (!fileId) return;
     setReadingStates((prev) => markFileUnreadState(prev, fileId));
@@ -2860,7 +2497,6 @@ export function useWorkspaceStore() {
     }
   };
 
-  /** 目录 / 工作区一键标为未读（同步清除服务端与本地已读基线，支持 8 秒 Toast 100% 撤销还原）。 */
   const handleMarkFolderUnread = async (
     scope: 'workspace' | 'folder',
     folderPrefix?: string
@@ -2966,7 +2602,6 @@ export function useWorkspaceStore() {
     );
     setReadingStates(next);
 
-    // 撤销时同时还原服务端 undo_items 与纯本地已读的文档，保证双端一致
     const undoMap = new Map(res.data.undo_items.map((u) => [u.file_id, u]));
     for (const [fid, prev] of previousSnapshot.entries()) {
       if (!undoMap.has(fid) && prev?.last_read_revision_id) {
@@ -3019,10 +2654,6 @@ export function useWorkspaceStore() {
     return true;
   };
 
-  /**
-   * 存量工作区/目录一键确立已读基线（后端单事务 <150ms + 8 秒 Toast 一键 100% 撤销）。
-   * 仅推进 `last_read_revision_id` 到各自当前版本，绝不伪造 `scrollPercent`。
-   */
   const handleMarkReadingBaseline = async (
     scope: 'workspace' | 'folder',
     folderPrefix?: string
@@ -3050,7 +2681,6 @@ export function useWorkspaceStore() {
         : '当前工作区';
 
     if (!hasActiveBackend) {
-      // 无后端连接（纯演示/单测态）回退本地基线确立，同样支持 8 秒撤销
       const targetFiles = files.filter((f) => {
         if (!f.current_revision_id) return false;
         if (scope === 'folder' && cleanPrefix) {
@@ -3170,8 +2800,6 @@ export function useWorkspaceStore() {
     return true;
   };
 
-  // 阅读器真实滚动 → 持久化滚动百分比。
-  // clamp 到 [0,100]，只写 scrollPercent/updated_at，不触碰已读基线 revision 与收藏
   const handleScrollProgress = (fileId: string, scrollPercent: number) => {
     if (scrollPercent < 0 || scrollPercent > 100 || !Number.isFinite(scrollPercent)) {
       return;
@@ -3190,8 +2818,6 @@ export function useWorkspaceStore() {
           },
         };
       }
-      // 首次真实滚动即建立阅读状态（不再需要先收藏/标已读才记进度）：
-      // 这样纯「打开→滚动→关闭」的文件也会带着真实进度进入「继续阅读」
       return {
         ...prev,
         [fileId]: {
@@ -3224,7 +2850,6 @@ export function useWorkspaceStore() {
     });
   };
 
-  // 目录级静默与恢复治理（仅影响星图/日历/列表噪点；左栏仍灰阶可见，随时可阅读或 Ctrl+K 检索）
   const handleToggleMuteFolder = (folderPath: string) => {
     const norm = normalizeMutedFolderPath(folderPath);
     if (!norm) return;
@@ -3276,8 +2901,6 @@ export function useWorkspaceStore() {
     }));
   };
 
-  // 「待办与决策」工作区已删除：全应用的决策引用（星图/时间线/阅读器/检视器）统一
-  // 跳到该决策首条证据的原文定位——溯源语义保留，签批流随工作区一并移除
   const handleOpenDecisionReference = (
     decId: string,
     targetEvidence?: DecisionSourceEvidence
@@ -3296,7 +2919,6 @@ export function useWorkspaceStore() {
     setIsMobileRightOpen(false);
   };
 
-  // 批阅看板卡片动作（位于 handleJumpToSourceEvidence 与 handleViewProposalDiff 之后，确保闭包无 TDZ）
   const handleBoardJumpToStatement = (stmt: ReviewBoardPendingStatement) => {
     setIsReviewBoardOpen(false);
     const cached = fileCacheRef.current.get(stmt.file_id);
@@ -3321,10 +2943,6 @@ export function useWorkspaceStore() {
     void handleViewProposalDiff(draft.draft_id);
   };
 
-  // ── Inline 拍板闭环：三步原子操作的前端承接 ──────────────────────────────
-  // ①回写与状态变更在后端拍板 job（CAS）完成；②顶部未决计数实时 -1：把对应决策
-  // 本地置「已确认」——DecisionRadar/HomeView 经 unresolvedDecisionCount 共用口径
-  // 自动 -1（决策不在本地数组时无从 -1，如实不造计数）；③阻塞清零恢复提示见下。
   const handleDecisionResolved = useCallback(
     (p: {
       decisionId: string;
@@ -3342,9 +2960,6 @@ export function useWorkspaceStore() {
           d.decision_id === p.decisionId ? { ...d, status: '已确认' as const } : d
         )
       );
-      // 拍板完成即生成《最新已拍板决策变更单》并推送到上下文清单。
-      // 问题/编号/来源路径优先取本地决策行；决定文本/确认人/生效日期取表单值，
-      // 缺字段如实 null（卡片显示「未记录」，不拿问题原文冒充决定）。
       const sourceDecision = decisions.find((d) => d.decision_id === p.decisionId);
       const evidence = sourceDecision?.evidences[0];
       const question =
@@ -3369,7 +2984,6 @@ export function useWorkspaceStore() {
           at: nowLocalIso(),
         })
       );
-      // 同步刷新状态机投影，确保四视图徽标与未决计数零延迟对齐
       void fetchStateOverview().then((overview) => {
         if (overview.ok) setStateOverview(overview.data);
       });
@@ -3377,8 +2991,6 @@ export function useWorkspaceStore() {
     [decisions, pushDecisionChangeNote]
   );
 
-  // 阻塞性事项（P0/P1）清零 → 长任务恢复横幅（await_decision 槽由写线程
-  // recompute_slots 唤醒；前端提示为非阻塞告知，8s 自动收起）
   const [hitlClearedAt, setHitlClearedAt] = useState<string | null>(null);
   const handleBlockingCleared = useCallback((_p: { fileId: string }) => {
     setHitlClearedAt(nowLocalIso());
@@ -3389,14 +3001,10 @@ export function useWorkspaceStore() {
     return () => window.clearTimeout(timer);
   }, [hitlClearedAt]);
 
-  // Delivered 一键归档 / Archived 重开。
-  // 提示数据来自 /state-overview（唯一数据源）；归档/重开走 202 job + 轮询，
-  // 完成后乐观更新并重新拉取 state-overview（不触发整库重扫）。
   const deliveredInitiatives = useMemo(
     () => deliveredInitiativesOf(stateOverview?.initiatives ?? []),
     [stateOverview]
   );
-  // 当前阅读专项若已交付，优先提示它；否则提示最近更新的已交付专项。
   const deliveredInitiative = useMemo(() => {
     if (deliveredInitiatives.length === 0) return null;
     if (activeInitiative?.state === 'delivered') {
@@ -3485,9 +3093,7 @@ export function useWorkspaceStore() {
     [initiativeLifecycle?.phase]
   );
 
-  // ── 桌面壳多工作区切换与彻底隔离重置 ─────────────────────────────────────
   const resetWorkspaceScopedState = useCallback(() => {
-    // 切换工作区/项目前补写当前工作区的阅读状态，合批窗口内的变化不丢
     readingPersist.flush();
     readingWorkspaceIdRef.current = null;
     setReadingStates({});
@@ -3614,7 +3220,6 @@ export function useWorkspaceStore() {
     [desktopSession?.root, desktopSession?.status, resetWorkspaceScopedState]
   );
 
-  // WebView 重载（F5）时 initialization_script 会注入启动初值；向 Rust 读取实时会话对账
   const desktopReconciledRef = useRef(false);
   useEffect(() => {
     if (!desktopBridgeAvailable || desktopReconciledRef.current) return;
@@ -3683,12 +3288,6 @@ export function useWorkspaceStore() {
     setContextPointers((prev) => [pointer, ...prev]);
   };
 
-  // 决策回执接入证据篮：阅读器回执层「加入证据篮」→ 装配成 EvidencePointer 走既有
-  // 篮子机制（状态/抽屉/导出全复用，不加平行数据链）。篮子形状装得下：evidence_kind
-  // 'decision_record' 枚举本就预留（抽屉徽标「决策卡」，ModalsAndDrawers EVIDENCE_KIND_LABEL），
-  // locator=整文件（决策勾选针对全文档），excerpt/note 自由文本承载决策内容。
-  // 字段不伪造：path/sha/observed_at 一律按 file_id+revision_id 回查工作区真实值；
-  // excerpt 只放已勾选项原文逐字（证据摘录语义），填空值属用户产出 → 进 note 不混摘录。
   const handleAddDecisionReceiptToBasket = (payload: DecisionReceiptBasketPayload) => {
     const file = files.find((f) => f.file_id === payload.file_id);
     const rev = file?.revisions.find((r) => r.revision_id === payload.revision_id);
@@ -3702,12 +3301,9 @@ export function useWorkspaceStore() {
       evidence_kind: 'decision_record',
       index_generation: config.runtimeStatus.indexGeneration,
       observed_at: rev?.observed_at ?? new Date().toISOString(),
-      // 回执层只在 md 阅读模式触发（ReaderView 决策层保守放行）→ md=全文覆盖诚实；
-      // 理论不可达的非 md 形态降级 filename_only，不冒充全文
       coverage: file?.format === 'md' ? 'full_text' : 'filename_only',
       stale: false,
       excerpt: payload.selectedOptions.join('\n'),
-      // 「决策回执」词根与 ReaderView 决策回执层（buildDecisionReceiptInstruction）同源
       note: `决策回执：已勾选 ${payload.selectedOptions.length} 项${
         payload.fillValues.length > 0
           ? ` · 填空 ${payload.fillValues.length} 项（${fillSummary}）`
@@ -3716,23 +3312,16 @@ export function useWorkspaceStore() {
     });
   };
 
-  // 分页续页 / 刷新 / 日期待考（Graph 与 Timeline 共用同一查询窗口）
-  // 续页与刷新必须带上与首屏一致的筛选指纹（order/undated/kinds/日期窗口），
-  // 否则服务端游标校验会因筛选不一致返回 CURSOR_STALE 拒绝续页
   const loadMoreEvents = async (): Promise<boolean> => {
     if (!eventPage?.next_cursor || eventPageLoading) return false;
     setEventPageLoading(true);
-    // 发起时刻的筛选代际：响应到达时不一致即整页作废（期间用户改了类型/日期筛选，
-    // 旧游标窗口的事件不得混进新筛选窗口；stale 重取分支同守）
     const gen = eventFetchGenRef.current;
     const nextQuery = {
       limit: 50,
       order: eventOrder,
       undated: undatedOnly,
-      // 游标绑定筛选指纹，续页必须带上与首页一致的日期窗口
       from: dateFilterRef.current.from,
       to: dateFilterRef.current.to,
-      // 筛选指纹含 kinds，续页漏传会被服务端判 CURSOR_STALE
       kinds: currentEventKinds(),
     };
     const next = await fetchEventPage({
@@ -3744,8 +3333,6 @@ export function useWorkspaceStore() {
       return false;
     }
     if (next.stale) {
-      // 游标失效（INDEX_STALE/CURSOR_STALE）：保留已显示数据不闪空，按同参重取当前窗口首页
-      // （按新快照整窗重查，UI 保留当前浏览位置并重新取数）
       const fresh = await fetchEventPage(nextQuery);
       setEventPageLoading(false);
       if (eventFetchGenRef.current !== gen) return false;
@@ -3768,9 +3355,7 @@ export function useWorkspaceStore() {
   };
 
   const refreshEvents = async () => {
-    eventFetchGenRef.current += 1; // 刷新开启新窗口，作废在途续页（竞态纪律，见 eventFetchGenRef 注释）
-    // 完成侧守卫：bump 后立即快照代际，落地不一致（期间又改了类型/日期/口径）丢弃响应，
-    // 避免慢请求的整页结果覆盖新筛选窗口（同 loadMoreEvents 的发起代际比对纪律）
+    eventFetchGenRef.current += 1;
     const gen = eventFetchGenRef.current;
     const dq = dayQueryRef.current;
     const [result, days] = await Promise.all([
@@ -3795,16 +3380,9 @@ export function useWorkspaceStore() {
       mergeEventsPage(result.page.items);
       setChangeNotice(null);
     }
-    // days 响应按发起时刻画布窗口指纹守卫（eventDays 无代际体系，见 sameDayQuery）：
-    // 期间切粒度/下钻/口径的旧 days 不得覆盖新窗口
     if (days && sameDayQuery(dayQueryRef.current, dq)) setEventDays(days);
   };
 
-  /**
-   * 无痛静默并入增量事件（保持当前位置）：
-   * - 不递增 eventFetchGenRef 也不清空已翻页列表，阅读器/日历/时间轴滚动位置与游标保持不动；
-   * - 仅将新增 event_id 增量合入 events 与 eventPage，并静默更新当日统计后清除提示条。
-   */
   const silentMergeNewEvents = async () => {
     if (silentMergeInFlightRef.current || silentMergingEvents) return;
     silentMergeInFlightRef.current = true;
@@ -3851,7 +3429,6 @@ export function useWorkspaceStore() {
     }
   };
 
-  // ---------- 原生系统桥接（定位目录、默认打开、剪贴板、拖入导入） ----------
   const showSystemToast = useCallback(
     (
       tone: 'ok' | 'warn' | 'error',
@@ -4078,7 +3655,6 @@ export function useWorkspaceStore() {
     return subscribeNativeDragDrop((ev) => nativeDropHandlerRef.current(ev));
   }, []);
 
-  // 文件操作 Undo/Redo 逆向落盘成功后的前端缓存同步（绝不回写 recordOp，防循环入账）
   const handleFileOpHistoryApplied = useCallback(
     (resp: import('../services/apiTypes').FileMutationResponse) => {
       detailLoadedIdsRef.current.delete(resp.file_id);
@@ -4114,7 +3690,6 @@ export function useWorkspaceStore() {
     [publishFiles]
   );
 
-  // 文件操作专属 Undo/Redo 账本（独立于正文编辑，默认保留 100 步 rename/move）
   const fileOpHistory = useFileOpHistory({
     workspaceEpoch,
     showToast: showSystemToast,
@@ -4137,7 +3712,6 @@ export function useWorkspaceStore() {
         setContextPointers((prev) => prev.filter((p) => p.file_id !== resp.file_id));
         showSystemToast('warn', message);
       } else {
-        // rename / move 成功即落 FileOpHistory 账本（trash 绝不入账）
         if (
           (resp.operation === 'file_renamed' || resp.operation === 'file_moved') &&
           resp.old_path &&
@@ -4193,7 +3767,6 @@ export function useWorkspaceStore() {
     onMutationSuccess: handleFileMutationSuccess,
   });
 
-  // Quiet.md 全局常驻目录外壳：真实空目录、置顶、挂载树、文件夹增删改移与批量整理
   const pendingOpenNewFileIdRef = useRef<string | null>(null);
   const [sidebarInlineAction, setSidebarInlineAction] = useState<{
     seq: number;
@@ -4255,7 +3828,6 @@ export function useWorkspaceStore() {
     showToast: showSystemToast,
   });
 
-  // ===== 多项目并存（Quiet.md 多目录工作台）：零重启切换焦点 + 跨项目目标落点消费 =====
   const pendingCrossProjectRef = useRef<PendingCrossProjectTarget | null>(null);
   const currentActiveProjectIdRef = useRef<string>('');
 
@@ -4290,7 +3862,6 @@ export function useWorkspaceStore() {
         return;
       }
 
-      // 切换到另一个受管项目：零重启（保留 HTTP 服务与 SSE），仅清空旧项目内存态并重拉新激活项目
       pendingCrossProjectRef.current = pendingTarget ?? null;
       resetWorkspaceScopedState();
       if (pendingTarget?.openTab) {
@@ -4327,7 +3898,6 @@ export function useWorkspaceStore() {
     };
   }, [multiProjects.refreshAll]);
 
-  // 跨项目切换完成且新项目 files / decisions 到达后，自动落点到目标文件夹 / 文件 / 决策
   useEffect(() => {
     const pending = pendingCrossProjectRef.current;
     if (!pending) return;
@@ -4364,7 +3934,6 @@ export function useWorkspaceStore() {
     }
   }, [decisions, files, handleOpenDecisionReference, multiProjects.activeProjectId]);
 
-  // 新建文档落盘并由 bootstrap/分页带回后，自动切入阅读器打开它
   useEffect(() => {
     const pendingId = pendingOpenNewFileIdRef.current;
     if (!pendingId) return;
@@ -4377,7 +3946,6 @@ export function useWorkspaceStore() {
     setLibraryMode('read');
   }, [files]);
 
-  // 合并空目录进单文件移动弹窗的可选目标列表（新建空文件夹后即可立刻把文件移进去）
   const fileOpFolderOptions = useMemo(
     () =>
       dirShell.realFolders.length > 0
@@ -4386,9 +3954,6 @@ export function useWorkspaceStore() {
     [baseFileOpFolderOptions, dirShell.realFolders, files]
   );
 
-  // ---------- 确认制引用路径修复（移动/改名涉及被 Markdown 决定证据引用的目标） ----------
-  // 清单收集零 IO（relations 行级边 + 决定证据，均已在内存）；写回走桌面壳
-  // save_workspace_file CAS 乐观锁（冲突绝不覆盖）；浏览器/CLI 无桥＝诚实禁用。
   const referenceRepair = useReferencePathRepair({
     files,
     relations,
@@ -4406,16 +3971,12 @@ export function useWorkspaceStore() {
     };
   }, [fileOpModal, referenceRepair]);
 
-  // FileOpsModal 提交包装：移动/重命名成功后按用户确认标志执行引用路径修复；
-  // 修复失败诚实 warn（引用在路径别名下不断链，但路径口径需修复才直达命中）。
   const handleFileOpsSubmit = useCallback(
     async (payload: FileOpSubmitPayload) => {
-      // 提交前固化 old→new 路径映射（弹窗此时仍持有 request；文件名取自真实路径段，
-      // 不取 title——title 是显示名，可能与文件名不同）
       const source = fileOpModal;
       const oldPath = source?.relativePath ?? '';
       const ok = await submitFileOp(payload);
-      if (!ok) return; // 失败：弹窗保持 + serverError 已显示，引用一个字节不动
+      if (!ok) return;
       if (
         (payload.kind === 'move' || payload.kind === 'rename') &&
         payload.updateReferences &&
@@ -4477,14 +4038,11 @@ export function useWorkspaceStore() {
     [openFileOp]
   );
 
-  // 树内拖拽落地：无受影响引用 → 直连文件移动接口（复用 submitFileOp 的移动分支：
-  // postMoveFile + fileCache 更新 + publishFiles + 成功事件全链路）；有受影响引用 →
-  // 转 FileOpsModal 确认弹窗（引用清单预览 + 用户显式确认，绝不静默断链/改写）。
   const handleTreeMoveFile = useCallback(
     (fileId: string, targetDir: string) => {
       const target = files.find((f) => f.file_id === fileId);
       if (!target) return;
-      if (target.folder === (targetDir === '' ? '.' : targetDir)) return; // 同目录无变化落点（防成环双保险）
+      if (target.folder === (targetDir === '' ? '.' : targetDir)) return;
       const affected = referenceRepair.collectAffectedReferences(fileId);
       if (affected.length > 0) {
         openFileOp('move', {
@@ -4544,18 +4102,15 @@ export function useWorkspaceStore() {
     onSyncSelection: handleSyncQuickPreviewSelection,
   });
 
-  // ---------- 全局无鼠快捷键分发层（Enter 深读 / D 版本对比 / C 加入上下文篮 / Ctrl+Z·Shift+Z Undo·Redo） ----------
   const resolveFocusedFileForShortcut = (): {
     file: FileRecord;
     revisionId: string;
   } | null => {
-    // 若星图正下钻在事件链/时光机内，优先取栈顶帧文件
     if (activeTab === 'panorama' && panoramaMode === 'canvas' && eventTrail.length > 0) {
       const top = eventTrail[eventTrail.length - 1];
       const f = fileCacheRef.current.get(top.fileId) ?? files.find((item) => item.file_id === top.fileId);
       if (f) return { file: f, revisionId: top.revisionId || f.current_revision_id };
     }
-    // 列表态优先取当前 J/K 选中事件的文件
     if (activeTab === 'panorama' && panoramaMode === 'list' && selectedEventId) {
       const ev = events.find((item) => item.event_id === selectedEventId);
       if (ev?.file_id) {
@@ -4575,7 +4130,6 @@ export function useWorkspaceStore() {
   useGlobalShortcuts({
     enabled: hasActiveBackend,
     onAction: (action: ShortcutAction): boolean => {
-      // 全站导航（1/2/3）与全景三态和弦（G S / G C / G L）与侧栏折展（[ / ]）
       if (action === 'nav-tab-home') {
         handleSelectPrimaryTab('home');
         return true;
@@ -4637,7 +4191,6 @@ export function useWorkspaceStore() {
       if (!target) return false;
 
       if (action === 'deep-read-focus') {
-        // 已在阅读态则不重复打开（避免干扰正文区）
         if (activeTab === 'library' && libraryMode === 'read') return false;
         handleOpenFileFromTimelineOrGraph(target.file.file_id, target.revisionId, 'read');
         return true;
@@ -4703,11 +4256,8 @@ export function useWorkspaceStore() {
     },
   });
 
-  // ---------- 命令面板执行回调（Enter / Ctrl+Enter / Tab / 动作行） ----------
-  // Enter 打开：复用既有打开链路（阅读器 + 返回面包屑），revisionId 缺省时退当前版
   const handlePaletteOpenFile = (item: PaletteItem) => {
     if (!item.fileId) return;
-    // 多项目并存命中：零重启切到来源项目并打开完整阅读器
     if (item.projectId && item.projectId !== multiProjects.activeProjectId) {
       void multiProjects.handleActivateProject(item.projectId, {
         projectId: item.projectId,
@@ -4717,9 +4267,6 @@ export function useWorkspaceStore() {
       });
       return;
     }
-    // 挂载区命中——参考工作区资料不在主区文件列表，走 QuickLook 只读预览
-    // （版本级端点经服务端按 revision 溯源路由到参考区只读库），并按挂载身份
-    // （规范化路径稳定哈希）持久保留阅读位置，离线/重挂后可回看
     if (item.sourceWorkspace) {
       recordMountedReading(item.sourceWorkspace.rootKey, {
         file_id: item.fileId,
@@ -4738,13 +4285,10 @@ export function useWorkspaceStore() {
     );
   };
 
-  // Ctrl+Enter 定位所在目录：直连桌面壳 revealInExplorer（'.' 即工作区根）
   const handlePaletteLocate = (item: PaletteItem) => {
     void handleRevealInExplorer(item.relativePath ?? '');
   };
 
-  // Tab 加入上下文（证据）篮：从内存版本链投影取当前版哈希（零异步）；
-  // 缓存缺当前版数据时退化为 metadata_only 文件级指针（诚实口径）
   const handlePaletteAddToBasket = (item: PaletteItem) => {
     if (!item.fileId) return;
     const listed = files.find((f) => f.file_id === item.fileId);
@@ -4770,7 +4314,6 @@ export function useWorkspaceStore() {
     handleAddEvidencePointer(pointer);
   };
 
-  // 动作行：跳到今天 / 证据篮 / 定位根目录 / 切换工作区
   const handlePaletteAction = (item: PaletteItem) => {
     switch (item.actionId) {
       case 'jump-today':
@@ -4785,7 +4328,6 @@ export function useWorkspaceStore() {
       case 'switch-workspace':
         if (item.payload) void handleSwitchWorkspace(item.payload);
         break;
-      // 打开挂载参考工作区管理面板（面板自己负责挂载/卸载与错误透出）
       case 'mount-workspace':
         setMountPanelOpen(true);
         break;
@@ -4823,10 +4365,6 @@ export function useWorkspaceStore() {
     ]
   );
 
-  // 日历只画主轴窗口内的刻度：进入日历时取最近 90 天的一页（≤200 条），
-  // 不再沿游标把整库事件排空进累计表。排空在高密度工作区上是数千次请求，
-  // 每页都并进 events 并重渲整棵树；更早历史仍由列表态的「加载更多」显式触发。
-  // 每代词只取一次（筛选变化会推进 eventFetchGenRef，窗口随之重取）。
   const calendarWindowFetchedRef = useRef('');
   useEffect(() => {
     if (panoramaMode !== 'calendar' || !hasActiveBackend) return;
@@ -4836,13 +4374,11 @@ export function useWorkspaceStore() {
     const gen = eventFetchGenRef.current;
     void (async () => {
       const result = await fetchEventPage(calendarWindowEventQuery(new Date()));
-      // 期间改了筛选：这页属于旧窗口，丢弃
       if (eventFetchGenRef.current !== gen) return;
       if (result.page) mergeEventsPage(result.page.items);
     })();
   }, [hasActiveBackend, mergeEventsPage, panoramaMode, workspaceEpoch]);
 
-  // 标尺粒度切换（月/周/日）。切回全域窗口重新取数，选中日期清空由画布自选最新桶
   const handleGranularityChange = (granularity: EventDayGranularity) => {
     const dq = dayQueryRef.current;
     if (granularity === dq.granularity && !dq.drill) return;
@@ -4850,8 +4386,6 @@ export function useWorkspaceStore() {
     setDayGranularity(granularity);
     setDrillRange(null);
     setActiveDate(undefined);
-    // 发起时刻窗口快照：days 落地时指纹不一致（期间又切粒度/下钻/口径）丢弃响应，
-    // 避免旧窗口的 days 覆盖新窗口（eventDays 无代际体系，见 sameDayQuery 纪律）
     const issued = dayQueryRef.current;
     void (async () => {
       const days = await fetchEventDays({
@@ -4865,7 +4399,6 @@ export function useWorkspaceStore() {
     })();
   };
 
-  // 点月/周聚合刻度下钻到日——按该桶的日期窗口（月=整月、周=周一至周日）取逐日数据
   const handleDrillToBucket = async (bucketDate: string, bucketGranularity: EventDayGranularity) => {
     const window = bucketRange(bucketDate, bucketGranularity);
     if (!window) return;
@@ -4873,9 +4406,6 @@ export function useWorkspaceStore() {
     setDayGranularity('day');
     setDrillRange(window);
     setActiveDate(undefined);
-    // 发起时刻窗口快照：days 落地时指纹不一致（期间又切粒度/下钻/口径）丢弃响应——
-    // 连选中日定位一起不落，避免旧桶的逐日数据与 activeDate 覆盖新窗口
-    // （eventDays 无代际体系，见 sameDayQuery 纪律）
     const issued = dayQueryRef.current;
     const days = await fetchEventDays({
       limitDays: DAYS_QUERY_LIMIT,
@@ -4886,7 +4416,6 @@ export function useWorkspaceStore() {
     });
     if (days && sameDayQuery(dayQueryRef.current, issued)) {
       setEventDays(days);
-      // 下钻后定位到该桶内最新一个有事件的日子
       const latest = days.groups.find((g) => g.date !== '');
       if (latest) setActiveDate(latest.date);
     }
@@ -4894,11 +4423,7 @@ export function useWorkspaceStore() {
 
   const toggleUndatedEvents = async () => {
     const next = !undatedOnly;
-    // 发起即 bump 作废旧窗口（竞态纪律，见 eventFetchGenRef 注释；此前漏 bump）：
-    // 旧 undated 指纹签发的在途游标续页会把旧窗口事件 append 进新窗口，或整页覆盖
-    // 新筛选结果
     eventFetchGenRef.current += 1;
-    // 完成侧守卫：落地代际不一致（期间又改了类型/日期/口径）丢弃响应（同 loadMoreEvents）
     const gen = eventFetchGenRef.current;
     setUndatedOnly(next);
     const result = await fetchEventPage({
@@ -4917,14 +4442,9 @@ export function useWorkspaceStore() {
 
   const toggleEventOrder = async () => {
     const next = eventOrder === 'occurred' ? 'observed' : 'occurred';
-    // 发起即 bump 作废旧窗口（竞态纪律，见 eventFetchGenRef 注释；此前漏 bump）：
-    // 旧 order 指纹签发的在途游标续页会把旧窗口事件 append 进新窗口，或整页覆盖
-    // 新筛选结果
     eventFetchGenRef.current += 1;
-    // 完成侧守卫：落地代际不一致（期间又改了类型/日期/口径）丢弃响应（同 loadMoreEvents）
     const gen = eventFetchGenRef.current;
     setEventOrder(next);
-    // 画布聚合与 Timeline 同步切换口径（同一持久查询）
     dayQueryRef.current = { ...dayQueryRef.current, order: next };
     const dq = dayQueryRef.current;
     const [result, days] = await Promise.all([
@@ -4949,14 +4469,9 @@ export function useWorkspaceStore() {
       mergeEventsPage(result.page.items);
       setChangeNotice(null);
     }
-    // days 响应按发起时刻画布窗口指纹守卫（eventDays 无代际体系，见 sameDayQuery）：
-    // 期间切粒度/下钻/口径的旧 days 不得覆盖新窗口
     if (days && sameDayQuery(dayQueryRef.current, dq)) setEventDays(days);
   };
 
-  // 全景溯源 星图/列表/日历 三态切换：浅色态宿主使用标线风格 Tabs（无胶囊填充、非激活态柔色字）；
-  // canvas 态的暗色端由 GraphCanvasView 内部渲染，list/calendar 态由 TimelineView/CalendarBoardView
-  // 顶部渲染同一组切换控件，不改变 Esc 逐级返回行为。
   const renderPanoramaModeSwitch = () => (
     <Tabs
       ariaLabel="全景溯源视图切换"
@@ -4967,23 +4482,18 @@ export function useWorkspaceStore() {
   );
 
   return {
-    // 桌面会话与桥接
     desktopSession, desktopBridgeAvailable, desktopSystemAvailable, hasActiveBackend,
     workspaceEpoch, switchingWorkspace, workspaceSwitchError,
     handlePickWorkspaceFolder, handleSwitchWorkspace, handleRemoveRecentWorkspace,
-    // 数据
     config, files, events, decisions, decisionsUnresolvedTotal, relations, filesTotal, fileFacets, readingStates,
     setReadingStates, mutedFolders, handleToggleMuteFolder, handleUnmuteFolder, handleClearMutedFolders,
     dataSource, dataError, scanSummary,
-    // 事件查询
     eventDays, activeDate, setActiveDate, eventPage, eventPageLoading, undatedOnly, eventOrder,
     eventKindFilter, dayGranularity, changeNotice,
-    // 任务与投影
     rescanState, rescanError, serviceStatus, stateOverview, setStateOverview,
     agentDraftFileIds, eventDataReady, workspaceSummary, eventRange, dateFilter,
     handleRescan,
     networkOffline, streamDisconnected, retryingConnection, handleRetryConnection,
-    // 导航与选中
     activeTab, setActiveTab, handleSelectPrimaryTab, panoramaMode, setPanoramaMode, portholeRef, handleCanvasThemeChange,
     libraryMode, setLibraryMode, eventTrail, setEventTrail,
     activeFileId, setActiveFileId, pinnedRevisionId, setPinnedRevisionId,
@@ -4991,30 +4501,24 @@ export function useWorkspaceStore() {
     readerFocusSection, setReaderFocusSection, readerScrollPercentRef,
     selectedEventId, setSelectedEventId, selectedDecisionId, setSelectedDecisionId,
     returnBreadcrumb, setReturnBreadcrumb, navSourceStack, handleNavigateLinkedFile,
-    // 搜索与筛选
     searchQuery, setSearchQuery, sidebarFilters, setSidebarFilters,
     handleClearSidebarFilters, sidebarFilterActive, sidebarFilterLabel, activeFileInFilter,
     smartViewFiles, activeSmartView, filteredFiles,
-    // 增量聚光灯（司辰旁导航条 + 画布骨架降亮度）
     spotlightEnabled, spotlightItems, spotlightDimmedFileIds,
     handleSpotlightToggle, handleSpotlightCursor, spotlightCursor,
-    // 浮层与抽屉
     isSettingsOpen, setIsSettingsOpen, isMcpConsoleOpen, setIsMcpConsoleOpen,
     isContextDrawerOpen, setIsContextDrawerOpen, isMobileLeftOpen, setIsMobileLeftOpen,
     isMobileRightOpen, setIsMobileRightOpen, libraryInspectorOpen, setLibraryInspectorOpen,
     overviewInspectorCollapsed, setOverviewInspectorCollapsed,
     decisionRadarSignal, setDecisionRadarSignal, isHelpOpen, setIsHelpOpen,
     isMountPanelOpen, setMountPanelOpen, mountedWs,
-    // 批阅看板与司辰手记
     isReviewBoardOpen, setIsReviewBoardOpen, reviewBoard, reviewBoardLoading,
     isChronosDigestOpen, setIsChronosDigestOpen,
     reviewBoardError, reviewBoardBusyKey, reviewBoardNotice,
     refreshReviewBoard, handleOpenReviewBoard, handleBoardAckStatement,
     handleBoardRepairOrphan, handleBoardJumpToStatement, handleBoardInspectDraft,
-    // 命令面板
     palette, isPaletteOpen, closePalette,
     handlePaletteOpenFile, handlePaletteLocate, handlePaletteAddToBasket, handlePaletteAction,
-    // 派生数据
     unreadFilesCount, contextPointers, setContextPointers,
     searchHits, searchHitsTruncated: searchResult.truncated, recentItems, activeFile, packageList, activePackage,
     stateOverviewIndex, activeInitiative, agentContextPreset, presetPointers, recommendedMounts,
@@ -5023,7 +4527,6 @@ export function useWorkspaceStore() {
     openContextDrawer, handleMountPointers, handleUpdatePointerGranularity,
     deliveredInitiatives, deliveredInitiative, initiativeLifecycle, runInitiativeLifecycle,
     hitlClearedAt,
-    // 变更单与回写
     proposalToast, proposalAdopting, proposalRejecting, proposalAdoptNotice,
     proposalDiffExpanded, proposalDiffLoading, proposalDiffError, proposalDiffContent,
     handleAdoptProposal, handleRejectProposal, handleViewProposalDiff,
@@ -5032,12 +4535,10 @@ export function useWorkspaceStore() {
     pushDecisionChangeNote,
     handleDecisionResolved, handleBlockingCleared,
     handleAddEvidencePointer, handleAddDecisionReceiptToBasket,
-    // 文件缓存与事件操作
     publishFiles, mergeEventsPage, ensureFileDetail, ensureRevisionContent,
     loadMoreEvents, refreshEvents, silentMergeNewEvents, silentMergingEvents, toggleUndatedEvents, toggleEventOrder,
     applyDayFilter, applyKindFilter, resetEventFilters, handleJumpToDayInTimeline,
     handleGranularityChange, handleDrillToBucket, handleSelectCanvasDate,
-    // 处理器
     handleSelectSearchHit, handleOpenFileFromTimelineOrGraph, openDocFromCalendar,
     setHistoryFileId, historyFileId,
     openDocResumeReading, handleFollowReturnBreadcrumb, handleOpenFileTimeline,

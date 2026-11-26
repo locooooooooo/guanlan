@@ -4,29 +4,16 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/**
- * 文档链接守卫。规范要求「文档与源码一致，每个链接都要能打开」（docs/code-standards.md
- * 「评审一个改动」），这里让它由测试保证，而不是靠人每次手工点。
- *
- * 查三件事：
- * 1. 每份文档里的相对链接、`@文件` 指向，都指向存在的文件或目录；
- * 2. 链接里的锚点（#后面的部分）对应当前文件或目标文件里确实存在的标题；
- * 3. docs/ 下的每份文档都能从 README.md 或 AGENTS.md 出发，顺着内部链接到达——
- *    写了却没人链得到的文档等于没写。
- */
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** 放文档的目录。仓库根只看一层，其余递归。 */
 const DOC_ROOTS = ['.', 'docs', '.github', 'native/docs'] as const;
-/** 新读者与编码智能体的入口。docs/ 下的文档至少要从其中一份出发能到达。 */
 const ENTRY_POINTS = ['README.md', 'AGENTS.md'] as const;
 
 function toPosix(p: string): string {
   return p.split('\\').join('/');
 }
 
-/** 列出全部文档，返回相对仓库根、用正斜杠写的路径。 */
 function listDocs(): string[] {
   const out: string[] = [];
   const walk = (dir: string, recursive: boolean) => {
@@ -43,12 +30,10 @@ function listDocs(): string[] {
   return out.sort();
 }
 
-/** 去掉围栏代码块与行内代码：里面的方括号和括号不是链接。 */
 function stripCode(text: string): string {
   return text.replace(/^```[\s\S]*?^```[^\n]*$/gm, '').replace(/`[^`\n]*`/g, '');
 }
 
-/** 链接目标：行内链接与图片、引用式定义、独占一行的 `@文件`。外部地址不算。 */
 function linkTargets(text: string): string[] {
   const body = stripCode(text);
   const targets: string[] = [];
@@ -58,10 +43,6 @@ function linkTargets(text: string): string[] {
   return targets.filter((target) => !/^[a-z][a-z0-9+.-]*:/i.test(target));
 }
 
-/**
- * GitHub 给标题生成锚点的办法：转小写，去掉字母、数字、连接符与空格之外的字符，
- * 空格换成连字符。重复的标题依次加 -1、-2。
- */
 function slugify(heading: string): string {
   return heading
     .trim()
@@ -86,7 +67,6 @@ function anchorsOf(text: string): Set<string> {
 
 const read = (rel: string): string => readFileSync(join(REPO, ...rel.split('/')), 'utf8');
 
-/** 一份文档里打不开的链接，每条写成「行号：目标 → 原因」。 */
 function brokenLinks(doc: string): string[] {
   const text = read(doc);
   const dir = doc.includes('/') ? doc.slice(0, doc.lastIndexOf('/')) : '';
@@ -108,7 +88,6 @@ function brokenLinks(doc: string): string[] {
   return broken;
 }
 
-/** 从一份入口文档出发，顺着内部链接能到达的全部文档。 */
 function reachableFrom(entry: string): Set<string> {
   const seen = new Set<string>();
   const queue = [entry];

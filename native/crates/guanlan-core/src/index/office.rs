@@ -18,21 +18,13 @@ use crate::index::ident::stable_key;
 use crate::index::writer::EXTRACT_RULE_VERSION;
 use crate::storage::StatementRow;
 
-/// 单个 XML 条目解压上限（16 MiB），防压缩炸弹撑爆内存
 const MAX_XML_ENTRY_BYTES: usize = 16 * 1024 * 1024;
-/// 单个归档最多允许扫描的条目数
 const MAX_ZIP_ENTRIES: usize = 4096;
-/// `.docx` 最多抽取的段落数
 const MAX_DOCX_PARAGRAPHS: usize = 2000;
-/// `.xlsx` 最多抽取的工作表数
 const MAX_XLSX_SHEETS: usize = 24;
-/// `.xlsx` 单表最多抽取的行数
 const MAX_XLSX_ROWS_PER_SHEET: usize = 500;
-/// `.xlsx` 单行最多抽取的列数
 const MAX_XLSX_COLS_PER_ROW: usize = 64;
-/// `.xlsx` 共享字符串表上限
 const MAX_SHARED_STRINGS: usize = 100_000;
-/// 提取纯文本总字符上限（供全文/摘要索引）
 const MAX_PLAIN_TEXT_BYTES: usize = 512 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -207,7 +199,6 @@ fn extract_office_inner(format: &str, bytes: &[u8]) -> OfficeExtractRecord {
         );
     }
 
-    // OLE2 / CFB 魔数头（D0 CF 11 E0 A1 B1 1A E1）：可能是加密 OOXML 容器或旧版 .doc/.xls
     if bytes.len() >= 8 && bytes[0..8] == [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1] {
         return OfficeExtractRecord::degraded(
             format,
@@ -243,10 +234,6 @@ fn extract_office_inner(format: &str, bytes: &[u8]) -> OfficeExtractRecord {
         _ => OfficeExtractRecord::metadata_only(format, "该扩展名未启用 OOXML 结构化抽取"),
     }
 }
-
-// ============================================================
-// 安全 ZIP 索引与 Deflate 解压器
-// ============================================================
 
 #[derive(Debug, Clone)]
 struct ZipEntry {
@@ -412,10 +399,6 @@ fn read_entry_utf8(
     let raw = extract_zip_entry(bytes, entry)?;
     Ok(Some(String::from_utf8_lossy(&raw).into_owned()))
 }
-
-// ============================================================
-// .docx 解析器（标题、段落序号、表格、批注、修订痕迹）
-// ============================================================
 
 fn parse_docx(
     format: &str,
@@ -811,10 +794,6 @@ fn docx_heading_level(style: &str) -> Option<u8> {
     }
     None
 }
-
-// ============================================================
-// .xlsx 解析器（工作表、表头、数值列区间摘要、精确 Sheet!CellRange）
-// ============================================================
 
 fn parse_xlsx(
     format: &str,
@@ -1250,7 +1229,6 @@ fn extract_sheet_headers(rows: &[XlsxRow], max_col: u32) -> Vec<String> {
 
 fn compute_numeric_summaries(rows: &[XlsxRow], headers: &[String]) -> Vec<XlsxNumericColSummary> {
     let header_row_num = rows.first().map(|r| r.row_num).unwrap_or(0);
-    // 若首行含非数值表头文本，跳过首行再汇总数值区间
     let first_has_text_header = rows
         .first()
         .is_some_and(|r| r.cells.iter().any(|c| !c.is_numeric && !c.value.is_empty()));
@@ -1374,10 +1352,6 @@ pub fn col_index_to_letters(mut col: u32) -> String {
     }
     chars.into_iter().rev().collect()
 }
-
-// ============================================================
-// Office 决定陈述派生（.docx 段落 / .xlsx 单元格精确锚定）
-// ============================================================
 
 /// 从已解析的 `.docx` / `.xlsx` 抽取显式 `[P0/P1/P2 - 待确认]` 或 `Q01：` 决定陈述，
 /// 将 `office_anchor`（`para:N` / `Sheet!CellRef`）写入 `detail_json`。
@@ -1609,16 +1583,16 @@ pub(crate) mod tests {
             let name_bytes = name.as_bytes().to_vec();
 
             buf.extend_from_slice(&[0x50, 0x4B, 0x03, 0x04]);
-            buf.extend_from_slice(&20u16.to_le_bytes()); // version
-            buf.extend_from_slice(&0u16.to_le_bytes()); // flags
-            buf.extend_from_slice(&8u16.to_le_bytes()); // deflate
-            buf.extend_from_slice(&0u16.to_le_bytes()); // time
-            buf.extend_from_slice(&0u16.to_le_bytes()); // date
+            buf.extend_from_slice(&20u16.to_le_bytes());
+            buf.extend_from_slice(&0u16.to_le_bytes());
+            buf.extend_from_slice(&8u16.to_le_bytes());
+            buf.extend_from_slice(&0u16.to_le_bytes());
+            buf.extend_from_slice(&0u16.to_le_bytes());
             buf.extend_from_slice(&crc.to_le_bytes());
             buf.extend_from_slice(&(comp.len() as u32).to_le_bytes());
             buf.extend_from_slice(&(data.len() as u32).to_le_bytes());
             buf.extend_from_slice(&(name_bytes.len() as u16).to_le_bytes());
-            buf.extend_from_slice(&0u16.to_le_bytes()); // extra
+            buf.extend_from_slice(&0u16.to_le_bytes());
             buf.extend_from_slice(&name_bytes);
             buf.extend_from_slice(&comp);
 

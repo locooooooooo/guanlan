@@ -17,13 +17,11 @@ export interface MountManagerPanelProps {
   onClose: () => void;
   mounts: MountedWorkspaceDto[];
   loading: boolean;
-  /** Hook 透出的最近一次操作错误（MOUNT_REJECTED / CONFLICT / NOT_FOUND …） */
   error: string;
   onMount: (rootPath: string) => Promise<boolean>;
   onUnmount: (mountId: string) => Promise<boolean>;
 }
 
-/** root_key 8 位短哈希（快照哈希标识；验收「明确标注…快照哈希」） */
 function shortHash(mount: MountedWorkspaceDto): string {
   const key = mount.root_key || mount.mount_key;
   return key.slice(0, 8);
@@ -113,7 +111,6 @@ export function MountManagerPanel(props: MountManagerPanelProps): React.ReactEle
           严禁挂载当前工作区的父/子目录；参考区只读，主/挂载区之间禁止移动与写入。
         </p>
 
-        {/* 挂载输入行 */}
         <div className="mb-3 flex gap-2">
           <input
             ref={inputRef}
@@ -139,7 +136,6 @@ export function MountManagerPanel(props: MountManagerPanelProps): React.ReactEle
           </button>
         </div>
 
-        {/* 确定性错误行（MOUNT_REJECTED / CONFLICT / NOT_FOUND …原样透出） */}
         {error ? (
           <div
             data-mount-panel-error="true"
@@ -149,7 +145,6 @@ export function MountManagerPanel(props: MountManagerPanelProps): React.ReactEle
           </div>
         ) : null}
 
-        {/* 挂载列表 */}
         <div className="max-h-[42vh] overflow-y-auto overscroll-contain">
           {mounts.length === 0 ? (
             <div className="px-2 py-6 text-center text-[13px] text-[color:var(--ink-3)]">

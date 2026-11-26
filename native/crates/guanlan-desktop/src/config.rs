@@ -283,7 +283,6 @@ mod tests {
         let cfg_path = dir.0.join("desktop.json");
         assert!(resolve_startup_root(Some(&cfg_path)).is_none());
 
-        // 即使写入不存在的旧目录，也不瞎撞
         std::fs::write(
             &cfg_path,
             r#"{ "lastRoot": "Z:/never/exists/guanlan-missing" }"#,
@@ -321,7 +320,6 @@ mod tests {
             &ws2.to_string_lossy(),
             "2026-11-18T11:00:00Z".into(),
         );
-        // 用斜杠/尾斜杠变体再次打开 ws1，必须去重并置顶
         let ws1_alt = format!("{}/", ws1.to_string_lossy().replace('\\', "/"));
         let cfg = record_workspace_opened(Some(&cfg_path), &ws1_alt, "2026-11-18T12:00:00Z".into());
         assert_eq!(cfg.recent_workspaces.len(), 2);

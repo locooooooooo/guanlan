@@ -1,19 +1,3 @@
-/**
- * 《最新已拍板决策变更单》数据层。
- *
- * 当某专项下所有阻塞性 P0/P1 事项均已确认时，自动唤醒处于
- * `Suspended_On_HITL` 状态的长任务节点，并向上下文清单推送一条
- * 《最新已拍板决策变更单》。
- *
- * 本模块只做纯数据组装（node --test 直跑，禁 .css/React）：
- *  - buildDecisionChangeNote：本地 Inline 拍板表单值 → 变更单；
- *  - decisionChangeNoteFromAssertion：SSE decision_writeback 后从服务端
- *    DecisionAssertion（含 confirmationBasis）→ 变更单；
- *  - DECISION_CHANGE_NOTE_TITLE / decisionChangeNoteSummaryLine：文案单一出口。
- *
- * 纪律：不伪造缺失字段——确认人/生效日期/来源路径未知时如实置 null，
- * 由 UI 显示「未记录」，不拿问题原文冒充决定文本。
- */
 
 import type { DecisionAssertion } from '../types/guanlan';
 
@@ -25,28 +9,19 @@ export type DecisionChangeNoteSource = 'inline' | 'writeback';
 
 export interface DecisionChangeNote {
   decisionId: string;
-  /** 决策编号（如 D-01；缺失 null） */
   code: string | null;
-  /** 决策问题原文 */
   question: string;
-  /** 拍板决定文本（表单「决定」或服务端 recordText） */
   decisionText: string;
-  /** 库内状态词（已确认/已否决/已搁置/已取代；Inline 路径恒为已确认） */
   status: string | null;
   confirmer: string | null;
-  /** 生效日期 YYYY-MM-DD（Inline 表单值；SSE 路径无此字段） */
   effectiveDate: string | null;
-  /** 服务端确认时间（confirmationBasis.confirmedAt；Inline 路径为本地回写时刻） */
   confirmedAt: string | null;
   fileId: string;
-  /** 来源文档相对路径（证据/确认依据）；未知 null */
   filePath: string | null;
   lineStart: number | null;
   lineEnd: number | null;
-  /** 本文档阻塞性 P0/P1 已全部清零 */
   blockingCleared: boolean;
   source: DecisionChangeNoteSource;
-  /** 变更单生成时刻（本地 ISO） */
   at: string;
 }
 

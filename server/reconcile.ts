@@ -1,14 +1,3 @@
-/**
- * 观澜 Node 对拍基线 —— 对账与历史写入
- *
- * 写入顺序：稳定读取 → 保存并校验内容快照 → 事务提交版本与事件及证据 → 发出更新通知。
- *
- * 核心不变量：
- * - 内容哈希相同 ⇒ 不新增版本、不新增事件（连续重扫不增加事件）
- * - 只有 mtime 变化 ⇒ 仅更新采集状态，不增加内容版本
- * - A → B → A ⇒ 三次版本出现、两份内容快照（相同哈希共享 blob），可逐版回看
- * - 首次扫描 ⇒ 一条「首次纳入 N 份资料」基线事件，而不是给每个文件各发一条 discovered
- */
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -32,9 +21,7 @@ export interface ReconcileOptions {
   dataDir?: string;
   excludedDirs?: string[];
   maxFiles?: number;
-  /** 注入采集时刻，便于测试重放 */
   now?: string;
-  /** 复用已有连接（开发服务器长期持有）；传入时本轮不负责关闭 */
   store?: WorkspaceStore;
 }
 
@@ -77,10 +64,6 @@ function normalizeRelPath(p: string): string {
   return p.replace(/\\/g, '/');
 }
 
-/**
- * 稳定文件 ID：同一工作区同一路径重放得到同一标识。
- * 小写化以适配 Windows 大小写不敏感的匹配。
- */
 function stableFileId(rootKey: string, relativePath: string): string {
   const h = createHash('sha256')
     .update(`${rootKey}|${normalizeRelPath(relativePath).toLowerCase()}`)
@@ -118,7 +101,6 @@ function detectRole(relativePath: string, title: string, format: string): string
   return '其他';
 }
 
-/** 变更摘要：章节增减与行数（内容修改时 MD 显示变更章节） */
 function summarizeChange(
   prevText: string | null,
   newText: string | null,
@@ -212,7 +194,6 @@ export function reconcileWorkspace(
     }
   }
 
-  // ---------- 第一遍：识别文件身份并规划新版本 ----------
   const pending: PendingRevision[] = [];
   const resolvedByFileId = new Map<string, CollectedFile>();
   const missingHashCandidates = store
@@ -234,24 +215,18 @@ export function reconcileWorkspace(
       const predictedId = stableFileId(workspace.root_key, relPath);
       const predicted = store.getFile(predictedId);
       if (predicted) {
-        // 同 ID 但状态缺失后重现：恢复；路径也可能只是大小写差异
         fileRow = predicted;
         evidence = 'same_hash_candidate';
       }
     }
 
     if (!fileRow && file.stable) {
-      // 改名/移动证据不足：仅当工作区里恰好有一个缺失文件与本文件同哈希时才考虑关联，
-      // 否则保留「新增」与「缺失」两个独立事实
       const sameHashMissing = missingHashCandidates.filter((candidate) => {
         const rev = store.latestRevision(candidate.file_id);
         return rev && rev.content_hash === file.sha256;
       });
       if (sameHashMissing.length === 1) {
         const matched = sameHashMissing[0];
-        // 关联后立刻从候选池移除该 file_id：同轮若有第二个同哈希新文件，
-        // 让它按「新增」处理。否则两个计划会各自算出相同 seq 与 revision_id，
-        // 事务内第二次 insertRevision 撞 UNIQUE(file_id, seq) 回滚整轮对账。
         missingHashCandidates.splice(missingHashCandidates.indexOf(matched), 1);
         fileRow = matched;
         recoveredMissing = true;
@@ -275,7 +250,6 @@ export function reconcileWorkspace(
     const latest = fileRow ? store.latestRevision(fileId) : undefined;
 
     if (latest && latest.content_hash === file.sha256) {
-      // 内容未变：仅更新采集状态。mtime 单独保存，绝不新增版本或事件
       const mtimeMoved = fileRow!.last_mtime_ms !== file.mtimeMs;
       store.transaction(() => {
         store.touchFile(fileId, observedAt, file.mtimeMs, latest.revision_id);
@@ -284,7 +258,6 @@ export function reconcileWorkspace(
           store.upsertAlias(workspace.workspace_id, relPath, fileId, observedAt, evidence);
         }
         if (mtimeMoved && fileRow!.status === 'active') {
-          // 仅时间戳变化：不登记内容版本，也不产生事件
         }
       });
       if (fileRow!.status === 'missing' || recoveredMissing) {
@@ -311,7 +284,6 @@ export function reconcileWorkspace(
       continue;
     }
 
-    // 需要新版本
     const seq = (latest?.seq ?? 0) + 1;
     pending.push({
       file,
@@ -339,16 +311,11 @@ export function reconcileWorkspace(
     if (isNewFile) report.newFiles++;
   }
 
-  // ---------- 第二遍：写快照（事务外 IO） ----------
   for (const plan of pending) {
     const content = plan.file.readContent();
     const wroteFile = store.writeSnapshotToDisk(content, plan.revision.content_hash);
     if (wroteFile) report.snapshotsWritten++;
 
-    // 版本发生时间：
-    // - 首次捕获（v1）：优先材料自述日期（回答「材料声称何时产生」）
-    // - 后续修改（v2+）：用文件修改时间（回答「这次改动何时发生」），
-    //   文档自述日期通常停留在初稿，不能拿来当修改时间
     const mtimeIso = new Date(plan.file.mtimeMs).toISOString();
     if (plan.revision.seq > 1) {
       plan.revision.occurred_at = mtimeIso;
@@ -368,8 +335,6 @@ export function reconcileWorkspace(
     }
   }
 
-  // ---------- 事务提交：文件、版本、事件、证据一起落库 ----------
-  // 路径索引：已入库文件 + 本轮待写入文件，保证引用能解析到已有路径
   const pathIndex = new Map<string, string>();
   for (const f of store.listFiles(workspace.workspace_id, true)) {
     pathIndex.set(normalizeRelPath(f.current_path), f.file_id);
@@ -409,9 +374,6 @@ export function reconcileWorkspace(
 
       const kind: EventRow['kind'] = plan.isNewFile ? 'appeared' : 'modified';
 
-      // 基线扫描的分工：
-      // - 正文有可核验自述日期的材料：按「文档自述日期」各自入轴，落到那一天
-      // - 没有日期依据的材料：不逐条刷屏，统一由「首次纳入 N 份资料」基线卡覆盖
       const datedBySelf = plan.revision.occurred_source === 'document_self';
       const skipBaselinePerFileEvent = initialBaseline && plan.isNewFile && !datedBySelf;
 
@@ -473,7 +435,6 @@ export function reconcileWorkspace(
       if (!plan.isNewFile) report.contentChanged++;
     }
 
-    // 缺失检测：只在范围完整遍历时判定
     if (collected.complete) {
       const seenPaths = new Set(collected.files.map((f) => normalizeRelPath(f.relativePath)));
       const seenIds = new Set(pending.map((p) => p.fileId));
@@ -502,7 +463,6 @@ export function reconcileWorkspace(
   });
 
   store.transaction(() => {
-    // 基线卡：正文有自述日期的材料已各自入轴，这里只覆盖扫描本身与无日期依据的部分
     const datedSelfCount = pending.filter((p) => p.isNewFile && p.revision.occurred_source === 'document_self').length;
 
     if (initialBaseline) {
@@ -536,7 +496,6 @@ export function reconcileWorkspace(
   });
 
   store.transaction(() => {
-    // 读取问题（不稳定读取或目录不可访问）：保留原记录，仅报告
     for (const err of collected.readErrors) {
       insertEventSafe(store, report, {
         event_id: `evt_read_error_${stableShort(err.relativePath)}_${observedAt.slice(0, 13).replace(/[:T]/g, '')}`,
@@ -557,7 +516,6 @@ export function reconcileWorkspace(
     }
   });
 
-  // ---------- 派生索引：陈述与关系（按新版本粒度） ----------
   const targetRevisionIndex = new Map<string, string>();
   for (const f of store.listFiles(workspace.workspace_id, true)) {
     const rev = store.latestRevision(f.file_id);
@@ -600,7 +558,6 @@ export function reconcileWorkspace(
       }
     }
 
-    // 读取不稳定：单独记录，不落版本
     for (const file of collected.files) {
       if (file.stable) continue;
       insertEventSafe(store, report, {
@@ -621,7 +578,6 @@ export function reconcileWorkspace(
       });
     }
 
-    // 决策入轴：只有明确的状态转换才新增事件，同状态复述只补来源证据
     report.decisionEventsInserted += recordDecisionEvents(
       store,
       workspace.workspace_id,
@@ -630,7 +586,6 @@ export function reconcileWorkspace(
     );
   });
 
-  // 规则升级：重建派生索引并记录规则版本
   const derived = rebuildDerivedIfNeeded(store, workspace.workspace_id, rootPath, observedAt);
   if (derived.rebuilt) {
     report.statementsUpserted += derived.statements;
@@ -638,15 +593,12 @@ export function reconcileWorkspace(
     report.derivedRebuilt = true;
   }
 
-  // 旧资料回填：已入库版本若正文明确记载日期，
-  // 补一条「文档自述日期」事件；没有日期依据的一律保持只由基线卡覆盖。
   report.backfilledDocDateEvents = backfillDocumentSelfEvents(
     store,
     workspace.workspace_id,
     report
   );
 
-  // 索引代只在校验到变化时推进：重复扫描不应让「代」无意义地增长
   const changed =
     report.newRevisions > 0 ||
     report.eventsInserted > 0 ||
@@ -660,10 +612,6 @@ export function reconcileWorkspace(
   return { report, store };
 }
 
-/**
- * 为已入库、带正文自述日期且尚无入轴事件的版本补事件。
- * 幂等：事件唯一索引与显式存在性检查都保证重复执行不新增。
- */
 function backfillDocumentSelfEvents(
   store: WorkspaceStore,
   workspaceId: string,
@@ -728,10 +676,6 @@ function nowForBackfill(store: WorkspaceStore, revisionId: string): string {
   return rev?.observed_at || new Date().toISOString();
 }
 
-/**
- * 抽取规则版本变化时，按「文件版本」粒度重建陈述与引用。
- * 删除旧派生数据后按当前规则重新抽取；普通重扫不触发。
- */
 function rebuildDerivedIfNeeded(
   store: WorkspaceStore,
   workspaceId: string,
@@ -810,7 +754,6 @@ function insertEventSafe(
   else report.eventsSkipped++;
 }
 
-/** 状态 → 界面用词与事件种类（决策提出、确认、否决或取代） */
 function decisionActionFor(status: string): { kind: EventKind; word: string; action: string } {
   switch (status) {
     case '已确认':
@@ -828,19 +771,12 @@ function decisionActionFor(status: string): { kind: EventKind; word: string; act
   }
 }
 
-/**
- * 决策事件写入：
- * - 每条来源陈述已在 statements 中留证
- * - 工程轴只在状态发生转换时新增事件；新版本复述同一状态不重复记
- * 返回实际新增的事件数。
- */
 function recordDecisionEvents(
   store: WorkspaceStore,
   workspaceId: string,
   statements: StatementRow[],
   observedAt: string
 ): number {
-  // 每个业务决定取「最新来源陈述」判定当前口径
   const latestByDecision = new Map<string, StatementRow>();
   for (const s of statements) {
     if (!s.decision_id) continue;
@@ -872,7 +808,6 @@ function recordDecisionEvents(
         lastStatus = null;
       }
     }
-    // 同状态复述：证据已写入 statements，不再新增决策事件
     if (lastStatus === stmt.status) continue;
 
     const action = decisionActionFor(stmt.status);

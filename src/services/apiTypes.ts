@@ -1,20 +1,3 @@
-/**
- * /api/v1 接口类型与端点路径常量
- *
- * 同源说明：与 `native/crates/guanlan-core/src/dto.rs`（Rust DTO）手工一一镜像，
- * 字段名逐字对齐 `native/docs/contract-query-api.md`：
- * - 主流 DTO 统一 snake_case：bootstrap、status、files 摘要；
- * - 事件时间范围与分页 wire 格式 1:1 保留：/events、/events/days、/events/range 的
- *   occurredMin/undatedCount 等 camelCase 键；
- * - 决定、关系、工作区配置沿用 `../types/guanlan.ts` 现有字段名。
- * 改任一侧（Rust DTO / 本文件）必须同步另一侧。
- *
- * 与 Rust 的映射约定：
- * - `Option<T>`（恒序列化，可为 null）→ `T | null`；
- * - `Option<T>` + skip_serializing_if（缺省不出现在 JSON）→ `?:`；
- * - `serde_json::Value` → `Record<string, unknown>` / `unknown`；
- * - `HashMap<String, u64>` → `Record<string, number>`。
- */
 
 import type {
   DecisionAssertion as DecisionAssertionWire,
@@ -23,7 +6,6 @@ import type {
   WorkspaceConfig as WorkspaceConfigWire,
 } from '../types/guanlan';
 
-// ===== 通用共享结构（镜像 WorkspaceRecord / WorkspaceCounts / EventTimeRange）=====
 
 /** 工作区行（WorkspaceRecord，server/WorkspaceStore.ts:39-46） */
 export interface WorkspaceRecord {
@@ -54,11 +36,9 @@ export interface EventTimeRange {
   undatedCount: number;
 }
 
-// ===== 事件 =====
 
 /** 事件查询窗口回显 */
 export interface EventWindow {
-  /** occurred（材料记载）| observed（采集） */
   order: 'occurred' | 'observed';
   from: string | null;
   to: string | null;
@@ -70,7 +50,6 @@ export interface EventWindow {
 
 /** 事件行（EventPageItem，server/queries.ts:34-52） */
 export interface EventPageItem {
-  /** events.seq 全局单调，原样保留 */
   seq: number;
   event_id: string;
   kind: string;
@@ -78,11 +57,8 @@ export interface EventPageItem {
   subject_id: string;
   revision_id: string | null;
   occurred_at: string | null;
-  /** day | minute | second | unknown */
   occurred_precision: 'day' | 'minute' | 'second' | 'unknown';
-  /** document_self | file_mtime | collector | manifest | git_commit | null */
   occurred_source: string | null;
-  /** UTC ISO（含毫秒） */
   observed_at: string;
   headline: string;
   detail: string;
@@ -90,7 +66,6 @@ export interface EventPageItem {
   file_id: string | null;
   file_path: string | null;
   file_title: string | null;
-  /** 工作区级事件为 null */
   format: string | null;
 }
 
@@ -99,16 +74,12 @@ export interface EventPage {
   ok: boolean;
   index_generation: number;
   window: EventWindow;
-  /** 游标绑定的窗口快照：新事件不进入已打开窗口 */
   snapshot_max_seq: number;
   items: EventPageItem[];
-  /** 末页为 null */
   next_cursor: string | null;
   has_more: boolean;
-  /** 不含游标条件的窗口计数 */
   total_in_window: number;
   undated_count: number;
-  /** 首屏后新增事件数，驱动「有新变化」提示 */
   newer_count: number;
 }
 
@@ -126,9 +97,7 @@ export interface EventDayItem {
   occurred_at: string | null;
   occurred_precision: string;
   observed_at: string;
-  /** document_self | file_mtime | collector | null */
   time_basis: string | null;
-  /** raised | conflicted | confirmed | rejected | superseded | shelved | null */
   action: string | null;
   decision_id: string | null;
   code: string | null;
@@ -148,15 +117,12 @@ export interface EventDayDecision {
 
 /** 事件日桶（EventDayGroup，queries.ts:402-410） */
 export interface EventDayGroup {
-  /** YYYY-MM-DD；''=日期待考，恒排最后 */
   date: string;
   count: number;
   by_kind: Record<string, number>;
   formats: Record<string, number>;
   decisions: EventDayDecision[];
-  /** 桶内决定总数（去重 decision_id）；与 decisions.length 不等即被截断 */
   decision_total?: number;
-  /** 决定样本是否被独立上限截断（可经 /events?from=to=该桶日期 继续读） */
   decisions_truncated?: boolean;
   samples: EventDayItem[];
 }
@@ -166,42 +132,32 @@ export interface EventDaysResult {
   ok: boolean;
   index_generation: number;
   order: 'occurred' | 'observed';
-  /** day | week | month */
   granularity: 'day' | 'week' | 'month';
   from: string | null;
   to: string | null;
   groups: EventDayGroup[];
   total: number;
-  /** 超 limit_days 折叠的更早桶数 */
   hidden_days: number;
   undated_count: number;
 }
 
-// ===== 文件 =====
 
 /** 文件摘要（FileSummary：与 FileRecord 对齐的 snake_case DTO） */
 export interface FileSummary {
   file_id: string;
-  /** files.current_path */
   relative_path: string;
   title: string;
   format: string;
   folder: string;
-  /** 事项/角色（files.role） */
   role: string;
-  /** active | missing | trashed */
   status: 'active' | 'missing' | 'trashed';
   current_revision_id: string | null;
   revision_count: number;
   first_observed_at: string;
   last_observed_at: string;
-  /** 最早版本发生时间（revisions 按 seq ASC 首条 occurred_at） */
   first_source_time: string | null;
-  /** full_text | svg_text | pdf_page_text | filename_only | unindexed */
   coverage: string;
-  /** 仅 PDF 下发（dto.rs Option+skip：非 PDF 不出现键，FileRecord.pdfStatus 的 undefined 口径） */
   pdf_status?: string;
-  /** 当前版快照可用 */
   snapshot_available: boolean;
 }
 
@@ -216,17 +172,14 @@ export interface FileFacets {
 export interface FileSummaryPage {
   ok: boolean;
   index_generation: number;
-  /** 游标绑定代际；续页时 != 当前代际 → CURSOR_STALE */
   snapshot_generation: number;
   items: FileSummary[];
   next_cursor: string | null;
   has_more: boolean;
-  /** 与筛选同口径的计数 */
   total_matched: number;
   facets: FileFacets;
 }
 
-// ===== 版本链与版本内容 =====
 
 /** 版本行（project.ts:454-466 字段逐字保留；不下发 snapshot_path） */
 export interface RevisionSummary {
@@ -265,13 +218,9 @@ export interface FileRevisionsResponse {
   next_cursor: string | null;
   has_more: boolean;
   total: number;
-  /** include=events（行形状见 workspaceClient.FileHistoryEvent） */
   events?: unknown[];
-  /** include=statements */
   statements?: unknown[];
-  /** include=edges */
   edges?: unknown[];
-  /** include=aliases（历史与当前路径别名） */
   aliases?: string[];
 }
 
@@ -284,15 +233,12 @@ export interface FileRecordRevision {
   versionNumber: number;
   content_sha256: string;
   observed_at: string;
-  /** 文档内或目录声称的日期（occurred_at）；无记载不出现 */
   source_time?: string;
   sizeBytes: number;
   snapshotAvailable: boolean;
   isBaselineProtected: boolean;
-  /** 仅 SVG 且快照可读时内联（≤256KiB，project.ts:124-139） */
   svgSource?: string;
   svgExtractedTexts?: string[];
-  /** 来自 modified 事件 payload 的 changed_sections（dto.rs changedSectionsFromPrev） */
   changedSectionsFromPrev?: string[];
   summaryNote: string;
 }
@@ -305,7 +251,6 @@ export interface FileDetailResponse {
   index_generation: number;
   file: FileHistoryHeader;
   revisions: FileRecordRevision[];
-  /** 附集合限额各 200 条（兼容保留）；行形状见 workspaceClient.FileHistoryEvent */
   events: unknown[];
   statements: unknown[];
   edges: unknown[];
@@ -317,13 +262,10 @@ export interface RevisionContentResponse {
   ok: boolean;
   format: string;
   revision_id: string;
-  /** PDF：/api/v1/revisions/<id>/content?raw=1 */
   raw_url?: string;
-  /** MD/SVG：utf-8 读快照 */
   text?: string;
 }
 
-// ===== 决定（字段名沿用 types/guanlan.ts 现有 wire 类型）=====
 
 /** 决定来源证据（types/guanlan.ts:146-159，与 Rust DecisionSourceEvidence 同构镜像） */
 export type DecisionSourceEvidence = DecisionSourceEvidenceWire;
@@ -340,11 +282,9 @@ export interface DecisionsResponse {
   next_cursor: string | null;
   has_more: boolean;
   total: number;
-  /** 全库活跃文件未决待拍板真实总数，不受分页截断 */
   unresolved_total?: number;
 }
 
-// ===== 关系（字段名沿用 types/guanlan.ts 现有 wire 类型）=====
 
 /** 引用定位（types/guanlan.ts:198 内联形状，Rust 侧为 RelationLocator struct） */
 export interface RelationLocator {
@@ -362,7 +302,6 @@ export interface RelationsResponse {
   items: RelationEdge[];
 }
 
-// ===== 工作区配置（types/guanlan.ts:253-285 camelCase 保留）=====
 
 /** 扫描枚举快照（types/guanlan.ts:262-271 内联形状，Rust 侧为 EnumSnapshot struct） */
 export interface EnumSnapshot {
@@ -398,50 +337,34 @@ export interface RuntimeStatus {
 /** 工作区配置投影（project.ts:274-310，与 Rust WorkspaceConfig 同构镜像） */
 export type WorkspaceConfig = WorkspaceConfigWire;
 
-// ===== 顶层响应 =====
 
 /** GET /api/v1/bootstrap（在一个短读快照内生成；
  *  响应任何位置不出现 svgSource、markdownContent、revisions[]） */
 export interface BootstrapResponse {
   ok: boolean;
   workspace: WorkspaceRecord;
-  /** hasBaseline；空工作区为 false，前端按「尚未覆盖」渲染 */
   baseline: boolean;
   counts: WorkspaceCounts;
-  /** camelCase 键保留现状 */
   time_range: EventTimeRange;
-  /** 直接内嵌完整 EventDaysResult（含其自身 ok 字段） */
   event_days: EventDaysResult;
-  /** 首页事件（无 cursor 入参） */
   events: EventPage;
-  /** 首批文件摘要 */
   files: FileSummaryPage;
-  /** active 文件总数 */
   files_total: number;
-  /** 首批决定（前端首屏用于初始化 selectedDecisionId） */
   decisions: DecisionAssertion[];
-  /** 全库活跃文件未决待拍板真实总数（与多项目工作台严格一致） */
   decisions_unresolved_total?: number;
-  /** 关系总数；全量关系另走 /api/v1/relations */
   relations_total: number;
   config: WorkspaceConfig;
-  /** 当前进行中的索引任务摘要列表 */
   index_jobs: unknown[];
-  /** 当前处于可恢复态（missing / trashed）的 file_id 列表，供前端剪枝阅读进度时保留 */
   recoverable_file_ids?: string[];
 }
 
-// ===== 索引任务与运行状态 =====
 
 /** POST /api/v1/index-jobs 的 202 响应（立即返回 202 + job_id） */
 export interface IndexJobAccepted {
   ok: boolean;
   job_id: string;
-  /** queued | running */
   state: string;
-  /** 是否并入了已有任务（同工作区重复重扫合并） */
   merged: boolean;
-  /** 受理时的索引代 */
   index_generation?: number;
 }
 
@@ -477,11 +400,8 @@ export interface IndexJobReport {
 export interface IndexJobStatus {
   ok: boolean;
   job_id: string;
-  /** verify_all | changed_paths | l4a_summary | set_initiative_dirs | 内部类… */
   kind: string;
-  /** queued | running | completed | failed */
   state: string;
-  /** queued | scanning | done | failed */
   phase: string;
   discovered: number;
   processed: number;
@@ -489,9 +409,7 @@ export interface IndexJobStatus {
   index_generation?: number;
   last_scan_at?: string | null;
   error?: string | null;
-  /** 按 kind 分支：扫描类=IndexJobReport；writeback/proposal/adopt/initiative 见各 JobReport* */
   report?: IndexJobKindReport | null;
-  /** 业务载荷预览（弱类型）；强类型读取走 GET /jobs/{id}/result（fetchJobResult<R>） */
   result?: unknown;
 }
 
@@ -514,17 +432,11 @@ export interface WorkspaceStatusResponse {
     active_files: number;
     missing_files: number;
   };
-  /** 进行中的索引任务（空数组表示没有在跑的任务） */
   active_jobs: IndexJobStatus[];
-  /** 文件监听（watcher）状态（schema_version=2 起下发） */
   watcher?: StatusWatcher;
-  /** L4A 结构化沉淀进度（0-100 整数，total=0 时恒 100） */
   l4a_progress?: L4aProgress;
 }
 
-// ===== 统一状态机投影（GET /api/v1/state-overview）=====
-// 四视图唯一数据源：专项卡片 / 专项详情下拉 / 星图节点 / 文档顶栏的状态徽标
-// 全部经 src/utils/stateProjection.ts 消费本节 wire DTO 投影。
 
 /** 文档六态（Rust state_machine.rs DocState 逐字镜像；迁移规则见
  *  src/utils/stateProjection.ts nextDocState——双端改规则必须两侧同步） */
@@ -556,7 +468,6 @@ export interface InitiativeStateView {
 /** 文档/产出物状态行 */
 export interface ArtifactStateView {
   file_id: string;
-  /** 工作区级散文件为 null */
   initiative_id: string | null;
   current_path: string;
   title: string;
@@ -580,7 +491,6 @@ export interface StateOverviewResponse {
   artifacts: ArtifactStateView[];
 }
 
-// ===== 智能体上下文包（POST /api/v1/context）=====
 
 /** 上下文入口意图（三入口：文档正文 / 专项详情 / 首页总览） */
 export type ContextIntent = 'document' | 'initiative' | 'global';
@@ -619,7 +529,6 @@ export interface ContextRequest {
   initiative_id?: string;
   items?: ContextRequestItem[];
   mode?: ContextExportMode;
-  /** 默认 65536（推荐阈值 64k） */
   budget_tokens?: number;
 }
 
@@ -637,9 +546,7 @@ export interface ContextPresetItem {
   snapshot_available: boolean;
   est_chars?: number;
   est_tokens: number;
-  /** 仅 mode 含 markdown 且 granularity=full 时内联（服务端 GUANLAN_RESPONSE_MAX_MIB 上限） */
   content?: string | null;
-  /** 当前粒度脱敏渲染片段 */
   snippet?: string | null;
 }
 
@@ -670,7 +577,6 @@ export interface ContextTokenBudget {
   est_tokens: number;
   threshold: number;
   over_threshold: boolean;
-  /** 超阈值时建议降级为 summary 的 file_id 列表 */
   downgrade_suggestions: string[];
 }
 
@@ -755,7 +661,6 @@ export interface McpHostConfigResponse {
   config_json: string;
 }
 
-// ===== 陈述与拍板（GET /statements + POST /decisions/{id}/resolve）=====
 
 /** 陈述状态 wire 词（query 传英文 wire 词，服务端映射库内中文词——
  *  pending→待确认、confirmed→已确认、rejected→已否决、shelved→已搁置、superseded→已取代；
@@ -770,7 +675,6 @@ export interface StatementDetailDTO {
   revision_id: string;
   code: string;
   question: string;
-  /** 库内中文词：待确认 | 已确认 | 已否决 | 已搁置 | 已取代 */
   status: string;
   line_start: number;
   line_end: number;
@@ -807,16 +711,13 @@ export interface DecisionResolveAccepted {
   decision_id: string;
 }
 
-// ===== 修订草案（/api/v1/revision-proposals 全链）=====
 
 export interface RevisionProposalRequest {
   file_id: string;
   base_revision_id: string;
   content: string;
   note?: string;
-  /** 本次修订依据的输入上下文内容哈希清单（采纳时写入 derived_from_context 边） */
   input_context_hashes?: string[];
-  /** Agent 回执摘要 */
   receipt_summary?: string;
 }
 
@@ -826,7 +727,6 @@ export interface RevisionProposalAccepted {
   job_id: string;
   draft_id: string;
   conflict: boolean;
-  /** 独立草案分支标签（`v(N+1)-agent-draft`） */
   draft_version_label?: string;
 }
 
@@ -837,11 +737,8 @@ export interface RevisionProposalRecord {
   path: string;
   base_revision_id: string;
   proposed_content_hash: string;
-  /** 独立草案分支标签（`v(N+1)-agent-draft`） */
   draft_version_label?: string;
-  /** 本次修订依赖的输入上下文哈希清单 */
   input_context_hashes?: string[];
-  /** Agent 回执摘要 */
   receipt_summary?: string | null;
   source: 'mcp' | 'agent';
   status: string;
@@ -884,7 +781,6 @@ export interface RevisionProposalPage {
   next_cursor: string | null;
 }
 
-// ===== 长任务 DAG 与 Checkpoint =====
 
 /** 五槽位任务节点状态（suspended_on_hitl 是节点持久态，不进 /jobs 口径） */
 export type TaskNodeState =
@@ -942,7 +838,6 @@ export interface CheckpointCommitRequest {
 export interface CheckpointCommitResult {
   ok: boolean;
   checkpoint_id: string;
-  /** 提交后该节点状态；无匹配节点（或非 SUCCESS）为 null */
   node_state: string | null;
 }
 
@@ -968,7 +863,6 @@ export interface CheckpointsPage {
   next_cursor: string | null;
 }
 
-// ===== 归档与重开 =====
 
 /** POST /api/v1/initiatives/{id}/archive|reopen 受理（写线程执行，
  *  report.warn='当前非已交付态' 见 JobReportInitiative） */
@@ -977,7 +871,6 @@ export interface InitiativeJobAccepted {
   job_id: string;
 }
 
-// ===== 任务结果（/jobs/{id}/result 与 cancel）=====
 
 /** 202 受理通用形状（adopt/dismiss/diff 等只回 job_id 的端点） */
 export interface JobAccepted {
@@ -990,7 +883,6 @@ export interface JobAccepted {
 export interface JobCancelResult {
   ok: boolean;
   job_id: string;
-  /** 取消受理后的当前态（queued 立即态变更；running 等写线程阶段间隙生效） */
   state: string;
 }
 
@@ -1126,7 +1018,6 @@ export interface JobReportOrphanRepair {
 export interface JobReportProposal {
   draft_id: string;
   cas_ok: boolean;
-  /** 恒为 'proposed' */
   status: string;
   conflict: boolean;
   draft_version_label?: string;
@@ -1171,14 +1062,12 @@ export type IndexJobKindReport =
 export interface JobResultResponse<R = unknown> {
   ok: boolean;
   job_id: string;
-  /** queued | running | completed | failed */
   state: string;
   kind: string;
   result: R | null;
   next_cursor: string | null;
 }
 
-// ===== 语义 Diff（POST /api/v1/diff 走任务队列）=====
 
 export interface DiffJobRequest {
   file_id: string;
@@ -1218,7 +1107,6 @@ export interface DiffResult {
   next_cursor: string | null;
 }
 
-// ===== L4A 摘要与运行状态扩展 =====
 
 export interface L4aOutlineNode {
   level: number;
@@ -1266,11 +1154,9 @@ export interface L4aProgress {
   done: number;
   total: number;
   percent: number;
-  /** queued+running（Rust L4aProgress 同源；归 0 即排空完成） */
   queue_depth?: number;
 }
 
-// ===== 身份保真文件操作 =====
 
 export interface RenameFileRequest {
   new_name: string;
@@ -1299,7 +1185,6 @@ export interface FileMutationResponse {
   trash_recoverable: boolean;
 }
 
-// ===== 本地快照存储占用与三档配额策略 =====
 
 export interface SnapshotTierPolicy {
   text_max_bytes: number;
@@ -1345,7 +1230,6 @@ export interface UpdateStoragePolicyResponse {
   policy: SnapshotTierPolicy;
 }
 
-// ===== QuickLook 轻预览（GET /api/v1/revisions/{revision_id}/preview）=====
 
 export type RevisionPreviewKind =
   | 'image'
@@ -1425,7 +1309,6 @@ export interface RevisionPreviewResponse {
   history: RevisionPreviewHistoryItem[];
 }
 
-// ===== Office（.docx / .xlsx）L2 结构化阅读（GET /api/v1/revisions/{revision_id}/office）=====
 
 export interface DocxHeading {
   para_index: number;
@@ -1524,7 +1407,6 @@ export interface OfficeContentResponse {
   plain_text: string;
 }
 
-// ===== PDF 页级正文阅读（GET /api/v1/revisions/{revision_id}/pdf）=====
 
 export interface PdfPreviewSummary {
   status: 'page_indexed' | 'image_only' | 'ocr_pending' | 'extract_failed' | 'encrypted' | 'corrupted' | 'metadata_only' | string;
@@ -1541,7 +1423,6 @@ export interface PdfPageExtract {
   page_number: number;
   heading: string;
   extracted_text: string;
-  /** text | mixed | image_only | extract_failed | empty */
   page_kind: string;
   image_count: number;
   char_count: number;
@@ -1571,26 +1452,20 @@ export interface PdfContentResponse {
 }
 
 
-// ===== 候选事项（多信号编织；采纳前绝不写正式归属）=====
 
 export interface InitiativeCandidateMember {
   file_id: string;
   relative_path: string;
   title: string;
-  /** 理由胶囊数组：[{signal, detail}]，signal ∈ dir_prefix|link|same_stem|session|agent_batch */
   signals: { signal: string; detail: string }[];
 }
 
 export interface InitiativeCandidateItem {
   candidate_id: string;
   title: string;
-  /** 主理由胶囊（人话一句话） */
   reason_summary: string;
-  /** 0x01 目录前缀 | 0x02 显式链接 | 0x04 同名主干 | 0x08 会话共现 | 0x10 Agent 批次 */
   signal_mask: number;
-  /** 置信分 0-100 */
   score: number;
-  /** candidate | adopted | dismissed */
   state: 'candidate' | 'adopted' | 'dismissed' | string;
   member_count: number;
   members: InitiativeCandidateMember[];
@@ -1603,7 +1478,6 @@ export interface InitiativeCandidatesResponse {
   items: InitiativeCandidateItem[];
 }
 
-// ===== 有界检索（GET /api/v1/search；CommandPalette 消费）=====
 
 /** 检索定位器（serde tag=kind，与 Rust dto.rs SearchLocator 逐字镜像；行号/页码 1-based） */
 export type SearchLocatorDto =
@@ -1620,25 +1494,19 @@ export interface SearchHitDto {
   relative_path: string;
   title: string;
   format: string;
-  /** full_text | svg_text | pdf_page_text | office_structured | filename_only | decision */
   coverage: string;
-  /** exact_code | bigram_phrase_verified | single_char_bounded | filename_match */
   match_strategy: string;
   locator: SearchLocatorDto;
   snippet: string;
   score: number;
   stale: boolean;
-  /** 命中来源工作区（仅挂载区命中携带；主区命中缺省） */
   source_workspace?: SearchHitSourceDto;
 }
 
 /** 挂载区命中的来源标注（工作区名 + 身份哈希） */
 export interface SearchHitSourceDto {
-  /** 参考区库内 workspace_id（ws_<root_key>） */
   workspace_id: string;
-  /** 参考区库内 root_key（16 hex 身份哈希） */
   root_key: string;
-  /** 展示名（参考区根路径末段） */
   name: string;
 }
 
@@ -1647,53 +1515,39 @@ export interface SearchResponseDto {
   ok: boolean;
   index_generation: number;
   query: string;
-  /** code | single | phrase */
   mode: string;
   total_matched: number;
   items: SearchHitDto[];
   truncated: boolean;
-  /** ready | building | absent——非 ready 时 items 恒空 */
   search_state: string;
 }
 
-// ===== 跨项目只读挂载与联合检索（与 Rust dto.rs 逐字镜像）=====
 
 /** 挂载区命中的来源标注（工作区名 + 身份哈希；主区命中不带该字段） */
 export interface SearchHitSourceDto {
-  /** 参考区库内 workspace_id（ws_<root_key>） */
   workspace_id: string;
-  /** 参考区库内 root_key（16 hex 身份哈希） */
   root_key: string;
-  /** 展示名（参考区根路径末段） */
   name: string;
 }
 
 /** 挂载参考工作区条目（离线时 online=false，其余字段为最后已知摘要 + error） */
 export interface MountedWorkspaceDto {
-  /** m_<mount_key> */
   mount_id: string;
-  /** plain() 规范化根路径的 sha256 前 16 hex（挂载身份命名空间，与 root_key 独立） */
   mount_key: string;
-  /** 参考区库内 root_key（未被观澜索引/无摘要时为空串） */
   root_key: string;
-  /** 规范化后的绝对路径（无 \\?\ 泄漏） */
   root_path: string;
   name: string;
   online: boolean;
   index_generation: number;
-  /** ready | building | absent */
   search_state: string;
   file_count: number;
-  /** 离线原因（online=true 时缺省） */
   error?: string;
-  /** 最近一次成功在线观测时间 */
   last_seen_at?: string;
 }
 
 /** GET /api/v1/mounts 响应 */
 export interface MountListResponseDto {
   ok: boolean;
-  /** 主区索引代（0 = 服务尚无缓存代际） */
   index_generation: number;
   items: MountedWorkspaceDto[];
 }
@@ -1710,17 +1564,13 @@ export interface CrossSearchResponseDto {
   index_generation: number;
   query: string;
   mode: string;
-  /** 各来源命中文件数之和（跨库不去重计数） */
   total_matched: number;
   items: SearchHitDto[];
   truncated: boolean;
-  /** 主区检索索引状态（挂载区各自状态见 mounts[].search_state） */
   search_state: string;
-  /** 全部挂载区状态（含离线降级） */
   mounts: MountedWorkspaceDto[];
 }
 
-// ===== 事项资料胶囊（Context Capsule）两阶段预览/导出/秒开核验 =====
 
 export type CapsuleMode = 'with_snapshots' | 'manifest_only';
 
@@ -1898,7 +1748,6 @@ export interface CapsuleFileContentResponse {
   text: string | null;
 }
 
-// ===== 全量开放导出、决定证据保护存储瘦身（GC）、全量 SHA-256 完整性核验与一键脱敏诊断 ZIP =====
 
 export interface ImpactedRevisionRef {
   file_id: string;
@@ -2012,7 +1861,6 @@ export interface DiagnosticZipResponse {
   sandbox_ok: boolean;
 }
 
-// ===== 真实目录树（含空目录）、文件夹一等操作、新建文档、批量整理与挂载目录树浏览 =====
 
 export interface FolderListResponseDto {
   ok: boolean;
@@ -2076,7 +1924,6 @@ export interface MountedFilesResponseDto {
   items: MountedFileEntryDto[];
 }
 
-// ===== 多项目并存与跨项目总览（Quiet.md 多目录工作台模型）=====
 
 export type ProjectRuntimeStatus = 'ready' | 'scanning' | 'offline' | 'root_in_use' | 'error' | string;
 
@@ -2200,7 +2047,6 @@ export interface CrossProjectSearchResponseDto {
   items: CrossProjectSearchHitDto[];
 }
 
-// ===== 存量工作区批量确立已读基线与撤销还原 =====
 
 export interface ReadingStateEntryDto {
   file_id: string;

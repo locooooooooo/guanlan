@@ -28,7 +28,6 @@ use crate::index::derive::decision_id_for;
 /// 字段值：占位符或已填内容
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FieldValue {
-    /// 仍是下划线/省略号占位（待人工填写）
     Placeholder,
     Filled(String),
 }
@@ -139,7 +138,6 @@ pub fn parse_decision_blocks(content: &str) -> Vec<DecisionBlock> {
             .unwrap_or(DecisionPriority::P2);
         let confirmed = captures.get(2).map(|m| m.as_str()) == Some("已确认");
 
-        // 标记行上的卡点标题：标记之后的文字
         let marker_end = captures.get(0).map(|m| m.end()).unwrap_or(0);
         let question = trimmed
             .get(marker_end..)
@@ -147,7 +145,6 @@ pub fn parse_decision_blocks(content: &str) -> Vec<DecisionBlock> {
             .unwrap_or_default()
             .to_owned();
 
-        // 块体：标记行 + 连续的非空、非标题、非标记行（防御上限 16）
         let mut body: Vec<&str> = vec![line];
         let mut cursor = index + 1;
         while cursor < lines.len() && body.len() < 16 {
@@ -168,7 +165,6 @@ pub fn parse_decision_blocks(content: &str) -> Vec<DecisionBlock> {
             priority,
             confirmed,
             question: if question.is_empty() {
-                // 标记行无标题时以首条字段前的原文兜底（确定性口径）
                 "待确认事项".to_owned()
             } else {
                 question
@@ -185,7 +181,6 @@ pub fn parse_decision_blocks(content: &str) -> Vec<DecisionBlock> {
             line_start: index + 1,
             line_end: if body.len() <= 1 { index + 1 } else { cursor },
         };
-        // 字段抽取跳过标记行本身（第 0 行是标记），标记行上的字段不算
         let field_lines: Vec<&str> = body.iter().skip(1).copied().collect();
         fill_block_fields(&mut block, &field_lines, &pat.field);
         blocks.push(block);
@@ -194,14 +189,12 @@ pub fn parse_decision_blocks(content: &str) -> Vec<DecisionBlock> {
     blocks
 }
 
-/// 编译一次的块级正则集
 struct BlockPatterns {
     marker: Regex,
     field: Regex,
     heading: Regex,
 }
 
-/// 从块体行抽取字段与选项（标记行上的字段也算——单行紧凑块）
 fn fill_block_fields(block: &mut DecisionBlock, body: &[&str], field: &Regex) {
     for line in body {
         let trimmed = line.trim();
@@ -224,7 +217,6 @@ fn fill_block_fields(block: &mut DecisionBlock, body: &[&str], field: &Regex) {
                 "生效范围与日期" => {
                     block.effective_scope = value.filled().map(str::to_owned);
                 }
-                // 「推荐理由：」与「推荐：」均归入推荐语字段
                 "推荐理由" | "推荐" if block.recommendation.is_none() => {
                     block.recommendation = value.filled().map(str::to_owned);
                 }
@@ -235,7 +227,6 @@ fn fill_block_fields(block: &mut DecisionBlock, body: &[&str], field: &Regex) {
     }
 }
 
-/// 占位判定：非空且全部字符都是下划线/省略号/破折号（`___`、`……`）
 fn classify_value(raw: &str) -> FieldValue {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -252,8 +243,6 @@ fn classify_value(raw: &str) -> FieldValue {
     }
 }
 
-/// 选项行收集：`可选方案：A / B`（`/` 分隔，≥3 字符项）与 `- **选项 X**：…`
-/// ——与 derive.rs 的选项抽取同口径
 fn collect_options(line: &str, options: &mut Vec<String>) {
     static OPTION_LINE: OnceLock<Regex> = OnceLock::new();
     let option_line = OPTION_LINE.get_or_init(|| {
@@ -319,7 +308,6 @@ mod tests {
 
     #[test]
     fn parses_confirmed_block_after_writeback() {
-        // 回写后的形态：状态词变更 + 字段已填
         let content = "\
 [P1 - 已确认] 属性字典与历史更新策略
 决定：采用两阶段状态锁
@@ -382,7 +370,6 @@ mod tests {
         assert!(item.decision_id.starts_with("dec_"));
         assert!(item.is_blocking(), "P1 未决是阻塞级");
         assert_eq!(item.status, "待确认");
-        // 同一问题经 statements 口径（derive::decision_id_for）应得到同一 ID
         assert_eq!(
             item.decision_id,
             decision_id_for("docs / 03-待确认事项", "属性字典与历史更新策略")

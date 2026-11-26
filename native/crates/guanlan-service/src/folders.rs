@@ -15,7 +15,6 @@ use std::time::{Duration, Instant};
 
 use guanlan_core::index::collector::{self, FolderListing};
 
-/// 缓存有效期。文件夹增删改移会主动失效，这个时间只兜住外部程序新建目录的场景。
 const DEFAULT_TTL_MS: u64 = 3_000;
 
 fn ttl_from_env() -> Duration {
@@ -71,8 +70,6 @@ impl FolderInventoryCache {
             collector::DEFAULT_MAX_DEPTH,
         );
         match entries.get(&key) {
-            // 本次读不全：保留上一次成功清单，不让读不到的目录从界面上消失。
-            // 不推进 `at`，下一次读取会重试；问题走 stderr 报告。
             Some(previous) if fresh.incomplete && !previous.listing.incomplete => {
                 eprintln!("guanlan 目录清单：{root_path} 本次有目录读不到，保留上一次结果");
                 previous.listing.clone()
@@ -127,12 +124,10 @@ mod tests {
         assert!(first.folders.contains(&"docs".to_owned()), "{first:?}");
         assert!(!first.incomplete);
 
-        // 缓存期内新增的目录不会出现在清单里
         write_dir(&base, "new-inbox");
         let cached = cache.get(&root);
         assert!(!cached.folders.contains(&"new-inbox".to_owned()));
 
-        // 文件夹操作后失效，下一次读取看到新目录
         cache.invalidate(&root);
         let refreshed = cache.get(&root);
         assert!(

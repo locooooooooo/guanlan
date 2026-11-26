@@ -1,19 +1,3 @@
-/**
- * 全景时间轴（列表态）J/K 上下事件 · H/L 收起展开事项——视图级键盘导航 Hook。
- *
- * 监听挂在 TimelineView（事项组折叠状态 collapsedBatches / openIdentityClusters /
- * openVersionHistories 与选中事件的组归属都在视图内，事件卡点击链 onSelectEvent
- * 直写 store selectedEventId）。
- *
- * 键位（keyboardShortcuts.resolveShortcutActionFromEvent 单一语义源）：
- *  - J = 下一可见事件（列表上新下旧，视觉向下 = 更旧）；K = 上一可见事件（更新）；
- *    折叠态的事项组只占 1 步（代表首事件），按 L 展开后再逐条进入子事件；两端不绕回；
- *  - H = 收起选中事件所属事项组（并将焦点吸附至组头首事件保持高亮可见）；
- *  - L = 展开选中事件所属事项组；无组（single 卡）则仅滚动定位；
- *  - 步进后把选中卡滚入视口（prefers-reduced-motion 动态降级为 behavior:'auto'）。
- *
- * 护栏：编辑面 / 浮层打开（hasBlockingDomOverlay + shortcutTargetYields）不生效。
- */
 import { useEffect, useRef } from 'react';
 import {
   hasBlockingDomOverlay,
@@ -26,17 +10,13 @@ import type { TimelineEvent } from '../types/guanlan';
 /** 选中事件所属事项组（H/L 折叠目标）。 */
 export interface TimelineFocusGroup {
   kind: 'batch' | 'cluster' | 'version';
-  /** collapsedBatches / openIdentityClusters / openVersionHistories 的键。 */
   key: string;
-  /** 组内首条（最新）事件，收起时吸附焦点到该条使高亮环仍可见。 */
   headEvent: TimelineEvent;
 }
 
 export interface TimelineRenderGroupSnapshot {
   kind: 'single' | 'batch' | 'cluster' | 'version';
-  /** 组内按展示序排列的全部事件（single 长度 1）。 */
   members: readonly TimelineEvent[];
-  /** true = 展开（所有成员可见）；false = 折叠（只停靠首条代表事件）。 */
   isOpen: boolean;
 }
 
@@ -60,15 +40,11 @@ export function collectNavigableTimelineEvents(
 }
 
 export interface UseTimelineKeyboardNavOptions {
-  /** 列表态可见时启用。 */
   enabled: boolean;
-  /** 当前可见可步进事件序列（collectNavigableTimelineEvents 产物）。 */
   events: readonly TimelineEvent[];
   selectedEventId: string;
   onSelectEvent: (event: TimelineEvent) => void;
-  /** 事件 → 所属事项组（视图内 memo 构建；无组事件不在表中）。 */
   groupByEventId: ReadonlyMap<string, TimelineFocusGroup>;
-  /** H 折叠 / L 展开（视图内按 group.kind 分派到三个折叠状态表）。 */
   onCollapseGroup: (group: TimelineFocusGroup, collapsed: boolean) => void;
 }
 
@@ -147,12 +123,10 @@ export function useTimelineKeyboardNav({
       if (action === 'event-next' || action === 'event-prev') {
         const delta = action === 'event-next' ? 1 : -1;
         let currentIdx = list.findIndex((ev) => ev.event_id === selected);
-        // 若当前选中事件位于某个已折叠组内部，先折算到其组头位置
         if (currentIdx < 0 && selected) {
           const g = groups.get(selected);
           if (g) currentIdx = list.findIndex((ev) => ev.event_id === g.headEvent.event_id);
         }
-        // 无选中：J 落首条（最新），K 落末条；有选中：越界原地（不绕回）
         let nextIdx: number;
         if (currentIdx < 0) {
           nextIdx = delta > 0 ? 0 : list.length - 1;
@@ -168,7 +142,6 @@ export function useTimelineKeyboardNav({
         return;
       }
 
-      // H/L：选中事件所属事项组折叠；无组（single 卡）只滚动定位（诚实无组可折）
       const targetId = selected || (list[0]?.event_id ?? '');
       const group = groups.get(targetId);
       event.preventDefault();
@@ -195,9 +168,7 @@ export function useTimelineKeyboardNav({
  */
 export function buildTimelineFocusGroups(input: {
   events: readonly TimelineEvent[];
-  /** 同文件同日版本组：key → 成员事件列表（首位最新）。 */
   versionGroups: ReadonlyArray<{ key: string; members: readonly TimelineEvent[] }>;
-  /** 身份簇（仅 members.length > 1 成簇）：clusterKey → 成员事件列表（首位最新）。 */
   clusterMembers: ReadonlyArray<{ key: string; members: readonly TimelineEvent[] }>;
 }): Map<string, TimelineFocusGroup> {
   const map = new Map<string, TimelineFocusGroup>();

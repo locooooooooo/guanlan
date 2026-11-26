@@ -92,11 +92,8 @@ pub fn serialize_context_hashes(hashes: &[String]) -> String {
 /// CAS 乐观锁判定结论
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProposalCasVerdict {
-    /// 磁盘与基准一致且草案有实质变更，可安全原子落盘
     Clean,
-    /// 磁盘与基准一致且草案字节与磁盘完全一致，无需重复写盘
     NoOp,
-    /// 磁盘内容已偏离基准（如人工并行修改了文档），必须阻止静默覆盖
     Conflict {
         expected_content_hash: String,
         disk_content_hash: String,
@@ -160,7 +157,6 @@ pub fn build_derived_context_edges(
         if target.file_id.is_empty() || target.revision_id.is_empty() {
             continue;
         }
-        // 绝不写「新版本引用新版本自身」的退化自环
         if target.file_id == source_file_id && target.revision_id == source_revision_id {
             continue;
         }
@@ -278,13 +274,11 @@ mod tests {
                 revision_id: "rev_spec_1".to_owned(),
                 matched_hash: "aaaaaaaaaaaaaaaa".to_owned(),
             },
-            // 退化自环（指向新落盘版本自身）应被跳过
             DerivedContextTarget {
                 file_id: "f_plan".to_owned(),
                 revision_id: "rev_plan_3".to_owned(),
                 matched_hash: "bbbbbbbbbbbbbbbb".to_owned(),
             },
-            // 同文件的历史基线版本（revision 不同）保留溯源
             DerivedContextTarget {
                 file_id: "f_plan".to_owned(),
                 revision_id: "rev_plan_2".to_owned(),

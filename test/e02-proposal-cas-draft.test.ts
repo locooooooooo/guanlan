@@ -1,7 +1,3 @@
-/**
- * 外部智能体文件写入 CAS 安全网、独立草案分支（v(N+1)-agent-draft）与
- * 「查看多模态 Diff → 采纳落盘 / 退回重做」前端纯函数与 SSR 渲染契约测试。
- */
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import React from 'react';

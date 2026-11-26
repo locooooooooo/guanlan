@@ -1,13 +1,3 @@
-/**
- * Quiet.md 风格全局常驻目录侧栏状态与文件夹/批量操作编排 Hook。
- *
- * 职责：
- * - 全局侧栏宽度（可拖拽调整）与折叠态持久化；
- * - 拉取并刷新工作区真实目录清单（含空文件夹，GET /api/v1/folders）；
- * - 工作区级置顶文件清单（localStorage 隔离持久化）；
- * - 挂载参考工作区目录树按需懒加载（GET /api/v1/mounts/{mount_id}/files）；
- * - 文件夹新建/重命名/移动/回收站、新建文档、批量移动/回收站执行与弹窗态。
- */
 
 import { useCallback, useEffect, useState } from 'react';
 import type { MountedFilesResponseDto } from '../services/apiTypes';
@@ -69,7 +59,6 @@ export function useDirectoryShell({
   showToast,
 }: UseDirectoryShellOptions) {
   const [sidebarPrefs, setSidebarPrefs] = useState(() => loadSidebarShellPrefs());
-  // 画布/全景视图默认收起左侧目录栏（为星图与版本时光机让出空间），用户可随时一键展开
   const [panoramaSidebarOpen, setPanoramaSidebarOpen] = useState(false);
   const [realFolders, setRealFolders] = useState<string[]>([]);
   const [pinnedFileIds, setPinnedFileIds] = useState<string[]>(() =>

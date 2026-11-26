@@ -18,8 +18,6 @@ pub use crate::index::office::{
 };
 pub use crate::index::pdf::{PdfEvidenceAnchor, PdfPageExtract};
 
-// ===== 通用共享结构（契约 §1.1/§1.2）=====
-
 /// 工作区行（契约 §1.1 workspace：WorkspaceRecord，`WorkspaceStore.ts:39-46`）
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkspaceRecord {
@@ -59,8 +57,6 @@ pub struct EventTimeRange {
     #[serde(rename = "undatedCount")]
     pub undated_count: u64,
 }
-
-// ===== 事件（契约 §1.4/§1.5/§1.6）=====
 
 /// 事件查询窗口回显（契约 §1.4 window）
 #[derive(Debug, Clone, Serialize)]
@@ -203,8 +199,6 @@ pub struct EventTimeRangeResponse {
     pub index_generation: u64,
 }
 
-// ===== 文件（契约 §1.3）=====
-
 /// 文件摘要（契约 §1.3 FileSummary：与 FileRecord 对齐并 snake_case 化的新 DTO）
 #[derive(Debug, Clone, Serialize)]
 pub struct FileSummary {
@@ -258,8 +252,6 @@ pub struct FileSummaryPage {
     pub total_matched: u64,
     pub facets: FileFacets,
 }
-
-// ===== 版本链与版本内容（契约 §1.7/§1.8）=====
 
 /// 版本行（契约 §1.7 revisions：`project.ts:454-466` 字段逐字保留）。
 /// 不下发 snapshot_path：服务端绝对路径不进 UI（`project.ts:465` 注释）。
@@ -433,8 +425,6 @@ pub struct RevisionContentResponse {
     pub content_hash: String,
 }
 
-// ===== 决定（契约 §1.9；结构沿用 types/guanlan.ts:137-183 字段名）=====
-
 /// 决定断言（契约 §1.9 items：结构 = `types/guanlan.ts:161-183`）
 #[derive(Debug, Clone, Serialize)]
 pub struct DecisionAssertion {
@@ -523,8 +513,6 @@ pub struct DecisionsResponse {
     pub unresolved_total: u64,
 }
 
-// ===== 关系（契约 §1.10；结构沿用 types/guanlan.ts:182-201 字段名）=====
-
 /// 引用定位（`types/guanlan.ts:198` 内联形状）
 #[derive(Debug, Clone, Serialize)]
 pub struct RelationLocator {
@@ -561,8 +549,6 @@ pub struct RelationsResponse {
     pub index_generation: u64,
     pub items: Vec<RelationEdge>,
 }
-
-// ===== 工作区配置（契约 §1.1 config；字段同 types/guanlan.ts:253-285，camelCase 保留）=====
 
 /// 扫描枚举快照（`types/guanlan.ts:262-271` 内联形状）
 #[derive(Debug, Clone, Serialize)]
@@ -641,8 +627,6 @@ pub struct WorkspaceConfig {
     pub runtime_status: RuntimeStatus,
 }
 
-// ===== 顶层响应（契约 §1.1/§1.2）=====
-
 /// GET /api/v1/bootstrap（契约 §1.1：一个短读快照内生成）。
 /// 约束：响应中任何位置不出现 svgSource、markdownContent、revisions[]
 /// （不含正文、完整版本链、全量关系、历史 SVG 原文）。
@@ -719,8 +703,6 @@ pub struct WatcherStatus {
     pub changed_paths_pending: u32,
     pub l4a_queue_depth: u32,
 }
-
-// ===== 索引任务（契约 §2）=====
 
 /// POST /api/v1/index-jobs 请求体（外部允许提交
 /// verify_all|changed_paths|l4a_summary|set_initiative_dirs；内部 kind 直接提交返回 400）
@@ -807,12 +789,6 @@ pub struct IndexJobReport {
     pub duration_ms: u64,
 }
 
-// ===== 统一状态机投影（GET /api/v1/state-overview） =====
-//
-// 四视图唯一数据源：专项卡片、详情下拉、星图节点、文档顶栏共用同一投影。
-// 存储层 = initiatives / artifact_states（contract-storage.md §4.3）；
-// 规则层 = index::state_machine（SSOT 纯函数）；本节是 wire 形状。
-
 /// 专项级投影行（initiatives[]）
 #[derive(Debug, Clone, Serialize)]
 pub struct InitiativeOverview {
@@ -854,8 +830,6 @@ pub struct StateOverview {
     pub initiatives: Vec<InitiativeOverview>,
     pub artifacts: Vec<ArtifactOverview>,
 }
-
-// ===== 长任务与上下文基座端点 DTO（snake_case） =====
 
 /// GET /api/v1/state-overview 响应（四视图唯一数据源）
 #[derive(Debug, Clone, Serialize)]
@@ -1292,8 +1266,6 @@ pub struct FileMutationResponse {
     pub trash_recoverable: bool,
 }
 
-// ===== 存储占用与三档快照配额统计（GET /api/v1/storage/stats · POST /api/v1/storage/policy）=====
-
 /// 三档快照配额策略
 #[derive(Debug, Clone, Serialize)]
 pub struct SnapshotTierPolicyDto {
@@ -1352,8 +1324,6 @@ pub struct UpdateStoragePolicyResponse {
     pub workspace_id: String,
     pub policy: SnapshotTierPolicyDto,
 }
-
-// ===== QuickLook 轻预览与流式缩略（GET /api/v1/revisions/{id}/preview）=====
 
 /// 位图 / SVG 尺寸元数据（仅解析文件头前 ≤64KiB，零整图解码）
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1427,8 +1397,6 @@ pub struct RevisionPreviewResponse {
     pub snapshot_path: Option<std::path::PathBuf>,
 }
 
-// ===== Office（.docx / .xlsx）L2 结构化提取与证据锚定 =====
-
 /// QuickLook 轻预览卡附带的紧凑 Office 摘要
 #[derive(Debug, Clone, Serialize)]
 pub struct OfficePreviewSummary {
@@ -1470,8 +1438,6 @@ pub struct OfficeContentResponse {
     pub xlsx: Option<OfficeXlsxData>,
     pub plain_text: String,
 }
-
-// ===== PDF 页级正文抽取与页码证据锚定 =====
 
 /// QuickLook 轻预览卡附带的紧凑 PDF 摘要
 #[derive(Debug, Clone, Serialize)]
@@ -1515,8 +1481,6 @@ pub struct PdfContentResponse {
     pub plain_text: String,
 }
 
-// ===== 候选事项（多信号编织；采纳前绝不写正式归属） =====
-
 /// 候选成员（含理由胶囊明细）
 #[derive(Debug, Clone, Serialize)]
 pub struct InitiativeCandidateMember {
@@ -1553,22 +1517,15 @@ pub struct InitiativeCandidatesResponse {
     pub items: Vec<InitiativeCandidateItem>,
 }
 
-// ===== 有界检索（契约 §2.4）=====
-
 /// 检索命中定位器（serde tag=kind；语义对齐前端 SearchHit.locator，
 /// `guanlanEngine.ts:78-86`；行号/页码一律 1-based）
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SearchLocator {
-    /// MD/文本/代码正文命中行（start == end 为精确单行）
     Lines { start: i64, end: i64 },
-    /// SVG 可提取文本命中（fragment = 命中文本行原文）
     SvgText { fragment: String },
-    /// PDF 页级命中（page 1-based，来自行→页锚）
     PdfPage { page: u64 },
-    /// Office 结构化命中（anchor = `#para=N` 或 `Sheet!A3`，对齐前端 officeAnchor）
     Office { anchor: String },
-    /// 仅文件级命中（标题/路径命中，无正文定位）
     File,
 }
 
@@ -1626,8 +1583,6 @@ pub struct SearchResponse {
     /// ready | building | absent——派生检索索引状态；非 ready 时 items 恒空
     pub search_state: String,
 }
-
-// ===== 跨项目只读挂载与联合检索（契约 contract-query-api.md §2.5）=====
 
 /// 挂载参考工作区条目（GET /api/v1/mounts 列表项 / POST /api/v1/mounts 返回体）。
 /// 离线语义：参考区目录或索引库暂不可达时 `online=false`，其余字段为
@@ -1696,8 +1651,6 @@ pub struct CrossSearchResponse {
     /// 全部挂载区状态（含离线：online=false + 最后已知摘要 + error）
     pub mounts: Vec<MountedWorkspaceInfo>,
 }
-
-// ===== 原位拍板（HITL）唤醒任务与批次批阅看板 =====
 
 /// 批阅看板五态 + 失联未知统计
 #[derive(Debug, Clone, Default, Serialize)]
@@ -1794,8 +1747,6 @@ pub struct ReviewBoardResponse {
     pub items: Vec<ReviewBoardCard>,
 }
 
-// ===== 真实目录树（含空目录）、文件夹一等操作、新建文档、批量整理与挂载目录树浏览 =====
-
 /// GET /api/v1/folders 响应（真实工作区目录清单，含空文件夹）
 #[derive(Debug, Clone, Serialize)]
 pub struct FolderListResponse {
@@ -1875,8 +1826,6 @@ pub struct MountedFilesResponse {
     pub folders: Vec<String>,
     pub items: Vec<MountedFileEntry>,
 }
-
-// ===== 多项目并存与跨项目总览（Quiet.md 多目录工作台模型）=====
 
 /// 单个受管项目条目（GET /api/v1/projects 列表项 / POST / PATCH / activate 返回）
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2026,8 +1975,6 @@ pub struct CrossProjectSearchResponse {
     pub offline_projects: usize,
     pub items: Vec<CrossProjectSearchHit>,
 }
-
-// ===== 存量工作区批量确立已读基线与撤销还原 =====
 
 /// 单文件服务端已读基线记录（仅记录已读版本与时刻，绝不伪造 scrollPercent）
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

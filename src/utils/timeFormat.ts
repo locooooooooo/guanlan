@@ -1,17 +1,4 @@
-/**
- * 时间口径统一的单一出口。
- *
- * 背景：observed_at 由服务端 reconcile 以 `new Date().toISOString()` 写入（UTC），
- * 直接 slice 会显示 UTC 挂钟（本机 +08 下慢 8 小时、跨零点错日）；occurred_at 可能是
- * 纯日期（材料只记载到日）也可能是含时刻的 ISO。两种形态必须分开处理：
- * - 纯日期（长度 ≤ 10）不做时区换算，原样截取，绝不把 11-02 移成 11-01；
- * - 含时刻的 ISO 一律按本地时区（或显式 timeZone）取日历日与时钟。
- *
- * 同时承载卡片时刻口径：列表默认按 occurred 排序，卡片就必须显示 occurred；
- * 三值依据（文档自述 / 文件时间 / 采集）与版本时光机的口径保持同源。
- */
 
-// ---------- 基础格式化 ----------
 
 interface LocalParts {
   year: string;
@@ -34,7 +21,6 @@ function formatterFor(timeZone?: string): Intl.DateTimeFormat {
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
-      // h23：午夜输出 00 而不是 24，避免跨零点错位
       hourCycle: 'h23',
     });
     formatterCache.set(key, formatter);
@@ -54,7 +40,6 @@ function localPartsOf(iso: string, timeZone?: string): LocalParts | null {
   return { year, month, day, hour, minute };
 }
 
-/** 纯日期（如 '2026-11-02'）：不做时区换算。 */
 function isDateOnly(iso: string): boolean {
   return iso.length <= 10;
 }
@@ -129,7 +114,6 @@ export function formatRelativeObservedAt(iso: string): string {
   return `${then.getFullYear()}-${pad2(then.getMonth() + 1)}-${pad2(then.getDate())}`;
 }
 
-// ---------- 三值时间依据 ----------
 
 export type TimeBasisLabel = '文档自述' | '文件时间' | '采集';
 
@@ -143,7 +127,6 @@ export function timeBasisLabel(source: string | null | undefined): TimeBasisLabe
   return '采集';
 }
 
-// ---------- 列表卡片时刻 ----------
 
 export type EventTimeOrder = 'occurred' | 'observed';
 
@@ -156,17 +139,11 @@ export interface CardTimeEvent {
 }
 
 export interface EventCardStamp {
-  /** 卡片可见时刻：occurred 口径取发生时间，缺失/observed 口径取采集时间 */
   stamp: string;
-  /** 可见时刻的依据：文档自述 / 文件时间 / 采集 */
   basis: TimeBasisLabel;
-  /** 作为依据的原始字符串（occurred_at 或 observed_at），供卡根 title 溯源 */
   raw: string;
-  /** occurred_precision='day'（或纯日期）时只出日期 */
   dayOnly: boolean;
-  /** 可见时刻是否取自 occurred_at */
   fromOccurred: boolean;
-  /** 归入的本地日历日（occurred 口径取发生日；observed 口径取观察日） */
   day: string;
 }
 

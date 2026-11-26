@@ -100,8 +100,6 @@ export function EventTimelineCanvas({ title, subtitle, nodes, offset, total, sel
             </g>
           </g>;
         })}
-        {/* 全部色值走 .dark-porthole --cv-* 令牌并挂 style（SVG 表现属性不吃 var()），
-            避免纸面（xray-light）主题下容器渲染成半透明黑灰块导致按钮文字不可读 */}
         <rect x={355} y={111} width={415} height={collapsed ? 43 : Math.max(90, 55 + Math.ceil(nodes.length / 2) * 92)}
           rx={13} fillOpacity=".78" strokeDasharray="4 4"
           style={{ fill: 'var(--cv-card)', stroke: 'color-mix(in srgb, var(--cv-lav) 48%, var(--cv-trunk))' }}/>

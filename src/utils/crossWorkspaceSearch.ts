@@ -1,14 +1,3 @@
-/**
- * 跨项目联合检索——命令面板接入纯函数（零 React 依赖，node:test 可单测）。
- *
- * 口径：
- * - 挂载区命中逐条携带 `source_workspace`（来源工作区名 + root_key 身份哈希）；
- *   主区命中不带该字段——面板据此渲染来源徽标「📁 工作区名」；
- * - 合并顺序：主区服务端层 → 挂载区跨库层 → 本地层，按 fileId 去重
- *   （file_id = 规范化路径稳定哈希派生，跨工作区理论不撞，同 id 主区优先）；
- * - 离线挂载不出条目（服务端 items 本就不含），由 mounts[] 状态行承载离线标识；
- * - hasOnlineMounts 为 false 时调用方根本不发 cross 请求（零多余网络开销）。
- */
 
 import type {
   CrossProjectSearchResponseDto,
@@ -36,7 +25,7 @@ export function crossHitsToItems(cross: CrossSearchResponseDto, limit: number): 
   const items: PaletteItem[] = [];
   for (const hit of cross.items) {
     if (items.length >= limit) break;
-    if (!hit.source_workspace) continue; // 主区命中由 /api/v1/search 通道承载，此处跳过
+    if (!hit.source_workspace) continue;
     items.push({
       kind: 'file',
       key: `cross:${hit.source_workspace.root_key}:${hit.file_id}:${hit.revision_id}`,
@@ -110,7 +99,6 @@ export function mergeCrossItems(
   const out: PaletteItem[] = [];
   for (const item of [...base, ...cross]) {
     if (item.kind !== 'file') {
-      // 动作行原样保留（去重键用 key，动作行不在跨层合并范围）
       if (item.kind === 'action' && !seen.has(item.key)) {
         seen.add(item.key);
         out.push(item);

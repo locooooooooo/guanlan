@@ -1,9 +1,3 @@
-/**
- * 浮动 Chrome 工具栏层：
- * 承载画布顶栏（全景三态页签 + 主题分段钮 + 司辰日期 chip + 详情钮）、
- * 视图设置弹层与底部药丸工具栏接线；Sources 面板位于 GraphSourcesPanel.tsx。
- * 数据一律来自 useGraphCanvasController ctx。
- */
 
 import React, { useSyncExternalStore } from 'react';
 import { Activity, BookMarked, ChevronLeft, ChevronRight, MoonStar, Orbit, Pause, Play, Sparkles, Sun } from 'lucide-react';
@@ -15,11 +9,6 @@ import { sceneDateLabel, type PanoramaMode } from './geometry';
 import { GraphSpotlightBar } from './GraphSpotlightBar';
 import type { GraphCanvasCtx } from './useGraphCanvasController';
 
-/* ── 主题订阅叶子 ─────────────────────────────────────────────────────────────────
- * 画布主题不经 React props 透传，仅两处叶子组件需要感知主题值：全景页签的 theme 形制、
- * 顶栏主题分段钮的激活段。两处各自 useSyncExternalStore 订阅 canvasThemeStore——
- * 一次翻转只重渲这两个叶子（合计 <30 节点），避免触发数千 SVG 节点的整树
- * reconciliation；data-canvas-theme/theme-morphing 由宿主 App 命令式直写舷窗。 */
 
 /** 全景三态页签（星图/列表/日历）：主题形制自订阅，其余 props 原样透传 Tabs */
 export function CanvasThemeAwareTabs(props: Omit<TabsProps, 'theme'>) {
@@ -89,8 +78,6 @@ export function GraphTopBar({ ctx }: { ctx: GraphCanvasCtx }) {
   } = ctx;
   return (
     <div className="mx-3.5 mt-2.5 px-4 py-1.5 rounded-[14px] bg-[color:var(--cv-panel)] border border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_8%,transparent)] flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-[12px] shrink-0 z-20">
-      {/* 主题形制由 CanvasThemeAwareTabs 自订阅（页签 ≤10 节点），
-          避免以 canvasTheme prop 拉动本组件整树重渲；资产域过滤以原生 flex 并列，零遮挡 */}
       <div className="flex items-center gap-3 min-w-0 flex-wrap">
         <CanvasThemeAwareTabs
           items={[
@@ -104,7 +91,6 @@ export function GraphTopBar({ ctx }: { ctx: GraphCanvasCtx }) {
         />
         {topBarSlot}
       </div>
-      {/* 画布主题分段钮 + 标尺粒度分段钮 + 详情/聚光灯/司辰日期统一 coss Toolbar 语义 */}
       <div
         role="toolbar"
         data-slot="toolbar"
@@ -146,7 +132,6 @@ export function GraphTopBar({ ctx }: { ctx: GraphCanvasCtx }) {
           </div>
         )}
         <CanvasThemeSegmented onChange={onCanvasThemeChange} />
-        {/* 顶栏「详情」文字钮：对当前选中节点滑出叙事抽屉（与双击节点互补） */}
         <button
           type="button"
           data-cv-topbar-detail
@@ -167,7 +152,6 @@ export function GraphTopBar({ ctx }: { ctx: GraphCanvasCtx }) {
             <span>司辰手记</span>
           </button>
         )}
-        {/* 增量聚光灯开关（展开后的逐条批阅微条浮于画布顶部中央，不撑宽顶栏） */}
         <GraphSpotlightBar ctx={ctx} mode="toggle" />
         {(() => {
           const fullDateText =
@@ -393,7 +377,6 @@ export function GraphPillToolbarSection({ ctx }: { ctx: GraphCanvasCtx }) {
       style={{ left: 16, right: narrativeDrawerOpen ? 356 : 16 }}
     >
       <div className="d3-no-pan pointer-events-auto flex flex-col items-center gap-2 max-w-full">
-      {/* 司辰时光步进回放微轨（播放态浮现于药丸上方：日/周步进 · 1x/2x 倍速 · 实时当日增量数字） */}
       {showReplayRail && (
         <div
           role="toolbar"
@@ -493,14 +476,12 @@ export function GraphPillToolbarSection({ ctx }: { ctx: GraphCanvasCtx }) {
           )
         }
         onShowShortcuts={() => {
-          // 与图例气泡/视图设置弹层互斥：同锚位（bottom-16 正中）三弹层不允许叠开
           setLegendOpen(false);
           setIsViewSettingsOpen(false);
           setShowShortcuts((v) => !v);
         }}
         viewSettingsOpen={isViewSettingsOpen}
         onToggleViewSettings={() => {
-          // 三弹层同锚位互斥：打开视图设置时收起图例与快捷键气泡（z-20 低于气泡 z-30，叠开会压顶）
           setIsViewSettingsOpen((v) => !v);
           if (!isViewSettingsOpen) {
             setLegendOpen(false);
@@ -514,7 +495,6 @@ export function GraphPillToolbarSection({ ctx }: { ctx: GraphCanvasCtx }) {
         legendOpen={legendOpen}
         onToggleLegend={() => {
           setLegendOpen((v) => !v);
-          // 三弹层同锚位互斥：展开图例时收起快捷键弹层与视图设置弹层
           if (!legendOpen) {
             setShowShortcuts(false);
             setIsViewSettingsOpen(false);

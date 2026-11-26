@@ -8,7 +8,6 @@ export type DocumentEvent = {
   children: DocumentEvent[];
 };
 
-// Keep original line numbers when ignoring YAML metadata and fenced examples.
 export function markdownLines(source: string): string[] {
   const lines = source.replace(/^\uFEFF/, '').split(/\r?\n/);
   const yamlEnd = lines[0]?.trim() === '---'
@@ -98,7 +97,6 @@ export function documentEvents(source: string): DocumentEvent[] {
     if (list) items.push({ indent, event });
   }
   clearItems(lines.length);
-  // Most plans have one H1 giving the document title. Start directly at its phases.
   if (roots.length === 1 && roots[0].kind === '章节' && roots[0].children.length) return roots[0].children;
   return roots;
 }

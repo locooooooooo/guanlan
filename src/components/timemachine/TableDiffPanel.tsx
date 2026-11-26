@@ -18,7 +18,6 @@ export interface TableDiffPanelProps {
   format: 'csv' | 'tsv' | 'xlsx';
 }
 
-/** 渲染行数上限（DOM 护栏，与数据预算无关） */
 const RENDER_MAX_ROWS = 400;
 const RENDER_MAX_HEADER_COLS = 24;
 
@@ -29,7 +28,6 @@ export function TableDiffPanel({ result, format }: TableDiffPanelProps) {
   return <CsvBody result={result as TableDiffResult} />;
 }
 
-// ---------- CSV / TSV ----------
 
 function CsvBody({ result }: { result: TableDiffResult }) {
   if (!result.ok) {
@@ -197,10 +195,8 @@ function formatDelta(delta: number): string {
   return String(rounded);
 }
 
-// ---------- XLSX ----------
 
 function XlsxBody({ result }: { result: XlsxDiffResult }) {
-  // hooks 先于任何分支（result 可在 ok/失败两态间翻转，hook 顺序必须恒定）
   const [sheetIndex, setSheetIndex] = useState(0);
   if (!result.ok) {
     return <p role="status" className="text-[11px]" style={{ color: 'var(--cv-ink-meta)' }}>{result.message}</p>;

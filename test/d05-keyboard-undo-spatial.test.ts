@@ -1,6 +1,3 @@
-/**
- * 时间轴导航分组 / 画布空间漫游投影 / ? 快捷键速查浮层与 TimelineView SSR 冒烟测试。
- */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
@@ -69,7 +66,6 @@ test('useTimelineKeyboardNav：折叠组只占 1 步，展开后遍历全成员�
   const c1 = makeEvent('ev_c1', 'f5');
   const c2 = makeEvent('ev_c2', 'f6');
 
-  // 折叠态：batch/version/cluster 各只停靠首条代表事件
   const collapsedSeq = collectNavigableTimelineEvents([
     { kind: 'single', members: [e1], isOpen: true },
     { kind: 'batch', members: [b1, b2], isOpen: false },
@@ -81,7 +77,6 @@ test('useTimelineKeyboardNav：折叠组只占 1 步，展开后遍历全成员�
     ['ev_1', 'ev_b1', 'ev_v1', 'ev_c1']
   );
 
-  // 按 L 展开 batch 与 version 后，J/K 逐条步入所有成员
   const expandedSeq = collectNavigableTimelineEvents([
     { kind: 'single', members: [e1], isOpen: true },
     { kind: 'batch', members: [b1, b2], isOpen: true },
@@ -93,7 +88,6 @@ test('useTimelineKeyboardNav：折叠组只占 1 步，展开后遍历全成员�
     ['ev_1', 'ev_b1', 'ev_b2', 'ev_v1', 'ev_v2', 'ev_c1']
   );
 
-  // buildTimelineFocusGroups 三类归属 + headEvent 正确，single 不入表
   const groups = buildTimelineFocusGroups({
     events: [e1, b1, b2, v1, v2, c1, c2],
     versionGroups: [{ key: 'f4|2026-11-21', members: [v1, v2] }],
@@ -134,18 +128,15 @@ test('useCanvasSpatialNav：构建事件卡 + 富预览卡真实世界中心坐�
     ],
   });
 
-  // 折叠箱第 3 张事件卡标记 hiddenInFold=true（跳转前自动展开扇出组）
   const c3 = cards.find((c) => c.id === 'ev_card_3');
   assert.equal(c3?.hiddenInFold, true);
 
-  // 富预览卡落于 packageGroupLayouts 真实世界横排坐标，而非退化 (0,0)
   const r1 = cards.find((c) => c.fileId === 'f_rich_1');
   const r2 = cards.find((c) => c.fileId === 'f_rich_2');
   assert.ok(r1 && r2);
   assert.ok(r1.x > 300 && r1.y > 782);
   assert.ok(r2.x > r1.x);
 
-  // 选中富卡时起点优先命中富卡而非残留事件卡
   const activeRich = resolveActiveSpatialCard(cards, 'ev_card_1', 'f_rich_2', 'f_rich_2');
   assert.equal(activeRich?.fileId, 'f_rich_2');
   assert.equal(activeRich?.kind, 'rich');
@@ -185,13 +176,11 @@ test('TopHeader ? 快捷键速查浮层 SSR：关闭态零 DOM，展开态含完
     onOpenContextDrawer: () => {},
   };
 
-  // 关闭态零 DOM（像素基线零扰动）
   const closedHtml = renderToStaticMarkup(
     React.createElement(TopHeader, { ...baseProps, helpOpen: false })
   );
   assert.equal(closedHtml.includes('data-testid="shortcut-cheatsheet-popover"'), false);
 
-  // 展开态包含完整键位、Esc 仲裁锚点与 reduced-motion 说明
   const openHtml = renderToStaticMarkup(
     React.createElement(TopHeader, { ...baseProps, helpOpen: true })
   );

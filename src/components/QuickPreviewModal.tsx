@@ -138,12 +138,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
   const canGoPrev = currentIndex > 0;
   const canGoNext = currentIndex >= 0 && currentIndex < queue.length - 1;
 
-  // 队列切换轻交叉淡入：只有「已打开后的 ←/→ 导航沿」才递增 navSeq——内容区
-  // wrapper 以 key={navSeq} 重挂并挂 .glx-fade-in（--dur-1 纯 opacity）完成轻量交叉淡变；
-  // 首次 Space 呼出（isOpen 翻转/首个目标）零重挂零动画，缓存命中首帧 <100ms 零闪烁。
-  // 80ms spinner 阈值与同步缓存命中路径（getCachedQuickPreview）保持不变。
-  // 渲染期调整 state（React 官方「依据上次渲染信息调整」范式）：第二趟渲染 navPrev
-  // 已同步 → isQueueNav 归 false，无循环；两趟均在提交前完成，不会闪帧。
   const [navSeq, setNavSeq] = useState(0);
   const navPrevRef = useRef<{ open: boolean; index: number }>({ open: false, index: -1 });
   const navPrev = navPrevRef.current;
@@ -165,7 +159,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
     coordinatorRef.current = new QuickPreviewCoordinator(fetchRevisionPreview);
   }
 
-  // 同步命中缓存，保证首帧 <16ms 零闪烁
   const cachedImmediate =
     isOpen && resolvedRevisionId
       ? getCachedQuickPreview(resolvedRevisionId, 0)
@@ -177,7 +170,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
   const [showSpinner, setShowSpinner] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // 视图局部交互态：图像缩放/网格、SVG 源码切换、CSV 表格/源码、JSON 美化
   const [imageZoom, setImageZoom] = useState<'fit' | number>('fit');
   const [naturalImageSize, setNaturalImageSize] = useState<{ width: number; height: number } | null>(
     null
@@ -203,7 +195,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
       ? fetchedPreview
       : cachedImmediate;
 
-  // 切换目标文件/版本时复位局部视觉态并走零竞态加载
   useEffect(() => {
     setExtraTextSlices([]);
     setLoadingMore(false);
@@ -237,7 +228,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
     }
 
     setFetchedPreview(null);
-    // 超过 80ms 才展示加载微旋，保证 <100ms 本地命中零闪烁
     let active = true;
     const spinnerTimer = window.setTimeout(() => {
       if (active) setShowSpinner(true);
@@ -262,7 +252,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
     };
   }, [isOpen, resolvedRevisionId]);
 
-  // 静默预取相邻上下文件，连续方向键切换零等待
   useEffect(() => {
     if (!isOpen || currentIndex < 0) return;
     const neighbors: string[] = [];
@@ -308,7 +297,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
     return 'binary';
   }, [preview, activeFile]);
 
-  // 模态开启期间全局捕获键盘导航：Space / Esc 关闭、↑↓←→ 切上下文件、Enter 进全屏阅读
   useEffect(() => {
     if (!isOpen) return;
     const handleKey = (e: KeyboardEvent) => {
@@ -408,7 +396,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
 
   const combinedText = useMemoTextSlice(preview?.text_slice, extraTextSlices);
 
-  // QuickLook 切片 >64KiB 被截断的 HTML 文件：在渲染视图下按需拉取完整快照，避免半截 HTML 绘制错乱
   useEffect(() => {
     if (
       !isOpen ||
@@ -521,7 +508,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
 
   const imageDims = preview?.image_meta ?? naturalImageSize;
 
-  // 底栏队列进度胶囊（纯函数派生；单份队列/非法索引诚实回 null → 不渲染胶囊）
   const queueProgress = buildQuickQueueProgress(queue, files, currentIndex);
 
   const handleCopyHash = async () => {
@@ -592,7 +578,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
       );
     }
 
-    // 1) 位图或 SVG 渲染图模式
     if (
       snapshotAvailable &&
       (effectiveKind === 'image' || (effectiveKind === 'vector' && !vectorAsSource))
@@ -752,7 +737,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
       );
     }
 
-    // 2) CSV / TSV 表格视图
     if (snapshotAvailable && effectiveKind === 'table' && !tableAsSource) {
       return (
         <div className="flex flex-col h-full min-h-[420px]">
@@ -849,7 +833,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
       );
     }
 
-    // 2.5) HTML 隔离沙盒绘制视图（默认渲染态，一键切源码）
     if (snapshotAvailable && isHtmlFormat && !htmlAsSource) {
       return (
         <div className="flex flex-col h-full min-h-[460px]" data-quick-preview-html="">
@@ -941,7 +924,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
       );
     }
 
-    // 3) 代码 / JSON / YAML / Markdown / Text / 源码切换态
     if (
       snapshotAvailable &&
       (effectiveKind === 'code' ||
@@ -1069,7 +1051,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
       );
     }
 
-    // 4) PDF 轻预览（页级文本摘要条——扫描件诚实标注，绝不假阳性）
     if (snapshotAvailable && effectiveKind === 'pdf') {
       const pdfSummary = preview?.pdf_summary;
       const scannedWhole =
@@ -1106,7 +1087,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
       );
     }
 
-    // 4.5) Office（.docx / .xlsx）L1 结构化摘要预览
     if (effectiveKind === 'office') {
       const summary = preview?.office_summary;
       const isIndexed = summary?.status === 'indexed';
@@ -1258,13 +1238,11 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
       );
     }
 
-    // 5) 大二进制 / 音视频 / 归档 / Office / L0 元数据体检卡
     const history = preview?.history ?? [];
     const maxHistSize = Math.max(1, ...history.map((h) => Math.max(0, h.size_bytes)));
 
     return (
       <div className="p-6 space-y-5 overflow-auto max-h-[68vh] min-h-[400px] bg-[color:var(--depth-0-base)]/40">
-        {/* 状态摘要栏 */}
         <div className="rounded-[var(--r-card)] border border-[color:var(--glass-hairline)] bg-card/85 p-4 flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-1.5 min-w-0">
             <div className="flex items-center gap-2">
@@ -1294,7 +1272,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
           )}
         </div>
 
-        {/* 核心身份指标卡 */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="rounded-[var(--r-ctl)] border border-[color:var(--glass-hairline)] bg-card/80 p-3 space-y-1">
             <div className="text-[11px] text-[color:var(--ink-soft)]">当前体积</div>
@@ -1339,7 +1316,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
           </div>
         </div>
 
-        {/* SHA-256 指纹与魔数头 */}
         <div className="rounded-[var(--r-card)] border border-[color:var(--glass-hairline)] bg-card/85 p-4 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 text-[12px] font-semibold text-[color:var(--ink-strong)]">
@@ -1371,7 +1347,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
           )}
         </div>
 
-        {/* 历史体积演进与版本记录 */}
         <div className="rounded-[var(--r-card)] border border-[color:var(--glass-hairline)] bg-card/85 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-[12px] font-semibold text-[color:var(--ink-strong)]">
@@ -1456,13 +1431,11 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
       }}
       className="glx-backdrop-in fixed inset-0 z-[85] flex items-center justify-center bg-[color:var(--ink-anchor)]/40 dark:bg-black/62 backdrop-blur-sm p-4 sm:p-6"
     >
-      {/* glass-pop 琉璃浮层统一材质 + coss Dialog 嵌套景深栈（--nested-dialogs） */}
       <div
         data-dialog-nested-stack=""
         style={{ '--nested-dialogs': 0 } as React.CSSProperties}
         className="glass-pop glx-popover-in w-full max-w-5xl max-h-[88vh] flex flex-col rounded-[var(--r-card)] overflow-hidden shadow-2xl border border-[color:var(--glass-hairline)]"
       >
-        {/* 顶栏 */}
         <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[color:var(--glass-hairline)] bg-card/80 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <span
@@ -1526,8 +1499,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
           </div>
         </header>
 
-        {/* 主体内容区：navSeq 仅在 ←/→ 队列导航沿递增 → key 重挂触发 .glx-fade-in
-            （--dur-1 纯 opacity）轻量交叉淡入；首帧（navSeq=0）零动画保住缓存命中即时呈现 */}
         <div
           key={`qp-nav-${navSeq}`}
           data-quick-preview-body=""
@@ -1540,7 +1511,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
           {renderBody()}
         </div>
 
-        {/* 底栏动作 */}
         <footer className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 border-t border-[color:var(--glass-hairline)] bg-card/80 shrink-0 text-[12px]">
           <div className="flex items-center gap-3 text-[11px] text-[color:var(--ink-soft)] font-mono">
             <span className="inline-flex items-center gap-1">
@@ -1556,8 +1526,6 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
             </span>
           </div>
 
-          {/* 底栏紧凑队列进度胶囊：「3 / 18」等宽进度 + 前后文档预览提示
-              （静态文本 + tabular-nums，零布局动画，不拖慢首帧） */}
           {queueProgress && (
             <div
               data-quick-preview-queue-pill=""
@@ -1640,10 +1608,6 @@ function useMemoTextSlice(firstSlice: string | undefined, extraSlices: string[])
   }, [firstSlice, extraSlices]);
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-// 底栏紧凑队列进度胶囊（纯函数出口，零 DOM 依赖，测试直接 import）
-// ── 胶囊 = 「3 / 18」等宽进度 + 前后文档预览提示；单份队列/非法索引诚实不出胶囊。
-// ══════════════════════════════════════════════════════════════════════════
 
 /** 「3 / 18」式进度文案；索引非法或队列为空返回空串（调用方据此不渲染胶囊）。 */
 export function formatQuickQueueProgressLabel(index: number, total: number): string {
@@ -1681,16 +1645,12 @@ export function resolveQuickQueueNeighborTitles(
 }
 
 export interface QuickQueueProgressInfo {
-  /** 1-based 当前位置（队列第 3 份 → 3） */
   position: number;
   total: number;
-  /** 「3 / 18」等宽进度文案（tabular-nums 渲染） */
   progressLabel: string;
   prevTitle: string | null;
   nextTitle: string | null;
-  /** 前侧预览提示：有上一份→「← 上一份：{title}」；已到首份→「已是第一份」 */
   prevHint: string;
-  /** 后侧预览提示：有下一份→「下一份：{title} →」；已到末份→「已是最后一份」 */
   nextHint: string;
 }
 
@@ -1721,5 +1681,4 @@ export function buildQuickQueueProgress(
   };
 }
 
-// 供测试与工具条复用图标引用检查
 export { ChevronLeft, ChevronRight };

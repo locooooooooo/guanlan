@@ -107,8 +107,6 @@ test('按日聚合：日期倒序、同一天内多个事项、日期待考独�
 
 test('同桶取样优先级：决策/内容修改事件不被 seq 更晚的 appeared 挤出样本窗口', () => {
   const { store, workspaceId } = freshStore();
-  // 同一桶（2026-11-04）：先插入 1 条 modified（seq 最小），再插入 6 条 appeared（seq 更大）；
-  // samplesPerDay=4 < 总数 7 —— 纯 seq DESC 取样会全是 appeared，modified 被挤出窗口
   seedEvent(store, workspaceId, 1, { occurred: '2026-11-04', kind: 'modified' });
   for (let i = 2; i <= 7; i++) {
     seedEvent(store, workspaceId, i, { occurred: '2026-11-04', kind: 'appeared', revId: `rev_p_${i}` });
@@ -143,7 +141,6 @@ test('文件监听：写入防抖后触发一次核验并发出变更通知', as
 
   const started = watcher.start();
   if (!started) {
-    // 平台不支持递归监听时，跳过而不误报通过
     watcher.stop();
     return;
   }

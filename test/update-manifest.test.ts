@@ -1,10 +1,3 @@
-/**
- * 更新清单 latest.json 的形状与校验，外加构建脚本的演练开关。
- *
- * 清单格式来自 Tauri v2 的静态清单：version / platforms 必填，notes / pub_date 可选；
- * windows 平台的 signature 是 .sig 文件原文，url 指向安装包。这里的校验比插件更严：
- * http 只允许回环地址，避免把明文下载地址写进真实发布清单。
- */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';

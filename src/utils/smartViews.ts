@@ -32,7 +32,6 @@ export type SmartViewId =
 export interface SmartViewDef {
   id: SmartViewId;
   label: string;
-  /** 行 title（悬浮说明口径与数据源，诚实缺省）。 */
   title: string;
 }
 
@@ -77,11 +76,8 @@ export function isSmartViewScope(value: string): value is SmartViewId {
 export interface SmartViewMembershipInput {
   files: readonly FileRecord[];
   readingStates: Readonly<Record<string, ReadingState>>;
-  /** /api/v1/state-overview 的 artifact 行索引（file_id → 行）；null/空＝投影未就绪。 */
   artifactsByFileId: ReadonlyMap<string, ArtifactStateView> | null;
-  /** 待审草案的 file_id 集合；null＝草案数据未就绪。 */
   agentDraftFileIds: ReadonlySet<string> | null;
-  /** 活跃窗口判定基准时刻（单测可注入固定值保证确定性）。 */
   nowMs: number;
 }
 
@@ -89,7 +85,6 @@ export type SmartViewFiles = Readonly<Record<SmartViewId, FileRecord[]>>;
 
 const emptyFiles = (): FileRecord[] => [];
 
-/** 解析 ISO 时间为毫秒；非法/缺失返回 null（调用方诚实跳过，不伪造）。 */
 function parseTimeMs(value: string | null | undefined): number | null {
   if (!value) return null;
   const parsed = Date.parse(value);
@@ -112,7 +107,6 @@ export function computeSmartViewFiles(input: SmartViewMembershipInput): SmartVie
   const windowStart = nowMs - RECENT_ACTIVE_WINDOW_MS;
   for (const file of input.files) {
     const st = input.readingStates[file.file_id];
-    // 读后有更新：有阅读基线且当前版更新（never_read / up_to_date 均不算）
     if (st && hasUnreadChanges(file, st).reason === 'updated_since_last_read') {
       result.updated_after_read.push(file);
     }
@@ -128,7 +122,6 @@ export function computeSmartViewFiles(input: SmartViewMembershipInput): SmartVie
     }
     if (input.agentDraftFileIds?.has(file.file_id)) result.agent_drafts.push(file);
   }
-  // 稳定排序：标题 zh 字典序（视图成员顺序确定，列表渲染不抖动）
   for (const key of SMART_VIEW_IDS) {
     result[key].sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans-CN'));
   }

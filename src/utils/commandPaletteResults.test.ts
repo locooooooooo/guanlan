@@ -14,7 +14,6 @@ import {
 } from './commandPaletteResults';
 import type { ReadingState } from '../types/guanlan';
 
-// ---------- 夹具 ----------
 
 function file(id: string, path: string, overrides: Partial<PaletteFileLite> = {}): PaletteFileLite {
   const base = path.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? path;
@@ -76,31 +75,25 @@ const FILES: PaletteFileLite[] = [
 
 const NOW = new Date('2026-11-20T12:00:00');
 
-// ---------- 用例 ----------
 
 test('localFileHits：关键词子串 + type/status/@日期语法过滤', () => {
   const states = Object.fromEntries([reading('f1', '2026-11-20T10:00:00Z')]);
-  // 关键词命中 f1（登录）与 f4（网关设计不含"登录"→不中）
   const hits = localFileHits(FILES, states, parsePaletteQuery('登录', NOW), [], 30);
   assert.deepEqual(hits.map((h) => h.fileId), ['f1']);
 
-  // type 过滤
   const pdfOnly = localFileHits(FILES, states, parsePaletteQuery('type:pdf', NOW), [], 30);
   assert.deepEqual(pdfOnly.map((h) => h.fileId), ['f2']);
 
-  // status:待拍板（artifacts pending）
   const artifacts = [artifact('f1', 1, 0), artifact('f2', 0, 2)];
   const pending = localFileHits(FILES, states, parsePaletteQuery('status:待拍板', NOW), artifacts, 30);
   assert.deepEqual(pending.map((h) => h.fileId).sort(), ['f1', 'f2']);
   assert.equal(pending[0].pendingDecisions, 1);
 
-  // @昨天：f1 last_observed_at=11-20 → 不在 11-19
   const yesterday = localFileHits(FILES, states, parsePaletteQuery('@昨天', NOW), [], 30);
   assert.deepEqual(yesterday, []);
   const today = localFileHits(FILES, states, parsePaletteQuery('@今天', NOW), [], 30);
-  assert.equal(today.length, 4); // 除 trashed f5 外全部 11-20
+  assert.equal(today.length, 4);
 
-  // trashed 永不出现
   const all = localFileHits(FILES, states, parsePaletteQuery('', NOW), [], 30);
   assert.ok(all.every((h) => h.fileId !== 'f5'));
 });
@@ -146,7 +139,6 @@ test('serverHitsToItems + mergeHits：服务端优先、同 file_id 去重', () 
     score: 40,
   };
   const merged = mergeHits(serverHitsToItems(srv, 30), [localHit, ...local], 30);
-  // f1 去重保留服务端条目（key 前缀 srv:）；同分按 file_id 字典序
   assert.equal(merged.length, 2);
   assert.equal(merged[0].key, 'srv:f1:rev_f1');
   assert.equal(merged[1].key, 'srv:f9:rev_f9');
@@ -162,7 +154,6 @@ test('recentViewedItems：updated_at 最新优先 Top N，未读不出', () => {
   assert.equal(recents.length, 2);
   assert.equal(recents[0].fileId, 'f2', '最近读的排最前');
   assert.equal(recents[0].kind, 'file');
-  // limit 生效
   const one = recentViewedItems(FILES, states, 1);
   assert.deepEqual(one.map((r) => r.fileId), ['f2']);
 });
@@ -196,7 +187,6 @@ test('assemblePaletteResults：空态=最近浏览+动作；查询态=语法过�
   ];
   const artifacts = [artifact('f1', 1, 0)];
 
-  // 空态
   const empty = assemblePaletteResults({
     query: parsePaletteQuery('', NOW),
     files: FILES,
@@ -211,7 +201,6 @@ test('assemblePaletteResults：空态=最近浏览+动作；查询态=语法过�
   assert.equal(empty[0].fileId, 'f1');
   assert.ok(empty.some((i) => i.kind === 'action'));
 
-  // 查询态：in: 事项名过滤 → 命中 init_1 下的 f1
   const inQuery = assemblePaletteResults({
     query: parsePaletteQuery('in:登录方案专项', NOW),
     files: FILES,
@@ -224,7 +213,6 @@ test('assemblePaletteResults：空态=最近浏览+动作；查询态=语法过�
   });
   assert.deepEqual(inQuery.map((i) => i.fileId), ['f1']);
 
-  // 查询态：in: 不匹配事项 → 空
   const none = assemblePaletteResults({
     query: parsePaletteQuery('in:不存在事项', NOW),
     files: FILES,

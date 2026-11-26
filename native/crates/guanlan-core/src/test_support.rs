@@ -10,8 +10,6 @@ use rusqlite::Connection;
 use crate::error::GuanlanError;
 use crate::storage::ReadonlyStore;
 
-/// 契约 §1.1 DDL 原文（contract-storage.md 38-170 行逐字摘录，
-/// 与 server/WorkspaceStore.ts:133-267 的 SCHEMA 一致，含 SQL 块注释）
 pub(crate) const CONTRACT_DDL: &str = r#"
 CREATE TABLE IF NOT EXISTS workspaces (
   workspace_id       TEXT PRIMARY KEY,
@@ -146,8 +144,6 @@ CREATE TABLE IF NOT EXISTS meta (
 
 static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-/// 临时夹具库：DDL 建表 + 可写连接（插数用）。路径形如
-/// `<temp>/guanlan-core-<tag>-<pid>-<seq>`，互不冲突。
 pub(crate) struct FixtureDb {
     pub dir: PathBuf,
     pub db_path: PathBuf,
@@ -171,7 +167,6 @@ impl FixtureDb {
         let conn = Connection::open(&db_path).expect("打开夹具库失败");
         conn.execute_batch(CONTRACT_DDL)
             .expect("按契约 DDL 建表失败");
-        // 派生检索索引两表（与生产 Writer::ensure_schema 同一 DDL 单一来源）
         conn.execute_batch(crate::index::search_index::SEARCH_DDL)
             .expect("按契约 DDL 建检索索引表失败");
         Self { dir, db_path, conn }
@@ -234,7 +229,6 @@ impl FixtureDb {
                     ws_id,
                     current_path,
                     format,
-                    // 与 reconcile 一致：title 从路径去扩展名；留空可测 titleOf 回退
                     crate::query::files::title_of(current_path),
                     role,
                     "2026-01-01T00:00:00.000Z",
@@ -301,7 +295,6 @@ impl FixtureDb {
                     file_id,
                     ws_id,
                     seq,
-                    // 契约 §2.4：prev_revision_id 取上一版，无上版为 NULL
                     if seq > 1 { Some(crate::domain::revision_id_of(file_id, seq - 1)) } else { None },
                     content_hash,
                     size_bytes,
@@ -333,7 +326,6 @@ impl FixtureDb {
         detail: &str,
         payload_json: &str,
     ) -> i64 {
-        // event_id 带 nanos 计数避免撞 UNIQUE（读取侧不关心 event_id 具体值）
         let event_id = format!(
             "evt_test_{kind}_{subject_id}_{}",
             NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
@@ -443,26 +435,21 @@ impl FixtureDb {
     }
 }
 
-/// 打开只读存储并按库内身份认领工作区行（与服务装配层同路径）
 pub(crate) fn open_store(fixture: &FixtureDb, root: &str) -> ReadonlyStore {
     let mut store = ReadonlyStore::open(&fixture.db_path).expect("只读打开夹具库失败");
     store.claim_workspace(root).expect("认领夹具工作区失败");
     store
 }
 
-/// 报错断言助手：校验错误包络码
 pub(crate) fn assert_code(result: Result<(), GuanlanError>, code: &str) {
     let err = result.expect_err("应当报错");
     assert_eq!(err.code(), code, "错误码不符：{err:?}");
 }
 
-/// 清理临时夹具目录（失败不掩盖测试本体结果）
 pub(crate) fn cleanup_dir(dir: &Path) {
     let _ = std::fs::remove_dir_all(dir);
 }
 
-/// 递归收集 JSON 里出现的禁用键（含出现路径，便于失败定位；契约 §1.1：
-/// bootstrap 不含正文/版本链/SVG 原文）
 pub(crate) fn collect_forbidden_keys(value: &serde_json::Value, keys: &[&str]) -> Vec<String> {
     let mut found = Vec::new();
     fn walk(v: &serde_json::Value, keys: &[&str], path: &str, out: &mut Vec<String>) {
@@ -488,7 +475,6 @@ pub(crate) fn collect_forbidden_keys(value: &serde_json::Value, keys: &[&str]) -
     found
 }
 
-/// 引用路径工具：测试断言里的 blobs 路径
 pub(crate) fn blob_rel(data_dir: &Path, hash: &str) -> PathBuf {
     data_dir.join("blobs").join(&hash[..2]).join(hash)
 }

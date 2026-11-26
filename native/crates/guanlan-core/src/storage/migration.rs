@@ -91,7 +91,6 @@ pub fn probe_schema_migration(conn: &Connection) -> Result<MigrationProbe, Guanl
 
     let mut needs_migration = from_version < CURRENT_SCHEMA_VERSION;
     if !needs_migration && existing_db {
-        // 即使 user_version 已是 2，若增量补列或新派生表缺失，仍视为需要增量迁移
         let missing_detail: i64 = conn
             .query_row(
                 "SELECT CASE WHEN EXISTS(SELECT 1 FROM pragma_table_info('statements') WHERE name = 'detail_json') THEN 0 ELSE 1 END",
@@ -147,7 +146,6 @@ pub fn create_consistent_sqlite_backup(
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
-    // 同毫秒多次触发时用递增后缀保证文件名唯一不覆盖
     let mut seq = 0u32;
     let final_name = loop {
         let candidate = if seq == 0 {
@@ -185,7 +183,6 @@ pub fn create_consistent_sqlite_backup(
                     GuanlanError::Internal(format!("执行 SQLite Backup API 一致性备份失败：{e}"))
                 })?;
         }
-        // 对备份库执行一致性快速核验，确保备份文件绝非残缺半成品
         let check: String = dst_conn
             .query_row("PRAGMA quick_check", [], |row| row.get(0))
             .map_err(|e| {
@@ -271,7 +268,6 @@ fn list_backups_in_dir(backups_dir: &Path) -> Result<Vec<MigrationBackupEntry>, 
             modified_epoch_ms: modified_ms,
         });
     }
-    // 按文件名倒序（含毫秒时间戳）与修改时间倒序，最新在前
     entries.sort_by(|a, b| {
         b.modified_epoch_ms
             .cmp(&a.modified_epoch_ms)
@@ -317,7 +313,6 @@ where
         });
     }
 
-    // 对既有数据升级前强制自动生成 SQLite Backup API 一致性备份
     let backup_created = if probe.existing_db && probe.needs_migration {
         let entry = create_consistent_sqlite_backup(
             conn,
@@ -331,7 +326,6 @@ where
         None
     };
 
-    // SQLite 原生支持事务性 DDL：BEGIN IMMEDIATE 保证失败时 100% 原子回滚
     conn.execute_batch("BEGIN IMMEDIATE;")
         .map_err(|e| GuanlanError::Internal(format!("开启迁移写事务失败：{e}")))?;
 
@@ -372,7 +366,6 @@ pub fn restore_backup_to_db(backup_path: &Path, target_db_path: &Path) -> Result
             backup_path.display()
         )));
     }
-    // 1. 先只读核验备份文件自身 100% 完整
     {
         let check_conn = Connection::open_with_flags(backup_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
             .map_err(|e| GuanlanError::Internal(format!("打开备份文件失败：{e}")))?;
@@ -385,7 +378,6 @@ pub fn restore_backup_to_db(backup_path: &Path, target_db_path: &Path) -> Result
             )));
         }
     }
-    // 2. 清理旧 WAL 伴生文件后拷贝替换
     let wal = PathBuf::from(format!("{}-wal", target_db_path.display()));
     let shm = PathBuf::from(format!("{}-shm", target_db_path.display()));
     let _ = fs::remove_file(&wal);
@@ -489,7 +481,6 @@ mod tests {
         .unwrap();
     }
 
-    /// 停机红线①：旧版遇高版本 schema 门禁拒绝盲写（零字节改动，清晰报 SCHEMA_TOO_NEW）
     #[test]
     fn f03_high_schema_version_gate_rejects_blind_write_and_readonly_open() {
         let tmp = TempMigDir::new("high-ver");
@@ -515,7 +506,6 @@ mod tests {
             "只读门禁同样应明确报 SCHEMA_TOO_NEW，实得：{ro_err}"
         );
 
-        // 确认原库 3 条历史事件与版本号 99 100% 完好无损
         let verify = Connection::open(&db_path).unwrap();
         let ver: i64 = verify
             .query_row("PRAGMA user_version", [], |r| r.get(0))
@@ -527,7 +517,6 @@ mod tests {
         assert_eq!(ev_cnt, 3);
     }
 
-    /// 停机红线②：迁移前自动一致性备份（SQLite Backup API）+ 最多保留最近 5 份 + 既有历史事件 100% 保留
     #[test]
     fn f03_auto_backup_before_upgrade_retains_latest_five_and_preserves_history() {
         let tmp = TempMigDir::new("backup-5");
@@ -536,7 +525,6 @@ mod tests {
         let db_path = data_dir.join("index.db");
         seed_legacy_v1_db(&db_path);
 
-        // 触发真实 Writer::open_at 从 v1 → v2 升级
         let writer = Writer::open_at(&data_dir, ws_dir.to_str().unwrap()).expect("平滑升级成功");
         let ver: i64 = writer
             .conn()
@@ -549,7 +537,6 @@ mod tests {
         assert_eq!(ver, CURRENT_SCHEMA_VERSION);
         assert_eq!(ev_cnt, 3, "原地覆盖升级绝不得丢失任何既有历史事件");
 
-        // 升级前应自动产出 1 份完整可打开的 SQLite 备份且保留原 v1 状态
         let backups = list_migration_backups(&data_dir).unwrap();
         assert_eq!(backups.len(), 1, "首次升级应自动生成 1 份备份");
         {
@@ -566,7 +553,6 @@ mod tests {
             assert_eq!(bk_ev, 3);
         }
 
-        // 连续再生成 6 份备份，总数必须严格收束为最近 5 份（MAX_MIGRATION_BACKUPS）
         for i in 0..6 {
             std::thread::sleep(Duration::from_millis(5));
             create_consistent_sqlite_backup(
@@ -586,7 +572,6 @@ mod tests {
         );
     }
 
-    /// 迁移失败回滚验证：人为注入迁移失败时，原库 100% 完好可无损回退，且自动备份文件可独立还原
     #[test]
     fn f03_injected_migration_failure_rolls_back_losslessly_and_backup_restores_cleanly() {
         let tmp = TempMigDir::new("rollback");
@@ -597,7 +582,6 @@ mod tests {
         {
             let conn = Connection::open(&db_path).unwrap();
             let err = run_safe_schema_migration(&conn, &data_dir, |c| {
-                // 先执行一条合法 DDL，再人为注入失败！
                 c.execute_batch(
                     "CREATE TABLE injected_partial_table (id INTEGER PRIMARY KEY);
                      ALTER TABLE statements ADD COLUMN detail_json TEXT NOT NULL DEFAULT '{}';",
@@ -610,7 +594,6 @@ mod tests {
             .expect_err("注入失败必须返回错误");
             assert!(err.to_string().contains("INJECTED_MIGRATION_FAILURE"));
 
-            // 1. 事务回滚校验：原库仍为 v1，半截表不存在，3 条历史事件 100% 完好
             let ver: i64 = conn
                 .query_row("PRAGMA user_version", [], |r| r.get(0))
                 .unwrap();
@@ -629,7 +612,6 @@ mod tests {
             assert_eq!(ev_cnt, 3, "失败后 3 条既有历史事件必须 100% 完好");
         }
 
-        // 2. 即使人为破坏磁盘上的 index.db，也可通过升级前自动生成的备份 100% 无损恢复！
         let backups = list_migration_backups(&data_dir).unwrap();
         assert_eq!(backups.len(), 1);
         fs::write(&db_path, b"CORRUPTED_LIVE_DB").unwrap();

@@ -1,33 +1,13 @@
-/**
- * Esc「按来源栈精确返回」——导航来源栈（纯函数模块）。
- *
- * 无论从哪层视图进入深视图，按 `Esc` 均可精确返回真实来源视图。
- *
- * 覆盖全应用所有深视图跃迁入口：
- *  - 星图 / 时间轴 / 日历 / 首页 / 命令面板 / 文件时间线打开阅读器；
- *  - 左栏 / 右缘悬浮岛「继续阅读」（openDocResumeReading）；
- *  - 决策雷达 / 首页 / 星图 / 阅读器点击决策引用跳证据原文（handleJumpToSourceEvidence）；
- *  - 阅读器正文内部链接跳转关联文档（A → B → C 支持多级嵌套原路回退）；
- *  - 跨视图按 D 进入多模态版本时光机（enteredTimeMachine 标记：退出时光机一步回原视图）；
- *  - 星图某日跳转时间轴列表（handleJumpToDayInTimeline）。
- *
- * 栈深上限 32（超出丢最旧，防止决策连点无限增长），连续压入同一视图与同一文件时
- * 自动去重，工作区切换或手动顶栏主导航切换时整栈清空。
- */
 
 /** 来源视图快照（进入深视图前的完整可恢复上下文）。 */
 export interface NavSourceEntry {
   activeTab: 'home' | 'panorama' | 'library';
   panoramaMode: 'canvas' | 'list' | 'calendar';
   libraryMode: 'read' | 'overview';
-  /** 来源视图聚焦的文件（'' = 无文件语境，如全景画布/首页）。 */
   fileId: string;
   revisionId: string;
-  /** 可选章节定位（正文内部链接跳回原段落时恢复）。 */
   sectionId?: string;
-  /** true = 从非星图视图经 D 键进入多模态时光机；退出时光机后自动弹栈回原视图。 */
   enteredTimeMachine?: boolean;
-  /** 压栈入口的人类可读标签（诚实描述从哪来，绝不猜）。 */
   label: string;
   atMs: number;
 }

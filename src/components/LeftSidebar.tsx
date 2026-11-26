@@ -57,9 +57,7 @@ import type { MountedTreeCacheEntry } from '../hooks/useDirectoryShell';
 import type { ProjectTreeCacheEntry } from '../hooks/useMultiProjects';
 import { hasUnreadChanges, unreadStatusLabel, type UnreadReason } from '../utils/guanlanEngine';
 import { readingRecency } from '../utils/readingStateStore';
-// 继续阅读行尾相对时间走单一出口（ReaderView/RightInspector 同源的「多久以前」叙述位）
 import { formatRelativeObservedAt } from '../utils/timeFormat';
-// 五类智能视图成员/计数（单一数据源派生，徽标与 App 过滤 100% 守恒）
 import {
   computeSmartViewCounts,
   computeSmartViewFiles,
@@ -69,9 +67,7 @@ import {
   type SmartViewDef,
   type SmartViewId,
 } from '../utils/smartViews';
-// 树内拖拽 UI 状态机（450ms 自动展开/防成环/24px 边缘滚屏；支持文件与文件夹拖拽）
 import { useSidebarTreeDrag } from '../hooks/useSidebarTreeDrag';
-// Quiet.md 风格纯函数目录树工具（合并空目录/级联路径/子树文件收集）
 import {
   buildMergedFolderTree,
   collectSubtreeFileIds,
@@ -89,14 +85,11 @@ import {
 } from '../utils/sidebarTree';
 import { extractCoreSummary } from '../utils/taskPackages';
 import { MountedWorkspacesSection } from './sidebar/MountedWorkspacesSection';
-// 侧栏共享「高密目录」阈值与 >150 视窗切片容器（单向依赖，无循环引用）
 import {
   ProjectTreeBranch,
   SIDEBAR_DENSE_FOLDER_THRESHOLD,
   VirtualFileSlice,
 } from './sidebar/ProjectTreeBranch';
-// 筛选控件取 primitives：筛选胶囊=Chip·active、格式胶囊=Chip·格式变体
-// （激活统一薰衣草语法＋6px 格式色点）、顶栏 pill/幽灵钮=Button
 import { Button, Chip } from './ui/primitives';
 import {
   AlertDialog,
@@ -124,8 +117,6 @@ import {
 } from './ui';
 import { formatUiMeta } from '../utils/formatMeta';
 
-// quickScope 涵盖「三段胶囊 + 五类智能视图」九态联合
-// （点「全部」同时清空目录残留，见下方三段胶囊 onClick）
 export type QuickScope =
   | 'all'
   | 'unread'
@@ -143,82 +134,58 @@ export interface SidebarFilters {
 /** 筛选组合快照（状态栈：一键清空后可回退到清空前的完整组合）。 */
 export type SidebarFiltersSnapshot = Readonly<SidebarFilters>;
 
-// 顶栏已承担全局主导航，左栏聚焦阅读状态与目录树；
-// onResetFilters 保留在接口上以兼容 App 既有调用，重置入口位于 FilterDropdown 的 onReset
 interface LeftSidebarProps {
   files: FileRecord[];
-  /** 数据加载源状态：loading 时展示骨架而非空态文案，error 时展示重连提示 */
   dataSource?: 'loading' | 'real' | 'error';
   retryingConnection?: boolean;
   onRetryConnection?: () => void;
   readingStates: Record<string, ReadingState>;
-  /** 「全部文件」计数来自服务（/api/v1/files total_matched / bootstrap files_total）；
-   *  分页未取全时不再用 files.length 冒充全量；未传时回退本地计数 */
   totalCount?: number;
   activeFileId: string;
   filters: SidebarFilters;
   onUpdateFilters: (next: Partial<SidebarFilters>) => void;
   onResetFilters: () => void;
   onOpenFileToRead: (fileId: string, sectionId?: string) => void;
-  /** 存量工作区/目录一键确立已读基线（AlertDialog 二次确认 + 8 秒 Toast 撤销） */
   onMarkReadingBaseline?: (
     scope: 'workspace' | 'folder',
     folderPrefix?: string
   ) => Promise<boolean> | void;
-  /** 单文档一键标为已读 / 标为未读（悬停快捷操作） */
   onMarkFileRead?: (fileId: string, revisionId: string) => void;
   onMarkFileUnread?: (fileId: string) => void;
-  /** 目录级一键标为未读 */
   onMarkFolderUnread?: (folderPath: string) => Promise<boolean> | boolean | void;
-  /** 工作区私有目录静默清单与恢复回调（磁盘零写入） */
   mutedFolders?: readonly string[];
   onToggleMuteFolder?: (folderPath: string) => void;
   onUnmuteFolder?: (folderPath: string) => void;
   onClearMutedFolders?: () => void;
-  /** 在左栏目录树选中文件或按 Space 原位轻预览 */
   onSelectFile?: (fileId: string, revisionId?: string) => void;
   onQuickPreview?: (fileId: string, revisionId?: string) => void;
-  /** 文件/目录右键菜单与拖放高亮 */
   onOpenFileContextMenu?: (e: React.MouseEvent, target: FileContextMenuTarget) => void;
   onImportIntoFolder?: (folderRelativePath: string) => void;
   desktopSystemSupported?: boolean;
   dropHoveredFolder?: string | null;
-  /** 智能视图：/api/v1/state-overview 的 artifact 行索引（file_id → 行）；
-   *  null/空＝服务端投影未就绪（待拍板/近7天/游离三视图诚实计数 0，不伪造）。 */
   artifactsByFileId?: ReadonlyMap<string, ArtifactStateView> | null;
-  /** 智能视图：待审草案（mcp/agent）的 file_id 集合；null＝未就绪。 */
   agentDraftFileIds?: ReadonlySet<string> | null;
-  /** 树内拖拽：落地直连 /move（宿主接线；有受影响引用时宿主转确认弹窗）。
-   *  未传＝拖拽整组关闭（能力诚实缺省）。 */
   onMoveFile?: (fileId: string, targetDir: string) => void;
-  /** Quiet.md 全局常驻目录外壳：可控侧栏宽度（px；默认 264） */
   width?: number;
-  /** 真实工作区目录清单（含空目录，来自 GET /api/v1/folders） */
   realFolders?: readonly string[];
-  /** 置顶文件 file_id 列表与切换回调 */
   pinnedFileIds?: readonly string[];
   onTogglePinFile?: (fileId: string) => void;
-  /** 文件夹一等操控：新建文件夹 / 新建文档 / 重命名文件夹 / 拖拽移动文件夹 */
   onCreateFolder?: (parentDir: string, name: string) => Promise<string | null> | void;
   onCreateDocument?: (targetDir: string, name: string) => Promise<string | null> | void;
   onRenameFolder?: (folderPath: string, newName: string) => Promise<boolean> | void;
   onMoveFolder?: (folderPath: string, targetParentDir: string) => Promise<boolean> | void;
-  /** 批量整理：把勾选的文件交由宿主打开批量移动/批量回收站确认弹窗 */
   onBatchMoveFiles?: (fileIds: string[]) => void;
   onBatchTrashFiles?: (fileIds: string[]) => void;
-  /** 挂载目录树直接进左侧目录栏 */
   mounts?: MountedWorkspaceDto[];
   mountedTrees?: Record<string, MountedTreeCacheEntry>;
   onExpandMount?: (mountId: string) => void;
   onOpenMountedFile?: (fileId: string, revisionId: string) => void;
   onOpenMountManager?: () => void;
-  /** 外部（如右键菜单/面包屑栏）触发侧栏内联新建或内联重命名 */
   inlineActionSignal?: {
     seq: number;
     kind: 'create-folder' | 'create-doc' | 'rename-folder';
     folderPath: string;
   } | null;
-  /** Quiet.md 多项目并列树（全项目一等操控 + 跨项目置顶） */
   projects?: ProjectEntryDto[];
   activeProjectId?: string;
   expandedProjects?: ReadonlySet<string>;
@@ -245,26 +212,18 @@ interface LeftSidebarProps {
   ) => Promise<string | null> | void;
 }
 
-// 筛选行公共样式（文件夹 / 主题共用）：激活态使用 iris 底色 + 描边 + --accent-iris-ink 字色。
-// 边框宽度在 BASE/IDLE/ACTIVE 三段各留一份，确保选中时不发生布局位移；
-// 边色在 IDLE/ACTIVE 互斥出现（Tailwind utilities 层内 .border-transparent 排在
-// 任意值 border-[color:…] 之后，同元素共存会反向覆盖激活边色，故不共置）
 const FILTER_ROW_BASE =
   'w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-[10px] border text-[length:var(--text-ui)] leading-[var(--lh-ui)] motion-safe:transition-all';
 const FILTER_ROW_ACTIVE =
   'bg-[color:var(--chip-active-bg)] border-[color:var(--chip-active-border)] text-[color:var(--accent-iris-ink)] font-medium';
 const FILTER_ROW_IDLE =
   'border-transparent text-[color:var(--ink-soft)] hover:bg-card/75 hover:text-[color:var(--ink-strong)]';
-// 计数徽标：mono + tabular-nums，字色取 --ink-soft（不用 --ink-faint）以保证可读对比度
 const ROW_COUNT =
   'font-mono text-[length:var(--text-micro)] leading-[var(--lh-micro)] tabular-nums text-[color:var(--ink-soft)] shrink-0';
-// 目录树选中态（明暗双态浮卡高亮，无生硬黑框）
 const TREE_ROW_ACTIVE =
   'bg-card/95 border-transparent text-[color:var(--ink-strong)] font-semibold shadow-[0_2px_8px_-2px_rgba(38,36,61,0.10),0_0_0_1px_var(--glass-hairline)]';
-// 系统/产出目录归入底部折叠组（用户反馈：工程目录与业务文档混排显得杂乱）
 const isSystemDirName = (name: string) => /^_/.test(name) || /^output/i.test(name);
 
-// 五类智能视图图标（语义一一对应；统一 --ink-faint 灰系，激活态由行底色承担）
 const SMART_VIEW_ICONS: Record<SmartViewId, React.ComponentType<{ className?: string }>> = {
   updated_after_read: BookOpen,
   awaiting_decision: ListChecks,
@@ -273,18 +232,6 @@ const SMART_VIEW_ICONS: Record<SmartViewId, React.ComponentType<{ className?: st
   unassigned: Inbox,
 };
 
-// ══════════════════════════════════════════════════════════════════════════
-// 左侧目录树视觉减噪（零值智能视图收纳 / 未读降噪 / 活跃微标）纯函数
-// ── 语义红线 ──────────────────────────────────────────────────────────────
-// 1. 未读三态唯一出口＝`hasUnreadChanges`（never_read / up_to_date /
-//    updated_since_last_read），零造数零漂移；本模块与左栏顶部未读计数、
-//    「读后有更新」智能视图同源。
-// 2. 近 7 日活跃唯一口径＝`RECENT_ACTIVE_WINDOW_MS` + 服务端
-//    `last_activity_at`（与「近 7 天活跃」智能视图同一窗口与同一数据源）；
-//    禁改用 updated_at / observed_at（采集时间），否则微标与智能视图互相矛盾。
-// 3. 收折是**呈现层**决策：绝不改动 computeSmartViewFiles /
-//    computeSmartViewCounts 的派生与守恒（计数 = 成员长度，误差恒 0）。
-// ══════════════════════════════════════════════════════════════════════════
 
 /** 智能视图胶囊单行占位高度（px）——11px 字 + py-1 上下各 4px + 2px 描边 ≈ 21px，行间隙 4px。 */
 export const SMART_VIEW_ROW_H = 25;
@@ -294,11 +241,8 @@ export const SMART_VIEW_COLLAPSED_CAPSULE_H = 25;
 export const SMART_VIEW_PILL_W = 100;
 
 export interface SmartViewPartition {
-  /** 必显视图：计数非 0 者 + 当前选中者（哪怕计数为 0，也绝不「失踪」）。 */
   visible: SmartViewDef[];
-  /** 被收折的零值视图（末尾轻胶囊，点击展开）。 */
   collapsedZero: SmartViewDef[];
-  /** 收折胶囊文案，如「其余 3 项 (0)」。 */
   collapsedLabel: string;
 }
 
@@ -350,7 +294,6 @@ export function estimateSmartViewCollapseGain(
   return Math.max(0, rowsBefore - rowsAfter) * SMART_VIEW_ROW_H;
 }
 
-/** 解析 ISO 时间为毫秒；非法/缺失返回 null（诚实不算活跃，绝不伪造）。 */
 function parseActivityMs(value: string | null | undefined): number | null {
   if (!value) return null;
   const parsed = Date.parse(value);
@@ -373,28 +316,19 @@ export function isRecentActiveArtifact(
 }
 
 export interface FolderActivitySummary {
-  /** 直接子文件数（高密降噪阈值的判定口径）。 */
   directCount: number;
-  /** 未读份数（目录树汇总时为含子目录的递归子树总未读数，与 node.total 口径一致；单一出口）。 */
   unreadCount: number;
-  /** 近 7 日活跃份数（目录树汇总时为含子目录的递归子树总活跃数；服务端 last_activity_at 口径）。 */
   active7dCount: number;
-  /** 仅直接归属本目录（不含子目录）的未读份数。 */
   directUnreadCount: number;
-  /** 仅直接归属本目录（不含子目录）的近 7 日活跃份数。 */
   directActive7dCount: number;
-  /** 标记 unreadCount/active7dCount 已含子树聚合，避免 sortFolderTreeNodes 二次累加。 */
   subtreeAggregated?: boolean;
-  /** 是否高密目录（直接子文件 >= 阈值 → 启用视觉降噪）。 */
   isDense: boolean;
 }
 
 export interface FolderActivityInput {
   directFiles: readonly FileRecord[];
   readingStates: Readonly<Record<string, ReadingState>>;
-  /** /api/v1/state-overview 的 artifact 行索引（file_id → 行）；null＝投影未就绪。 */
   artifactsByFileId: ReadonlyMap<string, ArtifactStateView> | null;
-  /** 活跃窗口判定基准时刻（与智能视图同一 nowMs，保证两处口径同源）。 */
   nowMs: number;
 }
 
@@ -466,20 +400,15 @@ export function collectUnreadFileIds(
   return out;
 }
 
-/** 目录行拖拽接线包（拖拽中每个目录行的一组行为/视觉 props）。 */
 interface FolderDragRowProps {
   onDragOver?: (event: React.DragEvent, folderPath: string) => void;
   onDragLeave?: (event: React.DragEvent, folderPath: string) => void;
   onDrop?: (event: React.DragEvent, folderPath: string) => void;
-  /** 合法落点高亮（防成环拦截的行恒为 false）。 */
   dropTarget: boolean;
-  /** 落地微反馈窗口。 */
   dropFlash: boolean;
-  /** 防成环拦截提示（title 前缀）。 */
   dropBlocked: boolean;
 }
 
-/** 侧栏内联新建行（Quiet.md 风格：就在目标目录下直接起一行输入框，Enter 确认 / Esc 取消）。 */
 const InlineCreateRow: React.FC<{
   kind: 'folder' | 'doc';
   depth: number;
@@ -546,7 +475,6 @@ const InlineCreateRow: React.FC<{
   );
 };
 
-/** 静默 14px 勾选框（Quiet.md 批量模式）。 */
 const BatchCheckbox: React.FC<{ state: 'off' | 'partial' | 'on' }> = ({ state }) => (
   <span
     aria-hidden="true"
@@ -562,7 +490,6 @@ const BatchCheckbox: React.FC<{ state: 'off' | 'partial' | 'on' }> = ({ state })
   </span>
 );
 
-/** 快筛命中高亮片段渲染件（无查询时原样返回字符串，零多余节点）。 */
 function HighlightedLabel({ text, query }: { text: string; query?: string }) {
   if (!query || !query.trim()) return <>{text}</>;
   const segments = splitQuickFilterHighlight(text, query);
@@ -597,29 +524,19 @@ const SidebarFileLeaf: React.FC<{
   onOpenFileToRead: (fileId: string, sectionId?: string) => void;
   onQuickPreview?: (fileId: string, revisionId?: string) => void;
   onOpenContextMenu?: (e: React.MouseEvent, target: FileContextMenuTarget) => void;
-  /** 树内拖拽：文件行可拖（dragstart/dragend）；未启用时为 null（draggable 关闭）。 */
   fileDragHandlers?: {
     onDragStart: (event: React.DragEvent) => void;
     onDragEnd: () => void;
   } | null;
-  /** 未读态（`hasUnreadChanges` 单一出口）→ 行尾 4px 柔和温琥珀点。 */
   unread?: boolean;
-  /** 细粒度未读原因（区分从未读与读后有更新） */
   unreadReason?: UnreadReason;
-  /** 悬停 1-click 切换单文档已读/未读 */
   onMarkFileRead?: (fileId: string, revisionId: string) => void;
   onMarkFileUnread?: (fileId: string) => void;
-  /** 高密目录（直接子文件 >= 15）→ 隐去格式色点（格式改由行尾标签承载）。 */
   dense?: boolean;
-  /** 展开交错微过渡的行序（稀疏目录逐行错峰；高密目录整目录瞬时落位）。 */
   rowIdx?: number;
-  /** 同级兄弟共享前缀长度（用于智能中段省略，保留后缀差异词）。 */
   sharedPrefixLen?: number;
-  /** 快筛高亮关键词。 */
   quickFilter?: string;
-  /** 共享 250ms 延迟 Base UI PreviewCard 句柄（全树单一 Portal，O(1) 内存开销）。 */
   previewHandle?: ReturnType<typeof PreviewCardCreateHandle<FileRecord>>;
-  /** 同级格式不一致时才露出行尾格式词；清一色目录不再刷一列相同的 PNG / MD。 */
   showFormat?: boolean;
 }> = ({
   file,
@@ -733,7 +650,6 @@ const SidebarFileLeaf: React.FC<{
       >
         <HighlightedLabel text={displayTitle} query={quickFilter} />
       </span>
-      {/* 仅对「读后有更新」显示温琥珀微点提示；常规未读已由深色字重区分，避免千行橙点刷屏 */}
       {!batchMode && unread && isUpdatedAfterRead && (
         <span
           aria-hidden="true"
@@ -829,35 +745,26 @@ export const FolderTreeRows: React.FC<{
   onOpenFileToRead: (fileId: string, sectionId?: string) => void;
   onQuickPreview?: (fileId: string, revisionId?: string) => void;
   onOpenContextMenu?: (e: React.MouseEvent, target: FileContextMenuTarget) => void;
-  /** 树内拖拽：目录行 drag 行为工厂（null＝拖拽未启用）。 */
   dragRowProps?: ((folderPath: string) => FolderDragRowProps) | null;
-  /** 文件夹行拖拽起始/结束回调（null＝未启用）。 */
   folderDragHandlers?: {
     onDragStart: (event: React.DragEvent, folderPath: string) => void;
     onDragEnd: () => void;
   } | null;
-  /** 树内拖拽：文件行 dragstart/dragend（null＝拖拽未启用）。 */
   fileDragHandlers?: {
     onDragStart: (event: React.DragEvent) => void;
     onDragEnd: () => void;
   } | null;
-  /** 目录行尾活跃摘要索引（folder path → 未读数 / 近 7 日活跃数）。 */
   folderActivity?: ReadonlyMap<string, FolderActivitySummary>;
-  /** 未读文件 id 集合（单一出口）→ 文件行 4px 温琥珀未读点。 */
   unreadFileIds?: ReadonlySet<string>;
-  /** 细粒度未读原因映射（用于区分从未读与读后有更新）。 */
   unreadReasonByFileId?: ReadonlyMap<string, UnreadReason>;
-  /** 单文档 / 目录级悬停 1-click 已读/未读切换回调。 */
   onMarkFileRead?: (fileId: string, revisionId: string) => void;
   onMarkFileUnread?: (fileId: string) => void;
   onMarkFolderRead?: (folderPath: string) => void;
-  /** 内联新建态（在对应目录内直接展开输入框）。 */
   inlineCreate?: { parentDir: string; kind: 'folder' | 'doc' } | null;
   inlineCreateBusy?: boolean;
   onStartInlineCreate?: (parentDir: string, kind: 'folder' | 'doc') => void;
   onSubmitInlineCreate?: (name: string) => void;
   onCancelInlineCreate?: () => void;
-  /** 内联重命名文件夹态。 */
   renamingFolderPath?: string | null;
   renameDraft?: string;
   renameBusy?: boolean;
@@ -865,11 +772,9 @@ export const FolderTreeRows: React.FC<{
   onRenameDraftChange?: (next: string) => void;
   onCommitRenameFolder?: () => void;
   onCancelRenameFolder?: () => void;
-  /** 已静默目录清单 + 快筛高亮关键词 + 共享 250ms PreviewCard 句柄 */
   mutedFolders?: readonly string[];
   quickFilter?: string;
   previewHandle?: ReturnType<typeof PreviewCardCreateHandle<FileRecord>>;
-  /** 仅在「未读」筛选或按未读排序时强调目录行尾未读数字，日常保持单数字静默呈现 */
   emphasizeUnread?: boolean;
 }> = ({
   nodes,
@@ -924,7 +829,6 @@ export const FolderTreeRows: React.FC<{
       const isCreatingInside = inlineCreate?.parentDir === node.path;
       const isRenaming = renamingFolderPath === node.path;
       const drag = dragRowProps ? dragRowProps(node.path) : null;
-      // 高密目录（直接子文件 >= 15）→ 文件行隐去格式色点；行尾改由聚合微标承担
       const isDenseFolder = node.directFiles.length >= SIDEBAR_DENSE_FOLDER_THRESHOLD;
       const folderMuted = isFolderMuted(node.path, mutedFolders);
       const siblingPrefixMap =
@@ -1279,18 +1183,14 @@ export const FolderTreeRows: React.FC<{
   </>
 );
 
-// ---------- FilterDropdown：格式/角色/主题三维位于顶栏搜索旁 ----------
 export interface FilterDropdownProps {
   files: FileRecord[];
   filters: SidebarFilters;
   onChange: (next: Partial<SidebarFilters>) => void;
   onReset: () => void;
-  /** 服务侧 facets（/api/v1/files）优先；缺失时回退本地 files 计数 */
   facets?: FileFacets | null;
 }
 
-// 章节小标（micro 档：11/16、500、letter-spacing .2em）；中文撤离 mono 归 sans
-// （mono=编号/口径分工，中文标签不进 mono）；色 --ink-soft（--ink-faint 禁用于 <24px 文字）
 const SECTION_LABEL =
   'text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-medium tracking-[0.2em] text-[color:var(--ink-soft)] flex items-center gap-1.5';
 
@@ -1304,7 +1204,6 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  // 自包含开关：点外面 / Esc 关闭，宿主（TopHeader）无需额外接线
   useEffect(() => {
     if (!open) return;
     const handleDocMouseDown = (e: MouseEvent) => {
@@ -1314,7 +1213,6 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
     };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      // Esc 只收起本下拉——阻止冒泡到 window，避免 App 同一下又清搜索/切页签
       e.stopPropagation();
       setOpen(false);
     };
@@ -1326,15 +1224,12 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
     };
   }, [open]);
 
-  // 角色筛选从当前文件的真实角色集合动态收集（原左栏语义保留）：
-  // 服务端 detectRole 还会产出「需求/报告/交接」，写死枚举会让这三类文件永远筛不到
   const roles = useMemo(() => Array.from(new Set(files.map((f) => f.role))), [files]);
   const topics = useMemo(
     () => Array.from(new Set(files.flatMap((f) => f.topics.map((t) => t.name)))),
     [files]
   );
 
-  // 激活筛选数只统计本下拉管理的三维（格式/角色/主题）；目录与阅读状态在左栏自身可见
   const activeFilterCount =
     (filters.format !== 'all' ? 1 : 0) +
     (filters.role !== 'all' ? 1 : 0) +
@@ -1342,7 +1237,6 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
 
   return (
     <div ref={rootRef} className="relative">
-      {/* 顶栏筛选入口：空闲时走静默 ghost 无框态，存在激活筛选时提亮为 secondary */}
       <Button
         variant={activeFilterCount > 0 ? 'secondary' : 'ghost'}
         size="sm"
@@ -1359,16 +1253,11 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
         )}
       </Button>
 
-      {/* data-esc-layer="open"：Esc 仲裁锚点——事件链/叙事抽屉的 window capture 级
-          Esc 监听（KnowledgeGraph/CanvasNarrativeDrawer）命中此标记时让位，
-          保住下面 handleKeyDown 的 document bubble 关闭路径 */}
       {open && (
         <div
           data-esc-layer="open"
           className="glass-pop absolute right-0 top-full mt-1.5 w-[300px] rounded-[var(--r-card)] z-50 p-3 space-y-3"
         >
-          {/* 维度一：文件格式——格式变体：
-              激活统一薰衣草语法，格式身份＝6px 格式色点（aria-hidden，泳道原值） */}
           <div className="space-y-1.5">
             <div
               className={SECTION_LABEL}
@@ -1379,7 +1268,6 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
             </div>
             <div className="flex flex-wrap gap-1">
               {(() => {
-                // 优先取服务端 facets.formats，保留 MD/SVG/PDF 固定前序，其余格式按计数降序动态展平
                 const mergedCounts = new Map<string, number>();
                 if (facets?.formats) {
                   for (const [k, v] of Object.entries(facets.formats)) {
@@ -1431,7 +1319,6 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
             </div>
           </div>
 
-          {/* 维度二：内容角色（原左栏「内容角色」节原样迁入） */}
           {roles.length > 0 && (
             <div className="space-y-1.5">
               <div
@@ -1459,7 +1346,6 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
             </div>
           )}
 
-          {/* 维度三：主题（原左栏「主题与专项」节原样迁入；服务端暂未产出主题时整块隐藏） */}
           {topics.length > 0 && (
             <div className="space-y-1.5">
               <div className={SECTION_LABEL}>
@@ -1492,8 +1378,6 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
             </div>
           )}
 
-          {/* 重置筛选（覆盖全部五维，调 onReset）——幽灵钮归 ghost；
-              静默分隔线常规态极低透明度，悬停本行动区平滑隐去 */}
           <div className="pt-2 border-t border-[color:var(--glass-hairline)] quiet-sep quiet-row">
             <Button
               variant="ghost"
@@ -1577,12 +1461,9 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   onCreateFolderInProject,
   onCreateDocumentInProject,
 }) => {
-  // 存量确立已读基线二次确认 AlertDialog 态
   const [baselineConfirmOpen, setBaselineConfirmOpen] = useState(false);
   const [baselineBusy, setBaselineBusy] = useState(false);
 
-  // 继续阅读条目：仅保留有真实阅读进度或读后有更新的文档；
-  // 纯批量确立基线且未真实打开浏览过的文档，以及已处于当前版已读基线（up_to_date）的文档均不污染「继续阅读」
   const continueReadingFiles = files
     .filter((f) => {
       const st = readingStates[f.file_id];
@@ -1605,7 +1486,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     )
     .slice(0, 2);
 
-  // Quiet.md 置顶区：按用户置顶顺序映射当前工作区活动文件
   const pinnedFiles = useMemo(() => {
     if (!pinnedFileIds.length) return [];
     const byId = new Map(files.map((f) => [f.file_id, f]));
@@ -1617,8 +1497,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     return out;
   }, [files, pinnedFileIds]);
 
-  // 未读文件 id 集合（`hasUnreadChanges` 单一出口）——
-  // 顶部未读计数、目录行尾未读数字微标、文件行 4px 未读点共用这一份判定（零漂移）。
   const unreadFileIds = useMemo(
     () => collectUnreadFileIds(files, readingStates),
     [files, readingStates]
@@ -1665,7 +1543,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const systemUnreadCount = unreadCount - businessUnreadCount;
   const bookmarkedCount = files.filter((f) => readingStates[f.file_id]?.bookmarked).length;
 
-  // ---------- 五类智能视图（成员/计数同源派生，徽标与 App 过滤 100% 守恒） ----------
   const nowMs = useMemo(() => Date.now(), [files]);
   const sidebarFiltersActive =
     filters.quickScope !== 'all' ||
@@ -1685,8 +1562,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     [agentDraftFileIds, artifactsByFileId, files, nowMs, readingStates]
   );
   const smartViewCounts = useMemo(() => computeSmartViewCounts(smartViewFiles), [smartViewFiles]);
-  // 默认折叠「继续阅读」与「智能视图」，将左栏主体空间还给真实项目目录树；
-  // 选中任一智能视图时自动展开以便随时切换或取消。
   const [smartViewsOpen, setSmartViewsOpen] = useState(false);
   const [continueReadingOpen, setContinueReadingOpen] = useState(false);
   const smartViewPartition = useMemo(
@@ -1696,8 +1571,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const isSmartViewActive = isSmartViewScope(filters.quickScope);
   const showSmartViewsBody = smartViewsOpen || isSmartViewActive;
 
-  // 范围联动目录树：切换「未读 / 收藏 / 智能视图」时，左侧目录树同步仅呈现对应范围的文件与祖先目录
-  // （「全部」态保留全部真实目录含空文件夹；顶部计数始终基于全量 files 不漂移）
   const treeScopeFiles = useMemo(() => {
     if (filters.quickScope === 'all') return files;
     if (filters.quickScope === 'unread') {
@@ -1712,7 +1585,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     return files;
   }, [files, filters.quickScope, readingStates, smartViewFiles, unreadFileIds]);
 
-  // 真实文件夹层级树（全部态合并空目录 + 已索引文件；筛选态仅含命中子树）
   const { nodes: folderTree, rootFiles } = useMemo(
     () =>
       buildMergedFolderTree(
@@ -1726,9 +1598,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     const system = folderTree.filter((n) => isSystemDirName(n.name));
     return { businessNodes: business, systemNodes: system };
   }, [folderTree]);
-  // 目录行尾活跃摘要索引（含子目录的递归子树未读数 + 近 7 日活跃数）。
-  // 未读走 hasUnreadChanges 单一出口；近 7 日活跃＝服务端 last_activity_at + RECENT_ACTIVE_WINDOW_MS
-  // （与「近 7 天活跃」智能视图同一 nowMs / 同一窗口 / 同一数据源）。
   const folderActivity = useMemo(
     () =>
       collectFolderActivitySummaries(folderTree, {
@@ -1740,7 +1609,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   );
   const [systemGroupOpen, setSystemGroupOpen] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
-  // 左栏即时目录/文件名快筛 + 三态排序（名称 / 近 7 日活跃 / 未读数）+ 单例 250ms PreviewCard 句柄
   const [treeQuickFilter, setTreeQuickFilter] = useState('');
   const [treeSortMode, setTreeSortMode] = useState<SidebarTreeSortMode>('name');
   const emphasizeFolderUnread = filters.quickScope === 'unread' || treeSortMode === 'unread';
@@ -1777,7 +1645,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const displayRootFiles = filteredBusiness.rootFiles;
   const displaySystemNodes = filteredSystem.nodes;
   const quickFilterActive = treeQuickFilter.trim().length > 0;
-  // 快筛激活时按筛选后的子树重算目录行尾未读数，确保 unreadCount 永不超过筛选后的 node.total
   const displayFolderActivity = useMemo(
     () =>
       quickFilterActive
@@ -1812,7 +1679,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           ? '当前智能视图暂无匹配文档'
           : '当前项目暂无目录或文件';
 
-  // 辅助：在整棵目录树里查找任意深度的 FolderNode（Alt+点击深层目录也能级联！）
   const findFolderNode = (nodes: FolderNode[], targetPath: string): FolderNode | null => {
     for (const n of nodes) {
       if (n.path === targetPath) return n;
@@ -1822,7 +1688,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     return null;
   };
 
-  // Alt+点击级联——opts.cascade 存在时对整棵子树（目录+全部后代路径）一并开合
   const toggleFolder = (path: string, opts?: { cascade?: 'open' | 'close' }) => {
     if (!opts?.cascade) {
       setExpandedFolders((prev) => {
@@ -1846,7 +1711,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   };
   const selectFolder = (path: string) => onUpdateFilters({ folder: path });
 
-  // ---------- Quiet.md 内联新建文件夹 / 新建文档 / 内联重命名文件夹 ----------
   const [inlineCreate, setInlineCreate] = useState<{
     parentDir: string;
     kind: 'folder' | 'doc';
@@ -1856,7 +1720,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const [renameDraft, setRenameDraft] = useState('');
   const [renameBusy, setRenameBusy] = useState(false);
 
-  // ---------- Quiet.md 多项目并列树局部状态（项目菜单 / 项目改别名 / 非激活项目内联新建） ----------
   const [projectMenuId, setProjectMenuId] = useState<string | null>(null);
   const [renamingProjectId, setRenamingProjectId] = useState<string | null>(null);
   const [projectRenameDraft, setProjectRenameDraft] = useState('');
@@ -1890,7 +1753,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     [globalPins]
   );
 
-  // 合并跨项目置顶 + 当前工作区置顶（去重，跨项目条目携带来源项目标签）
   const mergedPinnedItems = useMemo(() => {
     const out: Array<
       | { kind: 'global'; pin: GlobalPinnedFile }
@@ -2022,7 +1884,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     }
   };
 
-  // 响应外部（右键菜单 / 面包屑栏）发起的内联新建或重命名指令
   useEffect(() => {
     if (!inlineActionSignal) return;
     if (inlineActionSignal.kind === 'create-folder') {
@@ -2034,14 +1895,12 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
       expandAncestors(inlineActionSignal.folderPath);
       handleStartRenameFolder(inlineActionSignal.folderPath, base);
     }
-  }, [inlineActionSignal?.seq]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [inlineActionSignal?.seq]);
 
-  // ---------- Quiet.md 批量整理模式 ----------
   const [batchMode, setBatchMode] = useState(false);
   const [batchSelectedIds, setBatchSelectedIds] = useState<Set<string>>(new Set());
   const batchSupported = Boolean(onBatchMoveFiles || onBatchTrashFiles);
 
-  // 文件列表变更时自动清理已删除/不存在的勾选 ID
   useEffect(() => {
     if (!batchMode) return;
     const valid = new Set(files.map((f) => f.file_id));
@@ -2084,7 +1943,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     setBatchSelectedIds(new Set());
   };
 
-  // ---------- 筛选组合状态栈（任意组合可回退；一键清空后可撤销恢复） ----------
   const prevFiltersRef = useRef<SidebarFiltersSnapshot>(filters);
   const filtersStackRef = useRef<SidebarFiltersSnapshot[]>([]);
   const undoClearRef = useRef<SidebarFiltersSnapshot | null>(null);
@@ -2123,7 +1981,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     onUpdateFilters({ ...snapshot });
   };
 
-  // ---------- 树内拖拽 UI 状态机（支持文件拖拽 + 文件夹拖拽 + 拖回根目录） ----------
   const treeScrollRef = useRef<HTMLDivElement | null>(null);
   const treeDrag = useSidebarTreeDrag({
     enabled: Boolean(onMoveFile || onMoveFolder),
@@ -2179,7 +2036,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     };
   }, [onMoveFolder, treeDrag]);
 
-  // 激活目录或当前打开文件的祖先目录恒自动展开，让用户始终看得见当前所在位置
   useEffect(() => {
     if (filters.folder === 'all') return;
     expandAncestors(filters.folder);
@@ -2194,7 +2050,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     const hit = files.find((f) => f.file_id === activeFileId);
     if (!hit || !hit.folder || hit.folder === '.') return;
     expandAncestors(hit.folder);
-  }, [activeFileId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeFileId]);
 
   const rootDropActive = treeDrag.isDropTarget('');
 
@@ -2205,9 +2061,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
       style={width ? { width: `${width}px` } : undefined}
       className={`${width ? '' : 'w-[264px]'} shrink-0 bg-card/65 backdrop-blur-xl shadow-[1px_0_0_var(--glass-hairline)] text-[color:var(--ink-strong)] flex flex-col h-full select-none`}
     >
-      {/* 顶部紧凑控制区：单行三段胶囊 + 继续阅读 + 置顶 + 可折叠智能视图 */}
       <div className="px-2.5 pt-2 pb-1.5 space-y-1.5 shrink-0">
-        {/* 1. 单行三段分段控制器（coss SegmentedControl：全部 / 未读 / 收藏）+ 确立已读基线 */}
         <section className="space-y-1">
           <SegmentedControl
             role="group"
@@ -2220,7 +2074,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 {
                   id: 'all' as const,
                   label: '全部',
-                  // 总量只留在悬停说明里。和「未读」并排两个同样大的数字是侧栏最吵的一行。
                   count: undefined,
                   title: `全部文档 ${totalCount ?? files.length} 份（点击同时清除目录与状态残留筛选）`,
                   dot: false,
@@ -2283,7 +2136,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
             })}
           </SegmentedControl>
 
-          {/* 已读进度细条 + 存量确立已读基线入口：仅在「未读」筛选态展开，日常浏览「全部」时不重复占高 */}
           {totalWorkspaceFiles > 0 && filters.quickScope === 'unread' && (
             <div
               data-sidebar-reading-meter=""
@@ -2296,7 +2148,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                       {`已读 ${readProgressPct}% · 待读 ${unreadCount} 份`}
                     </span>
                   ) : (
-                    // 还没有任何阅读进度时，这句话只是把「未读」页签上的数字又写一遍。
                     <span className="sr-only">{`待读 ${unreadCount} 份`}</span>
                   )
                 ) : (
@@ -2339,7 +2190,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           )}
         </section>
 
-        {/* 确立当前工作区 / 当前目录已读基线二次确认弹窗（coss AlertDialog） */}
         {onMarkReadingBaseline && (
           <AlertDialog open={baselineConfirmOpen} onOpenChange={setBaselineConfirmOpen}>
             <AlertDialogPopup data-mark-baseline-dialog="">
@@ -2403,7 +2253,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           </AlertDialog>
         )}
 
-        {/* 2. 继续阅读（有真实阅读进度才出现，可一键折叠，带底部进度微轨与 1-click 已读） */}
         {continueReadingFiles.length > 0 && (
           <section className="space-y-0.5">
             <button
@@ -2523,7 +2372,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           </section>
         )}
 
-        {/* 3. Quiet.md 跨项目置顶区（Pinned 快捷入口，按需呈现） */}
         {mergedPinnedItems.length > 0 && (
           <section data-pinned-files-section="" className="space-y-0.5">
             <div className={SECTION_LABEL}>
@@ -2627,7 +2475,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           </section>
         )}
 
-        {/* 4. 五类智能视图（紧凑双列胶囊栅格，把主体垂直空间让给真实目录树） */}
         <section>
           <div className="flex items-center justify-between gap-1">
             <button
@@ -2672,7 +2519,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           </div>
           {showSmartViewsBody && (
             <div className="flex flex-wrap gap-1 mt-1" data-smart-views="">
-              {/* 仅展示有内容的智能视图及当前选中项，不再渲染「其余 N 项 (0)」零值占位胶囊 */}
               {smartViewPartition.visible.map((view) => {
                 const active = filters.quickScope === view.id;
                 const count = smartViewCounts[view.id];
@@ -2728,9 +2574,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
         </section>
       </div>
 
-      {/* 5. Quiet.md 多项目并列目录树主体（支持多项目平级展开 + 激活项目完整交互 + 非激活项目原地操控） */}
       <div className="flex-1 min-h-0 flex flex-col border-t border-[color:var(--glass-hairline)] quiet-sep">
-        {/* 项目目录章节头（同时作为「拖回当前项目根目录」落点，右侧放添加项目 / 批量整理 / 快捷新建） */}
         <div
           data-workspace-dir-header=""
           data-drop-folder=""
@@ -2833,7 +2677,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           </div>
         </div>
 
-        {/* 左栏目录快筛 + 行内紧凑排序切换（合并原三按钮常驻排序行，为目录树腾出更多高度） */}
         <div className="px-2.5 pb-1 space-y-1 shrink-0">
           <div className="flex items-center gap-1">
             <InputGroup
@@ -2905,7 +2748,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           )}
         </div>
 
-        {/* coss ScrollArea(scrollFade) 替代原生滚动条，上下边缘自然柔淡提示 */}
         <ScrollArea
           scrollFade
           viewportRef={treeScrollRef}
@@ -2932,7 +2774,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                     data-project-active={isActive ? 'true' : 'false'}
                     className="relative"
                   >
-                    {/* 项目根标题行（Quiet.md 多项目平级根） */}
                     <div
                       data-drop-folder={isActive ? '' : undefined}
                       onDragOver={
@@ -3032,7 +2873,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                         </button>
                       )}
 
-                      {/* 悬停快捷新建 + ⋯ 项目菜单 */}
                       {!isRenaming && (
                         <span
                           className={`${
@@ -3106,7 +2946,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                         </span>
                       )}
 
-                      {/* 多项目或离线时展示计数与状态；单项目激活根行不重复顶部「全部 N」数字 */}
                       {!isRenaming && !menuOpen && (projects.length > 1 || isOffline) && (
                         <span className="flex items-center gap-1 shrink-0 group-hover/proj:hidden">
                           {isOffline ? (
@@ -3122,7 +2961,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                       )}
                     </div>
 
-                    {/* 项目操作浮层菜单 */}
                     {menuOpen && (
                       <div
                         role="menu"
@@ -3258,7 +3096,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                       </div>
                     )}
 
-                    {/* 项目子树展开体 */}
                     {isExpanded &&
                       (isActive ? (
                         <div className="pl-2 mt-0.5 space-y-0.5">
@@ -3753,7 +3590,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
             </button>
           )}
 
-          {/* 历史只读参考挂载（仅在已有挂载时展示，避免与上方多项目目录重复占用视觉） */}
           {mounts.length > 0 && onOpenMountManager && onExpandMount && onOpenMountedFile && (
             <MountedWorkspacesSection
               mounts={mounts}
@@ -3765,7 +3601,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           )}
         </ScrollArea>
 
-        {/* 左栏底缘「已静默 N 个目录」轻胶囊一键管理与恢复（Base UI Popover） */}
         {mutedFolders.length > 0 && !batchMode && (
           <div className="px-2.5 py-1.5 border-t border-[color:var(--glass-hairline)] bg-[color:var(--depth-1-bg-soft)] shrink-0">
             <Popover>
@@ -3830,7 +3665,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           </div>
         )}
 
-        {/* 底部栏：仅批量整理模式呈现批量动作条（常规导入入口已收编进「项目目录」顶栏图标，释放底部高度） */}
         {batchMode && (
           <div
             data-batch-action-bar=""
@@ -3886,7 +3720,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
         )}
       </div>
 
-      {/* 全左栏共享单一 Base UI PreviewCard Portal（250ms 悬停速览文档标题/版本/格式/摘要/变动时刻） */}
       <PreviewCard<FileRecord> handle={sidebarPreviewHandle}>
         {({ payload }) => {
           if (!payload) return null;

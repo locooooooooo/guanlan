@@ -111,7 +111,6 @@ export function tokenizeCodeLine(line: string, format: string): SyntaxToken[] {
     return [{ kind: 'plain', text: line }];
   }
 
-  // Markdown：标题、列表、引用与待确认决策标记
   if (fmt === 'md' || fmt === 'mdx' || fmt === 'markdown' || fmt === 'rmd') {
     const trimmed = line.trimStart();
     if (trimmed.startsWith('#')) {
@@ -169,7 +168,6 @@ export function tokenizeCodeLine(line: string, format: string): SyntaxToken[] {
   let i = 0;
   const n = line.length;
 
-  // YAML / TOML key: value 开头快速高亮
   if (isYamlLike) {
     const trimmed = line.trimStart();
     if (trimmed.startsWith('#')) {
@@ -199,7 +197,6 @@ export function tokenizeCodeLine(line: string, format: string): SyntaxToken[] {
   while (i < n) {
     const ch = line[i];
 
-    // 行内注释 // 或 --（SQL）或 #
     if (ch === '/' && i + 1 < n && line[i + 1] === '/') {
       push('comment', line.slice(i));
       break;
@@ -213,7 +210,6 @@ export function tokenizeCodeLine(line: string, format: string): SyntaxToken[] {
       break;
     }
 
-    // 字符串字面量 "..." / '...' / `...`
     if (ch === '"' || ch === '\'' || ch === '`') {
       const quote = ch;
       let j = i + 1;
@@ -229,7 +225,6 @@ export function tokenizeCodeLine(line: string, format: string): SyntaxToken[] {
         j += 1;
       }
       const lit = line.slice(i, j);
-      // JSON key 识别："key": ...
       let isJsonKey = false;
       if (isJsonLike && quote === '"') {
         let k = j;
@@ -241,7 +236,6 @@ export function tokenizeCodeLine(line: string, format: string): SyntaxToken[] {
       continue;
     }
 
-    // 数字字面量
     if (
       (ch >= '0' && ch <= '9') ||
       (ch === '-' && i + 1 < n && line[i + 1] >= '0' && line[i + 1] <= '9' && (i === 0 || !isIdentChar(line[i - 1])))
@@ -255,7 +249,6 @@ export function tokenizeCodeLine(line: string, format: string): SyntaxToken[] {
       continue;
     }
 
-    // 标识符与关键字
     if (isIdentStart(ch)) {
       let j = i + 1;
       while (j < n && isIdentChar(line[j])) j += 1;
@@ -417,7 +410,6 @@ export function formatDeltaBytes(delta: number | null | undefined): string {
   return `${sign}${(abs / (1024 * 1024 * 1024)).toFixed(2)} GiB`;
 }
 
-// ===== QuickPreview LRU 缓存与零竞态协调器 =====
 
 const CACHE_CAP = 64;
 const previewCache = new Map<string, RevisionPreviewResponse>();
@@ -433,7 +425,6 @@ export function getCachedQuickPreview(
   const key = cacheKey(revisionId, offset);
   const hit = previewCache.get(key);
   if (!hit) return null;
-  // LRU refresh
   previewCache.delete(key);
   previewCache.set(key, hit);
   return hit;
@@ -550,7 +541,6 @@ export class QuickPreviewCoordinator {
         putCachedQuickPreview(revisionId, 0, res.data);
       }
     } catch {
-      /* 静默忽略预取失败 */
     }
   }
 }

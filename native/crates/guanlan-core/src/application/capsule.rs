@@ -454,7 +454,6 @@ fn build_capsule_plan(
     let from_bound = normalize_bound_start(req.from.as_deref());
     let to_bound = normalize_bound_end(req.to.as_deref());
 
-    // 1. 收集专项元信息与候选文件集（单只读事务）
     let (initiative, raw_files) = store.read_txn(|conn| {
         let init: Option<CapsuleManifestInitiative> = if let Some(ref init_id) = req.initiative_id {
             match conn.query_row(
@@ -486,7 +485,6 @@ fn build_capsule_plan(
             )));
         }
 
-        // 若给定了 initiative_id，优先按 artifact_states.initiative_id 与 dir_path 前缀收集文件
         let mut init_file_ids: HashSet<String> = HashSet::new();
         if let Some(ref iv) = init {
             let mut st = conn
@@ -584,7 +582,6 @@ fn build_capsule_plan(
         Ok((init, rows_out))
     })?;
 
-    // 2. 逐文件执行敏感路径扫描、体积测算与文本脱敏预检
     let explicit_selection: Option<HashSet<&str>> = req
         .selected_file_ids
         .as_ref()
@@ -606,7 +603,6 @@ fn build_capsule_plan(
         let sensitive_path = sensitive_reason.is_some();
         let excluded_by_dir = is_dir_excluded(&rel_path, &req.excluded_dirs);
 
-        // 停机护栏：敏感路径永远默认不勾选；仅当用户在预览面板里显式放入 selected_file_ids 才允许勾选
         let selected = match &explicit_selection {
             Some(sel) => sel.contains(file_id.as_str()) && !excluded_by_dir,
             None => !sensitive_path && !excluded_by_dir,
@@ -691,9 +687,7 @@ fn build_capsule_plan(
         .map(|f| (f.file_id.clone(), f.relative_path.clone()))
         .collect();
 
-    // 3. 查询选中文件集合对应的事件演进、决定证据与引用关系
     let (events, decisions, relations) = store.read_txn(|conn| {
-        // 3.1 事件（按 occurred_at / observed_at 正序呈现演进脉络）
         let mut ev_stmt = conn
             .prepare(
                 "SELECT event_id, kind, subject_kind, subject_id, revision_id,
@@ -761,7 +755,6 @@ fn build_capsule_plan(
             events_out.push(ev);
         }
 
-        // 3.2 决定与原文行号证据（来自选中文件的最新版本陈述）
         let mut st_stmt = conn
             .prepare(
                 "SELECT s.statement_id, s.decision_id, s.file_id, s.revision_id,
@@ -822,7 +815,6 @@ fn build_capsule_plan(
             });
         }
 
-        // 3.3 关系边（两端或源端在选中文件集内的引用与 derived_from_context 边）
         let mut ed_stmt = conn
             .prepare(
                 "SELECT e.edge_id, e.source_file_id, e.target_file_id, e.kind,
@@ -874,7 +866,6 @@ fn build_capsule_plan(
             }
         });
 
-    // 估算文档与清单元信息体积（TIMELINE.md + DECISIONS.md + index.html + capsule-manifest.json）
     let metadata_bytes = 6_144u64
         + (selected_ids.len() as u64) * 320
         + (events.len() as u64) * 360
@@ -1609,7 +1600,6 @@ mod tests {
             ..Default::default()
         };
 
-        // 停机红线 1：未预览或无 preview_token 直接导出 → 立即以 PREVIEW_REQUIRED 拒绝
         let silent_err = export_capsule(
             &store,
             &CapsuleExportRequest {
@@ -1623,11 +1613,9 @@ mod tests {
         assert!(silent_err.to_string().contains("PREVIEW_REQUIRED"));
         assert!(!ws.out.exists(), "被拒后绝不创建输出目录");
 
-        // 阶段一：预览自动排除 secrets/ 与 .env，并检测出正文内 API Key 脱敏数
         let preview = preview_capsule(&store, &req).unwrap();
         assert_eq!(preview.selected_file_count, 2, "仅勾选两份正常文档");
 
-        // 回归验证：显式传 initiative_id 按 initiatives.root_dir 精准匹配，绝不误报 404
         if let Ok(init_id) =
             store
                 .conn()
@@ -1664,7 +1652,6 @@ mod tests {
             }
         }
 
-        // 阶段二：伪造过期 token → 拒收
         let stale_err = export_capsule(
             &store,
             &CapsuleExportRequest {
@@ -1677,7 +1664,6 @@ mod tests {
         .expect_err("失配 token 必须拒收");
         assert!(stale_err.to_string().contains("PREVIEW_REQUIRED"));
 
-        // 阶段二：携带真实 preview_token + confirmed_preview=true 成功导出
         let exported = export_capsule(
             &store,
             &CapsuleExportRequest {
@@ -1692,7 +1678,6 @@ mod tests {
         assert_eq!(exported.snapshots_written, 2);
         assert!(exported.redactions_applied >= 1);
 
-        // 验证开放目录可读性 + 脱敏生效 + 敏感文件零打包
         let timeline = fs::read_to_string(&exported.timeline_md_path).unwrap();
         assert!(timeline.contains("事项演进脉络"));
         assert!(timeline.contains("01-方案.md"));
@@ -1709,7 +1694,6 @@ mod tests {
             .exists());
         assert!(!ws.out.join("files/01-胶囊专项/.env").exists());
 
-        // 另一台观澜秒开校验：完整还原主干、决定与快照 SHA-256 全部通过
         let inspected = inspect_capsule_dir(&ws.out).unwrap();
         assert!(
             inspected.integrity_ok,
@@ -1720,7 +1704,6 @@ mod tests {
         assert_eq!(inspected.manifest.schema_version, CAPSULE_SCHEMA_VERSION);
         assert!(!inspected.manifest.decisions.is_empty());
 
-        // manifest_only 模式不落 files/ 快照，仅带开放脉络与引用清单
         let out_manifest = ws.dir.join("capsule-manifest-only");
         let mo_req = CapsulePreviewRequest {
             mode: CapsuleMode::ManifestOnly,

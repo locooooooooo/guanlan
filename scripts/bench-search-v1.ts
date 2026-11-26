@@ -1,25 +1,3 @@
-/**
- * 混合倒排检索自动化基准（10,000 份混合夹具上的服务端检索时延）
- *
- * 用法：
- *   npx tsx scripts/bench-search-v1.ts --exe <guanlan.exe 路径> \
- *     [--fixture native/testdata/bench/workspace] [--data native/testdata/bench/data] \
- *     [--port 18411] [--samples 300]
- *
- * 前置：先运行 `npx tsx scripts/seed-bench-volume.ts <fixture目录>` 生成 10k 混合夹具
- * （与 bench-v1 共用同一夹具，可复用其数据目录）。
- *
- * 阶段与验收口径：
- *   A 冷启动+建索引 —— 清库首启 + verify_all 全量索引（含检索派生索引首次构建；
- *      仅记录并与既有全量索引基线 78s 对照，不设硬阈值）
- *   B 检索时延 —— 六类查询（中文双字短语 / 多词编号 / SKU 编号 / 路径词 /
- *      单字 / format 筛选）顺序采样，p95 < 30ms（硬判）
- *   C 并发检索 —— 4 路并发混合查询 p95（记录；与 bench-v1 并发查询口径对齐）
- *   D 一键重建 —— POST /api/v1/search/rebuild 全量重建耗时（记录）+ 重建后命中回归
- *
- * 机制锚点：GET /api/v1/search（契约 §2.4）、POST /api/v1/search/rebuild（202 Job）、
- * `search_state`（ready|building|absent，派生索引诚实口径）。
- */
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -118,7 +96,6 @@ async function waitReady(deadlineMs: number): Promise<number> {
         return lastReadyMs;
       }
     } catch {
-      /* 未就绪 */
     }
     if (now() - t0 > deadlineMs) throw new Error(`服务 ${deadlineMs}ms 内未就绪`);
     await wait(100);
@@ -155,7 +132,6 @@ async function stopServe(): Promise<void> {
   child = null;
 }
 
-/** 六类查询形状（词表取自 seed-bench-volume 确定性夹具内容） */
 interface QueryShape {
   label: string;
   q: string;
@@ -175,7 +151,6 @@ function queryShapes(): QueryShape[] {
   ];
 }
 
-/** 顺序采样一类查询，返回时延数组并断言命中 */
 async function sampleShape(shape: QueryShape, rounds: number, strict: boolean): Promise<number[]> {
   const suffix = shape.format ? `&format=${shape.format}` : '';
   const lat: number[] = [];
@@ -196,7 +171,6 @@ async function main(): Promise<void> {
   console.log(`检索基准：exe=${args.exe}`);
   console.log(`  fixture=${args.fixture}\n  data=${args.data}\n  samples=${args.samples}\n`);
 
-  // ===== A. 冷启动 + 全量索引（含检索派生索引首建）=====
   console.log('── A. 冷启动（清库首启 + verify_all 全量索引 + 检索索引首建）──');
   fs.rmSync(args.data, { recursive: true, force: true });
   await startServe();
@@ -212,15 +186,13 @@ async function main(): Promise<void> {
   const { json: statusAfter } = await getJson('/api/v1/status');
   row('A index_generation', String(statusAfter.index_generation));
 
-  // 首建质量抽查：中文短语可检索
   const probe = await getJson(`/api/v1/search?q=${encodeURIComponent('合成样本')}`);
   if (probe.json.search_state !== 'ready') throw new Error(`检索索引未就绪：${probe.json.search_state}`);
   row('A 检索索引状态', `${probe.json.search_state}（docs=${probe.json.total_matched} 命中）`, 'PASS');
 
-  // ===== B. 检索时延（六类查询顺序采样；p95 < 30ms 硬判）=====
   console.log('\n── B. 检索时延（六类混合；先预热 20 轮）──');
   const shapes = queryShapes();
-  for (const shape of shapes) await sampleShape(shape, 20, false); // 预热
+  for (const shape of shapes) await sampleShape(shape, 20, false);
 
   const perShape: Array<{ shape: QueryShape; lat: number[] }> = [];
   for (const shape of shapes) {
@@ -238,7 +210,6 @@ async function main(): Promise<void> {
   judge('B 检索 p95（六类混合，硬判）', percentile(all, 95), 30);
   judge('B 检索 p50', percentile(all, 50), 30);
 
-  // ===== C. 并发检索（4 路 × 并发；记录口径）=====
   console.log('\n── C. 并发检索（4 路并发 × 每路 samples/4）──');
   const workers = 4;
   const per = Math.max(10, Math.floor(args.samples / workers));
@@ -257,7 +228,6 @@ async function main(): Promise<void> {
     `p50 ${fmtMs(percentile(concAll, 50))} / p95 ${fmtMs(percentile(concAll, 95))} / max ${fmtMs(concAll[concAll.length - 1])}`
   );
 
-  // ===== D. 一键重建（POST /api/v1/search/rebuild；记录 + 命中回归）=====
   console.log('\n── D. 一键重建（派生索引丢弃重建自愈）──');
   const t0d = now();
   const acceptedRebuild = await postJson('/api/v1/search/rebuild', {});
@@ -269,7 +239,6 @@ async function main(): Promise<void> {
   const postProbe = await sampleShape(shapes[0], 5, true);
   row('D 重建后回归（中文短语 5 次采样 p95）', fmtMs(percentile([...postProbe].sort((a, b) => a - b), 95)), 'PASS');
 
-  // ===== 汇总 =====
   console.log('\n========== 检索基准结果 ==========');
   for (const line of report.lines) console.log(line);
   if (report.failures.length) {

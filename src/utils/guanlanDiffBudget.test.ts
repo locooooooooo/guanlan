@@ -1,11 +1,3 @@
-/**
- * 阅读/未读统计与差异计算拆分单测：
- * - 未读判定只比较版本身份（O(1)），不再触发二维 LCS；
- * - computeMarkdownDiff 同版本/同内容快捷退出（不分配 DP、保留行号）；
- * - 正文未加载 ≠ 空文档（CONTENT_NOT_LOADED，不把整份文档误报成全新增）；
- * - 行数与 DP 单元数硬预算，超限明确返回 DIFF_TOO_LARGE（不用空 diff 冒充成功）；
- * - 章节级变更走 computeChangedSectionsSinceRead（章节指纹，O(m+n)），正文未取回返回 []。
- */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
@@ -74,7 +66,6 @@ const readState = (baselineId: string, currentId: string): ReadingState =>
   ({
     file_id: 'f_diff18',
     last_read_revision_id: baselineId,
-    // 当前版本字段仅用于让判定走 updated 分支；hasUnreadChanges 只看两个 id 是否相等
     last_read_at: '2026-11-16T09:00:00+08:00',
     scrollPercent: 0,
     current_revision_id: currentId,
@@ -89,7 +80,6 @@ test('快捷退出①：同版本 ID 不分配 DP，返回全 unchanged 且行�
   assert.equal(res.addedCount, 0);
   assert.equal(res.removedCount, 0);
   assert.deepEqual(res.changedSections, []);
-  // 保留展示需要的行信息：行数与原文一致，行号 1..n 成对
   assert.equal(res.lines.length, 500);
   assert.equal(res.lines[0].type, 'unchanged');
   assert.equal(res.lines[0].oldLineNumber, 1);
@@ -132,8 +122,6 @@ test('未加载守卫：目标正文未取回同样拒绝；占位版本行（�
   assert.equal(res.ok, false);
   assert.equal(res.errorCode, 'CONTENT_NOT_LOADED');
 
-  // 摘要分页产出的占位版本行：content_sha256 为空串、sizeBytes 为 0——
-  // 不得被 isConfirmedEmptyContent 当成「确认空文档」绕过守卫
   const placeholder = revision({
     revision_id: 'rev_placeholder',
     content_sha256: '',
@@ -164,13 +152,11 @@ test('确认空文档（0 字节且 hash 非空）可以参与对比：空 → �
   const res = computeMarkdownDiff(file, 'rev_empty', 'rev_curr');
   assert.equal(res.ok, true);
   assert.equal(res.errorCode, undefined);
-  // 空串按一行空行参与对比：旧「空行」被移除，新文档两行全新增——如实报告，不谎报
   assert.equal(res.addedCount, 2);
   assert.equal(res.removedCount, 1);
 });
 
 test('预算①：DP 单元数超限明确拒绝 DIFF_TOO_LARGE，不用空 diff 冒充成功', () => {
-  // (m+1)(n+1) > DIFF_MAX_DP_CELLS：两侧 2200 行 → 2201² ≈ 4.84M > 4M
   const side = Math.min(2200, Math.floor(Math.sqrt(DIFF_MAX_DP_CELLS)));
   const oldText = Array.from({ length: side }, (_, i) => `旧 ${i}`).join('\n');
   const newText = Array.from({ length: side }, (_, i) => `新 ${i}`).join('\n');
@@ -195,12 +181,9 @@ test('预算内真实变更照常计算（Int32Array DP 回归）', () => {
   const file = twoVersionFile(oldText, newText);
   const res = computeMarkdownDiff(file, 'rev_base', 'rev_curr');
   assert.equal(res.ok, true);
-  // 新增：A 的新内容。/ 新增行。/ 空行 / ## 章节 C / 新章节。
   assert.equal(res.addedCount, 5);
-  assert.equal(res.removedCount, 1); // A 的旧内容。
-  // 空行新增落在章节 B 标题之后、章节 C 之前，按行走题口径归入章节 B（与既有 DP 行为一致）
+  assert.equal(res.removedCount, 1);
   assert.deepEqual(res.changedSections.sort(), ['章节 A', '章节 B', '章节 C']);
-  // 行号稳定性：首行 unchanged 对齐 1↔1
   assert.equal(res.lines[0].type, 'unchanged');
   assert.equal(res.lines[0].oldLineNumber, 1);
   assert.equal(res.lines[0].newLineNumber, 1);
@@ -272,7 +255,6 @@ test('章节指纹：正文未取回返回 []（诚实未知，不误报全文�
   const st = readState('rev_base', 'rev_curr');
   assert.deepEqual(computeChangedSectionsSinceRead(file, st), []);
 
-  // 快照淘汰同样返回 []，与 REVISION_UNAVAILABLE 的诚实口径一致
   const evictedFile = fileOf([
     revision({ revision_id: 'rev_base', snapshotAvailable: false, markdownContent: BASELINE_TEXT }),
     revision({ revision_id: 'rev_curr', markdownContent: '# 当前\n内容。' }),
@@ -302,6 +284,5 @@ test('章节指纹：contentCache 回退链生效（MD 正文未内联时按 rev
     rev_base: BASELINE_TEXT,
     rev_curr: '# 标题\n第一段内容。\n\n## 章节 A\nA 改了。',
   });
-  // 章节 A 被改 + 章节 B 被整段删除（基线独有章节如实计入变更）
   assert.deepEqual(sections, ['章节 A', '章节 B']);
 });

@@ -1,15 +1,9 @@
-/**
- * PDF（`.pdf#page=N`）页码证据锚点解析、标签格式化与跳转辅助纯函数。
- * 与 `officeAnchor.ts` 同构：fragment 语义与 Rust `derive.rs::parse_pdf_fragment` 同源。
- */
 
 import type { DecisionAssertion, DecisionSourceEvidence, PdfEvidenceAnchor } from '../types/guanlan';
 import { normalizeRelativeWorkspacePath } from './officeAnchor';
 
 export interface ParsedPdfHref {
-  /** 去掉 `#fragment` 后的路径部分 */
   pathWithoutFragment: string;
-  /** 若链接指向受支持的 `.pdf#page=N`，返回页码锚点 */
   anchor?: PdfEvidenceAnchor;
 }
 
@@ -46,7 +40,6 @@ export function parsePdfLinkHref(hrefRaw: string): ParsedPdfHref {
   try {
     if (decoded.includes('%')) decoded = decodeURIComponent(decoded);
   } catch {
-    /* 保留原串 */
   }
   const hashIdx = decoded.indexOf('#');
   if (hashIdx < 0) {

@@ -1,17 +1,3 @@
-/**
- * 五大黄金用户任务实机对标盲测基准脚本（千级混合文件真实工程 + release guanlan.exe）
- *
- * 用法：
- *   node node_modules/tsx/dist/cli.mjs scripts/bench-f04-golden-tasks.ts [--exe native/target/release/guanlan.exe] [--port 0] [--keep-alive]
- *
- * 覆盖五大黄金用户任务：
- *   T1 隔天回来恢复上次阅读版本与段落       （目标 < 10s）
- *   T2 找出离开后发生的全部实质变更         （目标 < 30s）
- *   T3 在陌生事项确认当前生效定稿及采用依据 （目标 < 60s）
- *   T4 从任一历史决定追到当时版本原文/原图   （目标 ≤ 3 步）
- *   T5 组装准确上下文包交给智能体继续推进   （目标 < 30s）
- *   + 错误使用过期版本次数 = 0（强校验）
- */
 
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
@@ -184,7 +170,6 @@ async function main(): Promise<void> {
       { stdio: 'pipe' }
     );
 
-    // Day 1：写入两个真实工程专项（含 MD / SVG / PDF / CSV + 跨文件引用与决定证据）
     const day1Iso = '2026-11-20T10:00:00.000Z';
     writeFileAt(
       '01-支付网关重构/01-架构设计方案.md',
@@ -236,7 +221,6 @@ async function main(): Promise<void> {
     console.log('[golden-tasks] 2/4 执行 Day 1 基线入库扫描（1,056 份混合文件）...');
     day1ScanMs = runScan(env);
 
-    // Day 2（隔夜实质变更波）：修改架构方案为 v2（拍板确认幂等键方案 + 新增熔断卡点）、升级 SVG v2、新增隔夜联调纪要
     const day2Iso = '2026-11-21T16:30:00.000Z';
     writeFileAt(
       '01-支付网关重构/01-架构设计方案.md',
@@ -287,7 +271,6 @@ async function main(): Promise<void> {
   console.log(`[golden-tasks] 实时服务已就绪：${endpoint}`);
 
   try {
-    // 预建派生检索索引（确保 <50ms 检索就绪）
     const rebuildJob = await fetchJson<{ job_id: string }>(endpoint, '/api/v1/search/rebuild', {
       method: 'POST',
     });
@@ -303,7 +286,6 @@ async function main(): Promise<void> {
       decisions_total: number;
     }>(endpoint, '/api/v1/bootstrap');
 
-    // 找到关键目标 file_id（均经服务端现态检索/分页获取）
     const searchGateway = await fetchJson<{
       items: Array<{ file_id: string; relative_path: string }>;
     }>(endpoint, `/api/v1/search?q=${encodeURIComponent('架构设计方案')}&limit=10`);
@@ -314,13 +296,12 @@ async function main(): Promise<void> {
 
     let staleVersionUsed = 0;
 
-    // ── 任务 1：隔天回来恢复上次阅读版本与段落（目标 < 10s） ──
     const t1Start = performance.now();
     const bootT1 = await fetchJson<{ ok: boolean }>(endpoint, '/api/v1/bootstrap');
     const revChainT1 = await fetchJson<{
       revisions: Array<{ revision_id: string; seq: number }>;
     }>(endpoint, `/api/v1/files/${encodeURIComponent(gatewayFile.file_id)}/revisions?include_sections=1`);
-    const latestRevT1 = revChainT1.revisions[0]; // 上新下旧首位即最新 v2
+    const latestRevT1 = revChainT1.revisions[0];
     const contentT1 = await fetchJson<{ text: string }>(
       endpoint,
       `/api/v1/revisions/${encodeURIComponent(latestRevT1.revision_id)}/content`
@@ -330,7 +311,6 @@ async function main(): Promise<void> {
       staleVersionUsed += 1;
     }
 
-    // ── 任务 2：找出离开后发生的全部实质变更（目标 < 30s） ──
     const t2Start = performance.now();
     const daysT2 = await fetchJson<{
       groups: Array<{ day: string; event_count: number; samples: Array<{ headline: string }> }>;
@@ -346,7 +326,6 @@ async function main(): Promise<void> {
       throw new Error('任务 2 未检出离开后的实质变更');
     }
 
-    // ── 任务 3：在陌生事项确认当前生效定稿及采用依据（目标 < 60s） ──
     const t3Start = performance.now();
     const overviewT3 = await fetchJson<{
       initiatives: Array<{ initiative_id: string; name: string; root_dir: string; state: string }>;
@@ -382,9 +361,7 @@ async function main(): Promise<void> {
       staleVersionUsed += 1;
     }
 
-    // ── 任务 4：从任一历史决定追到当时版本的原文/原图/原表页（目标 ≤ 3 步） ──
     const t4Start = performance.now();
-    // 第 1 步：打开决定列表定位已确认的幂等键决定（绑定 v2 revision_id 与准确行号）
     const decListT4 = await fetchJson<{
       items: Array<{
         question: string;
@@ -401,14 +378,12 @@ async function main(): Promise<void> {
       throw new Error('任务 4 未找到幂等键持久化方案决定');
     }
     const ev = targetDec.evidences[0];
-    // 第 2 步：按决定锚定的精确 revision_id 打开当时版本原文并定位行号
     const evContent = await fetchJson<{ text: string }>(
       endpoint,
       `/api/v1/revisions/${encodeURIComponent(ev.revision_id)}/content`
     );
     const lines = evContent.text.split(/\r?\n/);
     const exactLine = lines[Math.max(0, ev.lineStart - 1)] || '';
-    // 第 3 步：沿原文链接直达 PDF 第 2 页真实抽取内容
     const searchPdf = await fetchJson<{
       items: Array<{ file_id: string; relative_path: string }>;
     }>(endpoint, `/api/v1/search?q=${encodeURIComponent('合规安全规范')}&limit=5`);
@@ -431,7 +406,6 @@ async function main(): Promise<void> {
       staleVersionUsed += 1;
     }
 
-    // ── 任务 5：组装准确上下文包交给智能体继续推进（目标 < 30s） ──
     const t5Start = performance.now();
     const gwInit = overviewT3.initiatives.find((i) => i.root_dir.includes('01-支付网关重构'));
     const ctxResp = await fetchJson<{

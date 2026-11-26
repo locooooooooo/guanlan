@@ -21,13 +21,9 @@ use std::collections::BTreeSet;
 /// 查询模式（契约 §2.4 mode；matchStrategy 四态由此派生）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueryMode {
-    /// 空查询（服务端 400 拦截，不出现在响应里；保留枚举供单测）
     Empty,
-    /// 专有编号（`ac-03` / `#39` / 内部 ID）：postings 精确词项 + 回源核验
     Code,
-    /// 单字符：有界回退（matchStrategy = single_char_bounded）
     Single,
-    /// 短语（≥2 字符的混合口径）：Bigram/词元 AND 交集 + 行级回源核验
     Phrase,
 }
 
@@ -75,7 +71,6 @@ pub fn is_cjk(c: char) -> bool {
         0x3000..=0x303F | 0x4E00..=0x9FFF | 0xF900..=0xFAFF | 0xFF01..=0xFF5E)
 }
 
-/// 判定 ASCII 词元字符（字母/数字/下划线/井号/连字符——编号词的内嵌分隔符）
 fn is_word_byte(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_' || c == '#' || c == '-'
 }
@@ -98,7 +93,6 @@ pub fn normalize_text(s: &str) -> String {
     out
 }
 
-/// 内部 ID 四式（前端 `guanlanEngine.ts:108` 的 `^(q\d+|t-\d+|cand-\d+|rev_\w+|file_\w+)$`）
 fn is_internal_id(norm: &str) -> bool {
     let lower = norm.to_ascii_lowercase();
     let digits_only = |r: &str| !r.is_empty() && r.bytes().all(|b| b.is_ascii_digit());
@@ -127,7 +121,6 @@ fn is_internal_id(norm: &str) -> bool {
     false
 }
 
-/// 通用业务编号：`word[-_]digits`（`ac-03`、`rfc_2616`、`t-204`）；word 首字符须为字母
 fn is_generic_code(norm: &str) -> bool {
     let bytes = norm.as_bytes();
     if bytes.len() < 3 || bytes.len() > 32 {
@@ -177,7 +170,6 @@ pub fn plan_query(raw_query: &str) -> QueryPlan {
         };
     }
 
-    // 单字符：恰一个 char（CJK 或 ASCII）
     let char_count = norm.chars().count();
     if char_count == 1 {
         let c = norm.chars().next().unwrap_or('\u{0}');
@@ -192,7 +184,6 @@ pub fn plan_query(raw_query: &str) -> QueryPlan {
         };
     }
 
-    // 整查询即编号（空白折叠后无空格才会命中 is_*_code；含空格的查询走 Phrase）
     if !norm.contains(' ') && classify_code(&norm) {
         return QueryPlan {
             raw,
@@ -205,7 +196,6 @@ pub fn plan_query(raw_query: &str) -> QueryPlan {
         };
     }
 
-    // Phrase：CJK 连续段 Bigram + ASCII 词元（含内嵌编号整词）
     let (bigrams, words) = tokenize_mixed(&norm);
     QueryPlan {
         raw,
@@ -237,9 +227,7 @@ pub fn tokenize_mixed(norm_text: &str) -> (Vec<String>, Vec<String>) {
     };
     let flush_word = |word_run: &mut String, words: &mut BTreeSet<String>| {
         if !word_run.is_empty() {
-            // 编号整词（ac-03 / #39 / rev_x1）原样入词集
             words.insert(word_run.clone());
-            // 拆分词：按 -/_/# 切段，段长 ≥2 才收（避免 `03`、`-` 噪声）
             for part in word_run.split(['-', '_', '#']) {
                 if part.len() >= 2 && part.bytes().any(|b| b.is_ascii_alphabetic()) {
                     words.insert(part.to_owned());
@@ -299,7 +287,6 @@ pub fn acronym_of_segment(norm_segment: &str) -> Option<String> {
 pub fn path_field_tokens(norm_path: &str) -> Vec<String> {
     let mut tokens: BTreeSet<String> = BTreeSet::new();
     for segment in norm_path.split(['/', '.', '\\']).filter(|s| !s.is_empty()) {
-        // 整段 ASCII 词（`user-auth-service`——`-`/`_` 也算段内字符）
         if segment.len() >= 2
             && segment
                 .bytes()
@@ -307,7 +294,6 @@ pub fn path_field_tokens(norm_path: &str) -> Vec<String> {
         {
             tokens.insert(segment.to_owned());
         }
-        // 段内子词：ASCII 原样 + CJK Bigram + 单字（有界回退）
         for part in segment.split(['-', '_']).filter(|p| !p.is_empty()) {
             let chars: Vec<char> = part.chars().collect();
             if part.len() >= 2 && part.bytes().all(|b| b.is_ascii()) {
@@ -329,8 +315,6 @@ pub fn path_field_tokens(norm_path: &str) -> Vec<String> {
     tokens.into_iter().collect()
 }
 
-// ===== 单测 =====
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -344,15 +328,12 @@ mod tests {
 
     #[test]
     fn code_classification_matches_internal_ids_and_business_codes() {
-        // 前端内部 ID 四式（逐字对齐 guanlanEngine.ts:108）
         for q in ["q12", "T-204", "cand-9", "rev_ab12", "file_x"] {
             assert!(classify_code(&normalize_text(q)), "{q} 应为编号");
         }
-        // 通用业务编号
         for q in ["ac-03", "RFC_2616", "#39", "#7"] {
             assert!(classify_code(&normalize_text(q)), "{q} 应为编号");
         }
-        // 非编号
         for q in [
             "render",
             "ac",
@@ -368,32 +349,25 @@ mod tests {
 
     #[test]
     fn plan_query_modes() {
-        // 空查询
         assert_eq!(plan_query("   ").mode, QueryMode::Empty);
-        // 单字
         let single = plan_query("决");
         assert_eq!(single.mode, QueryMode::Single);
         assert_eq!(single.singles, vec!['决']);
-        // 编号
         let code = plan_query(" AC-03 ");
         assert_eq!(code.mode, QueryMode::Code);
         assert_eq!(code.code_term.as_deref(), Some("ac-03"));
-        // 短语（中文）——Bigram 按去重升序（UTF-8 字节序）输出
         let zh = plan_query("登录方案");
         assert_eq!(zh.mode, QueryMode::Phrase);
         assert_eq!(zh.bigrams, vec!["录方", "方案", "登录"]);
         assert!(zh.words.is_empty());
-        // 短语（英文多词）
         let en = plan_query("user auth");
         assert_eq!(en.mode, QueryMode::Phrase);
         assert!(en.bigrams.is_empty());
         assert_eq!(en.words, vec!["auth", "user"]);
-        // 混合
         let mixed = plan_query("登录 login");
         assert_eq!(mixed.mode, QueryMode::Phrase);
         assert_eq!(mixed.bigrams, vec!["登录"]);
         assert_eq!(mixed.words, vec!["login"]);
-        // 混合含编号
         let mc = plan_query("方案 ac-03");
         assert_eq!(mc.mode, QueryMode::Phrase);
         assert_eq!(mc.bigrams, vec!["方案"]);
@@ -402,7 +376,6 @@ mod tests {
 
     #[test]
     fn tokenize_mixed_extracts_bigrams_words_and_codes() {
-        // 空白分隔的独立编号词
         let (bigrams, words) = tokenize_mixed("决策文档 ac-03 #39 review");
         assert!(bigrams.contains(&"决策".to_owned()));
         assert!(bigrams.contains(&"策文".to_owned()));
@@ -411,10 +384,8 @@ mod tests {
         assert!(words.contains(&"ac-03".to_owned()));
         assert!(words.contains(&"#39".to_owned()));
         assert!(words.contains(&"review".to_owned()));
-        // 编号拆分词：含字母的段才收，纯数字段不收
         assert!(words.contains(&"ac".to_owned()));
         assert!(!words.contains(&"03".to_owned()));
-        // 连写（无空白分隔）：整词合并为一个词元，`-`/`#` 拆段
         let (bigrams2, words2) = tokenize_mixed("决策ac-03");
         assert!(bigrams2.contains(&"决策".to_owned()));
         assert!(words2.contains(&"ac-03".to_owned()));
@@ -424,20 +395,15 @@ mod tests {
     #[test]
     fn path_tokens_cover_segments_bigrams_and_acronym() {
         let tokens = path_field_tokens(&normalize_text("docs/设计/user-auth-service.ts"));
-        // 目录段 Bigram
         assert!(tokens.contains(&"设计".to_owned()));
-        // ASCII 段原样
         assert!(tokens.contains(&"docs".to_owned()));
         assert!(tokens.contains(&"user-auth-service".to_owned()));
-        // 首字母缩写
         assert!(tokens.contains(&"uas".to_owned()));
-        // 段长 ≥2 的 ASCII 段原样收录（ts 恰为 2）
         assert!(tokens.contains(&"ts".to_owned()));
         let zh = path_field_tokens(&normalize_text("交付/清单/登录方案-验收清单.docx"));
         assert!(zh.contains(&"登录".to_owned()));
         assert!(zh.contains(&"方案".to_owned()));
         assert!(zh.contains(&"验收".to_owned()));
-        // 单字回退可用
         assert!(zh.contains(&"登".to_owned()));
     }
 

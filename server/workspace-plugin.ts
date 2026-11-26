@@ -1,11 +1,3 @@
-/**
- * 观澜 Node 对拍基线 —— Vite 开发服务器中间件（已冻结，仅作测试与历史参考）
- *
- * 职责：
- * - 扫描器只产出路径、字节哈希、mtime 和内容；本服务比对持久库后分配版本与事件
- * - 查询接口支持分页：/api/workspace/events 支持日期、事项、格式、种类、时间口径和游标
- * - 按文件/版本 ID 读取内容，不提供任意路径下载（/api/workspace/file 仅限已配置根目录）
- */
 
 import type { Plugin } from 'vite';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -21,11 +13,8 @@ import { ChangeBroadcaster, WorkspaceWatcher } from './watcher';
 
 export interface WorkspacePluginOptions {
   rootPath: string;
-  /** 持久库目录；默认 %LOCALAPPDATA%/Guanlan/workspaces/<rootKey> */
   dataDir?: string;
-  /** 开发期扫描缓存，避免 StrictMode 双挂载重复对账 */
   scanCacheTtlMs?: number;
-  /** 文件监听防抖（毫秒） */
   watchDebounceMs?: number;
 }
 
@@ -35,19 +24,11 @@ interface ScanCache {
   report: ReconcileReport;
 }
 
-/**
- * /scan 载荷的按代预计算体：JSON 序列化字节 + gzip 字节。
- * 载荷可达数十 MiB：此前每请求重复 stringify 并在事件循环上同步 gzipSync
- * （53MB 载荷实测阻塞 ~24s，期间所有 API/静态请求排队）。
- */
 interface PreparedScanBody {
-  /** 本代 payload 的 JSON 字节（payload 每代新建且不再变更，字节与逐次 stringify 恒等） */
   raw: Buffer;
-  /** null = 尚未就绪；就绪后为 raw 的 gzip(level 6) 字节 */
   gzip: Promise<Buffer> | null;
 }
 
-/** gzip 走 zlib 异步 API（线程池），压缩期间事件循环保持响应 */
 const gzipAsync = (raw: Buffer): Promise<Buffer> =>
   new Promise((resolve, reject) => {
     zlib.gzip(raw, { level: 6 }, (error, buf) => (error ? reject(error) : resolve(buf)));
@@ -73,41 +54,31 @@ export function guanlanWorkspacePlugin(options: WorkspacePluginOptions): Plugin 
     return store;
   };
 
-  // /scan 预计算缓存：以 payload 对象身份为键（WeakMap）。stale-while-revalidate
-  // 每代重建全新 payload，旧代条目随之失效，绝不跨代复用（重建会更新 scannedAt 等
-  // 字段，字节必然变化）。
   const scanBodyByPayload = new WeakMap<object, PreparedScanBody>();
 
-  // 代内预计算：序列化一次，gzip 在线程池后台完成；完成后 sendJson 对同代请求直发字节
   const prepareScanBody = (payload: object): void => {
     if (scanBodyByPayload.has(payload)) return;
     const raw = Buffer.from(JSON.stringify(payload), 'utf-8');
     const prepared: PreparedScanBody = { raw, gzip: null };
     scanBodyByPayload.set(payload, prepared);
     const pending = gzipAsync(raw);
-    // 无人消费（如本代刚建好就被更新代替换）也不产生 unhandledRejection；消费方自行兜底
     pending.catch(() => {});
     prepared.gzip = pending;
   };
 
   const sendJson = (res: ServerResponse, status: number, payload: unknown): void => {
-    // /scan 命中本代预计算时复用序列化字节；其余载荷逐次 stringify（原路径）
     const prepared = scanBodyByPayload.get(payload as object);
     const raw = prepared ? prepared.raw : Buffer.from(JSON.stringify(payload), 'utf-8');
     res.statusCode = status;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Vary', 'Accept-Encoding');
-    // scan/events 的 JSON 可达 9 MiB 级：客户端声明支持 gzip 时压缩传输
-    // （fetch 会透明解压，响应结构与契约不变），可减约 80% 传输量
     const accept = String(res.req?.headers['accept-encoding'] ?? '').toLowerCase();
     const acceptsGzip = accept
       .split(',')
       .some((part) => part.trim().split(';')[0]?.trim() === 'gzip' && !/q=0(?:\.0+)?$/.test(part));
     if (raw.length > 1024 && acceptsGzip) {
       if (prepared?.gzip) {
-        // 命中预计算：就绪即直发字节；在途则等线程池完成（请求稍候、事件循环零阻塞）；
-        // 仅预计算失败时退回原同步路径。客户端中途断开则放弃回写。
         const writeGzip = (body: Buffer): void => {
           if (res.writableEnded || res.destroyed) return;
           res.setHeader('Content-Encoding', 'gzip');
@@ -147,20 +118,16 @@ export function guanlanWorkspacePlugin(options: WorkspacePluginOptions): Plugin 
       scannedAt: Date.now(),
       report,
     };
-    // 本代 JSON 字节与 gzip 随构建预计算（gzip 在线程池后台完成）
     prepareScanBody(payload);
     return cache;
   };
 
-  // 缓存过期后的后台重建（stale-while-revalidate）：单飞，避免并发请求重复对账
   const scheduleRevalidate = (): void => {
     if (revalidating) return;
     revalidating = true;
-    // 下一拍再跑：让当前请求先把 stale payload 发回浏览器，不再同步阻塞数十秒
     setTimeout(() => {
       try {
         const rebuilt = buildCache();
-        // 重建出有新变化的数据时通知已打开的界面（复用 watcher 的通知契约）
         broadcaster.broadcast({
           type: 'workspace-change',
           at: new Date().toISOString(),
@@ -179,20 +146,16 @@ export function guanlanWorkspacePlugin(options: WorkspacePluginOptions): Plugin 
   };
 
   const doScan = (force: boolean) => {
-    // 手动强制刷新，或还没有任何缓存可回退：同步对账（force 契约是反映当下状态）
     if (force || !cache) {
       return buildCache();
     }
     if (Date.now() - cache.scannedAt < cacheTtl) {
       return cache;
     }
-    // 缓存过期：立即返回上一次 payload，由后台重建替换，
-    // 避免每过 TTL 的首个请求同步阻塞数十秒
     scheduleRevalidate();
     return cache;
   };
 
-  // 监听只触发核验；防抖后跑一次对账，有新变化就通过 SSE 通知界面
   const ensureWatcher = (): void => {
     if (watcher) return;
     watcher = new WorkspaceWatcher({
@@ -201,7 +164,7 @@ export function guanlanWorkspacePlugin(options: WorkspacePluginOptions): Plugin 
       reconcile: () => {
         const s = getStore();
         const { report } = reconcileWorkspace(options.rootPath, { dataDir, store: s });
-        cache = null; // 下次读取时重新投影
+        cache = null;
         return {
           scanned: report.scanned,
           newEvents: report.eventsInserted,
@@ -225,11 +188,9 @@ export function guanlanWorkspacePlugin(options: WorkspacePluginOptions): Plugin 
         watcher?.stop();
         broadcaster.closeAll();
       });
-      // 启动预热：后台对账一次，浏览器首屏直接命中缓存
       setTimeout(() => {
         try {
           doScan(false);
-          // 首次扫描后启动监听（核验驱动，非逐条事件日志）
           ensureWatcher();
         } catch (error) {
           server.config.logger.warn(
@@ -248,7 +209,6 @@ export function guanlanWorkspacePlugin(options: WorkspacePluginOptions): Plugin 
           const url = new URL(rawUrl, 'http://127.0.0.1');
 
           try {
-            // ---------- 扫描并入账：GET /api/workspace/scan?force=1 ----------
             if (url.pathname === '/api/workspace/scan') {
               const force = url.searchParams.get('force') === '1';
               const result = doScan(force);
@@ -256,7 +216,6 @@ export function guanlanWorkspacePlugin(options: WorkspacePluginOptions): Plugin 
               return;
             }
 
-            // ---------- 按日/周/月聚合（画布标尺与折叠组）：GET /api/workspace/events/days ----------
             if (url.pathname === '/api/workspace/events/days') {
               getStore();
               const kinds = (url.searchParams.get('kinds') || '')
@@ -282,7 +241,6 @@ export function guanlanWorkspacePlugin(options: WorkspacePluginOptions): Plugin 
               return;
             }
 
-            // ---------- 分页事件：GET /api/workspace/events ----------
             if (url.pathname === '/api/workspace/events') {
               getStore();
               const kinds = (url.searchParams.get('kinds') || url.searchParams.get('kind') || '')
@@ -308,14 +266,12 @@ export function guanlanWorkspacePlugin(options: WorkspacePluginOptions): Plugin 
               return;
             }
 
-            // ---------- 实际时间范围：GET /api/workspace/events/range ----------
             if (url.pathname === '/api/workspace/events/range') {
               getStore();
               sendJson(res, 200, { ok: true, ...eventTimeRange(getStore(), workspaceId!) });
               return;
             }
 
-            // ---------- 单文件版本链：GET /api/workspace/history?file_id= ----------
             if (url.pathname === '/api/workspace/history') {
               getStore();
               const fileId = url.searchParams.get('file_id') || '';
@@ -328,7 +284,6 @@ export function guanlanWorkspacePlugin(options: WorkspacePluginOptions): Plugin 
               return;
             }
 
-            // ---------- 按版本取内容：GET /api/workspace/revisions/<id>/content ----------
             const revMatch = /^\/api\/workspace\/revisions\/([^/]+)\/content$/.exec(url.pathname);
             if (revMatch) {
               getStore();
@@ -369,7 +324,6 @@ export function guanlanWorkspacePlugin(options: WorkspacePluginOptions): Plugin 
               return;
             }
 
-            // ---------- 摘要：GET /api/workspace/summary ----------
             if (url.pathname === '/api/workspace/summary') {
               const s = getStore();
               const ws = s.getWorkspace(workspaceId!);
@@ -387,7 +341,6 @@ export function guanlanWorkspacePlugin(options: WorkspacePluginOptions): Plugin 
               return;
             }
 
-            // ---------- 单文件内容（现有阅读器直读）：GET /api/workspace/file?path= ----------
             if (url.pathname === '/api/workspace/file') {
               const rel = url.searchParams.get('path') || '';
               const boundary = validatePath(options.rootPath, rel);
@@ -425,7 +378,6 @@ export function guanlanWorkspacePlugin(options: WorkspacePluginOptions): Plugin 
               return;
             }
 
-            // ---------- 增量通知（SSE）：GET /api/workspace/stream ----------
             if (url.pathname === '/api/workspace/stream') {
               getStore();
               ensureWatcher();
@@ -444,7 +396,6 @@ export function guanlanWorkspacePlugin(options: WorkspacePluginOptions): Plugin 
                 try {
                   res.write(': ping\n\n');
                 } catch {
-                  /* 断开后由 close 清理 */
                 }
               }, 25_000);
               const remove = broadcaster.add({
@@ -458,7 +409,6 @@ export function guanlanWorkspacePlugin(options: WorkspacePluginOptions): Plugin 
               return;
             }
 
-            // ---------- 配置：GET /api/workspace/config ----------
             if (url.pathname === '/api/workspace/config') {
               sendJson(res, 200, {
                 rootPath: options.rootPath,

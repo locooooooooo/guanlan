@@ -1,9 +1,3 @@
-/**
- * 观澜 Node 对拍基线 —— 持久库 → 前端契约的投影
- *
- * 目的：Graph / Timeline / Reader / Diff 共享同一份持久库 versions/events。
- * 完整的多版本 revisions 全部投影给前端，正文按快照大小内联；超大快照留给按版本取内容接口。
- */
 
 import fs from 'node:fs';
 
@@ -81,7 +75,6 @@ export function projectWorkspace(
   const statements = store.listStatements(ws.workspace_id);
   const edges = store.listEdges(ws.workspace_id);
 
-  // 索引
   const fileById = new Map<string, FileRow>();
   for (const f of allFiles) fileById.set(f.file_id, f);
   const fileByPath = new Map<string, FileRow>();
@@ -95,7 +88,6 @@ export function projectWorkspace(
     fileIdByRevision.set(rev.revision_id, rev.file_id);
   }
 
-  // 变更章节（来自 modified 事件的 payload）
   const changedSectionsByRevision = new Map<string, string[]>();
   const rollbackRevisions = new Set<string>();
   for (const ev of eventRows) {
@@ -106,10 +98,8 @@ export function projectWorkspace(
         changedSectionsByRevision.set(ev.revision_id, payload.changed_sections);
       }
     } catch {
-      /* payload 异常不影响读取 */
     }
   }
-  // A → B → A：与更早版本内容哈希相同即为恢复
   for (const [, revs] of revisionsByFile) {
     const seen = new Map<string, number>();
     for (const rev of revs) {
@@ -126,11 +116,6 @@ export function projectWorkspace(
     return buffer.toString('utf-8');
   };
 
-  // B04 对齐（contract-query-api.md §1.3 / Rust query/files.rs coverage_of）：
-  // pdf=L2 页级抽取 page_indexed → pdf_page_text，否则 filename_only。Node 管线
-  // 没有 PDF 解析器；受控夹具口径：magic 头 %PDF- 且不超过 Rust 侧按需解析上限
-  // （query/pdf.rs MAX_ONDEMAND_PDF_BYTES = 32MiB）即视为可页级抽取
-  // （seed 的 buildPdf 产物恒满足；scan 级别的大 PDF 仍诚实 filename_only）。
   const PDF_ONDEMAND_MAX_BYTES = 32 * 1024 * 1024;
   const readPdfPageIndexed = (rev: RevisionRow): boolean => {
     if (!rev.snapshot_available) return false;
@@ -144,9 +129,6 @@ export function projectWorkspace(
     const kind = fileFormat;
     const p = fileByPath.get(fileById.get(rev.file_id)?.current_path.replace(/\\/g, '/') || '');
     const relPath = p?.current_path || '';
-    // 阶段一瘦身：只对 SVG 内联正文（SVG 阅读器依赖 /scan 内联的 svgSource，契约不动）；
-    // MD 正文不再随 /scan 传输（约 3MiB 级载荷收益），阅读器 / 搜索 / 差异 /
-    // 智能体读取均镜像 ReaderView.tsx 的既有模式，经 /revisions/<id>/content 按需回退。
     const text = kind === 'svg' ? readRevisionText(rev) : null;
 
     const summaryParts = [`v${rev.seq}`];
@@ -174,7 +156,6 @@ export function projectWorkspace(
       sizeBytes: rev.size_bytes,
       snapshotAvailable: Boolean(rev.snapshot_available),
       isBaselineProtected: rev.seq === 1,
-      // MD 正文不再内联（字段保持可选，消费方按需经 /revisions/<id>/content 回退）
       svgSource: kind === 'svg' && text !== null ? text : undefined,
       svgExtractedTexts: kind === 'svg' && text ? extractSvgText(text) : undefined,
       changedSectionsFromPrev: changedSectionsByRevision.get(rev.revision_id),
@@ -219,7 +200,6 @@ export function projectWorkspace(
     };
   });
 
-  // ---------- 事件 ----------
   const events: TimelineEvent[] = eventRows.map((ev) => {
     const payload = safeJson(ev.payload_json);
     const fileId =
@@ -253,12 +233,10 @@ export function projectWorkspace(
     };
   });
 
-  // ---------- 决策（按业务决定归并陈述） ----------
   const revisionObservedAt = new Map<string, string>();
   for (const rev of revisionRows) revisionObservedAt.set(rev.revision_id, rev.observed_at);
   const decisions = groupStatementsIntoDecisions(statements, fileById, revisionObservedAt);
 
-  // ---------- 关系（只投影能落到文件的引用） ----------
   const relations: RelationEdge[] = edges
     .filter((e) => !e.target_file_id.startsWith('unresolved:'))
     .map((e) => ({
@@ -275,7 +253,6 @@ export function projectWorkspace(
           : undefined,
     }));
 
-  // ---------- 配置 ----------
   const mdCount = activeFiles.filter((f) => f.format === 'md').length;
   const svgCount = activeFiles.filter((f) => f.format === 'svg').length;
   const pdfCount = activeFiles.filter((f) => f.format === 'pdf').length;
@@ -308,8 +285,6 @@ export function projectWorkspace(
     quota: {
       maxTotalMiB: 500,
       usedTotalMiB: Number((blobTotals.bytes / 1024 / 1024).toFixed(1)),
-      // 与契约 contract-storage.md §6 的第二档一致（默认 50 MiB）。冒烟拿这个投影值比对
-      // Rust 服务的 bootstrap；写成 20 时冒烟的 bootstrap 一项会红。
       maxSingleBinaryMiB: 50,
       protectedSnapshotsCount: blobTotals.n,
       evictedSnapshotsCount: 0,
@@ -343,8 +318,6 @@ export function projectWorkspace(
       source: 'store',
       totalFiles: activeFiles.length,
       totalRevisions: revisionRows.length,
-      // 单条 workspace COUNT：maxEventSeq>0 与 COUNT(*)>0 判空恒同（seq 自增恒 ≥1），
-      // 空工作区两条路径都返回 0，无须先 max 再 count 两条查询
       totalEvents: Number(
         (store.db
           .prepare('SELECT COUNT(*) AS n FROM events WHERE workspace_id = ?')
@@ -369,11 +342,7 @@ function groupStatementsIntoDecisions(
 
   const decisions: DecisionAssertion[] = [];
   for (const [decisionId, list] of byDecision) {
-    // 以「来源文件最新版本」的陈述作为当前口径；同版本内按行号先后
     const sorted = [...list].sort((a, b) => {
-      // 跨文件比较新旧不能用 per-file seq：seq 按文件独立编号，文件 X 的 seq10
-      // 不代表比文件 Y 的 seq2 更新。先比版本观察时间（与 reconcile.recordDecisionEvents
-      // 的 observed_at 口径一致），同时间再比陈述观察时间，最后按行号。
       const tA = revisionObservedAt.get(a.revision_id) ?? a.observed_at;
       const tB = revisionObservedAt.get(b.revision_id) ?? b.observed_at;
       if (tA !== tB) return tA < tB ? 1 : -1;
@@ -439,7 +408,6 @@ function groupStatementsIntoDecisions(
     });
   }
 
-  // 有内容变更的排在前面：待确认/来源不一致优先
   const rank = (s: string) => (s === '来源不一致' ? 0 : s === '待确认' ? 1 : s === '已确认' ? 2 : 3);
   decisions.sort((a, b) => rank(a.status) - rank(b.status) || a.code.localeCompare(b.code));
   return decisions;
@@ -477,14 +445,8 @@ export function projectFileHistory(store: WorkspaceStore, fileId: string) {
     occurred_precision: rev.occurred_precision,
     occurred_source: rev.occurred_source,
     snapshot_available: Boolean(rev.snapshot_available),
-    // 不下发 snapshot_path：服务端绝对路径不进 UI；正文一律走 /revisions/<id>/content
   }));
 
-  // 事件覆盖四类（缺一不可，否则版本链天生不完整）：
-  // 1) subject_id = file_id（file 主体事件）
-  // 2) revision_id 属于该文件（revision 主体事件）
-  // 3) payload_json.file_id = file_id（决策事件：file_id 只在 payload、revision_id 为 null）
-  // 4) subject_id = 'path:' + current_path（read_error / read_recovered 以路径为主体）
   const events = store.db
     .prepare(
       `SELECT * FROM events

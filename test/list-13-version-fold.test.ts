@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-// 1.3：列表「同文件同日多版本」折叠（纯函数口径）
 import {
   VERSION_HISTORY_KINDS,
   foldSameFileDayVersions,
@@ -10,7 +9,6 @@ import {
 } from '../src/utils/graphEvents';
 import type { SameFileDayVersionItem } from '../src/utils/graphEvents';
 
-/** 造一条事件：默认 PLAN.md 的 modified，同日 2026-11-12，版本从 20 递减到 1 */
 function item(over: Partial<SameFileDayVersionItem> = {}): SameFileDayVersionItem {
   return {
     eventId: 'evt_1',
@@ -22,7 +20,6 @@ function item(over: Partial<SameFileDayVersionItem> = {}): SameFileDayVersionIte
   };
 }
 
-/** 20 次演进（服务端上新下旧：v20 在最前） */
 function planDay(versions: number[], over: Partial<SameFileDayVersionItem> = {}) {
   return versions.map((v, i) =>
     item({ eventId: `evt_v${v}`, versionNumber: v, ...over })
@@ -30,7 +27,7 @@ function planDay(versions: number[], over: Partial<SameFileDayVersionItem> = {})
 }
 
 test('1.3 同文件同日 20 个版本 → 1 组主卡（v1 → v20 · 今日共 20 次演进）', () => {
-  const versions = Array.from({ length: 20 }, (_, i) => 20 - i); // 20,19,…,1
+  const versions = Array.from({ length: 20 }, (_, i) => 20 - i);
   const items = planDay(versions);
   const { groups, indexToGroup } = foldSameFileDayVersions(items);
 

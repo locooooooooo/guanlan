@@ -13,11 +13,8 @@ export interface CoalescedTimer {
 }
 
 export interface CoalescedPersist {
-  /** 标记有新状态待写；重复调用只保留最后一个定时器 */
   schedule(): void;
-  /** 立即写，并取消挂起的定时器 */
   flush(): void;
-  /** 取消挂起的定时器，不写 */
   cancel(): void;
 }
 

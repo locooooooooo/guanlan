@@ -1,35 +1,6 @@
 use super::*;
-/// 夹具身份数字向量（native/testdata/identity-vectors.json，由
-/// scripts/seed-fixture.ts 生成）。文件被 gitignore 且不在 git 内：
-/// 干净 checkout（无 seed 的 CI cargo 作业）缺文件时**显式降级跳过**，
-/// 不 panic，确保无 seed 的干净 checkout 也能通过 `cargo test`。
-///
-/// 夹具 JSON 结构（以 scripts/seed-fixture.ts 实际产出为准）：
-/// ```jsonc
-/// {
-///   "node": { "cwd": "H:\\…" },            // 相对路径/纯盘符向量使用的进程 cwd
-///   "root_key_cases": [                     // rootKey 断言（含 resolved/workspace_id）
-///     { "input": "…", "resolved": "…", "root_key": "773818154cee7e6d",
-///       "workspace_id": "ws_773818154cee7e6d", "note": "…" }
-///   ],
-///   "portable": [                           // 与 cwd 无关的 rootKey 断言（绝对路径）
-///     { "input": "D:\\notebooks\\demo", "root_key": "6d74a29df40616ec" }
-///   ],
-///   "file_id_cases": [                      // file_id 断言（含归一化交叉自检列）
-///     { "root_key": "fbf9781d0083e1ca", "input": "Notes\\ReadMe.MD",
-///       "normalized_input": "notes/readme.md", "file_id": "f_…" }
-///   ],
-///   "fixture_files": [                      // 夹具工作区全量文件的 file_id 断言
-///     { "relative_path": "assets/logo.svg", "file_id": "f_…" }
-///   ]
-/// }
-/// ```
 #[test]
 fn identity_vectors_from_fixture() {
-    // identity-vectors.json 被仓库根 .gitignore 忽略且由
-    // seed-fixture.ts 生成——干净 checkout（无 seed 的 CI cargo 作业）没有该文件。
-    // 缺文件时显式降级跳过而非 panic；身份公式本身由本文件的 SESSION_VECTORS
-    // 内嵌向量与 contract_stated_identity_values 覆盖，不因夹具缺失而失守。
     let text = match std::fs::read_to_string(IDENTITY_VECTORS_PATH) {
         Ok(t) => t,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -54,7 +25,6 @@ fn identity_vectors_from_fixture() {
 
     let mut checked = 0usize;
 
-    // root_key_cases：resolve → rootKey → workspace_id 全链断言
     let mut candidate_root_keys: Vec<String> = Vec::new();
     if let Some(list) = vectors.get("root_key_cases").and_then(|v| v.as_array()) {
         for case in list {
@@ -86,7 +56,6 @@ fn identity_vectors_from_fixture() {
         }
     }
 
-    // portable：绝对路径向量，与 cwd 无关
     if let Some(list) = vectors.get("portable").and_then(|v| v.as_array()) {
         for case in list {
             let input = case.get("input").and_then(|x| x.as_str()).expect("input");
@@ -103,7 +72,6 @@ fn identity_vectors_from_fixture() {
         }
     }
 
-    // file_id_cases：normalize+lower 交叉自检列 + file_id 断言
     if let Some(list) = vectors.get("file_id_cases").and_then(|v| v.as_array()) {
         for case in list {
             let root_key = case
@@ -131,8 +99,6 @@ fn identity_vectors_from_fixture() {
         }
     }
 
-    // fixture_files：夹具工作区全量文件清单，与 root_key_cases 中提供的
-    // 工作区根配对（生成口径：全部 58 个文件与同一 root_key 匹配）
     if let Some(list) = vectors.get("fixture_files").and_then(|v| v.as_array()) {
         if !list.is_empty() && !candidate_root_keys.is_empty() {
             let mut best = 0usize;

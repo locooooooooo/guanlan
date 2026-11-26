@@ -40,7 +40,6 @@ pub use crate::index::file_format::{
 /// 保留旧管线的既有排除项（`node_modules` / `.git` / `.venv` / `_软件安装包` /
 /// `_spike` / `dist` / `runtime` / `backups` / `tmp`），并补齐常见语言工具链依赖与系统目录。
 pub const DEFAULT_EXCLUDED: &[&str] = &[
-    // —— 依赖与包管理 ——
     "node_modules",
     "bower_components",
     "vendor",
@@ -48,13 +47,11 @@ pub const DEFAULT_EXCLUDED: &[&str] = &[
     ".pnp",
     ".pnpm-store",
     ".yarn",
-    // —— 版本库与 IDE ——
     ".git",
     ".svn",
     ".hg",
     ".idea",
     ".vscode",
-    // —— Python / JVM / 其它语言工具链 ——
     ".venv",
     "venv",
     "__pycache__",
@@ -65,12 +62,10 @@ pub const DEFAULT_EXCLUDED: &[&str] = &[
     ".nox",
     ".gradle",
     ".m2",
-    // —— Rust / C++ / .NET 构建目录 ——
     "target",
     "cmake-build-debug",
     "cmake-build-release",
     "CMakeFiles",
-    // —— 前端构建缓存 ——
     ".next",
     ".nuxt",
     ".svelte-kit",
@@ -78,7 +73,6 @@ pub const DEFAULT_EXCLUDED: &[&str] = &[
     ".parcel-cache",
     ".cache",
     ".terraform",
-    // —— 系统目录 ——
     "AppData",
     "$RECYCLE.BIN",
     "System Volume Information",
@@ -86,7 +80,6 @@ pub const DEFAULT_EXCLUDED: &[&str] = &[
     "Program Files",
     "Program Files (x86)",
     "ProgramData",
-    // —— 观澜旧管线既有排除项（保留，不扩大） ——
     "_软件安装包",
     "_spike",
     "dist",
@@ -259,7 +252,6 @@ pub fn collect_workspace_folders(
 
     let mut listing = FolderListing::default();
     if !root.is_dir() {
-        // 根目录本身读不到：清单不可信，交给调用方保留最后已知
         listing.incomplete = true;
         return listing;
     }
@@ -297,7 +289,6 @@ fn walk_folders(
         return;
     }
     let Ok(entries) = fs::read_dir(dir) else {
-        // 这一层读不到：清单缺一块，标记不完整（不当作「没有子目录」）
         listing.incomplete = true;
         return;
     };
@@ -428,7 +419,6 @@ pub fn collect_specific_paths_cancellable(
     CollectResult {
         files,
         read_errors,
-        // 定向采集范围不完整：缺失判定禁用（契约 §5.4）
         complete: false,
         truncated: false,
         cancelled,
@@ -450,13 +440,11 @@ pub fn is_ignored_path(root: &Path, rel_path: &str) -> bool {
     for (index, segment) in segments.iter().enumerate() {
         let is_last = index + 1 == segments.len();
         if is_last {
-            // 目标文件：命中即忽略
             if stack.is_ignored(rel_path, false) {
                 return true;
             }
             break;
         }
-        // 祖先目录：点目录 / 默认黑名单 / .gitignore 命中均整棵剪掉
         if segment.starts_with('.') || DEFAULT_EXCLUDED.contains(segment) {
             return true;
         }
@@ -477,14 +465,11 @@ pub fn is_ignored_path(root: &Path, rel_path: &str) -> bool {
     false
 }
 
-/// `.gitignore` 进程级缓存条目：`Absent` = 该目录确认无此文件；`Present` = 已解析规则。
-/// 命中条件含 mtime 一致（用户改写 `.gitignore` 后下一轮对账即失效重读，语义不变）。
 enum CachedLayer {
     Absent,
     Present(std::sync::Arc<Gitignore>),
 }
 
-/// 缓存表：`.gitignore` 绝对路径 → (mtime, 解析产物)
 type GitignoreCache = HashMap<PathBuf, (Option<SystemTime>, CachedLayer)>;
 
 fn gitignore_cache() -> &'static std::sync::Mutex<GitignoreCache> {
@@ -493,11 +478,6 @@ fn gitignore_cache() -> &'static std::sync::Mutex<GitignoreCache> {
     CACHE.get_or_init(|| std::sync::Mutex::new(HashMap::new()))
 }
 
-/// 读取某目录下的 `.gitignore`（不存在则返回 `None`）。
-///
-/// 整树扫描逐层加载与大批量定向路径采集都会重复读盘并重解析同一份 `.gitignore`，
-/// 因此使用进程级缓存（按 mtime 校验失效），命中时克隆规则向量返回（规则数通常很少，
-/// 代价可忽略），`read_gitignore` 对外签名与语义保持不变。
 fn read_gitignore(dir: &Path, base: &str) -> Option<Gitignore> {
     let path = dir.join(".gitignore");
     let mtime = fs::metadata(&path)
@@ -532,7 +512,6 @@ fn read_gitignore(dir: &Path, base: &str) -> Option<Gitignore> {
     }
 }
 
-/// 递归遍历一个目录
 #[allow(clippy::too_many_arguments)]
 fn walk(
     dir: &Path,
@@ -556,7 +535,6 @@ fn walk(
         return;
     }
     if depth > max_depth || files.len() >= max_files {
-        // 范围不完整：complete 必须同步为 false，调用方才不会把截断范围外的文件误判缺失
         *truncated = true;
         *complete = false;
         return;
@@ -565,7 +543,6 @@ fn walk(
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(err) => {
-            // 目录暂时读不到：保留原有记录，报告问题，不判定缺失
             *complete = false;
             read_errors.push(ReadError {
                 relative_path: if relative_dir.is_empty() {
@@ -579,7 +556,6 @@ fn walk(
         }
     };
 
-    // 按文件名排序：同一次扫描的采集顺序可复现（TS 用 OS 目录序，不可复现）
     let mut names: Vec<(String, PathBuf)> = Vec::new();
     for entry in entries {
         let entry = match entry {
@@ -628,17 +604,14 @@ fn walk(
         };
 
         if file_type.is_dir() {
-            // 点目录一律跳过（.git / .zcode / .aistudio 等）
             if name.starts_with('.') || is_excluded(&name, excluded) {
                 continue;
             }
             let child_rel = join_rel(relative_dir, &name);
-            // `.gitignore` 命中的目录整棵剪掉（git 语义：被忽略目录的内容不再递归）
             if stack.is_ignored(&child_rel, true) {
                 *ignored_count += 1;
                 continue;
             }
-            // 进入子目录：先压入该目录的 `.gitignore` 规则（越深越优先）
             let pushed =
                 read_gitignore(&full_path, &child_rel).is_some_and(|layer| stack.push(layer));
             walk(
@@ -665,7 +638,6 @@ fn walk(
             }
             continue;
         }
-        // 符号链接与其它类型一律跳过（与 TS 的 `entry.isFile()` 同口径）
         if !file_type.is_file() {
             continue;
         }
@@ -701,7 +673,6 @@ fn walk(
     }
 }
 
-/// 相对路径拼接（正斜杠）
 fn join_rel(relative_dir: &str, name: &str) -> String {
     if relative_dir.is_empty() {
         name.to_owned()
@@ -710,12 +681,10 @@ fn join_rel(relative_dir: &str, name: &str) -> String {
     }
 }
 
-/// 排除名匹配（默认集全是精确名，大小写敏感）
 fn is_excluded(name: &str, excluded: &[String]) -> bool {
     excluded.iter().any(|pattern| glob_match(pattern, name))
 }
 
-/// 通配符匹配（`*` → 任意串，整名锚定；与 TS 的正则等价写法同语义）
 fn glob_match(pattern: &str, name: &str) -> bool {
     if !pattern.contains('*') {
         return pattern == name;
@@ -736,9 +705,6 @@ fn glob_match(pattern: &str, name: &str) -> bool {
     rest.ends_with(last)
 }
 
-/// 无扩展名的常见文件名 → 格式 token（`Makefile` / `Dockerfile` / `README` …）。
-///
-/// 这些文件是真实资料，不能因为「没有扩展名」就退化成 `bin`。
 const KNOWN_EXTENSIONLESS: &[(&str, &str)] = &[
     ("makefile", "make"),
     ("gnumakefile", "make"),
@@ -766,11 +732,6 @@ const KNOWN_EXTENSIONLESS: &[(&str, &str)] = &[
     (".babelrc", "babelrc"),
 ];
 
-/// 扩展名判定 + 无扩展名文件识别（所有常规文件均映射为具体格式）。
-///
-/// - 有扩展名 → token = 小写扩展名（未知扩展名仍是真实 token，族归 `binary`）。
-/// - 无扩展名 → 查常见文件名表；仍未知则 `bin`。
-/// - 无扩展名但内容是 PDF（`%PDF` 魔数）→ `pdf`（沿用旧管线行为）。
 pub(crate) fn format_of(file_name: &str, path: &Path) -> FileFormat {
     let ext = extension_of(file_name);
     if !ext.is_empty() {
@@ -786,7 +747,6 @@ pub(crate) fn format_of(file_name: &str, path: &Path) -> FileFormat {
     FileFormat::of_extension(BINARY_TOKEN)
 }
 
-/// Node `path.extname` 口径：以点开头的文件名没有扩展名
 fn extension_of(file_name: &str) -> &str {
     match file_name.rfind('.') {
         Some(0) | None => "",
@@ -794,7 +754,6 @@ fn extension_of(file_name: &str) -> &str {
     }
 }
 
-/// 文件头魔数判定 PDF（无扩展名的内容也认）
 fn looks_like_pdf(path: &Path) -> bool {
     let Ok(mut file) = fs::File::open(path) else {
         return false;
@@ -895,7 +854,6 @@ pub fn stat_fingerprint(path: &Path) -> std::io::Result<Fingerprint> {
                 .unwrap_or_default();
             let secs = duration.as_secs() as i64;
             let nanos = duration.subsec_nanos() as i64;
-            // Node `stat.mtimeMs` 公式：秒 * 1000 + 纳秒 / 1e6（双精度）
             let millis = secs as f64 * 1000.0 + nanos as f64 / 1_000_000.0;
             (i128::from(secs) * 1_000_000_000 + i128::from(nanos), millis)
         }
@@ -970,7 +928,6 @@ mod tests {
         );
         assert!(result.complete);
         assert!(!result.truncated);
-        // 同名不同内容的两个文件不得互相覆盖
         let a = result
             .files
             .iter()
@@ -1007,7 +964,6 @@ mod tests {
         assert_eq!(token_of("b.docx"), "docx");
         assert_eq!(token_of("c.ts"), "ts");
         assert_eq!(token_of("d.png"), "png");
-        // 未知扩展名仍如实登记真实 token（族归 binary）
         assert_eq!(token_of("e.weird"), "weird");
 
         let _ = fs::remove_dir_all(&dir);
@@ -1119,7 +1075,6 @@ mod tests {
 
     #[test]
     fn large_binary_stream_hash_keeps_memory_flat() {
-        // 大文件哈希必须流式完成：全程只用一个 64KiB 缓冲
         let dir = tmp_dir("big");
         fs::create_dir_all(&dir).expect("建目录");
         let path = dir.join("big.bin");

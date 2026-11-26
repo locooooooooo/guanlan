@@ -1,23 +1,12 @@
-/**
- * 应用构建与发行身份单一真相源（编译期注入版本、`git-sha` 与构建时间戳）。
- *
- * - 生产构建（vite build / Tauri bundle）由 vite.config.ts `define` 静态注入三项真实字段；
- * - Node SSR / tsx 单测环境无 Vite define 替换时自动回退至安全常量，绝不抛 ReferenceError；
- * - 在「设置 → 关于观澜」清晰透出，彻底杜绝桌面端新旧安装包混淆。
- */
 
 declare const __GUANLAN_APP_VERSION__: string | undefined;
 declare const __GUANLAN_GIT_SHA__: string | undefined;
 declare const __GUANLAN_BUILD_TIME__: string | undefined;
 
 export interface AppBuildInfo {
-  /** 三端一致语义化版本号（如 "1.2.3"） */
   version: string;
-  /** 编译期 Git 短哈希（如 "8d8e4ab"；无 git 环境回退 "dev"） */
   gitSha: string;
-  /** 编译期 ISO-8601 UTC 构建时间戳 */
   buildTime: string;
-  /** 面向 UI 展示的完整版本标识（如 "v1.2.3"） */
   versionTag: string;
 }
 

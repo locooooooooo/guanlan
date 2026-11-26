@@ -259,7 +259,6 @@ describe('HTTP 轻预览客户端与 20 次连按方向键零竞态防抖调度'
       });
     });
 
-    // 连按 20 次方向键（每次不等前一次网络返回直接切下一个）
     const outcomes = await Promise.all(
       formats.map(([fmt], idx) => coordinator.load(`rev_${idx}_${fmt}`))
     );
@@ -271,7 +270,6 @@ describe('HTTP 轻预览客户端与 20 次连按方向键零竞态防抖调度'
     assert.equal(outcomes[19].status, 'ok');
     assert.equal(outcomes[19].data?.revision_id, 'rev_19_log');
 
-    // 再切回一次应命中本地 LRU 缓存（< 5ms 且不再触发网络）
     const t0 = performance.now();
     const cachedHit = await coordinator.load('rev_19_log');
     const elapsedMs = performance.now() - t0;
@@ -338,7 +336,6 @@ describe('HTTP 轻预览客户端与 20 次连按方向键零竞态防抖调度'
 describe('独立组件边界与全视图接线护栏', () => {
   it('QuickPreviewModal 保持独立，绝未塞入 ReaderView.tsx 巨石组件', () => {
     const reader = fs.readFileSync(path.join(SRC_ROOT, 'components/ReaderView.tsx'), 'utf8');
-    // 拆层后 App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
     const app = ['App.tsx', 'stores/useWorkspaceStore.tsx', 'components/app/AppModalsStack.tsx']
       .map((p) => fs.readFileSync(path.join(SRC_ROOT, p), 'utf8'))
       .join(String.fromCharCode(10))

@@ -1,19 +1,3 @@
-/**
- * 阅读器锚点批注纯函数层（零 React 依赖，node/SSR 可跑）。
- *
- * 原文/原图局部锚点批注的数据与锚点口径单一出处：
- * · 批注锚点三类：MD 段落（行号区间）、SVG 画布框选区域（渲染盒百分比，缩放无关）、
- *   PDF 指定页选中文字（页码 + 摘录）。
- * · 本地独立证据表（停机条款口径）：批注绝不写进用户原始文件字节；SVG/PDF 批注
- *   只落本地证据表并**按版本哈希（content_sha256）绑定**——换版本互不可见，绝不拿
- *   旧版批注冒充当前版批注。MD 批注「一键转为 [P1 - 待确认] 决定项」走既有桌面壳
- *   save_workspace_file CAS 桥（显式点击 + 冲突诚实拒绝），本层只产插入文本。
- * · 存储纪律与 decisionReceiptSnapshot 同口径：键 guanlan.readerAnnotations.v1 →
- *   Record<"fileId::contentSha256", 批注[]>；读写 try/catch 静默降级（隐私模式、
- *   配额满、损坏 JSON 绝不让阅读器起不来）；node 无 window 环境按未设置处理。
- * · 有界：每版本批注 ≤ ANNOTATIONS_PER_VERSION_CAP（超出丢最旧并如实计数），
- *   单条 note ≤ ANNOTATION_NOTE_MAX 字符。
- */
 
 /** 批注锚点定位器（三类；SVG 区域存渲染盒百分比 0..1，与缩放/分辨率无关）。 */
 export type ReaderAnnotationLocator =
@@ -25,9 +9,7 @@ export interface ReaderAnnotation {
   id: string;
   note: string;
   created_at: string;
-  /** 一键转为决定项：MD=已回写 [P1 - 待确认] 块；SVG/PDF=本地决定草案（绝不写原文）。 */
   converted: boolean;
-  /** 转为决定项时的决定文本（converted=false 恒缺省）。 */
   decision_text?: string;
   locator: ReaderAnnotationLocator;
 }
@@ -55,7 +37,6 @@ export function emptyAnnotationStore(): ReaderAnnotationStore {
   return {};
 }
 
-/** 批注 id：时间单调 + 计数器，同毫秒不撞（注入 clock 便于测试确定性）。 */
 let annotationSeq = 0;
 export function nextAnnotationId(clock: () => number = () => Date.now()): string {
   annotationSeq += 1;
@@ -75,7 +56,6 @@ export function normalizeAnnotationExcerpt(raw: string): string {
   return (raw || '').replace(/\s+/g, ' ').trim().slice(0, ANNOTATION_EXCERPT_MAX);
 }
 
-/** 单条批注形状校验（损坏条目剔除，不抛错）。 */
 function isValidAnnotation(value: unknown): value is ReaderAnnotation {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const a = value as Partial<ReaderAnnotation>;
@@ -174,7 +154,6 @@ export function markAnnotationConverted(
   return changed ? { ...store, [key]: next } : store;
 }
 
-/* ── 本地持久化薄壳（decisionReceiptSnapshot 同口径；node 无 window 静默） ── */
 
 export function loadAnnotationStore(): ReaderAnnotationStore {
   if (typeof window === 'undefined') return {};
@@ -192,11 +171,9 @@ export function persistAnnotationStore(store: ReaderAnnotationStore): void {
   try {
     window.localStorage.setItem(ANNOTATION_STORAGE_KEY, JSON.stringify(store));
   } catch {
-    /* 隐私模式/配额满：静默（批注是增强能力，不是阅读前置条件） */
   }
 }
 
-/* ── SVG 框选区域几何（渲染盒百分比坐标系） ────────────────────────────── */
 
 /** SVG 画布单位（viewBox 宽高优先，root width/height 数值兜底，皆缺 null——仅作展示标签，定位恒用百分比）。 */
 export function svgCanvasUnitsOf(svg: string): { width: number; height: number } | null {
@@ -235,8 +212,6 @@ export function normalizeSvgRegion(
   fy1: number
 ): { fx: number; fy: number; fw: number; fh: number } | null {
   const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
-  // 1e-6 量化消除拖拽减法的浮点尾差（0.8-0.2=0.6000000000000001 类），
-  // 百分比定位最终 toFixed(3)，量化不损失可见精度
   const q = (v: number) => Number(v.toFixed(6));
   const x0 = clamp01(fx0);
   const y0 = clamp01(fy0);
@@ -265,7 +240,6 @@ export function svgRegionStyle(region: { fx: number; fy: number; fw: number; fh:
   };
 }
 
-/* ── 锚点标签与决定项转换 ──────────────────────────────────────────────── */
 
 /** 锚点人话标签（composer/清单共用一处口径）。 */
 export function formatAnnotationLocatorLabel(locator: ReaderAnnotationLocator): string {
@@ -304,7 +278,6 @@ export function buildDecisionBlockInsertion(input: {
   const content = input.markdownContent ?? '';
   const note = normalizeAnnotationNote(input.note);
   const locatorLabel = input.locatorLabel || '本地批注';
-  // 空 note 不拒绝（调用方入口已拦截纯空批注）：标题与决定字段按锚点标签兜底
   const title = buildAnnotationDecisionTitle(note, locatorLabel);
   const decisionText = note || title;
   const titleShort = title.length > 60 ? `${title.slice(0, 60)}…` : title;

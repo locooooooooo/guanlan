@@ -73,8 +73,6 @@ pub fn bootstrap(
     let files_page_size = clamp_limit(Some(query.files_page_size), 100, 500);
     let events_limit = clamp_limit(Some(query.events_limit), 50, 200);
 
-    // 短读事务：同一一致性视图内完成全部读取（契约 §1.1；只读连接上的
-    // DEFERRED 事务不产生任何写行为，契约 §4-1 只读边界不变）
     store.read_txn(|_conn| {
         let ws = store.workspace()?.clone();
         let ws_id = ws.workspace_id.as_str();
@@ -84,7 +82,6 @@ pub fn bootstrap(
         let counts = store.counts(ws_id)?;
         let time_range = event_time_range_inner(conn, ws_id)?;
 
-        // bootstrap 已在自身 read_txn 内，调 *_tx 变体避免嵌套事务
         let event_days = query_event_days_tx(
             store,
             &EventDaysQuery {
@@ -95,7 +92,6 @@ pub fn bootstrap(
                 ..Default::default()
             },
         )?;
-        // bootstrap 已在自身 read_txn 内，调 query_events_tx 避免嵌套事务
         let events = query_events_tx(
             store,
             &EventQuery {
@@ -110,14 +106,11 @@ pub fn bootstrap(
                 ..Default::default()
             },
         )?;
-        // 决定首批（前端首屏要 selectedDecisionId，App.tsx:336-338；批量上限取
-        // §1.9 默认 limit 100），同时透出全库未决待拍板真实总数
         let decisions_page = decisions_tx(store, &DecisionsQuery::default())?;
         let decisions_unresolved_total = decisions_page.unresolved_total;
         let decisions = decisions_page.items;
         let relations = relations_total(conn, ws_id)?;
 
-        // active 文件总数（WorkspaceStore.ts:540-548 的计数口径）
         let files_total: i64 = conn
             .query_row(
                 "SELECT COUNT(*) AS n FROM files WHERE workspace_id = ? AND status = 'active'",
@@ -149,7 +142,6 @@ pub fn bootstrap(
     })
 }
 
-/// 工作区配置投影（契约 §1.1 config；project.ts:265-310 逐字对齐）
 fn workspace_config(
     store: &ReadonlyStore,
     ws: &crate::dto::WorkspaceRecord,
@@ -157,7 +149,6 @@ fn workspace_config(
     let conn = store.conn();
     let ws_id = ws.workspace_id.as_str();
 
-    // active 文件的格式分布（project.ts:266-268）
     let mut stmt = conn
         .prepare("SELECT format, COUNT(*) AS n FROM files WHERE workspace_id = ? AND status = 'active' GROUP BY format")
         .map_err(internal_sql)?;
@@ -177,7 +168,6 @@ fn workspace_config(
     let pdf_count = *by_format.get("pdf").unwrap_or(&0);
     let active_total: u64 = by_format.values().sum();
 
-    // 快照配额（project.ts:270-272：全表 blob 汇总）
     let (blob_bytes, blob_rows): (i64, i64) = conn
         .query_row(
             "SELECT COALESCE(SUM(size_bytes),0) AS bytes, COUNT(*) AS n FROM blobs",
@@ -185,10 +175,8 @@ fn workspace_config(
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .map_err(internal_sql)?;
-    // Number((bytes / 1024 / 1024).toFixed(1))：保留 1 位小数
     let used_total_mib = ((blob_bytes as f64 / 1024.0 / 1024.0) * 10.0).round() / 10.0;
 
-    // runtimeStatus.sseSeq = 最近 2000 条事件计数（project.ts:80-82 eventLimit）
     let sse_seq: i64 = conn
         .query_row(
             "SELECT COUNT(*) AS n FROM (SELECT 1 FROM events WHERE workspace_id = ? LIMIT 2000)",
@@ -197,8 +185,6 @@ fn workspace_config(
         )
         .map_err(internal_sql)?;
 
-    // enumSnapshot.date = last_scan_at 前 10 字符，缺失回退当前 UTC 日期
-    // （project.ts:282 `(ws.last_scan_at || new Date().toISOString()).slice(0, 10)`）
     let enum_date = ws
         .last_scan_at
         .as_ref()
@@ -224,7 +210,6 @@ fn workspace_config(
             svg_count,
             pdf_count,
             total_count: active_total,
-            // 现状口径：md 记为索引成功，svg/pdf 记为失败（project.ts:287-291）
             indexed_success_count: md_count,
             parse_failed_count: 0,
             pdf_unindexed_count: pdf_count,
@@ -247,8 +232,6 @@ fn workspace_config(
     })
 }
 
-/// 当前 UTC 日期 YYYY-MM-DD（无 chrono 依赖的 civil 算法，Howard Hinnant 口径）。
-/// 仅用于 last_scan_at 缺失时 enumSnapshot.date 的兜底（project.ts:282 同位）。
 fn now_utc_date() -> String {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -271,8 +254,6 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
     (if m <= 2 { y + 1 } else { y }, m, d)
 }
 
-/// 服务实例身份（契约 §1.2）：进程内 OnceLock 缓存，
-/// 以「进程号 + 纳秒时钟」的 SHA-256 前 16 hex 生成。
 fn instance_id() -> String {
     static INSTANCE: OnceLock<String> = OnceLock::new();
     INSTANCE
@@ -317,7 +298,6 @@ pub fn status(store: &ReadonlyStore) -> Result<StatusResponse, GuanlanError> {
         ok: true,
         instance_id: instance_id(),
         api_version: "v1".to_owned(),
-        // 数据库 schema 版本（contract-storage.md §4.3.1）
         schema_version: 2,
         workspace_id: ws.workspace_id,
         root_path: ws.root_path,
@@ -332,7 +312,6 @@ pub fn status(store: &ReadonlyStore) -> Result<StatusResponse, GuanlanError> {
             missing_files: missing_files.max(0) as u64,
         },
         active_jobs: Vec::new(),
-        // watcher 与 L4A 进度由服务装配层填充（core 侧先给中性默认值）
         watcher: crate::dto::WatcherStatus {
             enabled: false,
             last_poll_at: None,
@@ -390,7 +369,6 @@ pub fn storage_stats(store: &ReadonlyStore) -> Result<StorageStatsResponse, Guan
             )
             .map_err(internal_sql)?;
 
-        // 各格式 active 文件数
         let mut by_format: std::collections::HashMap<String, u64> = Default::default();
         let mut class_files: std::collections::HashMap<&'static str, u64> = Default::default();
         {
@@ -417,7 +395,6 @@ pub fn storage_stats(store: &ReadonlyStore) -> Result<StorageStatsResponse, Guan
         }
         let active_files_count: u64 = by_format.values().sum();
 
-        // 各格式版本与快照字节占用（按 file.format 聚合成 FormatClass）
         let mut class_revs: std::collections::HashMap<&'static str, (u64, u64, u64)> =
             Default::default();
         {

@@ -1,8 +1,3 @@
-/**
- * App 横幅栈与冷启动进度：
- * 手动重扫进度 / 后台语义整理 / HITL 清零恢复 / Delivered 归档提示 / Archived 重开 /
- * 监听提示 / 冷启动首扫进度。数据一律来自 useWorkspaceStore ctx。
- */
 
 import React, { useState, useSyncExternalStore } from 'react';
 import { X } from 'lucide-react';
@@ -21,8 +16,6 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
     networkOffline, streamDisconnected, retryingConnection, handleRetryConnection,
     switchingWorkspace,
   } = ctx;
-  // L4A 进度是叶子订阅：它不进 store ctx，更新只重渲本横幅，不带动阅读器与星图。
-  // 传第三参 getServerSnapshot 供 SSR/测试渲染直接读当前快照。
   const l4aProgress = useSyncExternalStore(
     subscribeL4aProgress,
     getL4aProgress,
@@ -30,13 +23,10 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
   );
   const [dismissedNoticeKey, setDismissedNoticeKey] = useState<string | null>(null);
   const changeNoticeKey = changeNotice ? `${changeNotice.at}:${changeNotice.count}` : null;
-  // 新事件分页并入条仅作用于全景溯源（星图/日历/时间线）；
-  // 在知识资产库阅读文档或首页时不弹出通栏横幅打断阅读。
   const visibleChangeNotice =
     activeTab === 'panorama' && changeNotice && changeNoticeKey !== dismissedNoticeKey
       ? changeNotice
       : null;
-  // 主动切换工作区期间旧服务正按预期停机，不弹连接中断/扫描失败红条，改为中性状态条提示。
   const showConnectionAlert =
     !switchingWorkspace && (networkOffline || streamDisconnected || dataSource === 'error');
   const connectionAlertText = networkOffline
@@ -60,7 +50,6 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
         </div>
       )}
 
-      {/* 全局断网 / 服务不可用告警条（role="alert" + 可点击重试，防重提交） */}
       {showConnectionAlert && (
         <div
           data-connection-alert=""
@@ -84,8 +73,6 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
         </div>
       )}
 
-      {/* 手动重扫进度已收编入 TopHeader 右上角同步胶囊（「扫描中…」+ 旋转图标），
-          不再弹出通栏横幅挤压正文/画布高度；仅在扫描失败时呈现可重试告警横幅。 */}
       {!switchingWorkspace && rescanState === 'error' && (
         <div
           className="px-4 py-1.5 bg-[color:color-mix(in_srgb,var(--stage-ink-exec)_10%,var(--card))] border-b border-[color:color-mix(in_srgb,var(--stage-ink-exec)_36%,transparent)] text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--stage-ink-exec-text)] flex flex-wrap items-center gap-2 shrink-0 tabular-nums"
@@ -99,7 +86,6 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
         </div>
       )}
 
-      {/* 后台语义整理与新事件合一细条：两项并发时并作单行轻条，避免双层横幅挤压主视口 */}
       {(l4aProgress || visibleChangeNotice) && (
         <div
           data-unified-status-ribbon=""
@@ -194,9 +180,6 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
         </div>
       )}
 
-      {/* Inline 拍板闭环：阻塞性事项（P0/P1）全部拍板清零后的长任务恢复提示。
-          语义采用 deliver 绿，非阻塞告知 8s 自动收起——
-          槽位唤醒由后端写线程 recompute_slots 完成，本横幅只陈述该事实 */}
       {hitlClearedAt && (
         <div
           className="px-4 py-1 bg-[color:color-mix(in_srgb,var(--stage-ink-deliver)_10%,transparent)] backdrop-blur-md border-b border-[color:color-mix(in_srgb,var(--stage-ink-deliver)_40%,transparent)] text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--stage-ink-deliver-text)] flex items-center gap-2 shrink-0 tabular-nums"
@@ -210,9 +193,6 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
         </div>
       )}
 
-      {/* Delivered 已交付 → 提示一键归档。
-          数据源 /state-overview；归档走 202 job + 轮询，完成后刷新状态投影。
-          非阻塞横幅：不锁阅读/拍板/上下文清单，失败就地展示并允许重试。 */}
       {deliveredInitiative && (
         <div
           data-initiative-archive-prompt=""
@@ -250,8 +230,6 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
         </div>
       )}
 
-      {/* 当前文档所属专项已归档 → 提供人工重开入口（Archived 终态唯一离开通道）。
-          仅在阅读归档专项内文档时出现，不对全局归档列表刷屏。 */}
       {activeInitiative?.state === 'archived' && (
         <div
           data-initiative-reopen-prompt=""
@@ -282,10 +260,6 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
         </div>
       )}
 
-      {/* 冷启动首扫（千份级资料约一分钟）：首页上有明确的进度态；其余页签仍显示各自空态。
-          采用琉璃骨架屏——司辰线稿（静态）+ 流光骨架条（prefers-reduced-motion 下退化为
-          静态玻璃条）；role="status" 与两句诚实文案原样保留，
-          骨架只是视觉占位，不吞任何真实错误态（dataError 分支整块不渲染骨架）。 */}
       {dataSource === 'loading' && files.length === 0 && !dataError && activeTab === 'home' && (
         <div
           className="flex-1 flex items-center justify-center p-8"

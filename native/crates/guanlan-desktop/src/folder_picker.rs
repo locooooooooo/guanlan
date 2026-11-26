@@ -17,7 +17,6 @@ mod win_picker {
         data4: [u8; 8],
     }
 
-    // CLSID_FileOpenDialog: {DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7}
     const CLSID_FILE_OPEN_DIALOG: Guid = Guid {
         data1: 0xDC1C_5A9C,
         data2: 0xE88A,
@@ -25,7 +24,6 @@ mod win_picker {
         data4: [0xA5, 0xA1, 0x60, 0xF8, 0x2A, 0x20, 0xAE, 0xF7],
     };
 
-    // IID_IFileOpenDialog: {D57C7288-D4AD-4768-BE02-9D969532D960}
     const IID_I_FILE_OPEN_DIALOG: Guid = Guid {
         data1: 0xD57C_7288,
         data2: 0xD4AD,
@@ -85,7 +83,6 @@ mod win_picker {
 
     unsafe fn release_com(obj: *mut ComObject) {
         if !obj.is_null() {
-            // IUnknown::Release = slot 2
             let release: unsafe extern "system" fn(*mut ComObject) -> u32 =
                 std::mem::transmute(*(*obj).vtbl.add(2));
             release(obj);
@@ -123,8 +120,6 @@ mod win_picker {
             let dialog = raw_dialog as *mut ComObject;
             let _release_dialog = ComGuard::new(|| release_com(dialog));
 
-            // IFileDialog::GetOptions = slot 10, SetOptions = slot 9, SetTitle = slot 17,
-            // Show = slot 3, GetResult = slot 20 (validated against ShObjIdl_core.h)
             let get_options: unsafe extern "system" fn(*mut ComObject, *mut u32) -> i32 =
                 std::mem::transmute(*(*dialog).vtbl.add(10));
             let set_options: unsafe extern "system" fn(*mut ComObject, u32) -> i32 =
@@ -169,7 +164,6 @@ mod win_picker {
             let item = raw_item as *mut ComObject;
             let _release_item = ComGuard::new(|| release_com(item));
 
-            // IShellItem::GetDisplayName = slot 5
             let get_display_name: unsafe extern "system" fn(
                 *mut ComObject,
                 u32,
@@ -222,8 +216,6 @@ mod win_picker {
             let dialog = raw_dialog as *mut ComObject;
             let _release_dialog = ComGuard::new(|| release_com(dialog));
 
-            // IFileDialog: GetOptions=10, SetOptions=9, SetTitle=17, Show=3;
-            // IFileOpenDialog: GetResults=27 (validated against ShObjIdl_core.h)
             let get_options: unsafe extern "system" fn(*mut ComObject, *mut u32) -> i32 =
                 std::mem::transmute(*(*dialog).vtbl.add(10));
             let set_options: unsafe extern "system" fn(*mut ComObject, u32) -> i32 =
@@ -268,7 +260,6 @@ mod win_picker {
             let array = raw_array as *mut ComObject;
             let _release_array = ComGuard::new(|| release_com(array));
 
-            // IShellItemArray: GetCount=7, GetItemAt=8 (validated against ShObjIdl_core.h)
             let get_count: unsafe extern "system" fn(*mut ComObject, *mut u32) -> i32 =
                 std::mem::transmute(*(*array).vtbl.add(7));
             let get_item_at: unsafe extern "system" fn(

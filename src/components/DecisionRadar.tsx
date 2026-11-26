@@ -3,8 +3,6 @@ import { ChevronDown, Scale } from 'lucide-react';
 import type { DecisionAssertion, DecisionSourceEvidence } from '../types/guanlan';
 import { formatOfficeAnchorLabel, pickPrimaryOfficeEvidence } from '../utils/officeAnchor';
 import { formatPdfAnchorLabel, pickPrimaryPdfEvidence } from '../utils/pdfAnchor';
-// 统一状态机 SSOT：决策状态词表与未决口径单一出口——
-// DECIDED_STATUSES 与 HomeView 卡 A 的过滤实现保持同源一致
 import {
   DECIDED_DECISION_STATUSES,
   DECISION_STATUS_CONFIRMED,
@@ -17,29 +15,13 @@ import {
 } from '../utils/stateProjection';
 import { cleanDisplayText } from '../utils/displayText';
 
-/**
- * 未决决策雷达（全程只读）。
- *
- * - 只读：DecisionAssertion 没有审批动作字段，服务端也没有写决策的路径；
- *   这里只有「展开 / 跳到证据原文」两种交互，不提供确认/否决/搁置/签批。
- * - 口径：未决 = 待确认 + 来源不一致（冲突）；状态未知单列「待核对」，不计入 N；
- *   已取代不算未决，归入「已定案」。
- * - 候选决策（isCandidateOnly）不计入 N、不进列表。
- * - 排序用 impactBlocked.length 作「阻塞任务数」代理（没有验收临近度数据，不伪造）。
- */
 interface DecisionRadarProps {
   decisions: DecisionAssertion[];
-  /** 服务端全库未决待拍板真实总数（缺省时回退本地计算，兼容单测） */
   unresolvedTotal?: number | null;
   onOpenDecision: (decisionId: string, targetEvidence?: DecisionSourceEvidence) => void;
-  /** 受控展开信号：App 侧递增计数经 TopHeader 转发进来；
-   *  >0 即展开面板。收起仍归本地状态（Esc/外点/再点按钮），信号不反向收起 */
   openSignal?: number;
 }
 
-// 状态字色 → stage-ink -text 深档（玻璃 ≥4.5 AA；同步胶囊三态同款映射：
-// 待确认=decision、来源不一致=anomaly、已确认=deliver；未定局状态一律 --ink-soft）。
-// 键取 stateProjection 决策词表常量，状态词不就地硬编码
 const STATUS_TEXT_COLORS: Record<string, string> = {
   [DECISION_STATUS_PENDING]: 'text-[color:var(--stage-ink-decision-text)]',
   [DECISION_STATUS_CONFLICT]: 'text-[color:var(--stage-ink-anomaly-text)]',
@@ -50,12 +32,10 @@ const STATUS_TEXT_COLORS: Record<string, string> = {
   '未知': 'text-[color:var(--ink-soft)]',
 };
 
-/** 阻塞数降序；同数时按编号稳定排序，避免每次展开跳位 */
 const byBlocked = (a: DecisionAssertion, b: DecisionAssertion) =>
   b.impactBlocked.length - a.impactBlocked.length ||
   a.code.localeCompare(b.code, 'zh-Hans-CN');
 
-/** 分区折叠体（默认收起；只控制显隐，不触任何数据逻辑） */
 const Disclosure: React.FC<{ title: string; count: number; children: React.ReactNode }> = ({
   title,
   count,
@@ -92,12 +72,10 @@ export const DecisionRadar: React.FC<DecisionRadarProps> = ({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  // 受控展开：信号变化且 >0 时展开（仅单向触发，不与本地关闭逻辑打架）
   useEffect(() => {
     if (openSignal !== undefined && openSignal > 0) setOpen(true);
   }, [openSignal]);
 
-  // 点外面 / Esc 关闭：自包含，宿主无需接线
   useEffect(() => {
     if (!open) return;
     const handleDocMouseDown = (e: MouseEvent) => {
@@ -105,8 +83,6 @@ export const DecisionRadar: React.FC<DecisionRadarProps> = ({
     };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        // 浮层先吃掉这一次 Esc：不拦冒泡的话 App 的全局 Esc 会接着切回全景溯源，
-        // 一次按键既关面板又换工作区，阅读现场（滚动位/纸面/行号）随之丢失
         e.stopPropagation();
         setOpen(false);
       }
@@ -119,7 +95,6 @@ export const DecisionRadar: React.FC<DecisionRadarProps> = ({
     };
   }, [open]);
 
-  // 只统计真实决策：候选（isCandidateOnly）只作为线索，不计入任何分区
   const considered = useMemo(
     () => decisions.filter((d) => !d.isCandidateOnly),
     [decisions]
@@ -136,8 +111,6 @@ export const DecisionRadar: React.FC<DecisionRadarProps> = ({
     () => considered.filter((d) => DECIDED_DECISION_STATUSES.includes(d.status)).sort(byBlocked),
     [considered]
   );
-  // 未决/已定案之外的都进「待核对」：服务端若给出未知状态字符串也不会从列表里消失，
-  // 保证非候选决策全量可枚举
   const unknown = useMemo(
     () =>
       considered
@@ -150,8 +123,6 @@ export const DecisionRadar: React.FC<DecisionRadarProps> = ({
         .sort(byBlocked),
     [considered]
   );
-  // 未决计数单一出口：优先消费服务端全库未决总数，避免分页加载造成统计偏差；
-  // 缺省时回退本地 stateProjection.unresolvedDecisionCount，兼容单测与缺省场景
   const loadedUnresolvedCount = unresolvedDecisionCount(considered);
   const unresolvedCount =
     typeof unresolvedTotal === 'number' && unresolvedTotal >= 0
@@ -304,10 +275,6 @@ export const DecisionRadar: React.FC<DecisionRadarProps> = ({
         />
       </button>
 
-      {/* data-esc-layer="open"：Esc 仲裁锚点——事件链/叙事抽屉的 window capture 级
-          Esc 监听（KnowledgeGraph/CanvasNarrativeDrawer）命中此标记时让位，
-          保住上方 handleKeyDown 的 document bubble 关闭路径（stopPropagation 收尾）；
-          缺标记时 capture 层会 stopImmediatePropagation 吞掉本次 Esc，trail 反被静默弹层 */}
       {open && (
         <div
           role="region"
@@ -330,7 +297,6 @@ export const DecisionRadar: React.FC<DecisionRadarProps> = ({
             </p>
           )}
 
-          {/* 冲突（来源不一致）置顶，其次待确认；每组内按阻塞数降序 */}
           {conflicts.length > 0 && (
             <div className="space-y-2">
               <div className="px-1 text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-semibold tracking-[0.16em] text-[color:var(--stage-ink-anomaly-text)]">
@@ -348,7 +314,6 @@ export const DecisionRadar: React.FC<DecisionRadarProps> = ({
             </div>
           )}
 
-          {/* 非候选决策全量可枚举：已定案 / 状态未知 两个折叠区 */}
           <div className="pt-1 border-t border-[#26243D]/10 space-y-1">
             <Disclosure title="已定案（已确认/已否决/已搁置/已取代）" count={decided.length}>
               {decided.length === 0 ? (

@@ -1,23 +1,3 @@
-/**
- * 观澜 —— Node↔Rust 写入对拍
- *
- * 用途：Rust 写入器接管索引后，必须与旧 Node 管线在**同一套表**上产出**同一套事实**。
- * 契约 §2.1 第 2 条明令「不生成第二套历史」：身份公式（file_id / revision_id /
- * event_id / statement_id / decision_id / edge_id）任一处偏差，都会在库里留下两套
- * 并存的记录。这个脚本是那道约束的唯一硬保证。
- *
- * 用法（在 guanlan/ 下执行）：
- *   node node_modules/tsx/dist/cli.mjs scripts/parity-reconcile.ts \
- *     [--exe <guanlan.exe 路径>] [--workspace <目录>]
- *
- * 过程：
- * 1) 同一工作区，分别交给 TS 管线（server/reconcile.ts）与 Rust 写入器
- *    （`guanlan scan --root`），各自写进独立的数据目录；
- * 2) 逐表导出、归一化（剔除采集时刻等必然不同的字段）后比对；
- * 3) 任一差异逐条列出并以非零码退出。
- *
- * 刻意不共享任何实现：TS 侧只 import 旧管线，Rust 侧只跑二进制。
- */
 
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -32,7 +12,6 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.resolve(SCRIPT_DIR, '..');
 const NATIVE_ROOT = path.join(PKG_ROOT, 'native');
 
-// ---------- 参数 ----------
 
 function argOf(name: string): string | undefined {
   const index = process.argv.indexOf(name);
@@ -58,7 +37,6 @@ if (!fs.existsSync(workspaceRoot)) {
   process.exit(2);
 }
 
-// ---------- 临时目录 ----------
 
 const base = fs.mkdtempSync(path.join(os.tmpdir(), 'guanlan-parity-'));
 const tsDataDir = path.join(base, 'ts');
@@ -66,7 +44,6 @@ const rustDataBase = path.join(base, 'rust');
 fs.mkdirSync(tsDataDir, { recursive: true });
 fs.mkdirSync(rustDataBase, { recursive: true });
 
-// ---------- 两侧各跑一轮 ----------
 
 console.log(`工作区：${workspaceRoot}`);
 console.log('① TS 管线（server/reconcile.ts）…');
@@ -83,7 +60,6 @@ if (rustRun.status !== 0) {
   process.exit(1);
 }
 
-// Rust 的数据目录同样是 <base>/<rootKey>（两侧 rootKey 口径一致）
 const rootKey = fs
   .readdirSync(rustDataBase)
   .find((entry) => fs.existsSync(path.join(rustDataBase, entry, 'index.db')));
@@ -93,9 +69,7 @@ if (!rootKey) {
 }
 const rustDataDir = path.join(rustDataBase, rootKey);
 
-// ---------- 导出与归一化 ----------
 
-/** 采集时刻等字段必然随运行时刻变化，比对时剔除 */
 const VOLATILE = new Set([
   'observed_at',
   'last_observed_at',
@@ -123,7 +97,6 @@ function dump(dbPath: string, table: string, columns: string[]): any[] {
   }
 }
 
-/** 稳定排序（按主键或标识列），让比对与插入顺序无关 */
 function sortRows(rows: any[], key: string): any[] {
   return [...rows].sort((a, b) => {
     const left = String(a[key] ?? '');
@@ -230,7 +203,6 @@ const TABLES: Array<{ table: string; columns: string[]; key: string }> = [
   },
 ];
 
-// ---------- 比对 ----------
 
 let failures = 0;
 
@@ -270,7 +242,6 @@ for (const { table, columns, key } of TABLES) {
   }
 }
 
-// ---------- 报告字段对照 ----------
 
 const tsSummary = {
   scanned: tsReport.scanned,
@@ -297,12 +268,10 @@ if (failures > 0) {
   process.exit(1);
 }
 console.log('\n对拍通过：两侧在同一套表上产出了同一套事实。');
-// 清理：Windows 上 SQLite 句柄释放有延迟，重试几次即可
 for (let attempt = 0; attempt < 5; attempt += 1) {
   try {
     fs.rmSync(base, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
     break;
   } catch {
-    // 下一轮重试
   }
 }

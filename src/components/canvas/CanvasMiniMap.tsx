@@ -1,28 +1,14 @@
-/**
- * 画布右上角缩略小地图。
- *
- * world = zoom 层内容包围盒（宿主收集节点/扇出盒/分组横排计算），viewport = 当前
- * transform 折算的用户空间可视矩形；点击/拖框跳转走宿主既有运镜
- * （PAN_TRANSITION_MS=500=--dur-pan）。
- * 锚点：data-cv-minimap（容器）、data-cv-minimap-viewport（视口框）。
- * 舷窗纪律：样式全走 .cvw-*，零内联色值；位置类由宿主 className 注入
- * （right-4 top-3 z-20，约 160×100px）。
- */
 
 import React, { useCallback, useRef } from 'react';
-// 样式文件统一由 App.tsx 装载：Node 测试链不解析 .css 导入，由 App 常驻装载兜底
 
 export interface CanvasMiniMapProps {
   worldWidth: number;
   worldHeight: number;
-  /** 当前可视矩形（zoom 层用户空间）：x/y=左上角，width/height=可视宽高 */
   viewport: { x: number; y: number; width: number; height: number };
-  /** 跳转到世界坐标 (x, y)（宿主实现：把该点运镜到可视区中心） */
   onJump: (x: number, y: number) => void;
   className?: string;
 }
 
-/** 地图内边距（px）：世界框与容器边缘的呼吸位 */
 const MAP_PAD = 8;
 
 export default function CanvasMiniMap({
@@ -35,7 +21,6 @@ export default function CanvasMiniMap({
   const mapRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef(false);
 
-  // 世界 → 地图坐标：等比缩放居中（worldWidth/Height ≤ 0 时全框退化，视口框隐藏）
   const fitScale =
     Number.isFinite(worldWidth) &&
     Number.isFinite(worldHeight) &&
@@ -51,13 +36,11 @@ export default function CanvasMiniMap({
       ? {
           w: worldWidth * fitScale,
           h: worldHeight * fitScale,
-          // 居中留白：世界比容器「矮胖/瘦高」时往中间靠
           x: (160 - worldWidth * fitScale) / 2,
           y: (100 - worldHeight * fitScale) / 2,
         }
       : null;
 
-  /** 地图本地坐标 → 世界坐标 */
   const toWorld = useCallback(
     (localX: number, localY: number): { x: number; y: number } | null => {
       if (!worldBox) return null;
@@ -80,7 +63,6 @@ export default function CanvasMiniMap({
     [onJump, toWorld]
   );
 
-  // 点击/拖框跳转：pointerdown 即跳并捕获，pointermove 跟手连续跳（运镜由宿主收口）
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     draggingRef.current = true;
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -97,7 +79,6 @@ export default function CanvasMiniMap({
     }
   };
 
-  // 视口框（世界坐标 → 地图坐标）：越界部分被容器 overflow hidden 收口，不钳制
   const viewportBox =
     worldBox &&
     Number.isFinite(viewport.x) &&

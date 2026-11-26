@@ -1,10 +1,3 @@
-/**
- * 今日首页「多项目工作台」总览条（coss Frame / CardFrame / Group 布局）：
- * - 展示所有已纳入观澜管理的本地项目卡片（在线/扫描/只读/离线状态、文件数、目录数、待拍板数）；
- * - 所有指标项强制 whitespace-nowrap + 响应式换行，根治「720 文\n件」折行穿帮；
- * - 支持一键添加新项目、零重启聚焦到任意项目（首页 / 全景星图 / 知识资产库）；
- * - 汇总其他项目的待拍板决策与最新活跃文档，点击直接跨项目跳转原文或证据。
- */
 
 import React from 'react';
 import {
@@ -58,8 +51,6 @@ export const MultiProjectOverviewStrip: React.FC<MultiProjectOverviewStripProps>
   );
   const totalAssets = overview?.total_files ?? list.reduce((a, p) => a + p.file_count, 0);
 
-  // 单项目且无跨项目动态时收拢为单行紧凑工作区条，避免 3 列网格在首屏留出大面积空白，
-  // 让核心可视化图表第一时间落入首屏视口；多项目时展开完整卡片矩阵与资产占比微条。
   if (list.length === 1 && otherDecisions.length === 0 && otherRecentFiles.length === 0) {
     const project = list[0];
     const active = project.project_id === activeProjectId;
@@ -212,7 +203,6 @@ export const MultiProjectOverviewStrip: React.FC<MultiProjectOverviewStripProps>
           </Button>
         </div>
 
-        {/* 项目卡片矩阵 */}
         <FramePanel className="p-3 space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
             {list.map((project) => {
@@ -310,7 +300,6 @@ export const MultiProjectOverviewStrip: React.FC<MultiProjectOverviewStripProps>
                     )}
                   </div>
 
-                  {/* 指标与入口均强制 whitespace-nowrap + 响应式换行，避免「720 文\n件」折行 */}
                   <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 pt-2.5 border-t border-border/70">
                     <div
                       data-project-metrics=""
@@ -361,7 +350,6 @@ export const MultiProjectOverviewStrip: React.FC<MultiProjectOverviewStripProps>
             })}
           </div>
 
-          {/* 其他项目的待拍板与近期动态（仅当存在其他项目内容时呈现，点击即跨项目秒切跳转） */}
           {(otherDecisions.length > 0 || otherRecentFiles.length > 0) && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 pt-0.5">
               {otherDecisions.length > 0 && (

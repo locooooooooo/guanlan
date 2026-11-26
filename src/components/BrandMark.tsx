@@ -3,7 +3,6 @@ import React, { useId } from 'react';
 export type BrandMarkSize = 'sm' | 'md' | 'lg' | 'xl';
 
 interface BrandMarkProps {
-  /** sm=28px（顶栏）/ md=36px（紧凑卡片）/ lg=48px（首启引导）/ xl=56px（关于页品牌头图） */
   size?: BrandMarkSize;
   className?: string;
 }
@@ -23,7 +22,6 @@ const SIZE_CLASSES: Record<BrandMarkSize, string> = {
  * 纯静态零动画（遵循 P1 静：ping / 呼吸动效仅用于未读与新变化提示，不属品牌位）。
  */
 export const BrandMark: React.FC<BrandMarkProps> = ({ size = 'sm', className = '' }) => {
-  // React 19 SSR 与客户端均支持 useId()，多处同页渲染时渐变 ID 互不碰撞
   const rawId = useId();
   const uid = rawId.replace(/[^a-zA-Z0-9_-]/g, '');
   const backGradId = `gl-bm-back-${uid}`;
@@ -87,18 +85,15 @@ export const BrandMark: React.FC<BrandMarkProps> = ({ size = 'sm', className = '
           </linearGradient>
         </defs>
 
-        {/* 曜石缎面后板 + 左上折耳（外侧透明无多余方框底） */}
         <path
           d="M3.85 4H11.55C12.75 4 13.72 4.58 14.54 5.7L15.44 6.92C15.94 7.58 16.56 7.84 17.44 7.84H28.4C29.5 7.84 30.4 8.74 30.4 9.84V26.08C30.4 27.4 29.32 28.48 28 28.48H4C2.68 28.48 1.6 27.4 1.6 26.08V6.24C1.6 5 2.61 4 3.85 4Z"
           fill={`url(#${backGradId})`}
         />
 
-        {/* 折耳司辰权杖朱砂核心眼（精钢铂银镶口 + 暖朱砂宝珠） */}
         <circle cx="7.05" cy="6.48" r="1.12" fill="#DCE2F0" />
         <circle cx="7.05" cy="6.48" r="0.80" fill="#10131C" />
         <circle cx="7.05" cy="6.48" r="0.56" fill="#F07440" />
 
-        {/* 夹层温润象牙纸页折边（呼应本地档案纸墨质感） */}
         <rect
           x="2.9"
           y="8.88"
@@ -108,7 +103,6 @@ export const BrandMark: React.FC<BrandMarkProps> = ({ size = 'sm', className = '
           fill={`url(#${paperGradId})`}
         />
 
-        {/* 曜石缎面前袋面板 + 冷银微倒角细边 + 极轻蚀刻星轨暗环 */}
         <rect
           x="1.6"
           y="10"
@@ -151,9 +145,7 @@ export const BrandMark: React.FC<BrandMarkProps> = ({ size = 'sm', className = '
           strokeLinecap="round"
         />
 
-        {/* 司辰对称弧形拉丝银翼（自沙漏腰后向左右舒展，不挤压沙漏本体） */}
         <g>
-          {/* 左翼三层羽刃（下短羽 -> 中次羽 -> 上主羽） */}
           <path
             d="M14.1 20.6C12.2 20.3 10.3 20.6 8.8 21.5C10.5 22.1 12.6 21.8 14.3 21.2Z"
             fill={`url(#${wingLoGradId})`}
@@ -166,7 +158,6 @@ export const BrandMark: React.FC<BrandMarkProps> = ({ size = 'sm', className = '
             d="M14.3 18.8C11.2 16.5 7.5 15.5 4.6 16.5C7.1 18.4 10.8 19.4 14.4 19.6Z"
             fill={`url(#${wingHiGradId})`}
           />
-          {/* 右翼三层羽刃（镜像对称） */}
           <path
             d="M17.9 20.6C19.8 20.3 21.7 20.6 23.2 21.5C21.5 22.1 19.4 21.8 17.7 21.2Z"
             fill={`url(#${wingLoGradId})`}
@@ -181,14 +172,12 @@ export const BrandMark: React.FC<BrandMarkProps> = ({ size = 'sm', className = '
           />
         </g>
 
-        {/* 居中司辰沙漏：烟熏深色玻璃内腔 */}
         <path
           d="M11.82 13.84C11.82 16.6 14.72 18.08 15.26 19.24C14.72 20.4 11.82 21.88 11.82 24.64H20.18C20.18 21.88 17.28 20.4 16.74 19.24C17.28 18.08 20.18 16.6 20.18 13.84Z"
           fill="#0F121B"
           fillOpacity="0.94"
         />
 
-        {/* 司辰朱砂琥珀流沙（上仓漏斗 + 细腰亮金流沙 + 下仓沉淀丘紧贴底盖） */}
         <path
           d="M12.82 15.96Q16 16.68 19.18 15.96C18.56 17.48 16.76 18.44 16 19.24C15.24 18.44 13.44 17.48 12.82 15.96Z"
           fill={`url(#${sandGradId})`}
@@ -207,7 +196,6 @@ export const BrandMark: React.FC<BrandMarkProps> = ({ size = 'sm', className = '
           strokeLinecap="round"
         />
 
-        {/* 拉丝铂银玻璃廓线 + 车削圆角端盖 */}
         <path
           d="M11.82 13.84C11.82 16.6 14.72 18.08 15.26 19.24C14.72 20.4 11.82 21.88 11.82 24.64H20.18C20.18 21.88 17.28 20.4 16.74 19.24C17.28 18.08 20.18 16.6 20.18 13.84Z"
           stroke={`url(#${silverGradId})`}

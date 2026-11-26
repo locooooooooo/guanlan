@@ -17,7 +17,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const gateScript = resolve(__dirname, '..', 'scripts', 'gate.mjs');
 const REPO_ROOT = resolve(__dirname, '..');
 
-// 基线跑门禁时 npm run build 真实输出过的那次崩溃（@tailwindcss/oxide 4.3.4），逐字取自日志
 const REAL_OXIDE_PANIC = [
   "thread '<unnamed>' (31400) panicked at crates\\oxide\\src\\extractor\\boundary.rs:21:13:",
   'index out of bounds: the len is 0 but the index is 3',
@@ -33,7 +32,6 @@ describe('统一门禁脚本：已知偶发失败的判定', () => {
     assert.equal(isKnownBuildFlake('src/x.ts(1,15): error TS1110: Type expected.'), false);
     assert.equal(isKnownBuildFlake("thread 'main' panicked at src/main.rs:2:3: index out of bounds"), false);
     assert.equal(isKnownBuildFlake('\u001b[32m✓ built in 3.27s\u001b[39m'), false);
-    // 只提到 oxide 目录但没有 panic，不算
     assert.equal(isKnownBuildFlake('Compiling crates/oxide/src/extractor/boundary.rs'), false);
   });
 });
@@ -53,7 +51,6 @@ describe('统一门禁脚本：从输出里统计测试数', () => {
   });
 
   it('node:test：取最后一组 pass / fail，带不带颜色码都认', () => {
-    // 测试文件由子进程跑时，输出里会先出现子进程的汇总、再出现父进程的汇总，数目不同
     const twoSummaries = [
       'ℹ tests 5\nℹ pass 5\nℹ fail 0\n',
       'ℹ tests 901\nℹ pass 901\nℹ fail 0\n',
@@ -96,7 +93,6 @@ describe('统一门禁脚本：一步结果的描述', () => {  const step = { l
   it('重试过、或有测试跳过，都要注明；没解析到测试数也要注明', () => {
     const retried = describeResult({ code: 0, output: '✓ built', retried: true }, { label: 'npm run build', tests: undefined });
     assert.equal(retried.text, '通过。重试过一次');
-    // 被跳过的测试算在「通过」里。运行记录要点名它们，并说明不计入验证
     const skipped = describeResult(
       {
         code: 0,
@@ -186,18 +182,15 @@ describe('统一门禁脚本：步骤清单', () => {
     assert.equal(clippy.GUANLAN_DATA_DIR, 'C:/tmp/guanlan-gate-abc');
     assert.equal(clippy.GUANLAN_TEST_SKIP_LOG, undefined, '不跑测试的 cargo 步骤不收跳过记录');
 
-    // 前端步骤与 CI 一样不设数据目录。PATH 是所有步骤都带上 cargo 的目录，这一步也一样
     const lint = envForStep(byLabel('npm run lint')!, context);
     assert.equal(lint.GUANLAN_DATA_DIR, undefined);
     assert.equal(lint.GUANLAN_TEST_SKIP_LOG, undefined);
     assert.equal(lint.PATH, rustTest.PATH);
 
-    // 找不到 cargo 时不要往 PATH 里塞一个空目录
     const noCargo = envForStep(byLabel('cargo fmt --all -- --check')!, { ...context, cargoFile: null });
     assert.equal(noCargo.PATH, '/usr/bin');
     assert.equal(noCargo.GUANLAN_DATA_DIR, 'C:/tmp/guanlan-gate-abc');
 
-    // 不改调用方传进来的环境对象
     assert.deepEqual(context.base, { PATH: '/usr/bin' });
   });
 
@@ -205,7 +198,6 @@ describe('统一门禁脚本：步骤清单', () => {
     for (const step of buildSteps('cargo').filter((entry) => entry.label.includes('--exe'))) {
       assert.match(step.label, /--exe native\/target\/release\/guanlan\.exe$/);
       assert.equal(step.label.includes(REPO_ROOT), false);
-      // 实际执行的命令用的仍是能直接传给子进程的绝对路径
       const exe = Array.isArray(step.cmd) ? step.cmd.at(-1) : undefined;
       assert.ok(typeof exe === 'string' && exe.endsWith('guanlan.exe') && isAbsolute(exe), step.label);
     }
@@ -226,8 +218,6 @@ describe('统一门禁脚本：命令行入口', () => {
   });
 
   it('被导入时不执行门禁、不打印开场信息（否则测试一导入就跑完整套检查）', () => {
-    // 子进程带着 --help 去导入模块：守卫若失效，导入时就会把用法打出来。
-    // Windows 下动态 import 一个绝对路径要用 file:// 形式。
     const script = `import(${JSON.stringify(pathToFileURL(gateScript).href)}).then(() => console.log('imported'));`;
     const out = spawnSync(process.execPath, ['--input-type=module', '-e', script, '--', '--help'], {
       encoding: 'utf8',

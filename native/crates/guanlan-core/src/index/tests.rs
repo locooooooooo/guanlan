@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 
 use crate::index::{reconcile, ReconcileOptions, Writer};
 
-/// 临时目录（进程号 + 用例名隔离）
 struct TempWorkspace {
     root: PathBuf,
     data: PathBuf,
@@ -54,7 +53,6 @@ impl Drop for TempWorkspace {
     }
 }
 
-/// 用固定时刻跑一轮对账（便于断言时间语义）
 fn run(writer: &mut Writer, observed_at: &str) -> crate::index::ReconcileReport {
     reconcile(
         writer,
@@ -83,7 +81,6 @@ fn first_scan_creates_baseline_and_versions() {
     assert_eq!(report.new_files, 3);
     assert_eq!(report.new_revisions, 3);
     assert_eq!(report.snapshots_written, 3);
-    // 基线卡一条；正文有自述日期的那份单独入轴（appeared），另一份无日期依据不刷屏
     let events = writer
         .list_events_of_subject(
             &report.workspace_id,
@@ -97,7 +94,6 @@ fn first_scan_creates_baseline_and_versions() {
         "基线卡标题应覆盖全部三份"
     );
 
-    // 版本与文件行都在
     let files = writer
         .list_files(&report.workspace_id, true)
         .expect("查文件");
@@ -224,9 +220,6 @@ fn document_self_date_is_preserved_without_midnight() {
 
 #[test]
 fn rename_with_same_hash_is_recovered_not_duplicated() {
-    // 语义与 TS 逐字一致（node tsx server/reconcile 实测）：
-    // 同哈希认领只在「旧路径已被上一轮判为 missing」之后才发生——
-    // 改名与删除同轮发生时，两侧先各自记为「新增」与「缺失」，下一轮才认领。
     let ws = TempWorkspace::new("rename");
     ws.write("old.md", "# 内容\n");
 
@@ -234,12 +227,10 @@ fn rename_with_same_hash_is_recovered_not_duplicated() {
     let first = run(&mut writer, "2026-11-17T00:00:00.000Z");
     assert_eq!(first.new_files, 1);
 
-    // 旧路径消失 → 判缺失
     ws.remove("old.md");
     let second = run(&mut writer, "2026-11-17T01:00:00.000Z");
     assert_eq!(second.missing, 1);
 
-    // 同内容出现在新路径 → 按同哈希认领旧身份，不产生第二个身份
     ws.write("new.md", "# 内容\n");
     let third = run(&mut writer, "2026-11-17T02:00:00.000Z");
     assert_eq!(third.new_files, 0, "同哈希不得当成新文件");
@@ -254,26 +245,21 @@ fn rename_with_same_hash_is_recovered_not_duplicated() {
         "不产生第二个身份"
     );
 
-    // 再扫一轮：状态稳定，事件不重复
     let fourth = run(&mut writer, "2026-11-17T03:00:00.000Z");
     assert_eq!(fourth.new_files, 0);
     assert_eq!(fourth.events_inserted, 0, "重扫不增事件");
     assert_eq!(fourth.generation, third.generation, "无变化不推进索引代");
 }
 
-/// 供外部用例复用：工作区根路径
 #[allow(dead_code)]
 fn root_of(workspace: &TempWorkspace) -> &Path {
     &workspace.root
 }
 
-// ===== 状态机重算 =====
-
 use crate::index::state_engine::{commit_checkpoint, state_machine_recompute};
 use crate::index::state_machine::{initiative_id_of, node_id_of, SlotKind, Stage};
 use crate::index::CheckpointInput;
 
-/// 决策阶段文档：P1 卡点块（pending）
 const DECISION_PENDING_MD: &str = "\
 # 03-待确认事项
 
@@ -282,7 +268,6 @@ const DECISION_PENDING_MD: &str = "\
 确认人：___
 ";
 
-/// 决策阶段文档：拍板完成（回写后形态）
 const DECISION_RESOLVED_MD: &str = "\
 # 03-待确认事项
 
@@ -301,14 +286,12 @@ fn state_machine_first_scan_creates_rows_silently() {
     let mut writer = ws.writer();
     let first = run(&mut writer, "2026-11-17T00:00:00.000Z");
 
-    // 首建静默：有落库行、无迁移事件
     assert!(
         first.state_rows_upserted > 0,
         "首轮应落 initiatives/artifact_states/task_nodes 行"
     );
     assert_eq!(first.state_transitions, 0, "首轮建行不发迁移事件");
 
-    // 一专项 + 3 文档 + 5 槽位
     let workspace_id = &first.workspace_id;
     let initiatives = writer.list_initiatives(workspace_id).expect("查专项");
     assert_eq!(initiatives.len(), 1);
@@ -363,7 +346,6 @@ fn state_machine_first_scan_creates_rows_silently() {
         "执行槽：前置决策未完成 → queued"
     );
     assert_eq!(by_stage("交付").state, "queued");
-    // 节点 ID 幂等可对拍 + 依赖链
     let exec = by_stage("执行");
     assert_eq!(
         exec.node_id,
@@ -386,7 +368,6 @@ fn state_machine_first_scan_creates_rows_silently() {
         )
     );
 
-    // 幂等：第二轮重扫，行稳定、无事件、代际不进
     let second = run(&mut writer, "2026-11-17T01:00:00.000Z");
     assert_eq!(second.state_transitions, 0, "重算幂等：同输入无迁移");
     assert_eq!(second.events_inserted, 0, "重扫不增事件");
@@ -411,12 +392,9 @@ fn state_machine_transition_events_carry_direction_identity() {
     let first = run(&mut writer, "2026-11-17T00:00:00.000Z");
     assert_eq!(first.state_transitions, 0);
 
-    // 拍板完成 → 新版本：文档 pending_review→approved_revision→executing？
-    // task_running 此刻仍 false（执行槽 queued），两级迁移到 approved_revision 为止
     ws.write("01-演示专项/03-待确认事项.md", DECISION_RESOLVED_MD);
     let second = run(&mut writer, "2026-11-17T02:00:00.000Z");
 
-    // 回归锁：多级迁移每单步一条、身份互异（subject_id 编码 from→to）
     assert!(
         second.state_transitions >= 3,
         "文档 + 节点 + 专项三条迁移：{}",
@@ -430,7 +408,6 @@ fn state_machine_transition_events_carry_direction_identity() {
         "未决清零+有版本 → approved_revision"
     );
 
-    // 文档级迁移事件
     let artifact_events = writer
         .list_events_of_subject(
             &workspace_id,
@@ -446,7 +423,6 @@ fn state_machine_transition_events_carry_direction_identity() {
         1,
         "pending_review→approved_revision 恰一条"
     );
-    // 节点迁移事件（suspended_on_hitl→completed）
     let decision_node = writer
         .find_task_node_by_stage(&workspace_id, &initiative_id_of("01-演示专项"), "决策")
         .expect("查节点")
@@ -461,7 +437,6 @@ fn state_machine_transition_events_carry_direction_identity() {
     assert_eq!(node_events.len(), 1);
     assert_eq!(node_events[0].kind, "task_node_moved");
 
-    // 第三轮：无变化 → 无事件、代际稳定
     let third = run(&mut writer, "2026-11-17T03:00:00.000Z");
     assert_eq!(third.state_transitions, 0);
     assert_eq!(third.events_inserted, 0);
@@ -470,8 +445,6 @@ fn state_machine_transition_events_carry_direction_identity() {
 
 #[test]
 fn checkpoint_commit_advances_generate_slot_without_node_id() {
-    // POST /checkpoints 不带 node_id 时按 (initiative_id, stage) 反查推进执行槽；
-    // seq 由库内派生；验证完整流转：suspended → 拍板 → 唤醒 → checkpoint → completed
     let ws = TempWorkspace::new("sm-ckpt");
     ws.write("01-演示专项/需求单.md", "# 需求单\n\n范围\n");
     ws.write("01-演示专项/方案.md", "# 方案\n\n设计\n");
@@ -483,7 +456,6 @@ fn checkpoint_commit_advances_generate_slot_without_node_id() {
     let workspace_id = writer.workspace().expect("ws").workspace_id;
     let initiative_id = initiative_id_of("01-演示专项");
 
-    // 拍板 → 决策槽 completed → 执行槽（有 artifact 无 checkpoint）→ running
     ws.write("01-演示专项/03-待确认事项.md", DECISION_RESOLVED_MD);
     let second = run(&mut writer, "2026-11-17T02:00:00.000Z");
     let _ = second;
@@ -496,7 +468,6 @@ fn checkpoint_commit_advances_generate_slot_without_node_id() {
         "决策清零后执行槽 running（task_running=true）"
     );
 
-    // 文档级 approved_revision→executing（task_running 唤醒）
     let states = writer.list_artifact_states(&workspace_id).expect("查状态");
     let decision_state = states.iter().find(|s| s.stage == "决策").expect("决策文档");
     assert_eq!(
@@ -504,7 +475,6 @@ fn checkpoint_commit_advances_generate_slot_without_node_id() {
         "多级迁移：pending_review→approved→executing"
     );
 
-    // checkpoint 提交（node_id 缺省时按阶段反查；先验未知专项 404）
     let bad = CheckpointInput {
         node_id: None,
         workspace_id: workspace_id.clone(),
@@ -545,7 +515,6 @@ fn checkpoint_commit_advances_generate_slot_without_node_id() {
         "SUCCESS 推进执行槽 → completed（同事务）"
     );
 
-    // 节点推进 + checkpoint_committed 事件 + 恢复查询
     let exec_after = writer
         .get_task_node(&exec_node.node_id)
         .expect("查节点")
@@ -577,7 +546,6 @@ fn checkpoint_commit_advances_generate_slot_without_node_id() {
 
 #[test]
 fn state_machine_recompute_direct_entry_is_idempotent() {
-    // 直接入口（service DecisionWriteback/adopt 后调用同一重算）：幂等可重复
     let ws = TempWorkspace::new("sm-direct");
     ws.write("01-演示专项/方案.md", "# 方案\n\n设计\n");
     let mut writer = ws.writer();
@@ -600,7 +568,6 @@ fn state_machine_recompute_direct_entry_is_idempotent() {
 #[test]
 fn b01_mixed_formats_gitignore_and_tiered_snapshot_policy() {
     let ws = TempWorkspace::new("b01-tiered");
-    // .gitignore 规则 + 目录黑名单
     ws.write(".gitignore", "*.log\nbuild/\n!important.log\n");
     ws.write("sub/.gitignore", "*.tmp\n");
     ws.write("debug.log", "ignored log\n");
@@ -610,11 +577,9 @@ fn b01_mixed_formats_gitignore_and_tiered_snapshot_policy() {
     ws.write("node_modules/pkg/index.js", "ignored dep\n");
     ws.write("target/debug/app.exe", "ignored build\n");
 
-    // 各类文件：文本、源码、图片、办公、音视频、未知二进制
     ws.write("docs/spec.md", "# 规范\n\n正文\n");
     ws.write("src/app.ts", "export const ok = true;\n");
     ws.write("Makefile", "all:\n\techo hi\n");
-    // 二进制样板
     fs::create_dir_all(ws.root.join("assets")).expect("建目录");
     fs::write(
         ws.root.join("assets/photo.png"),
@@ -624,7 +589,6 @@ fn b01_mixed_formats_gitignore_and_tiered_snapshot_policy() {
     fs::write(ws.root.join("assets/contract.docx"), b"PK\x03\x04docx").expect("写 docx");
     fs::write(ws.root.join("assets/clip.mp4"), vec![0xAAu8; 4096]).expect("写 mp4");
     fs::write(ws.root.join("assets/raw.bin"), vec![0xBBu8; 2048]).expect("写 bin");
-    // 超过文本阈值（测自定义策略 text_max=100B, binary_max=500B）的大文本与大图片
     ws.write("docs/large.txt", &"x".repeat(256));
     fs::write(ws.root.join("assets/huge.png"), vec![0x89u8; 1024]).expect("写大 png");
 
@@ -667,7 +631,6 @@ fn b01_mixed_formats_gitignore_and_tiered_snapshot_policy() {
         ]
     );
 
-    // 验证各文件格式与三档快照可用性
     let check_rev = |rel: &str, expected_fmt: &str, expected_avail: i64| {
         let row = files.iter().find(|f| f.current_path == rel).expect(rel);
         assert_eq!(row.format, expected_fmt, "format mismatch for {rel}");
@@ -703,7 +666,6 @@ fn b01_mixed_formats_gitignore_and_tiered_snapshot_policy() {
     let mp4_v1 = check_rev("assets/clip.mp4", "mp4", 0);
     check_rev("assets/raw.bin", "bin", 0);
 
-    // 音视频修改：生成 v2 仅元数据版本，绝不崩溃、绝不复制快照，事件如实记入
     fs::write(ws.root.join("assets/clip.mp4"), vec![0xCCu8; 4096]).expect("修改 mp4");
     let second = reconcile(
         &mut writer,
@@ -727,7 +689,6 @@ fn b01_mixed_formats_gitignore_and_tiered_snapshot_policy() {
     assert_eq!(mp4_revs[0].revision_id, mp4_v1.revision_id);
     assert_eq!(mp4_revs[1].snapshot_available, 0);
 
-    // 工作区级持久化配额阈值（meta 读写往返）
     let updated = writer.set_snapshot_policy(32, 128).expect("持久化配额阈值");
     assert_eq!(updated.text_max_bytes, 32 * 1024 * 1024);
     assert_eq!(updated.binary_max_bytes, 128 * 1024 * 1024);
@@ -764,10 +725,8 @@ fn b01_five_thousand_mixed_formats_100_percent_visible_coverage_and_zero_ignored
 
     let mut writer = ws.writer();
     let report = reconcile(&mut writer, &ReconcileOptions::default()).expect("5050 文件对账");
-    // 5050 + 1 个根目录 .gitignore = 5051 份非忽略可见文件，100% 纳入且不被旧 5000 上限截断
     assert_eq!(report.scanned, total_visible + 1);
     assert_eq!(report.new_files, total_visible + 1);
-    // 每 10 份有 2 份（mp4 + bin）恒走 L0 仅元数据（505 * 2 = 1010）
     assert_eq!(report.metadata_only_revisions, (total_visible / 10) * 2);
 
     let files = writer
@@ -789,7 +748,6 @@ fn b03_reconcile_indexes_docx_and_xlsx_links_decisions_and_caches_by_hash() {
 
     let ws = TempWorkspace::new("b03-office");
 
-    // 1) 真实构造 .xlsx 多工作表工作簿（含公式、数值列统计区间）
     let wb = r#"<?xml version="1.0" encoding="UTF-8"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -836,7 +794,6 @@ fn b03_reconcile_indexes_docx_and_xlsx_links_decisions_and_caches_by_hash() {
         ("xl/worksheets/sheet2.xml", s2),
     ]);
 
-    // 2) 真实构造 .docx 文档 + 损坏的 .docx 文档
     let doc_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
@@ -855,7 +812,6 @@ fn b03_reconcile_indexes_docx_and_xlsx_links_decisions_and_caches_by_hash() {
     fs::write(&docx_path, &docx_bytes).unwrap();
     fs::write(&bad_path, b"not-a-valid-zip-docx").unwrap();
 
-    // 3) Markdown 决策显式链接到 BOM 工作簿单元格范围 `#BOM!C2:C3`
     ws.write(
         "decisions/bom-check.md",
         "[P0 - 待确认] MCU 单价核定是否按新版报价执行？\n依据：[BOM 核价表](../specs/bom.xlsx#BOM!C2:C3)\n待确认\n",
@@ -865,7 +821,6 @@ fn b03_reconcile_indexes_docx_and_xlsx_links_decisions_and_caches_by_hash() {
     let r1 = reconcile(&mut writer, &ReconcileOptions::default()).expect("首次对账 Office");
     assert_eq!(r1.new_files, 4);
 
-    // 拷贝一份相同 .xlsx 到另一个路径，验证同哈希 L2 提取幂等复用
     fs::write(ws.root.join("specs/bom-copy.xlsx"), &xlsx_bytes).unwrap();
     let r2 = reconcile(&mut writer, &ReconcileOptions::default()).expect("复用同哈希缓存");
     assert_eq!(r2.new_files, 1);
@@ -903,7 +858,6 @@ fn b03_reconcile_indexes_docx_and_xlsx_links_decisions_and_caches_by_hash() {
     let office_bad = revision_office(&store, &bad_rev.revision_id).expect("读取损坏 DOCX 降级结果");
     assert_eq!(office_bad.status, "corrupted");
 
-    // 校验 decisions：既包含 .docx 内嵌决策，也包含 Markdown -> .xlsx#BOM!C2:C3 关联锚点
     let dec_resp =
         query_decisions(&store, &crate::query::DecisionsQuery::default()).expect("查决定");
     let bom_dec = dec_resp
@@ -964,9 +918,6 @@ fn reconcile_aborts_cleanly_on_cancel_without_partial_writes() {
 
 #[test]
 fn missing_detection_lookup_is_indexed_at_workspace_scale() {
-    // 缺失检测对「已入库文件数」次判定；线性扫描在 8 万文件上是数十亿次比较，
-    // 而这段判定在写事务里执行。这里用 8 万条已见路径/身份压一次查找，
-    // 2 秒上限是给 debug 构建与慢机器的余量（集合判定实际在毫秒级）。
     const N: usize = 80_000;
     let paths: Vec<String> = (0..N)
         .map(|index| format!("资料/{:03}/文档-{index:05}.md", index % 500))

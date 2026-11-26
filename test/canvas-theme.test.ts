@@ -22,21 +22,9 @@ import {
   TRUNK_COLOR,
 } from '../src/components/DocumentTimeMachineView';
 
-/**
- * 画布主题契约：
- *
- * 1) canvasThemeStore 三类回退：非法值回 xray-dark / 非 JSON 裸值宽容收下 /
- *    读异常回默认；写失败静默——持久化是增强能力，绝不让画布起不来。
- * 2) 泳道/时光机色常量值契约：值必须是 `var(--cv-*)` 令牌引用（TSX 零 hex/rgba 红线；
- *    泳道=文档分类数据编码轴，令牌名逐字锁定，别名化会静默串写编码）。
- *
- * node 裸环境无 window：store 的 DOM 守卫直接回默认；回退逻辑用 mock window
- * 驱动真实代码路径（store 在调用时才读 window.localStorage，导入期零副作用）。
- */
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
 
-/** 临时挂一个带 localStorage 的 mock window（node 无 window；用完必须卸载） */
 function installWindow(storage: StorageLike | null): void {
   (globalThis as { window?: unknown }).window = { localStorage: storage };
 }
@@ -44,7 +32,6 @@ function uninstallWindow(): void {
   delete (globalThis as { window?: unknown }).window;
 }
 
-/** 内存版 localStorage：可注入故障（读抛/写抛）以覆盖异常回退分支 */
 function mockStorage(options?: { getThrows?: boolean; setThrows?: boolean }): StorageLike & {
   read: (key: string) => string | null;
   written: () => string;
@@ -64,7 +51,6 @@ function mockStorage(options?: { getThrows?: boolean; setThrows?: boolean }): St
   };
 }
 
-// ---------- 1 · 持久化契约 ----------
 
 test('存储键名契约：guanlan.canvasTheme.v1（防被当全局主题复用）', () => {
   assert.equal(CANVAS_THEME_STORAGE_KEY, 'guanlan.canvasTheme.v1');
@@ -140,7 +126,6 @@ test('写失败静默：隐私模式/配额满下切换不被阻塞', () => {
   }
 });
 
-// ---------- 2 · 泳道/时光机色常量值契约 ----------
 
 test('LANE_COLORS：四泳道键齐全，值逐字锁 --cv-lane-* 令牌（数据编码轴不别名化）', () => {
   assert.deepEqual(Object.keys(LANE_COLORS).sort(), ['md', 'pdf', 'svg', 'unknown']);
@@ -177,15 +162,8 @@ test('时光机状态色族：全部为 var(--cv-*) 引用（TSX 零 hex/rgba �
   assert.equal(TRUNK_COLOR, 'var(--cv-trunk)');
 });
 
-// ---------- 3 · attr↔选择器契约（评审第 1 轮 #1 防再裂） ----------
 
-// 背景：首轮视觉评审实证浅档永不生效——App.tsx 挂 data-canvas-theme={canvasTheme}
-//（值=canvasThemeStore 枚举 'xray-dark'|'xray-light'），而 index.css 浅档覆写块
-// 字面写作 [data-canvas-theme='light']，attr 恒 'xray-light' → 选择器永不匹配 →
-// 开关/持久化全翻转、画布恒夜航。契约：CSS 里出现的每个 data-canvas-theme='X'
-// 字面必须是 CanvasTheme 枚举成员（attr 与选择器同词汇，禁止第三套值）。
 
-/** 读 src/ 下源文件（相对 test/ 目录，须带 ../src/ 前缀） */
 function readSrc(path: string): string {
   return readFileSync(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8');
 }
@@ -229,7 +207,6 @@ test('契约：浅档覆写块与泳道软滤镜块的选择器逐字= xray-ligh
 });
 
 test('契约：App.tsx 命令式挂 store 枚举值，不做 light/dark 转译', () => {
-  // 拆层后 App 实现 = 装配层 + 单一 Store——联合文本断言（语义不变）
   const app = [readSrc('App.tsx'), readSrc('stores/useWorkspaceStore.tsx')].join(String.fromCharCode(10))
   assert.ok(
     app.includes('porthole.dataset.canvasTheme = next'),
@@ -242,12 +219,11 @@ test('契约：App.tsx 命令式挂 store 枚举值，不做 light/dark 转译',
 });
 
 test('活值层：apply 异值更新活值+通知订阅者；同值短路；退订后不再通知', () => {
-  // node 裸环境无 window：apply 内的持久化守卫静默跳过，通知逻辑照常走
   const seen: CanvasTheme[] = [];
   const off = subscribeCanvasTheme(() => seen.push(getCanvasTheme()));
   applyCanvasTheme('xray-light');
   assert.equal(getCanvasTheme(), 'xray-light');
-  applyCanvasTheme('xray-light'); // 同值：不通知（避免无谓的叶子重渲）
+  applyCanvasTheme('xray-light');
   assert.deepEqual(seen, ['xray-light']);
   off();
   applyCanvasTheme('xray-dark');
@@ -255,6 +231,5 @@ test('活值层：apply 异值更新活值+通知订阅者；同值短路；退�
   assert.equal(getCanvasTheme(), 'xray-dark');
 });
 
-// 类型面冒烟：CanvasTheme 枚举只允许两档（编译期即锁，此处断言运行时字形）
 const _typeProbe: CanvasTheme[] = ['xray-dark', 'xray-light'];
 void _typeProbe;

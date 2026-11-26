@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import { FolderOpen, Package } from 'lucide-react';
 import type { FileRecord } from '../types/guanlan';
 import type { StateOverviewResponse } from '../services/apiTypes';
-// 筛选/阶段判定全部消费 taskPackages 产出（零新造判定）
 import {
   formatPackageMetaLine,
   packageBadgeLine,
@@ -10,11 +9,6 @@ import {
   STAGE_ACCENT,
   STAGE_SLOT_ORDER,
 } from '../utils/taskPackages';
-// 统一状态机 SSOT：筛选胶囊词表来自 stateProjection——executing/awaiting
-// 直接取 STAGE_BADGE_PHRASE，与卡片徽标短语同源；胶囊排版骨架
-// 亦单一出口（PILL_LAYOUT_BASE——本组件只配颜色/阴影件）。
-// /state-overview 投影优先渲染六态词；无服务端行时 projectInitiativeState
-// 的 fallback 分支保留既有阶段短语。
 import {
   DOC_STATE_LABEL,
   GALLERY_FILTERS,
@@ -26,7 +20,6 @@ import {
   projectInitiativeState,
 } from '../utils/stateProjection';
 import type { GalleryFilterKey } from '../utils/stateProjection';
-// 既有消费面保兼容：词表 SSOT 在 stateProjection，此处再导出
 export { GALLERY_FILTERS } from '../utils/stateProjection';
 export type { GalleryFilterKey } from '../utils/stateProjection';
 import type { StageRole, TaskPackage } from '../utils/taskPackages';
@@ -50,13 +43,6 @@ import {
 
 export { buildPackageVisualFingerprint } from '../utils/packageFingerprint';
 
-// ============================================================
-// 任务包视觉预览网格 · 专项橱窗（coss Frame/CardFrame + 真实数据指纹封面）
-//   - 首页与知识库概览共用；筛选与状态投影严格复用 stateProjection SSOT；
-//   - 封面舞台注入真实数据驱动的微视觉指纹：近 14 天变更微折线（Sparkline）+
-//     格式构成比例彩带（Format Ribbon）+ 清晰更新相对时间（零造数、杜绝空白横条与 60... 截断）；
-//   - 明暗双态无缝自适应（全部走语义令牌 bg-card / border-border / var(--glass-hairline)）。
-// ============================================================
 
 const STAGE_BADGE_PILL_CLASS =
   PILL_LAYOUT_BASE +
@@ -64,24 +50,18 @@ const STAGE_BADGE_PILL_CLASS =
 
 export interface TaskPackageGalleryProps {
   packages: TaskPackage[];
-  /** 文件索引（封面/文档回查与真实数据指纹派生） */
   fileById: Map<string, FileRecord>;
-  /** svg 封面 dataUri 表（file_id → data:image/svg+xml;utf8,…），调用方必传口径见上 */
   svgDataUris?: Record<string, string>;
   onOpenDoc: (fileId: string) => void;
   activeFileId?: string;
   filter?: GalleryFilterKey;
   onFilterChange?: (key: GalleryFilterKey) => void;
   className?: string;
-  /** /state-overview 六态投影（App 级唯一数据源）。 */
   stateOverview?: StateOverviewResponse | null;
-  /** 右键菜单支持（以包首份核心文件为目标） */
   onOpenFileContextMenu?: (e: React.MouseEvent, target: FileContextMenuTarget) => void;
-  /** 可选锚点时间（测试注入固定时刻，生产环境默认当前时间） */
   nowIso?: string;
 }
 
-/** 筛选口径（按文档阶段/格式实判，与 GALLERY_FILTERS 五项一一对应，不虚造维度）。 */
 function matchesFilter(pkg: TaskPackage, key: GalleryFilterKey): boolean {
   if (key === 'all') return true;
   if (key === 'executing') return pkg.stage === '执行';
@@ -91,7 +71,6 @@ function matchesFilter(pkg: TaskPackage, key: GalleryFilterKey): boolean {
   return true;
 }
 
-/** 取该专项首张已编码 SVG 图纸 dataUri（按 readingOrder 优先）。 */
 function coverDataUriOf(
   pkg: TaskPackage,
   svgDataUris?: Record<string, string>
@@ -110,7 +89,6 @@ function coverDataUriOf(
   return null;
 }
 
-/** 五阶段迷你进度轨（aria-hidden 纯装饰，底轨消费 --glass-hairline 适配明暗双态） */
 const FiveStageRail: React.FC<{ stage: StageRole }> = ({ stage }) => {
   const reachedRank = STAGE_SLOT_ORDER.indexOf(stage);
   return (
@@ -129,7 +107,6 @@ const FiveStageRail: React.FC<{ stage: StageRole }> = ({ stage }) => {
   );
 };
 
-/** 真实数据驱动的 14 天变更微折线 + 格式构成比例彩带 */
 const PackageFingerprintVisual: React.FC<{
   pkgId: string;
   stage: StageRole;
@@ -142,7 +119,6 @@ const PackageFingerprintVisual: React.FC<{
 
   return (
     <span className="flex flex-col gap-1.5">
-      {/* 14 天变更微折线（全 0 诚实平线，有变动真实起伏） */}
       {!compact && (
         <span
           data-fingerprint-sparkline=""
@@ -192,7 +168,6 @@ const PackageFingerprintVisual: React.FC<{
         </span>
       )}
 
-      {/* 格式构成比例彩带（严格按真实文档格式计数比例分段，零伪造） */}
       <span data-fingerprint-ribbon="" className="flex flex-col gap-1">
         <span
           className="flex h-1.5 w-full overflow-hidden rounded-full bg-muted/80"
@@ -248,11 +223,8 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
   onOpenFileContextMenu,
   nowIso,
 }) => {
-  // App 级 /state-overview 响应 → 常数查索引（一次构建；无响应 → null 回退阶段词）
   const stateIndex = useMemo(() => indexStateOverview(stateOverview), [stateOverview]);
-  // 筛选：filter prop 提供即受控值，缺省走内部 useState 自持（onFilterChange 有则总是回调）
   const [innerFilter, setInnerFilter] = useState<GalleryFilterKey>('all');
-  // 事项资料胶囊打包 / 秒开校验弹窗状态（挂载在橱窗内，首页与知识库概览自动共享）
   const [capsulePreset, setCapsulePreset] = useState<CapsuleTargetPreset | null>(null);
   const currentFilter = filter ?? innerFilter;
   const changeFilter = (key: GalleryFilterKey) => {
@@ -260,7 +232,6 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
     onFilterChange?.(key);
   };
 
-  // 各筛选胶囊计数徽标（全部按口径实算，不虚报）
   const counts = useMemo(() => {
     const map = {
       all: packages.length,
@@ -283,7 +254,6 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
     [packages, currentFilter]
   );
 
-  // 批量派生可见专项的真实数据微指纹（零造数）
   const fingerprints = useMemo(() => {
     const map = new Map<string, PackageVisualFingerprint>();
     for (const pkg of visiblePackages) {
@@ -305,7 +275,6 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
             </Badge>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {/* 按时间段打包开放胶囊 / 另一台观澜秒开校验胶囊（coss Group 紧凑拼接） */}
             <Group
               aria-label="事项胶囊工具"
               className="h-7 shrink-0 rounded-lg border border-border bg-card/85 shadow-xs"
@@ -331,7 +300,6 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
               </button>
             </Group>
 
-            {/* 筛选分段条：coss 精密凹槽 + 高反差选中浮雕胶囊 */}
             <div
               className="flex flex-wrap items-center gap-0.5 rounded-lg border border-border/75 bg-background/70 dark:bg-card/60 p-0.5"
               role="group"
@@ -370,7 +338,6 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
           </div>
         </div>
 
-        {/* 筛选切换网格淡入：基于容器可用宽度的自适应列轨（minmax 252px），彻底消除拥挤与截断 */}
         <FramePanel className="p-3.5">
           <div
             key={currentFilter}
@@ -382,7 +349,6 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
               </p>
             )}
             {visiblePackages.map((pkg, idx) => {
-              // 键盘：卡即按钮，Tab+Enter 打开首份核心文档（readingOrder = 推荐阅读顺序首位）
               const firstDoc = pkg.readingOrder[0] ?? pkg.docs[0] ?? null;
               const coverUri = coverDataUriOf(pkg, svgDataUris);
               const initiative = initiativeStateOfPackage(stateIndex, pkg);
@@ -435,7 +401,6 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
                     }${pkg.lastActivity ? ` · 最近 ${localDay(pkg.lastActivity)}` : ''}`}
                     className="flex min-h-0 flex-1 cursor-pointer flex-col text-left"
                   >
-                    {/* 封面舞台（data-gallery-cover）：真实数据指纹（14天 Sparkline + 格式构成彩带）或 SVG 展台 */}
                     <span
                       data-gallery-cover=""
                       className="relative flex h-[132px] w-full shrink-0 flex-col justify-between overflow-hidden border-b border-border/60 p-3"
@@ -486,7 +451,6 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
                       )}
                     </span>
 
-                    {/* 信息前两行：包名 / 1 行核心摘要 */}
                     <span className="flex min-h-0 flex-1 flex-col gap-1 px-3.5 pt-3 pb-2">
                       <span className="flex items-center gap-1.5 min-w-0">
                         <span
@@ -528,7 +492,6 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
                     </span>
                   </button>
 
-                  {/* 元信息底行 + 一键打包胶囊按钮（同级兄弟节点，无嵌套 button；强制不截断「60 份」） */}
                   <div className="flex items-center justify-between gap-2 border-t border-border/60 bg-muted/25 px-3.5 py-2 text-[11px] leading-4 font-mono text-muted-foreground tabular-nums">
                     <span
                       data-gallery-meta=""
@@ -562,7 +525,6 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
                     </button>
                   </div>
 
-                  {/* 轻引导：hover 渐显右上角「进入专项 →」深墨胶囊 */}
                   <span
                     aria-hidden="true"
                     className="glx-t-fade pointer-events-none absolute right-2.5 top-2.5 z-10 rounded-full bg-[color:var(--ink-anchor)] px-2.5 py-0.5 text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-medium text-[color:var(--paper-on-ink)] opacity-0 shadow-md group-hover:opacity-100"

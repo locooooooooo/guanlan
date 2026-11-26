@@ -23,7 +23,6 @@ use crate::query::cursor::{
 use crate::query::{sql_text, DecisionsQuery};
 use crate::storage::{edge_row, internal_sql, statement_row, EdgeRow, ReadonlyStore, StatementRow};
 
-/// 决策状态排序（project.ts:428）：来源不一致 0 < 待确认 1 < 已确认 2 < 其他 3
 fn status_rank(status: &str) -> u8 {
     match status {
         "来源不一致" => 0,
@@ -33,7 +32,6 @@ fn status_rank(status: &str) -> u8 {
     }
 }
 
-/// SQLite LIKE 的默认口径：ASCII 大小写无关的子串包含（question/namespace 的 q 筛选）
 fn like_contains(hay: &str, needle: &str) -> bool {
     hay.to_ascii_lowercase()
         .contains(&needle.to_ascii_lowercase())
@@ -75,10 +73,6 @@ pub fn decisions_tx(
     }
     let snapshot_generation = cursor.as_ref().map_or(current_gen, |c| c.snap) as u64;
 
-    // 两级投影：先取「一行一决定」的摘要（SQL 窗口函数按
-    // 「来源文件最新版本观察时间 → 陈述观察时间 → 行号」选主陈述，project.ts:356-367
-    // 口径不变），筛选/排序/分页全部作用于摘要；只为本页决定构造完整证据
-    // （页外/未命中决定不再装载 statements 全量、不复制 quote、不建全库版本映射）。
     let summary_sql = "SELECT decision_id, status, code, question, namespace, \
          CASE status WHEN '来源不一致' THEN 0 WHEN '待确认' THEN 1 WHEN '已确认' THEN 2 ELSE 3 END AS _rank, \
          _file_status \
@@ -109,8 +103,6 @@ pub fn decisions_tx(
         .collect::<rusqlite::Result<Vec<_>>>()
         .map_err(internal_sql)?;
 
-    // 筛选（契约 §1.9：status 精确 / code 精确 / q 为 question·namespace LIKE，
-    // like_contains 与 SQL LIKE 同为 ASCII 大小写无关包含——沿用 Rust 口径）
     let status_filter = non_empty(&query.status);
     let code_filter = non_empty(&query.code);
     let q_filter = non_empty(&query.q);
@@ -124,7 +116,6 @@ pub fn decisions_tx(
         })
         .collect();
 
-    // 排序：状态秩 → 编号（JS localeCompare 以字节序近似：编号为 ASCII 大写时恒等）
     items.sort_by(|a, b| {
         a.rank
             .cmp(&b.rank)
@@ -132,11 +123,7 @@ pub fn decisions_tx(
             .then_with(|| a.decision_id.cmp(&b.decision_id))
     });
 
-    // 键集分页（内存摘要列表）：排序键 (status_rank, code, decision_id)；
-    // 游标 k 编码为 "{rank}|{code}"（游标不透明，前端不解析）
     let total = items.len() as u64;
-    // 统一待确认口径：与 query/projects.rs pending_decisions_count 同口径（活跃文件 ∧ 来源不一致|待确认），
-    // 在分页截断前全量计数，避免列表分页截断导致跨视图数字分裂
     let unresolved_total = items
         .iter()
         .filter(|d| d.file_active && d.rank <= 1)
@@ -160,8 +147,6 @@ pub fn decisions_tx(
     let page_len = page_summaries.len();
     let has_more = start + page_len < total as usize;
 
-    // 本页决定的完整证据：按 decision_id IN 取陈述（含历史陈述与 missing/缺行文件——
-    // LEFT JOIN 保持证据不丢弃），revision 观察时间由关联子查询给出（不建全库映射）
     let decision_ids: Vec<&str> = page_summaries
         .iter()
         .map(|d| d.decision_id.as_str())
@@ -191,10 +176,8 @@ pub fn decisions_tx(
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(internal_sql)?;
 
-        // 按本页决定顺序归并（同一 decision_id 的全部陈述进同一组）
         let mut grouped: HashMap<String, Vec<StatementMeta>> = HashMap::new();
         for meta in rows {
-            // SQL 已过滤 decision_id IS NOT NULL，此处按 Some 展开（防御性跳过 None）
             if let Some(decision_id) = meta.row.decision_id.clone() {
                 grouped.entry(decision_id).or_default().push(meta);
             }
@@ -214,7 +197,6 @@ pub fn decisions_tx(
             k: format!("{}|{}", status_rank(&last.status), last.code),
             s: last.decision_id.clone(),
             fp: fp.clone(),
-            // files/decisions 不使用 total（仅版本链游标携带），序列化时省略
             total: None,
         })
     });
@@ -231,21 +213,13 @@ pub fn decisions_tx(
     })
 }
 
-/// 单个业务决定的归并投影（project.ts:355-425 逐字迁移）。
-/// 只为本页决定调用；陈述携带关联好的来源路径与版本观察时间
-/// （SQL 内联子查询），不再需要全库 file/revision 映射。
 fn build_decision(decision_id: String, list: Vec<StatementMeta>) -> DecisionAssertion {
-    // 以「来源文件最新版本」的陈述作为当前口径；同版本内按行号先后。
-    // 跨文件比较新旧不能用 per-file seq：先比版本观察时间，同时间再比陈述观察
-    // 时间，最后按行号（project.ts:356-367 注释）
     let mut sorted = list;
     sorted.sort_by(|a, b| {
         let t_a = a.rev_time.as_str();
         let t_b = b.rev_time.as_str();
-        // 降序：tA < tB 则 a 排后（JS `tA < tB ? 1 : -1`）
         t_b.cmp(t_a)
             .then_with(|| b.row.observed_at.cmp(&a.row.observed_at))
-            // 行号升序（JS `a.line_start - b.line_start`）
             .then_with(|| a.row.line_start.cmp(&b.row.line_start))
     });
     let primary = &sorted[0].row;
@@ -295,18 +269,15 @@ fn build_decision(decision_id: String, list: Vec<StatementMeta>) -> DecisionAsse
             line_start: s.line_start.max(0) as u64,
             line_end: s.line_end.max(0) as u64,
             observed_at: s.observed_at.clone(),
-            // source_time = observed_at 前 10 字符（project.ts:392）
             source_time: Some(s.observed_at.chars().take(10).collect()),
             claimed_status: s.status.clone(),
             exact_quote: s.quote.clone(),
-            // detail 为主陈述的 detail（project.ts:382-398 闭包捕获）
             confirmer: confirmer.clone(),
             note: format!("陈述 {} · 版本 {} · {}", s.code, s.revision_id, s.namespace),
             office_anchor: direct_anchor,
             pdf_anchor: direct_pdf_anchor,
         });
 
-        // 若 Markdown 陈述显式链接了 `.xlsx#Sheet!Range` / `.docx#para=N`，追加一条可直跳 Office 锚点卡片的关联证据
         if let Some(linked) = meta_detail.get("linkedOffice") {
             let target_file_id = linked.get("file_id").and_then(|v| v.as_str());
             let target_revision_id = linked.get("revision_id").and_then(|v| v.as_str());
@@ -349,7 +320,6 @@ fn build_decision(decision_id: String, list: Vec<StatementMeta>) -> DecisionAsse
             }
         }
 
-        // 若 Markdown 陈述显式链接了 `.pdf#page=N`，追加一条可直跳 PDF 页码锚点的关联证据
         if let Some(linked) = meta_detail.get("linkedPdf") {
             let target_file_id = linked.get("file_id").and_then(|v| v.as_str());
             let target_revision_id = linked.get("revision_id").and_then(|v| v.as_str());
@@ -395,7 +365,6 @@ fn build_decision(decision_id: String, list: Vec<StatementMeta>) -> DecisionAsse
                 DecisionConfirmationBasis {
                     record_text: primary.quote.chars().take(200).collect(),
                     confirmer: confirmer.clone(),
-                    // confirmedAt = observed_at 前 16 字符并把第一个 T 换成空格（project.ts:416）
                     confirmed_at: primary
                         .observed_at
                         .chars()
@@ -431,7 +400,6 @@ fn build_decision(decision_id: String, list: Vec<StatementMeta>) -> DecisionAsse
     }
 }
 
-/// 摘要投影行：一行一决定，只携带筛选/排序/键集所需字段
 struct DecisionSummary {
     decision_id: String,
     status: String,
@@ -442,8 +410,6 @@ struct DecisionSummary {
     file_active: bool,
 }
 
-/// 证据构造的陈述行 + 关联元数据：来源路径与版本观察时间在 SQL 内
-/// 关联给出（missing 文件/缺行文件 path 为空串；无版本行的陈述回退陈述观察时间）
 struct StatementMeta {
     row: StatementRow,
     path: String,
@@ -509,7 +475,6 @@ pub fn relations_tx(store: &ReadonlyStore) -> Result<RelationsResponse, GuanlanE
     })
 }
 
-/// relations_total（bootstrap 用）：可落文件的引用边计数
 pub(crate) fn relations_total(
     conn: &rusqlite::Connection,
     workspace_id: &str,

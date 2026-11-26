@@ -6,9 +6,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
-// /api 由独立 Rust 服务（guanlan serve，native/）提供，
-// Vite 仅做开发代理。
-// 服务地址可用环境变量 GUANLAN_SERVE 覆盖；默认对应 `guanlan serve --port 8787`。
 const GUANLAN_SERVE = process.env.GUANLAN_SERVE ?? 'http://127.0.0.1:8787';
 
 const CONFIG_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -71,10 +68,7 @@ export default defineConfig(() => {
           changeOrigin: false,
         },
       },
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };

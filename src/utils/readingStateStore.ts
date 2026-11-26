@@ -72,7 +72,6 @@ export function saveReadingStates(states: ReadingStateMap, workspaceId?: string)
   try {
     window.localStorage.setItem(readingStateStorageKey(workspaceId), JSON.stringify(states));
   } catch {
-    /* 忽略：持久化是增强能力，不是阅读的前置条件 */
   }
 }
 
@@ -182,7 +181,6 @@ export function mergeServerReadingStates(
   return next ?? local;
 }
 
-/** 清除单条阅读状态的已读基线；保留收藏、个人批注与既有阅读位置，全空则返回 null 以便删键。 */
 function clearReadBaselineFromState(state: ReadingState): ReadingState | null {
   const cleaned: ReadingState = {
     ...state,

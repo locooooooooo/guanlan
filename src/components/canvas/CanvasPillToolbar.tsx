@@ -1,21 +1,3 @@
-/**
- * 画布底部药丸工具栏（底部悬浮唯一控制栏）。
- *
- * 挂画布底部正中（宿主 Tailwind：left-1/2 -translate-x-1/2 bottom-4，z-20 低于
- * 叙事抽屉 z-30）；磨砂底 = --cv-panel 92% + backdrop-blur（canvasWidgets.css）。
- * 汇总画布核心交互控件，避免左下/右下多条悬浮栏叠加遮挡：
- *  ① +添加上下文 —— 宿主接既有 onAddEvidencePointer 链路；
- *  ② 指针/抓手双态 —— aria-pressed 语义（--cv-pill-active-* 取值）；
- *  ③ 只看最新/看版本演进双态 —— 联动宿主 isNodeInActiveTimeSlice/activeDate 语义；
- *  ④ 司辰时间轴滑块开关 —— 显隐司辰时间轴并支持时光流转重演；
- *  ⑤ ?快捷键 —— 就地轻弹层（宿主渲染）；
- *  ⑥ ⚙视图设置 —— 触发宿主布局/特效弹层（定位在药丸上方正中）；
- *  ⑦ 缩放簇（− / 百分比读数 / +）+ 重置 —— 读数保留 data-testid="canvas-scale-indicator"；
- *  ⑧ 图例「?」—— 点击展开四泳道图例气泡（气泡由宿主渲染，本组件只出按钮）。
- * 日期切换经主干刻度与司辰滑块完成，再次点击当前选中刻度可回到全域视图。
- * 锚点：容器 data-cv-pill-toolbar，控件 data-cv-pill-btn="add-context|tool|version-view|chronos|view-settings|zoom-out|zoom-percent|zoom-in|reset-view|legend|shortcuts"。
- * 舷窗纪律：样式全走 .cvw-*，零内联色值。
- */
 
 import {
   CircleDot,
@@ -33,7 +15,6 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
-// 样式文件统一由 App.tsx 装载：Node 测试链不解析 .css 导入，由 App 常驻装载兜底
 
 export interface CanvasPillToolbarProps {
   tool: 'pointer' | 'pan';
@@ -42,20 +23,16 @@ export interface CanvasPillToolbarProps {
   onVersionViewChange: (v: 'latest' | 'evolution') => void;
   chronosSliderOpen: boolean;
   onToggleChronosSlider: () => void;
-  /** 时光流转重演（可选：缺省时不渲染，兼容旧测试） */
   isTimeFlowPlaying?: boolean;
   onToggleTimeFlow?: () => void;
   onAddContext: () => void;
   onShowShortcuts: () => void;
-  /* 视图设置弹层开关（弹层本体由宿主渲染） */
   viewSettingsOpen: boolean;
   onToggleViewSettings: () => void;
-  /* 缩放簇（− / 读数 / +）与重置运镜；读数=整数百分比 */
   zoomPercent: number;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onResetView: () => void;
-  /* 泳道图例「?」气泡开关（气泡本体由宿主渲染） */
   legendOpen: boolean;
   onToggleLegend: () => void;
 }
@@ -82,7 +59,6 @@ export default function CanvasPillToolbar({
 }: CanvasPillToolbarProps) {
   return (
     <div className="cvw-pill-toolbar glx-floating-dock" data-cv-pill-toolbar>
-      {/* ① +上下文：接宿主 onAddEvidencePointer 链路（当前选中文件证据指针） */}
       <button
         type="button"
         className="cvw-pill-btn"
@@ -96,7 +72,6 @@ export default function CanvasPillToolbar({
 
       <span className="cvw-pill-sep" aria-hidden="true" />
 
-      {/* ② 指针/抓手双态：aria-pressed 双钮形制 */}
       <button
         type="button"
         className="cvw-pill-btn"
@@ -113,7 +88,6 @@ export default function CanvasPillToolbar({
         <span>{tool === 'pointer' ? '指针' : '抓手'}</span>
       </button>
 
-      {/* ③ 最新 / 演进：演进态放开按日调光（isNodeInActiveTimeSlice 全时段可见） */}
       <button
         type="button"
         className="cvw-pill-btn"
@@ -134,7 +108,6 @@ export default function CanvasPillToolbar({
         <span>{versionView === 'latest' ? '最新' : '演进'}</span>
       </button>
 
-      {/* ④ 司辰时间轴显隐与时光流转重演 */}
       <button
         type="button"
         className="cvw-pill-btn"
@@ -171,7 +144,6 @@ export default function CanvasPillToolbar({
 
       <span className="cvw-pill-sep" aria-hidden="true" />
 
-      {/* ⑥ ⚙视图设置（纯图标瘦身） */}
       <button
         type="button"
         className="cvw-pill-btn cvw-pill-icon-btn"
@@ -184,7 +156,6 @@ export default function CanvasPillToolbar({
         <Settings2 className="w-3.5 h-3.5" strokeWidth={1.5} aria-hidden="true" />
       </button>
 
-      {/* ⑦ 缩放簇（− / 百分比读数 / +）+ 重置 */}
       <button
         type="button"
         className="cvw-pill-btn cvw-pill-icon-btn"
@@ -225,7 +196,6 @@ export default function CanvasPillToolbar({
 
       <span className="cvw-pill-sep" aria-hidden="true" />
 
-      {/* ⑧ 泳道图例与快捷键（纯图标瘦身） */}
       <button
         type="button"
         className="cvw-pill-btn cvw-pill-icon-btn"

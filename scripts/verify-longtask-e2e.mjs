@@ -206,7 +206,6 @@ async function main() {
           else reject(new Error(`scan failed (${code}): ${err}\n${out}`));
         });
       });
-    // 先扫 6 份建立基线，再新增 03-待确认事项.md 重扫，使星图画布出现该文档的独立节点
     await runScan();
     fs.writeFileSync(
       decisionDocPath,
@@ -311,7 +310,6 @@ async function main() {
     assert.equal(ac01Home.cardStateText, '待用户确认');
     assert.equal(ac01Home.radarText, '1', 'TopHeader 未决计数应为 1');
 
-    // 验证全景溯源画布星图节点状态徽标一致
     await cdp.eval(`
       const tabs = Array.from(document.querySelectorAll('[role="tab"], button'));
       tabs.find(t => t.innerText.includes('全景溯源'))?.click();
@@ -327,7 +325,6 @@ async function main() {
     assert.equal(ac01Canvas.state, 'pending_review');
     assert.equal(ac01Canvas.text, '待用户确认');
 
-    // 返回首页并打开上下文抽屉（global 意图）
     await cdp.eval(`
       const tabs = Array.from(document.querySelectorAll('[role="tab"], button'));
       tabs.find(t => t.innerText.trim() === '首页')?.click();
@@ -523,7 +520,6 @@ async function main() {
           mcpResponses.delete(msg.id);
         }
       } catch {
-        // ignore
       }
     });
     const mcpRpc = (id, method, params) =>

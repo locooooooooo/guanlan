@@ -1,7 +1,3 @@
-/**
- * Quiet.md 多项目添加弹窗（桌面端原生选目录 + 浏览器/桌面端手动路径输入 + 最近目录快选 + 只读保护开关）。
- * 零裸 hex 色值，全部使用设计系统 CSS 变量。
- */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FolderOpen, FolderPlus, Lock, X } from 'lucide-react';

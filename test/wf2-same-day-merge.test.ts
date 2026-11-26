@@ -5,7 +5,6 @@ import { buildCanvasEventScene, type CanvasEventCard } from '../src/utils/graphE
 import { dayMergeLabel, stageOfPath, taskPackageOf } from '../src/utils/taskPackages';
 import { basenameOf } from '../src/utils/documentIdentity';
 import type { EventDayItem, EventDaysResult } from '../src/services/workspaceClient';
-// 组头胶囊几何常量与纯函数
 import {
   FANOUT_HEADER_BUTTON_W,
   FANOUT_HEADER_CAPSULE_H,
@@ -17,13 +16,6 @@ import {
   fitFanOutHeaderText,
 } from '../src/components/GraphCanvasView';
 
-/**
- * 全景溯源——同日同文件合并为一张卡（v1 → v3 · 今日演进 N 次）+
- * 组头日期胶囊几何（文本预算 / 按钮右缘 / 司辰留白三组常量）。
- *
- * 合并为可选开启：buildCanvasEventScene 注入 resolveVersion 才合并；缺省逐卡旧行为
- * （既有断言不动，本文件单独验证两档口径）。
- */
 
 function item(over: Partial<EventDayItem> = {}): EventDayItem {
   return {
@@ -51,7 +43,6 @@ function item(over: Partial<EventDayItem> = {}): EventDayItem {
   };
 }
 
-/** 同 file_id 一日三版：r1→v1、r2→v2、r3→v3（EventDayItem 无版本号，由调用方注入查表） */
 const resolve = (revisionId: string | null): number | null =>
   revisionId === 'r1' ? 1 : revisionId === 'r2' ? 2 : revisionId === 'r3' ? 3 : null;
 
@@ -79,7 +70,6 @@ function singleDayFixture(samples: EventDayItem[]): EventDaysResult {
   } as EventDaysResult;
 }
 
-// ---------- 验收：同 file_id 同日合并（DoD2 逐字口径） ----------
 
 test('同 file_id 同日三版 → 1 张合并卡，changeLabel=v1 → v3 · 今日演进 2 次', () => {
   const samples = [
@@ -156,25 +146,20 @@ test('两规则互不覆盖：先同 file_id 同日合并、再跨 file_id 同�
   assert.equal(scene.active?.more, 0, '并组卡承载全部 6 条原始样本，more 口径不变');
 });
 
-// ---------- 验收：组头胶囊几何（三组常量在渲染断言中覆盖） ----------
 
 test('组头胶囊几何：文本预算 / 按钮右缘 / 司辰留白三组常量，任何盒宽不重叠', () => {
-  // 文本预算（ask 逐字口径）：fanOutBounds.width - 96 - 58（按钮宽）- 16
   assert.equal(FANOUT_HEADER_TEXT_BUDGET_OFFSET, 96 + FANOUT_HEADER_BUTTON_W + 16);
   assert.equal(FANOUT_HEADER_BUTTON_W, 58);
 
   for (const w of [330, 358, 500, 640, 1200]) {
     const textMax = fanOutHeaderTextMaxWidth(w);
     assert.equal(textMax, Math.max(0, w - 96 - 58 - 16), `w=${w} 文本预算 = 盒宽 - 96 - 58 - 16`);
-    // 文本终点（左缘 12 + 预算）恒在按钮左缘（盒宽 - 82）之前 → 『点击看全天 →』与『收起』永不重叠
     const textEnd = 12 + textMax;
     const btnLeft = fanOutHeaderButtonLeft(w);
     assert.ok(textEnd < btnLeft, `w=${w} 文本终点 ${textEnd} < 按钮左缘 ${btnLeft}`);
-    // 按钮右缘恒贴胶囊右缘（盒宽 - 24 = 82 - 58）
     assert.equal(btnLeft + FANOUT_HEADER_BUTTON_W, w - 24, '按钮右缘 = 盒宽 - 24，恒贴胶囊右缘');
   }
 
-  // 超长省略：超预算文本以「…」收尾（em 预算保守估算，永不溢出）；未超预算原样
   const long = '⑃ 2026-11-05 · 187 条事件 · 5 个事项 · 60 条待展开 · 点击看全天 →';
   const budgetChars = Math.max(1, Math.floor(330 / 11.5));
   assert.ok(long.length > budgetChars, 'more>0 长文案确实超出预算');
@@ -184,14 +169,12 @@ test('组头胶囊几何：文本预算 / 按钮右缘 / 司辰留白三组常�
   const short = '⑃ 2026-11-05 · 3 条事件';
   assert.equal(fitFanOutHeaderText(short, 330), short, '未超预算原样返回（双色 tspan 结构保留）');
 
-  // 胶囊底与司辰留白 ≥ 20px：fanOutHeaderCapsuleY 只上推胶囊（盒内钳制），不改司辰派生
   assert.ok(FANOUT_HEADER_CHRONOS_GAP_MIN >= 20, '留白常量下限 20px');
-  // 间距可达的样本（chronosY ≥ boxTop + 46，上推可在盒内补足）：留白 ≥ 20 恒成立
   for (const [boxTop, chronosY] of [
-    [202, 266], // 默认布局：卡片顶 248 - 46 头高 = 202；司辰默认 266
-    [202, 248.4], // 6 日标尺、次新日（原布局留白不足 10.4 的触发样本）
-    [192, 266], // 空态默认盒
-    [202, 250], // gap 12 → 上推 8 → 恰好 20
+    [202, 266],
+    [202, 248.4],
+    [192, 266],
+    [202, 250],
   ]) {
     const capsuleY = fanOutHeaderCapsuleY(boxTop, chronosY);
     const capsuleBottom = boxTop + capsuleY + FANOUT_HEADER_CAPSULE_H;
@@ -200,15 +183,12 @@ test('组头胶囊几何：文本预算 / 按钮右缘 / 司辰留白三组常�
       `boxTop=${boxTop} chronosY=${chronosY}：留白 ${chronosY - capsuleBottom} ≥ 20`
     );
   }
-  // 间距充足的样本：胶囊原位不动（10）
   assert.equal(fanOutHeaderCapsuleY(202, 266), 10);
   assert.equal(fanOutHeaderCapsuleY(192, 266), 10);
-  // 触发样本：上推到恰好 20px 留白（0.4 = 10 - (20 - 10.4)）
   assert.ok(
     Math.abs(fanOutHeaderCapsuleY(202, 248.4) - 0.4) < 1e-9,
     'gap=10.4 → 上推 9.6 → 胶囊 y=0.4（恰好 20px 留白）'
   );
-  // 司辰被拖入盒区/盒上方（盒内不可补足）：钳制在盒顶 0，胶囊永不越出盒顶
   for (const [boxTop, chronosY] of [
     [300, 300],
     [202, 238],
@@ -220,7 +200,6 @@ test('组头胶囊几何：文本预算 / 按钮右缘 / 司辰留白三组常�
   }
 });
 
-// ---------- 验收：DoD1 抽查（任务包名 + 核心文档名替代截断前缀路径） ----------
 
 test('路径降噪抽查：深层容器路径 → 任务包名+核心文档名，行首不含连续截断前缀', () => {
   const p = '01-方案文档/产品需求与任务包/PDM四专项需求核对_2026-11-04/01-需求单.md';
@@ -229,12 +208,10 @@ test('路径降噪抽查：深层容器路径 → 任务包名+核心文档名�
   assert.equal(basenameOf(p), '01-需求单', '核心文档名 = basename 去扩展名');
   assert.equal(stageOfPath(p), '蓝图', '01-需求单 → 蓝图阶段（关键词优先）');
 
-  // 行首展示 = 任务包名 + 核心文档名（chips 同源口径）；容器前缀只收进完整路径（title 悬浮）
   const chipLine = `${pkg.name}·${stageOfPath(p)} ${basenameOf(p)}`;
   assert.ok(!chipLine.includes('01-方案文档/产品需求与任务包'), '行首不再裸显容器前缀路径');
   assert.ok(!chipLine.includes('01-方案文档/产品需求与任务包/PDM四专项需求核对_2026-11-04'), '连续同前缀路径不再出现');
 
-  // 连续 10 个同容器文件的行首（DoD1 场景）：每行 = 包名 + 各自文档名，无「蜈蚣列表」
   const tenDocs = Array.from({ length: 10 }, (_, i) =>
     `01-方案文档/产品需求与任务包/PDM四专项需求核对_2026-11-04/0${i + 1}-文档${i + 1}.md`
   );

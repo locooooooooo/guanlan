@@ -1,7 +1,3 @@
-/**
- * 画布叙事抽屉内容装配（时间轴叙事分节：发生→变更章节→关联决策→引用依据）。
- * 接收显式参数，返回 { narrative, narrativeCopyFileId }。
- */
 
 import React from 'react';
 import { cleanDisplayText } from '../../utils/displayText';
@@ -33,8 +29,6 @@ interface GraphNarrativeInputs {
   activeFileRecord: FileRecord | null;
 }
 
-/** 渲染叙事抽屉「引用依据」分节：按（目标文件 + 方向 + 标签）合并同源重复边并标注处数/行号，
- *  标题独占主行 + 非换行关系标签胶囊（杜绝中文字中折行），可解析目标支持单击直达切换叙事焦点。 */
 function renderNarrativeCitations(
   fileRelations: RelationEdge[],
   currentFileId: string,
@@ -136,9 +130,7 @@ export function useGraphCanvasNarrative({
   activeFileRecord,
 }: GraphNarrativeInputs) {
 
-  // ═══ 叙事抽屉内容（时间轴叙事分节：发生→变更章节→关联决策→引用依据）═══
   const narrative = React.useMemo(() => {
-    // ① 事件卡叙事：nodeId 命中事件卡 → 该事件为「发生」节
     if (narrativeTarget?.nodeId) {
       const card = subAgentCards.find((c) => c.id === narrativeTarget.nodeId);
       if (card) {
@@ -252,7 +244,6 @@ export function useGraphCanvasNarrative({
       }
     }
 
-    // ② 文件叙事：指名 fileId（富预览卡双击）→ 该文档版本叙事
     const fileId = narrativeTarget?.fileId ?? '';
     const file = fileId ? files.find((f) => f.file_id === fileId) ?? null : null;
     if (file) {
@@ -362,7 +353,6 @@ export function useGraphCanvasNarrative({
       };
     }
 
-    // ③ 工程轴中枢叙事（main_hub / 未指名目标）
     const focusedGroup = orderedPackageGroups.find((g) => g.pkgId === focusedPkgId) ?? null;
     const sections: CanvasNarrativeSection[] = [
       {
@@ -388,7 +378,6 @@ export function useGraphCanvasNarrative({
         id: 'reading',
         label: '待阅',
         tone: 'change',
-        // 未读两态统一表述：未读新件（首次收录）与读后有更新（读后变更）明确区分
         body: `${unreadCount} 份未读（未读新件 / 读后有更新）。`,
       },
     ];
@@ -416,11 +405,6 @@ export function useGraphCanvasNarrative({
     onSelectCitation,
   ]);
 
-  // 叙事抽屉「复制证据」fileId 单一解析值：onClick 传参与 copiedId 成功反馈判断必须消费
-  // 同一解析值——否则无 file 决策卡（footerFileId=''，下方 memo 事件卡分支 `card.fileId || ''`）
-  // 复制成功但按钮永不进 ClipboardCheck 态（历史 bug：反馈比对目标 `footerFileId || ''`
-  // 空串，与 handler 兜底链落到的真实 file_id 永不相等）。兜底链与 handleCopyInspectorPointer
-  // 既有语义一致：footer 缺 file → activeFileRecord → files[0]；handler 侧证据指针的
   const narrativeCopyFileId =
     narrative.footerFileId || activeFileRecord?.file_id || files[0]?.file_id || '';
   return { narrative, narrativeCopyFileId };

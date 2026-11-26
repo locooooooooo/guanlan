@@ -14,12 +14,9 @@ import {
   type FileHistory,
   type FileHistoryRevision,
 } from '../services/workspaceClient';
-// 版本锚点统一按本地时区展示（纯日期不换算）；时间依据三值标注与
-// documentDiff 同源（utils/timeFormat.ts 单一事实源）
 import { formatLocalDateTime, timeBasisLabel } from '../utils/timeFormat';
 import { isPreviewableHtmlFormat } from '../utils/formatMeta';
 import { buildHtmlSandboxDocument } from '../utils/htmlPreview';
-// 版本动作钮使用统一原语组件（「阅读器打开」使用 primary sm）
 import { Button } from './ui/primitives';
 import {
   Empty,
@@ -29,28 +26,12 @@ import {
   EmptyTitle,
   ScrollArea,
 } from './ui';
-// 版本链拉取与版本正文预览使用琉璃骨架占位（骨架条随容器文字色 tint，reduce 下静态终态）
 import { GlassSkeleton } from './ui/GlassSkeleton';
 
-/**
- * 以文件为中心的时间线抽屉。
- *
- * 消费 /api/v1/files/{id}/revisions 分页版本链（fetchFileHistory）：
- * - 版本节点按 occurred_at（无则 observed_at）排列；
- * - 事件按 seq 挂到对应版本下（决策事件 file_id 只在 payload_json、读取异常以 path: 为主体，
- *   由服务端 history SQL 补齐后一并在链路中呈现）；
- * - snapshot_available=false 的版本显示「已过保留期」并禁用点开；
- * - 正文按需经 fetchRevisionContent / revisionRawUrl 读取，绝不拿当前文件内容冒充历史版本；
- * - 抽屉入场接入 `.glx-t-panel` 弹簧双轨（transform→spring、opacity→fade），通过首帧偏移态 → rAF
- *   翻转终态触发过渡，避免与一次性 keyframes 叠挂（reduce 降级走 motion.css transition:none）；
- * - size_bytes KB 收进版本徽标 hover 与正文预览头，避免逐节点平铺卡面；
- *   occurred 精度标注保留，「时间轴序 ≠ 修订链序」常显提示。
- */
 interface FileTimelineDrawerProps {
   isOpen: boolean;
   fileId: string;
   onClose: () => void;
-  /** 打开某个时点的版本（App 把阅读器钉到该 revision_id） */
   onOpenRevision: (fileId: string, revisionId: string) => void;
 }
 
@@ -58,10 +39,8 @@ type HistoryEvent = FileHistory['events'][number];
 
 interface TimelineNode {
   key: string;
-  /** 该节点锚定的版本（前导事件节点没有版本） */
   revision: FileHistoryRevision | null;
   events: HistoryEvent[];
-  /** 排序锚点：版本用 occurred_at ?? observed_at；事件用 occurred_at ?? observed_at */
   anchorAt: string;
 }
 
@@ -115,14 +94,10 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
   const [history, setHistory] = useState<FileHistory | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
-  // 正文预览（点有快照的版本后按需读取）
   const [previewRevisionId, setPreviewRevisionId] = useState<string>('');
   const [previewText, setPreviewText] = useState<string>('');
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string>('');
-  // 弹簧抽屉两段式入场：首帧偏移态（translateX+opacity:0）→ rAF 翻转终态，
-  // 过渡由 .glx-t-panel 双轨承担（transform→spring / opacity→fade，只动这两属性）。
-  // reduce 用户走 motion.css 既有 .glx-t-panel → transition:none，第二帧瞬时落位。
   const [entered, setEntered] = useState(false);
 
   useEffect(() => {
@@ -157,8 +132,6 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
     };
   }, [isOpen, fileId]);
 
-  // Esc 只关闭本抽屉（App 的全局 Esc 在 historyFileId 非空时已让位），
-  // 不切页签、不清搜索、不关其他浮层
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -169,8 +142,6 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  // 版本节点按 occurred_at（无则 observed_at）排列；事件按 revision_id 归挂，
-  // revision_id 为空的事件（决策 / 读取异常）按时间插到宿主版本下
   const nodes = useMemo<TimelineNode[]>(() => {
     if (!history) return [];
     const revisions = [...history.revisions].sort((a, b) => {
@@ -192,7 +163,6 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
         eventsByRevision.set(ev.revision_id, list);
         continue;
       }
-      // 孤儿事件：挂到最后一个锚点时间不晚于事件时间的版本；之前没有任何版本则进前导段
       const t = anchorOfEvent(ev);
       const host = revisions
         .filter((r) => anchorOfRevision(r) <= t)
@@ -231,7 +201,6 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
     return out;
   }, [history]);
 
-  // 正文按需回退：MD / SVG 取文本；PDF 走 revisionRawUrl（版本地址，避免当前路径漂移）
   useEffect(() => {
     if (!previewRevisionId || !history) return;
     const rev = history.revisions.find((r) => r.revision_id === previewRevisionId);
@@ -287,19 +256,16 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* coss Sheet (variant="inset") 悬浮抽屉材质 */}
       <div
         data-timeline-panel=""
         data-sheet-variant="inset"
         className="glx-t-panel bg-popover/95 dark:bg-popover/95 backdrop-blur-2xl w-full max-w-2xl h-full flex flex-col overflow-hidden rounded-2xl border border-border/85 text-foreground"
         style={{
-          // 弹簧抽屉入场只动 transform/opacity（glx-t-panel 双轨）；禁动画 right/width
           transform: entered ? 'none' : 'translateX(32px)',
           opacity: entered ? 1 : 0,
           boxShadow: 'var(--glass-shadow-pop)',
         }}
       >
-        {/* Header */}
         <div className="px-6 py-4 bg-card/85 backdrop-blur-md border-b border-border/80 flex items-center justify-between gap-3 shrink-0">
           <div className="min-w-0">
             <h2 className="font-serif-claude text-[17px] leading-[1.35] font-semibold tracking-[-0.01em] text-foreground flex items-center gap-2">
@@ -328,7 +294,6 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
           </button>
         </div>
 
-        {/* Body */}
         <ScrollArea scrollFade className="flex-1 min-h-0">
         <div className="p-6 space-y-4">
           {loading && (
@@ -352,7 +317,6 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
 
           {!loading && history && (
             <>
-              {/* 概览统计：4 格微瓷砖 + 元信息胶囊 */}
               <div className="space-y-2">
                 <div className="grid grid-cols-4 gap-2 font-mono tabular-nums">
                   {[
@@ -379,7 +343,6 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
                 </div>
                 <div className="flex items-center justify-between px-1 font-mono text-[11px] text-[color:var(--ink-soft)]">
                   <span>格式 · {history.file.format.toUpperCase()}</span>
-                  {/* 时间轴序 ≠ 修订链序常显提示 */}
                   <span title="版本与事件按发生/采集时间混排（时间轴序·自新到旧），与版本时光机的修订链序（seq 降序）是两套口径">
                     排序 · 时间轴自新到旧（非修订链）
                   </span>
@@ -406,7 +369,6 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
                 </Empty>
               )}
 
-              {/* 版本链 + 挂载事件：左侧垂直时间脊柱 + 发光节点圆点（节点带可测锚点） */}
               <div className="relative pl-6 space-y-3" data-timeline-nodes="">
                 <span
                   aria-hidden="true"
@@ -445,7 +407,6 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
                             : ''
                         }`}
                       >
-                      {/* 版本节点头（size KB 收进徽标 hover 与预览头，不在卡面逐节点平铺） */}
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
                           {rev ? (
@@ -510,7 +471,6 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
                         )}
                       </div>
 
-                      {/* 挂载事件 */}
                       {node.events.length > 0 && (
                         <div className="mt-2.5 pt-2.5 border-t border-[#26243D]/10 space-y-2">
                           {node.events.map((ev) => (
@@ -539,7 +499,6 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
                         </div>
                       )}
 
-                      {/* 正文预览（预览头补充版本元数据，展示 size 字段） */}
                       {rev && available && isActivePreview && (
                         <div className="mt-2.5 pt-2.5 border-t border-[#26243D]/10">
                           <div
@@ -600,7 +559,6 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
         </div>
         </ScrollArea>
 
-        {/* Footer */}
         <div className="px-5 py-3 border-t border-border/80 bg-card/80 text-[11px] text-muted-foreground shrink-0">
           版本正文一律按 revision_id 从持久快照读取（/revisions/&lt;id&gt;/content），
           绝不用磁盘当前内容冒充历史版本；「已过保留期」版本仅保留元数据。

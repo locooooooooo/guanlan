@@ -12,10 +12,8 @@ use crate::index::office::{extract_office_from_bytes, OfficeExtractRecord};
 use crate::query::files::title_of;
 use crate::storage::{ReadonlyStore, RevisionRow};
 
-/// 只读按需解析兜底的大小上限（32 MiB，与 L2 快照上限一致）
 const MAX_ONDEMAND_OFFICE_BYTES: u64 = 32 * 1024 * 1024;
 
-/// 读取指定 `content_hash` 在 `office_extracts` 里的状态（供 `files.rs` coverage 判定）
 pub(crate) fn cached_office_status(store: &ReadonlyStore, content_hash: &str) -> Option<String> {
     store
         .conn()
@@ -27,7 +25,6 @@ pub(crate) fn cached_office_status(store: &ReadonlyStore, content_hash: &str) ->
         .ok()
 }
 
-/// 按版本加载 Office 提取结构；未命中缓存时按快照门禁安全兜底解析（只读不写库）
 pub(crate) fn load_office_extract_for_revision(
     store: &ReadonlyStore,
     format: &str,
@@ -81,7 +78,6 @@ pub(crate) fn load_office_extract_for_revision(
     extract_office_from_bytes(format, &bytes)
 }
 
-/// 生成供 QuickLook 轻预览端点使用的紧凑 Office 摘要
 pub(crate) fn summarize_office(rec: &OfficeExtractRecord) -> OfficePreviewSummary {
     let mut text_preview = String::new();
     for ch in rec.plain_text.chars().take(1200) {

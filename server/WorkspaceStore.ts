@@ -1,15 +1,3 @@
-/**
- * 观澜 Node 对拍基线 —— 工作区持久层（node:sqlite，零第三方依赖）
- *
- * 扫描器只产出路径、字节哈希、mtime 和内容；服务端比对持久库后分配版本和事件。
- *
- * 表设计要点：
- * - revisions 记录「版本出现」，A → B → A 是三次出现、两份内容（哈希相同的共享快照）
- * - blobs 按完整哈希去重存放内容快照
- * - events 用单调 seq 支持日历排序、断线恢复、分页游标与去重
- * - statements 给「每条来源陈述」独立身份，业务决定 ID 可空（避免同编号不同问题被合并）
- * - edges 把引用绑定到来源版本，并记录目标版本是否已知
- */
 
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
@@ -106,7 +94,6 @@ export interface StatementRow {
   line_start: number;
   line_end: number;
   decision_id: string | null;
-  /** 选项、推荐语、影响范围等派生信息（JSON） */
   detail_json: string;
   extract_rule_version: string;
   observed_at: string;
@@ -307,7 +294,6 @@ export class WorkspaceStore {
     this.db.exec('PRAGMA foreign_keys = ON');
     this.db.exec('PRAGMA busy_timeout = 5000');
     this.db.exec(SCHEMA);
-    // 增量列迁移：早期库没有 detail_json，补列不重建
     this.ensureColumn('statements', 'detail_json', "TEXT NOT NULL DEFAULT '{}'");
   }
 
@@ -322,7 +308,6 @@ export class WorkspaceStore {
     this.db.close();
   }
 
-  /** 事务包装：数据库内条目一起提交 */
   transaction<T>(fn: () => T): T {
     this.db.exec('BEGIN IMMEDIATE');
     try {
@@ -333,13 +318,11 @@ export class WorkspaceStore {
       try {
         this.db.exec('ROLLBACK');
       } catch {
-        /* 回滚失败不掩盖原始错误 */
       }
       throw error;
     }
   }
 
-  // ---------- 工作区 ----------
 
   ensureWorkspace(rootPath: string): WorkspaceRecord {
     const resolved = path.resolve(rootPath);
@@ -394,13 +377,11 @@ export class WorkspaceStore {
     return row.n > 0;
   }
 
-  // ---------- 快照（按哈希去重） ----------
 
   private blobPathFor(hash: string): string {
     return path.join(this.blobsDir, hash.slice(0, 2), hash);
   }
 
-  /** 对外暴露快照路径，供校验与回收使用 */
   snapshotPath(hash: string): string {
     return this.blobPathFor(hash);
   }
@@ -410,11 +391,6 @@ export class WorkspaceStore {
     return Boolean(row) && fs.existsSync(this.blobPathFor(hash));
   }
 
-  /**
-   * 写入顺序第 2 步（事务外）：保存并校验内容快照。
-   * 磁盘上已有相同哈希则不重复写；A → B → A 的两份相同内容共享同一快照文件。
-   * 返回是否新写了磁盘文件。
-   */
   writeSnapshotToDisk(content: Buffer, hash: string): boolean {
     const target = this.blobPathFor(hash);
     if (fs.existsSync(target)) {
@@ -433,7 +409,6 @@ export class WorkspaceStore {
     return true;
   }
 
-  /** 事务内：登记快照元数据并维护引用计数 */
   registerBlobRef(hash: string, sizeBytes: number): void {
     const now = new Date().toISOString();
     const rel = path.relative(this.dataDir, this.blobPathFor(hash)).replace(/\\/g, '/');
@@ -456,14 +431,12 @@ export class WorkspaceStore {
       .run(hash, sizeBytes, rel, now, now);
   }
 
-  /** 组合入口：磁盘写入 + 登记（非事务场景使用） */
   storeSnapshot(content: Buffer, hash: string): boolean {
     const wrote = this.writeSnapshotToDisk(content, hash);
     this.registerBlobRef(hash, content.length);
     return wrote;
   }
 
-  /** 回收未被任何版本引用的快照（外部文件单独校验和回收） */
   evictUnreferencedSnapshots(): number {
     const orphaned = this.db
       .prepare(
@@ -489,7 +462,6 @@ export class WorkspaceStore {
     return fs.readFileSync(target);
   }
 
-  // ---------- 文件与别名 ----------
 
   findFileByPath(workspaceId: string, filePath: string): FileRow | undefined {
     return this.db
@@ -569,7 +541,6 @@ export class WorkspaceStore {
       | undefined;
   }
 
-  // ---------- 版本 ----------
 
   revisionsOfFile(fileId: string): RevisionRow[] {
     return this.db
@@ -613,7 +584,6 @@ export class WorkspaceStore {
         rev.snapshot_available,
         rev.extract_rule_version
       );
-    // blob 引用计数由 storeSnapshot 维护，这里确保存在记录
     if (!this.db.prepare('SELECT 1 AS x FROM blobs WHERE content_hash = ?').get(rev.content_hash)) {
       throw new Error(`版本引用了未保存的快照：${rev.content_hash.slice(0, 16)}`);
     }
@@ -625,9 +595,7 @@ export class WorkspaceStore {
       .run(revisionId);
   }
 
-  // ---------- 事件 ----------
 
-  /** 同 identity 的事件已存在则跳过（重扫不增加事件） */
   insertEvent(event: Omit<EventRow, 'seq'>): { inserted: boolean; seq: number | null } {
     try {
       const info = this.db
@@ -654,14 +622,10 @@ export class WorkspaceStore {
         );
       return { inserted: true, seq: Number(info.lastInsertRowid ?? 0) };
     } catch (error) {
-      // node:sqlite 对表达式唯一索引的报错形如 `UNIQUE constraint failed: index 'uniq_event_identity'`，
-      // 与 sqlite3 CLI 的 `UNIQUE constraint failed: uniq_event_identity` 不同；errcode（SQLITE_CONSTRAINT_UNIQUE）
-      // 兜底覆盖不同版本的消息格式。本方法只写 events 表，唯一约束冲突只可能是重复身份或重复 event_id，
-      // 一律按「已存在、跳过」返回，绝不把冲突抛回调用方中断整轮对账事务。
       const errcode = (error as { errcode?: number } | null)?.errcode;
       const message = error instanceof Error ? error.message : String(error);
       if (
-        errcode === 2067 /* SQLITE_CONSTRAINT_UNIQUE */ ||
+        errcode === 2067  ||
         /UNIQUE constraint failed: (?:index ')?(?:uniq_event_identity|events\.event_id)/.test(message)
       ) {
         return { inserted: false, seq: null };
@@ -677,7 +641,6 @@ export class WorkspaceStore {
     return row.s;
   }
 
-  // ---------- 决策陈述 ----------
 
   upsertStatement(row: StatementRow): void {
     this.db
@@ -718,14 +681,12 @@ export class WorkspaceStore {
   }
 
   clearStatementsOfRevision(revisionId: string, ruleVersion: string): number {
-    // 规则升级后重建派生索引：只清除旧规则版本留下的记录
     const info = this.db
       .prepare('DELETE FROM statements WHERE revision_id = ? AND extract_rule_version <> ?')
       .run(revisionId, ruleVersion);
     return Number(info.changes ?? 0);
   }
 
-  // ---------- 关系 ----------
 
   upsertEdge(row: EdgeRow): void {
     this.db
@@ -759,7 +720,6 @@ export class WorkspaceStore {
       .all(workspaceId) as unknown as EdgeRow[];
   }
 
-  // ---------- 元信息（规则版本等） ----------
 
   getMeta(key: string): string | null {
     const row = this.db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as unknown as
@@ -777,7 +737,6 @@ export class WorkspaceStore {
       .run(key, value);
   }
 
-  // ---------- 统计 ----------
 
   counts(workspaceId: string): { files: number; revisions: number; events: number; blobs: number; statements: number; edges: number } {
     const one = (sql: string) =>

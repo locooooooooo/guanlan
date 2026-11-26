@@ -1,17 +1,3 @@
-/**
- * 日期轴源头去重 + 事件卡变更摘要派生单测。
- *
- * 守住两件事：
- *  ① 日期轴铁律：同一桶键（YYYY-MM-DD / 周一 / YYYY-MM / '' 待考）在画布场景
- *     （scene.days 折叠组、navigator 日期卡、主干 ruler 刻度）只允许出现 1 次——
- *     上游给出重复日期桶时在 buildCanvasEventScene 入口并组（计数求和、样本/决策拼接），
- *     互异日期桶逐字不变（回归 v04-canvas-events 既有断言口径）。
- *  ② 「检测到更新」事件卡摘要直出：deriveCanvasChangeSummary 只从既有
- *     changedSections/diff 链派生（章节描述 + 服务端 detail 定式回收 +/- 行数），
- *     派生不出就返回空——绝不伪造行数、绝不渲染空洞占位。
- *
- * 纯函数断言，不渲染 SVG。
- */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
@@ -22,7 +8,6 @@ import {
 } from '../src/utils/graphEvents';
 import type { EventDayGroup, EventDayItem, EventDaysResult } from '../src/services/apiTypes';
 
-// ---------- fixtures ----------
 
 function item(over: Partial<EventDayItem> & Pick<EventDayItem, 'event_id'>): EventDayItem {
   return {
@@ -75,7 +60,6 @@ function daysResult(groups: EventDayGroup[], granularity: 'day' | 'week' = 'day'
   };
 }
 
-// ---------- T5 · dedupeEventGroupsByDate 纯函数 ----------
 
 test('T5 同日期重复桶并组：计数求和、by_kind/formats 求和、样本/决策按出现序拼接', () => {
   const a = group({
@@ -104,7 +88,6 @@ test('T5 同日期重复桶并组：计数求和、by_kind/formats 求和、样�
 
   const merged = dedupeEventGroupsByDate([a, b, c]);
 
-  // 同日只留 1 桶，且保持首现位置（11-13 在前、11-14 在后）
   assert.deepEqual(
     merged.map((g) => g.date),
     ['2026-11-13', '2026-11-14']
@@ -123,7 +106,6 @@ test('T5 同日期重复桶并组：计数求和、by_kind/formats 求和、样�
     ['dec_q1', 'dec_q2'],
     'decisions 按出现序拼接'
   );
-  // 互异日期桶逐字不变（回归口径）
   assert.equal(merged[1].count, 1);
   assert.deepEqual(merged[1].samples.map((s) => s.event_id), ['c1']);
 });
@@ -145,7 +127,6 @@ test('T5 「日期待考」桶同样只允许 1 个（空串键并组）', () =>
   assert.deepEqual(merged[0].samples.map((s) => s.event_id), ['u1', 'u2']);
 });
 
-// ---------- T5 · buildCanvasEventScene 出口不变量 ----------
 
 test('T5 场景出口：scene.days / navigator / ruler 三个日期轴同日期均只出现 1 次', () => {
   const scene = buildCanvasEventScene(
@@ -168,7 +149,6 @@ test('T5 场景出口：scene.days / navigator / ruler 三个日期轴同日期�
     ])
   );
 
-  // 折叠组：同日 1 组，计数合并（scene.days 保持上游输入序；「新→旧」由上游排序保证）
   assert.deepEqual(
     scene.days.map((d) => d.date),
     ['2026-11-13', '2026-11-14'],
@@ -177,11 +157,9 @@ test('T5 场景出口：scene.days / navigator / ruler 三个日期轴同日期�
   const day13 = scene.days.find((d) => d.date === '2026-11-13')!;
   assert.equal(day13.count, 3);
 
-  // 日期导航卡：无重复日期
   const navDates = scene.navigator.map((n) => n.date);
   assert.equal(new Set(navDates).size, navDates.length, 'navigator 日期唯一');
 
-  // 主干标尺：day 粒度逐日展开，同一日期刻度唯一（重复渲染 11-13/11-14 的穿帮根除）
   const rulerDates = scene.ruler.map((t) => t.date);
   assert.equal(new Set(rulerDates).size, rulerDates.length, 'ruler 刻度日期唯一');
   const tick13 = scene.ruler.filter((t) => t.date === '2026-11-13');
@@ -207,7 +185,6 @@ test('T5 week 粒度聚合桶重复键同样收敛（一桶一刻度）', () => 
   assert.equal(week.count, 3);
 });
 
-// ---------- T6 · deriveCanvasChangeSummary ----------
 
 test('T6 章节链派生：首章节一句描述，多章节补计数', () => {
   const one = deriveCanvasChangeSummary({ changedSections: ['发布机构建文档头部'] });
@@ -228,13 +205,11 @@ test('T6 行数回收：只认服务端 detail 的「（+N/-M 行）」定式', 
   assert.deepEqual(fromDetail.counts, { added: 1, removed: 1 });
   assert.equal(fromDetail.description, '修改文档头部');
 
-  // 半角括号与多余空白同样成立（容错，不放宽到任意文本）
   const halfWidth = deriveCanvasChangeSummary({
     detail: '内容哈希变化(+12 /-3行)',
   });
   assert.deepEqual(halfWidth.counts, { added: 12, removed: 3 });
 
-  // 无章节纯哈希变化：行数即摘要本体，描述留空
   const hashOnly = deriveCanvasChangeSummary({ detail: '内容哈希变化（+4/-2 行）' });
   assert.deepEqual(hashOnly.counts, { added: 4, removed: 2 });
   assert.equal(hashOnly.description, '');
@@ -246,10 +221,8 @@ test('T6 无可诚实透出时返回空（调用方回退 headline，不制造�
     counts: null,
     description: '',
   });
-  // 含「+N/-M」但不是服务端行数定式的文本，不误回收
   const notCounts = deriveCanvasChangeSummary({ detail: '变更章节：检索策略' });
   assert.deepEqual(notCounts, { counts: null, description: '' });
-  // 空白章节名过滤
   const blank = deriveCanvasChangeSummary({ changedSections: ['  ', ''] });
   assert.deepEqual(blank, { counts: null, description: '' });
 });

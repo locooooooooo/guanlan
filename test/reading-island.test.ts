@@ -10,26 +10,13 @@ import {
 } from '../src/utils/readingIslandStats';
 import type { FileRecord, ReadingState, WorkspaceConfig } from '../src/types/guanlan';
 
-/**
- * 右缘「阅读与存档」悬浮岛（参考贴屏黑岛 + 三进度环）。
- *
- * 三个问题一张岛答完：哪些已读 / 哪些未读 / 哪些已落盘存档。
- * 口径全部复用既有判定：已读/未读走 hasUnreadChanges 三态（up_to_date 记已读），
- * 落盘取当前版本 snapshotAvailable（被配额淘汰 = 未落盘），配额水位取 config.quota 真实值。
- *
- * 测试分两层：纯函数（computeReadingIslandStats/islandPercent/
- * formatIslandQuotaLine）+ renderToString 结构断言（node 无 DOM 事件，点击接线由
- * onClick 代码保证，见文末对账注释）。
- */
 
-// ---------- 夹具：最小 FileRecord / ReadingState ----------
 
 let seq = 0;
 interface FileOpts {
   title?: string;
   path?: string;
   format?: 'md' | 'svg' | 'pdf';
-  /** 当前版本快照是否在存档区（默认 true） */
   persisted?: boolean;
 }
 
@@ -58,7 +45,6 @@ function file(opts: FileOpts = {}): FileRecord {
 }
 
 interface StateOpts {
-  /** 已读基线指向的 revision_id；缺省 = 从未读过 */
   baselineOf?: string;
   scrollPercent?: number;
   updatedAt?: string;
@@ -77,29 +63,22 @@ function state(opts: StateOpts = {}): ReadingState {
 
 const EMPTY_STATES = {};
 
-/** React 会在相邻文本节点间插入 <!-- -->（如 {percent}%），断言前剥掉 */
 function stripComments(html: string): string {
   return html.replace(/<!-- -->/g, '');
 }
 
-// ---------- 纯函数层：三态聚合 + 落盘判定 ----------
 
 test('悬浮岛聚合：已读/未读按三态分桶，落盘按当前版本 snapshotAvailable', () => {
-  // ① 已读最新：基线 = 当前版本 → up_to_date → 已读
   const readDoc = file({ title: '已读完' });
-  // ② 从未读过：无阅读记录 → never_read → 未读
   const neverDoc = file({ title: '从未读' });
-  // ③ 读过但有更新：基线 ≠ 当前版本 → updated_since_last_read → 未读
-  //    基线版本快照已被淘汰 → diff 走 REVISION_UNAVAILABLE 短路（fixture 不需要正文）
   const updatedDoc = file({ title: '有更新' });
   updatedDoc.revisions.unshift({
     revision_id: 'rev_old',
     versionNumber: 0,
     observed_at: '2026-10-01T10:00:00+08:00',
-    snapshotAvailable: false, // 基线快照已淘汰
+    snapshotAvailable: false,
     summaryNote: '',
   } as never);
-  // ④ 快照被配额淘汰：当前版本 snapshotAvailable=false → 未落盘
   const evictedDoc = file({ title: '快照淘汰', persisted: false });
 
   const stats = computeReadingIslandStats(
@@ -171,7 +150,6 @@ test('悬浮岛纯函数：islandPercent 取整与空总数兜底；配额行上
   assert.equal(formatIslandQuotaLine(noLimit), '存档区 已用 7 MiB · 上限未知', '上限缺失不虚构配额');
 });
 
-// ---------- 渲染层（renderToString）：收起态三环 + 展开态面板 ----------
 
 function islandFixture(): { files: FileRecord[]; states: Record<string, ReadingState> } {
   const readDoc = file({ title: '已读完', path: 'docs/done.md' });
@@ -298,10 +276,3 @@ test('悬浮岛环组件：0% 只画轨道，100% 满弧；aria 与 title 同源
   assert.ok(full.includes('stroke-dashoffset="0"'), '100% 时弧画满（offset=0）');
 });
 
-/**
- * 接线对账（node 无 DOM 事件，由代码走查保证）：
- * - data-island-pill onClick → setExpanded 切换展开态（ReadingIsland.tsx 本体）；
- * - data-island-doc-row onClick → onOpenDoc(fileId) + 收起面板；App 侧接
- *   openDocResumeReading（续读入口，与左栏 onOpenFileToRead 同一函数，不复制逻辑）；
- * - 面板 X 按钮 onClick → onClose 收起面板。
- */

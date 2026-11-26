@@ -26,18 +26,13 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use guanlan_core::error::GuanlanError;
 
-/// 默认总预算 64 MiB：约 8 个 8 MiB 内联响应并发到达上限
 const DEFAULT_TOTAL_BYTES: usize = 64 * 1024 * 1024;
-/// 默认单响应上限 8 MiB：超过走 raw=1 流式，不再内联进 JSON
 const DEFAULT_MAX_SINGLE_BYTES: usize = 8 * 1024 * 1024;
-/// 预算等待 deadline：预算耗尽时最多等这么久，超时按饱和拒绝
 const BUDGET_WAIT: Duration = Duration::from_secs(5);
 
 /// 响应字节预算（AppState 持有 Arc 共享）
 pub struct ResponseBudget {
-    /// 许可数 = 字节数
     permits: Arc<Semaphore>,
-    /// 总容量（字节）
     capacity: usize,
     max_single: usize,
 }
@@ -139,7 +134,6 @@ impl HttpBody for BudgetedBody {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-        // BudgetedBody 只包 axum::body::Body（Unpin），安全地取可变引用
         let this = self.get_mut();
         Pin::new(&mut this.inner).poll_frame(cx)
     }
@@ -155,7 +149,6 @@ impl HttpBody for BudgetedBody {
 
 impl Drop for BudgetedBody {
     fn drop(&mut self) {
-        // 明确释放点：响应体销毁（读完或连接中断）时归还预算
         self.guard.0.take();
     }
 }
@@ -194,7 +187,6 @@ mod tests {
         let budget = ResponseBudget::new(100, 100);
         let permit = budget.acquire(100).await.expect("占用全部预算");
         let body = BudgetedBody::new(Body::from(vec![0u8; 10]), permit.into_guard());
-        // 响应体仍存活：第二个请求拿不到预算
         let contended = budget.acquire(1).await;
         assert!(contended.is_err(), "响应体未释放前预算仍被占用");
         drop(body);

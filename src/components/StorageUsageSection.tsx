@@ -106,7 +106,6 @@ export const StorageUsageSection: React.FC<StorageUsageSectionProps> = ({
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
-  // SHA-256 完整性校验、受保护存储瘦身、全量开放导出、一键脱敏诊断 ZIP
   const [integrityLoading, setIntegrityLoading] = useState(false);
   const [integrityReport, setIntegrityReport] = useState<BlobIntegrityReport | null>(null);
   const [integrityError, setIntegrityError] = useState<string | null>(null);
@@ -391,7 +390,6 @@ export const StorageUsageSection: React.FC<StorageUsageSectionProps> = ({
             )}
           </form>
 
-          {/* 全量 SHA-256 完整性校验 + 决定证据铁律保护存储瘦身（GC） */}
           <div className="pt-3 border-t border-border/75 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
@@ -472,7 +470,6 @@ export const StorageUsageSection: React.FC<StorageUsageSectionProps> = ({
               );
             })()}
 
-            {/* 存储瘦身 GC（先预演再执行；铁律保护决定/因果边证据快照） */}
             <div className="rounded-[10px] border border-border/75 bg-muted/35 p-3 space-y-2.5">
               <div className="text-[11px] leading-relaxed text-muted-foreground">
                 <strong className="text-foreground">决定证据铁律保护：</strong>
@@ -548,7 +545,6 @@ export const StorageUsageSection: React.FC<StorageUsageSectionProps> = ({
             </div>
           </div>
 
-          {/* 零锁定全量开放导出 + 一键脱敏诊断包 ZIP */}
           <div className="pt-3 border-t border-border/75 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="rounded-[10px] border border-border/75 bg-muted/35 p-3 space-y-2">
               <div className="flex items-center gap-1.5 text-[11.5px] font-semibold text-foreground">

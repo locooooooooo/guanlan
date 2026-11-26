@@ -1,34 +1,12 @@
-/**
- * Ctrl+K 命令面板（Omnibox）——查询语法解析与命中摘要构建（纯函数，零 React 依赖）。
- *
- * 语法口径：
- *   @今天 / @昨天 / @N天前 / @2026-11-20 —— 相对/绝对日期过滤（文件 last_observed_at 的本地日归属）
- *   type:pdf / type:md / type:svg / …     —— 格式过滤（可多个，交集语义）
- *   status:待拍板                          —— 阻塞拍板过滤（artifact pending_p0+p1 > 0）
- *   in:事项名                              —— 事项归属过滤（事项名子串匹配）
- *   其余文本 token 合并为关键词（大小写不敏感；语法前缀不区分大小写）
- *
- * 摘要口径（首个命中词前 16 字起上下文、精确控行 ≤2、全量高亮）：
- *   - 窗口从首个命中词前 BEFORE_CHARS 个字符处开始（不跨行回退到行首时也不超过）；
- *   - 窗口内的换行保留为行分隔（最多 2 行），超出裁断并标记 clippedTail；
- *   - 窗口内所有命中词出现处（大小写不敏感，多词全部）标记 hit，供 UI 高亮；
- *   - 首个命中词永远在窗口内（这是本函数的存在意义），窗口上限 MAX_WINDOW_CHARS 防超长段落溢出。
- */
 
 /** 查询语法解析结果 */
 export interface PaletteQuery {
-  /** 去掉语法 token 后合并的关键词（大小写不敏感口径在调用方 toLowerCase） */
   keyword: string;
-  /** @过滤的本地日（YYYY-MM-DD）；区间=单日（from===to） */
   dateFrom?: string;
   dateTo?: string;
-  /** type: 格式 token（小写） */
   types: string[];
-  /** status:待拍板 */
   pendingDecisionOnly: boolean;
-  /** in: 事项名过滤词（原始大小写，子串匹配） */
   initiativeQuery?: string;
-  /** 原始输入（trim 后） */
   raw: string;
 }
 
@@ -40,13 +18,9 @@ export interface SnippetSegment {
 
 /** 摘要构建结果 */
 export interface SnippetResult {
-  /** 已按 ≤2 行合并的分段（换行以 \n 保留在段内文本中） */
   segments: SnippetSegment[];
-  /** 窗口起点之前还有内容 */
   clippedHead: boolean;
-  /** 窗口终点之后还有内容 */
   clippedTail: boolean;
-  /** 实际行数（1 或 2） */
   lines: 1 | 2;
 }
 
@@ -104,7 +78,7 @@ export function parsePaletteQuery(rawQuery: string, now: Date = new Date()): Pal
         out.dateTo = day;
         continue;
       }
-      keywordParts.push(token); // 无法解析的 @词 当普通关键词
+      keywordParts.push(token);
       continue;
     }
     const lower = token.toLowerCase();
@@ -118,12 +92,10 @@ export function parsePaletteQuery(rawQuery: string, now: Date = new Date()): Pal
         out.pendingDecisionOnly = true;
         continue;
       }
-      // 未知 status 值当普通关键词（诚实不吞词）
       keywordParts.push(token);
       continue;
     }
     if (lower.startsWith('in:') && lower.length > 3) {
-      // in: 保留原始大小写（中文事项名）
       out.initiativeQuery = token.slice(3);
       continue;
     }
@@ -152,7 +124,6 @@ export function buildSnippet(text: string, queryLower: string): SnippetResult {
     start = Math.max(0, firstHit - BEFORE_CHARS);
   }
 
-  // ≤2 行：从 start 起取至第 2 个换行后
   let end = Math.min(plain.length, start + MAX_WINDOW_CHARS);
   let clippedTail = end < plain.length;
   {
@@ -161,7 +132,7 @@ export function buildSnippet(text: string, queryLower: string): SnippetResult {
       if (plain[i] === '\n') {
         lineNo++;
         if (lineNo === 2) {
-          end = i; // 第 2 行的换行符处截断（换行不进窗口）
+          end = i;
           clippedTail = clippedTail || end < plain.length;
           break;
         }
@@ -187,7 +158,6 @@ export function buildHighlightSegments(windowText: string, queryLower: string): 
   if (!q || !windowText) return windowText ? [{ text: windowText, hit: false }] : [];
   const terms = Array.from(new Set(q.split(/\s+/).filter(Boolean)));
   const lower = windowText.toLowerCase();
-  // 每个字符位置标记是否处于任一命中词内
   const hitMask = new Array<boolean>(windowText.length).fill(false);
   for (const term of terms) {
     let from = 0;

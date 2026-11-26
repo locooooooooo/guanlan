@@ -1,11 +1,8 @@
 import React, { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, Compass, Search, X } from 'lucide-react';
 import type { FileRecord, TimelineEvent, FileFormat } from '../types/guanlan';
-// 文档/事件定位日期统一按本地日历日（纯日期不换算）
 import { localDay } from '../utils/timeFormat';
-// 日槽清单按「哈希→同名」身份折叠（共享纯工具），展开行只显最小区分前缀 + 核心文件名，完整路径进 title
 import { basenameOf, groupByIdentity, minimalDirPrefix } from '../utils/documentIdentity';
-// 基础控件与弹层原语（CardFrame / Toolbar / SegmentedControl / ScrollArea / Base UI Popover）
 import { Button, Chip } from './ui/primitives';
 import {
   CALENDAR_ROW_SLICE_STEP,
@@ -41,32 +38,16 @@ export interface CalendarBoardViewProps {
   files: FileRecord[];
   events: TimelineEvent[];
   onOpenDocument: (fileId: string) => void;
-  /**
-   * 主轴初始窗口天数（缺省 = CALENDAR_WINDOW_SHORT）。
-   * 组件默认档采用 30 天而非 90 天：90 列时每日列宽不足 10px，同槽 pill/+N 芯片容易
-   * 挤成一条线互相重叠；30 天下每日列宽约 3 倍，槽内元素有足够落位空间。
-   * 90 天初值可供测试覆盖与宿主预置使用。
-   */
   initialWindowDays?: number;
-  /** 桌面文件右键菜单回调 */
   systemActions?: DesktopFileActionCallbacks;
-  /** 跨栏联动的聚焦日期（右侧迷你月历/脉冲柱点击锁定；缺省时由组件内部管理） */
   focusedDate?: string | null;
-  /** 跨栏联动的悬停日期（悬停任意格/迷你月历日驱动主板纵贯光束） */
   hoveredDate?: string | null;
   onFocusDate?: (date: string | null) => void;
   onHoverDate?: (date: string | null) => void;
-  /** 从日历任意一天一键飞向司辰星图该日 */
   onJumpToStarMap?: (date: string) => void;
-  /**
-   * 「紧凑活跃」初始态。
-   * auto（默认）= 智能识别（窗口内空日占比达阈值且存在 ≥5 天连续空白段时自动开启压缩）；
-   * on / off = 强制开 / 强制关（供测试与宿主预置使用）。
-   */
   compactMode?: 'auto' | 'on' | 'off';
 }
 
-// ---------- 日期轴窗口化（近7天 / 近14天 / 近30天 / 近90天四档） ----------
 
 /** 极近焦窗口：最近 7 个日历日（高密工程逐日细审）。 */
 export const CALENDAR_WINDOW_WEEK = 7;
@@ -101,21 +82,16 @@ export const CALENDAR_ROW_SCROLL_MARGIN = CALENDAR_STICKY_HEADER_H + 1;
 
 /** 「历史/更早」聚合槽：窗口起点之前的全部日期。 */
 export interface CalendarOlderSlot {
-  /** 落在槽内的**不同日期数**（不是份数——份数按行另算） */
   count: number;
   minDate: string;
   maxDate: string;
 }
 
 export interface CalendarWindowResult {
-  /** 窗口内逐个日历日（升序、连续）——即主轴列数，长度 ≤ windowDays */
   windowDays: string[];
-  /** 窗口首日 / 末日；输入为空时为 null */
   start: string | null;
   end: string | null;
-  /** 窗口内实际出现过的日期（升序去重），供刻度与槽定位 */
   activeDays: string[];
-  /** 窗口起点之前的全部日期聚合；没有更早日期时为 null */
   olderSlot: CalendarOlderSlot | null;
 }
 
@@ -123,7 +99,7 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function dayMsOf(day: string): number | null {
   if (typeof day !== 'string' || !DAY_RE.test(day)) return null;
-  const ms = Date.parse(`${day}T00:00:00`); // 本地零点的纯日期，均按本地日历日处理
+  const ms = Date.parse(`${day}T00:00:00`);
   return Number.isFinite(ms) ? ms : null;
 }
 
@@ -165,7 +141,6 @@ export function calendarWindow(
     Math.floor(Number.isFinite(windowDays) ? windowDays : CALENDAR_WINDOW_DEFAULT)
   );
 
-  // 去重 + 升序（只保留合法纯日期）
   const seen = new Set<string>();
   const valid: string[] = [];
   for (const raw of days) {
@@ -186,12 +161,11 @@ export function calendarWindow(
       : dataMax;
   const start = shiftCalendarDay(end, -(span - 1)) as string;
 
-  // 连续日历日：长度恒等于 span（除非跨了不存在的日期，实际不会）
   const columns: string[] = [];
   let cursor: string | null = start;
   while (cursor !== null && cursor <= end) {
     columns.push(cursor);
-    if (columns.length > span + 1) break; // 防御：绝不允许死循环
+    if (columns.length > span + 1) break;
     cursor = shiftCalendarDay(cursor, 1);
   }
 
@@ -205,7 +179,6 @@ export function calendarWindow(
   return { windowDays: columns, start, end, activeDays, olderSlot };
 }
 
-// ---------- 同槽文档可达性（前 3 枚 pill + 「+N」聚合芯片） ----------
 
 /**
  * 同槽可见 pill 上限。超过上限的文档若叠在同位互相覆盖会导致完全不可点；
@@ -351,7 +324,6 @@ export function buildDailyAccumulationSparkline(
   return { linePath, areaPath, total: running };
 }
 
-// ---------- 日历弹层智能避让（纯函数，无 DOM 依赖） ----------
 
 /**
  * 弹层与触发格之间的「呼吸间距」（px）。
@@ -396,12 +368,9 @@ export interface CalendarPopoverViewport {
 }
 
 export interface CalendarPopoverPos {
-  /** 弹层左上角（viewport 坐标，配合 position:fixed 使用）。 */
   left: number;
   top: number;
-  /** 展开方向：right = 触发格右侧展开；left = 向左展开（右半区 / 右侧余量不足的避让方向）。 */
   side: 'left' | 'right';
-  /** 是否相对「默认向右」发生了方向翻转。 */
   flipped: boolean;
 }
 
@@ -449,28 +418,23 @@ export function computeCalendarPopoverPos(
   const anchorBottom = Math.max(anchorRect.top, anchorRect.bottom);
   const anchorCenterX = (anchorLeft + anchorRight) / 2;
 
-  // 方向判定：①锚点在视口右半区；②向右展开会越侧栏安全界 → 一律向左展开
   const rightLeft = anchorRight + CALENDAR_POPOVER_GAP;
   const rightFits = rightLeft + pw <= safeRight;
   const inRightHalf = anchorCenterX >= vw / 2;
   const preferLeft = inRightHalf || !rightFits;
 
-  // 向左展开时的弹层左缘（= 触发格左缘 − 呼吸间距 − 弹层宽）
   const leftLeft = anchorLeft - CALENDAR_POPOVER_GAP - pw;
   let side: 'left' | 'right' = preferLeft ? 'left' : 'right';
   let left = side === 'left' ? leftLeft : rightLeft;
 
-  // 左向空间不足 → 回退右向（仅当右向确实不越安全界，否则保持左向并交给下方收口）
   if (side === 'left' && leftLeft < CALENDAR_POPOVER_MARGIN && rightFits) {
     side = 'right';
     left = rightLeft;
   }
 
-  // 硬约束收口：左缘不越视口、右缘不越侧栏安全界
   const maxLeft = Math.max(CALENDAR_POPOVER_MARGIN, safeRight - pw);
   left = Math.min(Math.max(left, CALENDAR_POPOVER_MARGIN), maxLeft);
 
-  // 纵向：默认锚点下方；下方不足则上翻到锚点上方；仍不足则贴视口底
   let top = anchorBottom + CALENDAR_POPOVER_GAP;
   if (top + ph > vh - CALENDAR_POPOVER_MARGIN) {
     const above = anchorTop - CALENDAR_POPOVER_GAP - ph;
@@ -481,8 +445,6 @@ export function computeCalendarPopoverPos(
   }
   top = Math.max(CALENDAR_POPOVER_MARGIN, top);
 
-  // 取整用 floor（不四舍五入）：触发格坐标常带小数（实测 1440 视口下 1109.6875），
-  // 向下取整保证「弹层右缘 ≤ 触发格左缘 − 8」在整数像素上依然严格成立。
   return { left: Math.floor(left), top: Math.floor(top), side, flipped: side === 'left' };
 }
 
@@ -504,17 +466,12 @@ export function anchorRectOf(rect: {
   };
 }
 
-/**
- * 兼容旧调用方的锚点换算：历史入参是「中心 x + 底边 y」，
- * 这里折算成一个 16×12 的虚拟触发格（chip 尺寸量级），保证避让几何连续可测。
- */
 function legacyAnchorRect(left?: number, top?: number): CalendarPopoverAnchorRect {
   const cx = Number.isFinite(left) ? (left as number) : 0;
   const by = Number.isFinite(top) ? (top as number) : 0;
   return { left: cx - 8, right: cx + 8, top: by - 12, bottom: by };
 }
 
-// ---------- 日历「紧凑活跃」空白周压缩与双态光束对齐（纯函数，无 DOM 依赖） ----------
 
 /**
  * 断层槽最小折叠长度：连续空日 ≥ 5 天才折为「空 N 天」断层槽。
@@ -537,21 +494,13 @@ export const CALENDAR_COMPACT_GAP_WEIGHT = 0.6;
 /** 轴上的一列：活跃日槽，或被折叠的连续空白段（断层槽）。 */
 export interface CalendarAxisSlot {
   kind: 'day' | 'gap';
-  /** day：该日历日；gap：断层首日 */
   date: string;
-  /** gap：断层末日（day 与 date 相同） */
   endDate: string;
-  /** 该槽覆盖的**真实日历天数**（断层 = 连续空日天数，绝不虚标） */
   span: number;
-  /** 轴上权重（day=1；gap=CALENDAR_COMPACT_GAP_WEIGHT） */
   weight: number;
-  /** 槽左边界百分比 */
   startPct: number;
-  /** 槽右边界百分比 */
   endPct: number;
-  /** 槽中心百分比（唯一位置映射出口） */
   centerPct: number;
-  /** 槽占轴宽的比例（0..1） */
   widthShare: number;
 }
 
@@ -559,25 +508,16 @@ export interface CalendarAxisSlot {
 export interface CalendarAxisLayout {
   mode: 'equal' | 'compact';
   slots: CalendarAxisSlot[];
-  /** 断层槽（紧凑模式才有；等距模式恒为空） */
   gaps: CalendarAxisSlot[];
-  /** 保留的活跃日（升序，与窗口时间序严格一致） */
   activeDays: string[];
-  /** 被折叠进断层的真实日历天数合计 */
   foldedDays: number;
-  /** 窗口内空日占比（0..1） */
   emptyRatio: number;
-  /** 最长连续空段（真实日历天数） */
   maxEmptyRun: number;
-  /** 是否值得压缩（空日占比达阈值 且 存在 ≥ minGapDays 的连续空段） */
   canCompact: boolean;
-  /** 日期 → 槽下标（覆盖窗口内每一天；断层内日期映射到该断层槽） */
   slotIndexByDate: Record<string, number>;
-  /** 槽总数 */
   slotCount: number;
 }
 
-/** 合法纯日期归一（去重 + 升序；非法值剔除）。 */
 function normalizeAxisDays(days: readonly string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -590,7 +530,6 @@ function normalizeAxisDays(days: readonly string[]): string[] {
   return out;
 }
 
-/** 空日占比与最长连续空段（真实日历天数口径，绝不按列数估算）。 */
 function axisEmptyStats(days: readonly string[], active: ReadonlySet<string>) {
   let emptyDays = 0;
   let maxEmptyRun = 0;
@@ -672,11 +611,8 @@ export function buildCompactCalendarSlots(
   days: readonly string[],
   activeDaySet: ReadonlySet<string> | readonly string[],
   options: {
-    /** 连续空日达到该长度才折为断层槽（默认 5） */
     minGapDays?: number;
-    /** 断层槽权重（默认 0.6；<1 即压缩） */
     gapWeight?: number;
-    /** 空日占比阈值（默认 0.3） */
     minEmptyRatio?: number;
   } = {}
 ): CalendarAxisLayout {
@@ -743,7 +679,6 @@ export function buildCompactCalendarSlots(
     };
   });
 
-  // 日期 → 槽下标：断层槽覆盖它折叠掉的每一天（保证「日期零丢失」可反查核对）
   const slotIndexByDate: Record<string, number> = {};
   slots.forEach((s, i) => {
     if (s.kind === 'day') {
@@ -833,7 +768,6 @@ export function normalizeCalendarCompactChoice(raw: string | null | undefined): 
   return 'auto';
 }
 
-/** 读本地选择（无 window / 读抛异常 → 'auto'，绝不阻塞渲染）。 */
 function readCalendarCompactChoice(): 'auto' | boolean {
   if (typeof window === 'undefined') return 'auto';
   try {
@@ -843,7 +777,6 @@ function readCalendarCompactChoice(): 'auto' | boolean {
   }
 }
 
-/** 写本地选择（写抛异常静默降级为会话内状态，不打断交互）。 */
 function writeCalendarCompactChoice(choice: 'auto' | boolean): void {
   if (typeof window === 'undefined') return;
   try {
@@ -852,14 +785,9 @@ function writeCalendarCompactChoice(choice: 'auto' | boolean): void {
       choice === 'auto' ? 'auto' : choice ? 'on' : 'off'
     );
   } catch {
-    /* 隐私模式 / 配额异常：静默降级，不打断交互 */
   }
 }
 
-// 事件 tick 底色（与 TimelineView.tsx KIND_CHIP_COLORS 六色映射表镜像：
-// modified→exec / appeared→blueprint / discovered·workspace_baseline·read_recovered→deliver /
-// decision_*→plan / moved_or_copied→decision / missing·read_error·isRollback→anomaly）。
-// tick 是 3×16px 图形刻度，取 stage-ink graphic 原值（玻璃上 ≥3:1）；未知 kind→--ink-soft。
 const KIND_TICK_COLORS: Record<string, string> = {
   modified: 'var(--stage-ink-exec)',
   appeared: 'var(--stage-ink-blueprint)',
@@ -876,34 +804,27 @@ const KIND_TICK_COLORS: Record<string, string> = {
   read_error: 'var(--stage-ink-anomaly)',
 };
 
-// 待考灰纹（无 source_time 文档的 pill / 图例块；取色自基线弱灰 #5F6368）
 const UNDATED_STRIPES = 'repeating-linear-gradient(135deg, rgba(95,99,104,0.45) 0 3px, transparent 3px 6px)';
 
 /** 「历史/更早」列宽（与右侧待考尾槽同为 68px，左右对称） */
 export const CALENDAR_OLDER_SLOT_W = 68;
-/** 定位层左内边距：无更早槽时 8px，有更早槽时让出 68px 列 + 8px 间隙 */
 const AXIS_LEFT_WITH_OLDER = CALENDAR_OLDER_SLOT_W + 8;
 
-/** 文档定位日期 = 最早版本（revisions[0]，server/project.ts:82-84 按 seq ASC）的 source_time 截日；
- *  observed_at 是采集时间（实测集中在 2026-11-06/07），严禁用作文档日期。 */
 function docDateOf(f: FileRecord): string | null {
   const sourceTime = f.revisions[0]?.source_time;
   return sourceTime ? localDay(sourceTime) : null;
 }
 
-/** 身份哈希取当前版本内容哈希（缺 current 时回退首版）；无版本数据返回 null（只同名分组）。 */
 function currentHashOf(f: FileRecord): string | null {
   const rev =
     f.revisions.find((r) => r.revision_id === f.current_revision_id) ?? f.revisions[0];
   return rev?.content_sha256 || null;
 }
 
-/** 事件定位日期 = source_time 的本地日历日（server/project.ts:223-224；observed_at 同为采集时间，禁用）。 */
 function evDateOf(ev: TimelineEvent): string | null {
   return ev.source_time ? localDay(ev.source_time) : null;
 }
 
-/** Today 用本地日期手工拼，勿用 toISOString（UTC 偏移会差一天）。 */
 function localToday(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -914,12 +835,12 @@ function sortDayEntriesDesc(entries: [string, FileRecord[]][]): [string, FileRec
 }
 
 interface FolderRow {
-  folder: string; // 分组键：'.' 或顶层段
+  folder: string;
   total: number;
-  datedCount: number; // 全量有日期份数（覆盖率口径，不随窗口变化）
-  dated: [string, FileRecord[]][]; // 窗口内：日期 → 同日文档（数组序即槽内序 j）
-  older: FileRecord[]; // 窗口起点之前：历史/更早
-  olderGroups: [string, FileRecord[]][]; // 同上，按日期倒序分组（供更早槽清单）
+  datedCount: number;
+  dated: [string, FileRecord[]][];
+  older: FileRecord[];
+  olderGroups: [string, FileRecord[]][];
   undated: FileRecord[];
 }
 
@@ -936,21 +857,18 @@ export function CalendarBoardView({
   onJumpToStarMap,
   compactMode = 'auto',
 }: CalendarBoardViewProps) {
-  // 聚合芯片展开的当日清单状态（date + 全量条目 + 触发格矩形 + 可选实 DOM 锚点）
   const [openSlot, setOpenSlot] = useState<{
     date: string;
     items: FileRecord[];
     anchor: CalendarPopoverAnchorRect;
     anchorEl?: HTMLElement | null;
   } | null>(null);
-  // 「历史/更早」槽展开的日期清单（按日期分组，点日期再进当日清单）
   const [openOlder, setOpenOlder] = useState<{
     label: string;
     groups: [string, FileRecord[]][];
     anchor: CalendarPopoverAnchorRect;
     anchorEl?: HTMLElement | null;
   } | null>(null);
-  // 实时测量日历主轴可用像素宽度，供 resolveCalendarSlotMode 精确计算单列像素宽（SSR 缺省 660px）
   const axisTrackRef = useRef<HTMLDivElement | null>(null);
   const [axisTrackWidthPx, setAxisTrackWidthPx] = useState<number>(660);
   useEffect(() => {
@@ -965,17 +883,11 @@ export function CalendarBoardView({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  // 主轴窗口天数（初始默认 30 天：90 列下每日列宽不足 10px 易导致格子重叠，30 天让每天有足够宽度）
   const [windowDays, setWindowDays] = useState<number>(initialWindowDays);
-  // 「紧凑活跃」开关态。auto = 智能识别（空日占比达阈值且有 ≥5 天连续空白段时自动压缩）；
-  // 用户一旦手动点过即转为显式布尔（并跨会话保留，不随刷新丢失）。
-  // compactMode prop 优先于本地存储（宿主/测试的显式指定最高优先）。
   const [compactChoice, setCompactChoice] = useState<'auto' | boolean>(
     compactMode === 'on' ? true : compactMode === 'off' ? false : readCalendarCompactChoice()
   );
-  // 仅看当前窗口内有活跃文档的目录（默认关闭保证全目录完整展示）
   const [activeFoldersOnly, setActiveFoldersOnly] = useState(false);
-  // 跨栏/板内日期聚焦与悬停纵贯光束（受控优先，缺省时组件自持状态）
   const [localFocusedDate, setLocalFocusedDate] = useState<string | null>(null);
   const [localHoveredDate, setLocalHoveredDate] = useState<string | null>(null);
   const effectiveFocusedDate = focusedDateProp !== undefined ? focusedDateProp : localFocusedDate;
@@ -989,7 +901,6 @@ export function CalendarBoardView({
     onHoverDate?.(date);
   };
 
-  // 全量数据日期（文档 source_time + 事件 source_time；observed_at 是采集时间，禁入）
   const allDates = useMemo(() => {
     const out: string[] = [];
     for (const f of files) {
@@ -1003,10 +914,8 @@ export function CalendarBoardView({
     return out;
   }, [files, events]);
 
-  // 主轴按「最近 N 个有数据的日历日」窗口化，而不取全局极值
   const win = useMemo(() => calendarWindow(allDates, windowDays), [allDates, windowDays]);
 
-  // 紧凑活跃「智能识别」：统计窗口内空日占比与最长连续空白段
   const compactGate = useMemo(() => {
     const columns = win.windowDays;
     const inWindow = new Set(columns);
@@ -1021,9 +930,7 @@ export function CalendarBoardView({
     };
   }, [allDates, win]);
 
-  // auto = 智能识别（默认）；用户手动点过后转为显式布尔
   const compactEnabled = compactChoice === 'auto' ? compactGate.canCompact : compactChoice;
-  // 一键切换（手动点过即脱离 auto，并把选择持久化，刷新不丢）
   const toggleCompactChoice = () => {
     const next = !compactEnabled;
     setCompactChoice(next);
@@ -1033,7 +940,6 @@ export function CalendarBoardView({
   const model = useMemo(() => {
     const today = localToday();
 
-    // 顶层文件夹行：按首现顺序 Map 分组，一个不落全部上板
     const groups = new Map<string, FileRecord[]>();
     for (const f of files) {
       const key = f.folder === '.' ? '.' : f.folder.split('/')[0];
@@ -1047,8 +953,6 @@ export function CalendarBoardView({
     const columns = win.windowDays.length > 0 ? win.windowDays : [today];
     const totalDays = columns.length;
 
-    // 等距与紧凑活跃共用同一套轴槽模型与唯一位置映射出口
-    // （slotPct = 日期 → 槽中心百分比；光束/浮标/今日灯标/脉冲柱全部消费它）
     const layout = compactEnabled
       ? buildCompactCalendarSlots(columns, compactGate.activeSet)
       : buildEqualCalendarSlots(columns, compactGate.activeSet);
@@ -1056,8 +960,6 @@ export function CalendarBoardView({
     const slotIndex = (date: string): number => calendarSlotIndex(layout, date);
     const slotKept = (date: string): boolean => calendarSlotOf(layout, date)?.kind === 'day';
 
-    // 表头：窗口内每月 1 日刻度（≤ ⌈90/28⌉ 条，不再逐日展开）
-    //（紧凑模式下落在断层内的月份不重复出标，避免同位叠字）
     const monthTicks: { label: string; pct: number }[] = [];
     for (const d of columns) {
       if (d.slice(8, 10) !== '01') continue;
@@ -1066,12 +968,11 @@ export function CalendarBoardView({
       if (pct !== null) monthTicks.push({ label: d.slice(0, 7), pct });
     }
 
-    // 行泳道：每周一竖线（窗口内 ≤ ⌈90/7⌉ 条；旧版是 682 条）
     const weekPcts: number[] = [];
     const weekTicks: { label: string; pct: number }[] = [];
     if (columns.length > 0) {
       const startMs = Date.parse(`${columns[0]}T00:00:00`);
-      const firstDow = new Date(startMs).getDay(); // 0=周日 … 6=周六
+      const firstDow = new Date(startMs).getDay();
       for (let i = (8 - firstDow) % 7; i < totalDays; i += 7) {
         const d = columns[i];
         if (!slotKept(d)) continue;
@@ -1082,11 +983,9 @@ export function CalendarBoardView({
       }
     }
 
-    // today 只在窗口内才画（窗口锚在数据末日，陈旧工作区的 today 可能落在窗口外）
     const todayInWindow = today >= axisStart && today <= axisEnd;
     const todayPct = todayInWindow ? slotPct(today) : null;
 
-    // 文件夹行模型：窗口内同日文档分槽（j = 槽内序号）；窗口前归「历史/更早」；无日期归「待考」
     const rows: FolderRow[] = Array.from(groups.entries()).map(([folder, groupFiles]) => {
       const byDate = new Map<string, FileRecord[]>();
       const olderByDate = new Map<string, FileRecord[]>();
@@ -1121,8 +1020,6 @@ export function CalendarBoardView({
       };
     });
 
-    // 事件 tick：同一天的事件原本全部落在**同一 x**（slotPct 按日算），逐条渲染只是白堆 DOM；
-    // 这里按日聚合成 1 个刻度，title 保留全量明细（单条日文案与旧版逐字一致）
     const evByDate = new Map<string, TimelineEvent[]>();
     let olderEventCount = 0;
     for (const ev of events) {
@@ -1159,7 +1056,6 @@ export function CalendarBoardView({
         };
       });
 
-    // 「历史/更早」全量聚合（跨文件夹）：槽头点击后进入按日期分组的清单
     const olderAllMap = new Map<string, FileRecord[]>();
     for (const row of rows) {
       for (const [d, items] of row.olderGroups) {
@@ -1173,7 +1069,6 @@ export function CalendarBoardView({
     const undatedAllCount = rows.reduce((s, r) => s + r.undated.length, 0);
     const maxEventCount = Math.max(1, ...eventTicks.map((t) => t.count));
 
-    // 窗口内每日新增/归属文档数，用于顶栏时光累积折线微缩图
     const docsPerDay = new Map<string, number>();
     for (const row of rows) {
       for (const [d, items] of row.dated) {
@@ -1202,9 +1097,7 @@ export function CalendarBoardView({
       olderSlot: win.olderSlot,
       olderAllGroups,
       olderAllCount,
-      // 槽体出现条件：窗口前有文档**或**有事件（只有事件时槽内不列文档，只标条数）
       hasOlder: olderAllCount > 0 || olderEventCount > 0,
-      // 无任何待考文档时自动收起右侧 68px 空白待考列，把宝贵横向列宽让给 30/90 天主轴
       hasUndated: undatedAllCount > 0,
       windowCount: windowDays,
     };
@@ -1235,7 +1128,6 @@ export function CalendarBoardView({
   } = model;
 
   const visibleRows = activeFoldersOnly ? rows.filter((r) => r.dated.length > 0) : rows;
-  // 日历多目录行分批渲染护栏（> 48 行自动切片，大工作区滚动保持 60fps）
   const [rowRenderLimit, setRowRenderLimit] = useState<number>(CALENDAR_ROW_SLICE_THRESHOLD);
   const rowSlice = computeChunkedListSlice(
     visibleRows.length,
@@ -1251,13 +1143,9 @@ export function CalendarBoardView({
     activeBeamDate && activeBeamDate >= axisStart && activeBeamDate <= axisEnd
       ? slotPct(activeBeamDate)
       : null;
-  // 纵贯光束宽度：等距按窗口档自适应，紧凑活跃保持固定宽度
   const beamWidth = calendarBeamWidth(layout.mode, windowDays);
-  // 断层槽（紧凑活跃折叠出的连续空白段）
   const gapSlots = layout.gaps;
 
-  // 更早槽 / 芯片的弹出层共用「点击时的视口锚点」策略（fixed 定位，不受滚动容器裁剪）；
-  // 锚点存完整矩形（而非中心 x + 底边 y），供弹层避让判定左右半区与边界。
   const openOlderList = (
     label: string,
     groups: [string, FileRecord[]][],
@@ -1272,11 +1160,8 @@ export function CalendarBoardView({
   const axisLeft = hasOlder ? AXIS_LEFT_WITH_OLDER : 8;
 
   return (
-    // 字体分工：sans＝界面骨架；mono 只留给日期/计数/口径标签（各行已显式携带）。
-    // 外框采用 CardFrame（双层光学折边托盘）+ CardFrameHeader(Toolbar + 4档 SegmentedControl) + ScrollArea(scrollFade) + CardFrameFooter
     <section className="flex-1 min-w-0 h-full pt-2.5 px-3.5 pb-3.5 text-[color:var(--ink-strong)]">
       <CardFrame className="flex h-full min-h-0 flex-col overflow-hidden bg-card/95 backdrop-blur-md">
-        {/* 头部条：图标冠徽 + 日期跨度 + 时光累积微缩曲线 + 聚焦日联动 + 4档窗口切换 */}
         <CardFrameHeader className="flex flex-row items-center justify-between gap-3 border-b border-[color:var(--glass-hairline)] bg-card/90 px-4 py-2 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <span className="w-6 h-6 rounded-[8px] bg-[color:color-mix(in_srgb,var(--accent-iris)_12%,transparent)] border border-[color:color-mix(in_srgb,var(--accent-iris)_22%,transparent)] flex items-center justify-center text-[color:var(--accent-iris-deep)] shrink-0">
@@ -1294,7 +1179,6 @@ export function CalendarBoardView({
             >
               {axisStart.slice(5)} — {axisEnd.slice(5)}
             </Badge>
-            {/* 窗口时光累积微折线：静默传达「时间流逝 → 文件一点一点累积」 */}
             {accumSpark.total > 0 && accumSpark.linePath && (
               <div
                 data-calendar-sparkline=""
@@ -1330,7 +1214,6 @@ export function CalendarBoardView({
             )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {/* 聚焦日胶囊 + 一键飞向司辰星图 */}
             {effectiveFocusedDate && (
               <div className="glx-popover-in hidden md:inline-flex items-center gap-1 rounded-full bg-[color:color-mix(in_srgb,var(--accent-iris)_11%,var(--card))] border border-[color:color-mix(in_srgb,var(--accent-iris)_32%,transparent)] pl-2 pr-1 py-0.5 text-[10.5px]">
                 <span className="font-mono font-medium tabular-nums text-[color:var(--accent-iris-ink)]">
@@ -1358,7 +1241,6 @@ export function CalendarBoardView({
                 </button>
               </div>
             )}
-            {/* 主轴 4 档窗口切换（近7天 / 近14天 / 近30天 / 近90天）+ 工具组（Toolbar + SegmentedControl） */}
             <Toolbar
               aria-label="日历窗口与视图工具栏"
               className="border-transparent bg-transparent p-0 shadow-none before:hidden gap-1.5"
@@ -1400,8 +1282,6 @@ export function CalendarBoardView({
                     活跃 {activeFolderCount}/{rows.length}
                   </Chip>
                 )}
-                {/* 「紧凑活跃」轻量开关：空日占比达阈值且有 ≥5 天连续空白段时提供；
-                    开启后连续空白段折为「空 N 天」断层槽，横向空间让给近期活跃日 */}
                 {compactGate.canCompact && (
                   <Chip
                     data-calendar-compact=""
@@ -1422,7 +1302,6 @@ export function CalendarBoardView({
           </div>
         </CardFrameHeader>
 
-        {/* ScrollArea(scrollFade) 替代原生滚动容器；内部 flex-col 保障底部事件刻度 + 摘要条不被裁切 */}
         <ScrollArea scrollFade className="flex-1 min-h-0" viewportClassName="h-full">
           {files.length === 0 ? (
             <div className="m-6 rounded-[var(--r-block)] border border-[#26243D]/10 bg-white/60 p-6 text-center text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)] text-[color:var(--ink-soft)]">
@@ -1430,8 +1309,6 @@ export function CalendarBoardView({
             </div>
           ) : (
             <div className="flex min-h-full flex-col">
-              {/* 日期表头（sticky）：高度显式钉在 CALENDAR_STICKY_HEADER_H，
-                  行侧 scroll-margin-top 与之同源，避免锚点滚动（查找/焦点/跳日期）把目标行压进表头之下 */}
               <div
                 data-cal-sticky-header=""
                 className="sticky top-0 z-20 flex bg-[color:var(--glass-page-base)] border-b border-[#26243D]/10"
@@ -1441,7 +1318,6 @@ export function CalendarBoardView({
                   <span className="font-mono text-[length:var(--text-micro)] tracking-[0.18em] text-[color:var(--ink-soft)]">目录</span>
                 </div>
                 <div className="relative flex-1">
-                  {/* 「历史/更早」聚合槽（最左固定列，不占百分比轴） */}
                   {hasOlder && (
                     <div className="absolute inset-y-0 left-0 flex w-[68px] flex-col items-center justify-center border-r border-[#26243D]/10 bg-[#26243D]/[0.04]">
                       {olderAllCount > 0 ? (
@@ -1468,16 +1344,12 @@ export function CalendarBoardView({
                       )}
                     </div>
                   )}
-                  {/* 定位层（列数 = 窗口天数）：首日 + 月份 + 30天周一辅助刻度 + 今日，全部碰撞避让 */}
                   {(() => {
-                    // 轴首/末日刻度由统一位置映射给出（等距 = 首末列中心，紧凑 = 所属槽中心）
                     const startPct = slotPct(axisStart) ?? 0;
                     const endPct = slotPct(axisEnd) ?? 0;
                     const todayNearEnd = todayPct !== null && Math.abs(endPct - todayPct) < 16;
                     const todayNearStart = todayPct !== null && todayPct < 14;
                     const monthPcts = monthTicks.map((m) => m.pct);
-                    // 悬停/聚焦的纵贯光束浮标（z-40 紫色胶囊）若与同位置的表头刻度标签
-                    // （周一刻度 / 月刻度 / 轴首末日）重叠会导致叠字，故同位刻度标签让位隐退。
                     const beamFloatPct =
                       activeBeamPct !== null &&
                       activeBeamDate !== null &&
@@ -1492,7 +1364,6 @@ export function CalendarBoardView({
                         className="absolute inset-y-0"
                         style={{ left: axisLeft, right: axisRight }}
                       >
-                        {/* 轴首日刻度 + 标签 */}
                         <div className="absolute inset-y-0 w-px bg-[#26243D]/10" style={{ left: `${startPct}%` }} />
                         {!todayNearStart && !nearBeam(startPct) && (
                           <span
@@ -1502,7 +1373,6 @@ export function CalendarBoardView({
                             {axisStart}
                           </span>
                         )}
-                        {/* 窗口内每月 1 日刻度 + YYYY-MM 标签（靠首末过近时不叠字） */}
                         {monthTicks.map((t) => {
                           const tooCloseToEnds = t.pct < 14 || t.pct > 85;
                           const tooCloseToToday = todayPct !== null && Math.abs(t.pct - todayPct) < 13;
@@ -1520,7 +1390,6 @@ export function CalendarBoardView({
                             </Fragment>
                           );
                         })}
-                        {/* ≤30天紧凑档补充每周一 MM-DD 辅刻度（严防与首/末/月/今日/光束浮标叠字） */}
                         {windowDays <= CALENDAR_WINDOW_SHORT &&
                           weekTicks.map((wt) => {
                             const tooCloseToEnds = wt.pct < 16 || wt.pct > 84;
@@ -1538,7 +1407,6 @@ export function CalendarBoardView({
                               </span>
                             );
                           })}
-                        {/* 轴末日刻度 + 右对齐标签（与今日贴邻时交由今日胶囊统一承载，零重叠） */}
                         <div className="absolute inset-y-0 w-px bg-[#26243D]/10" style={{ left: `${endPct}%` }} />
                         {!todayNearEnd && !nearBeam(endPct) && (
                           <span
@@ -1548,7 +1416,6 @@ export function CalendarBoardView({
                             {axisEnd}
                           </span>
                         )}
-                        {/* Today 竖线 + 活体呼吸胶囊标签（当纵贯浮标靠近今日时临时隐退让位，杜绝叠字） */}
                         {todayPct !== null && (() => {
                           const beamOverlapsToday =
                             activeBeamPct !== null &&
@@ -1586,7 +1453,6 @@ export function CalendarBoardView({
                             </>
                           );
                         })()}
-                        {/* 悬停/聚焦纵贯日期标尺浮标：随光标或迷你月历丝滑滑动 */}
                         {activeBeamPct !== null && activeBeamDate && activeBeamDate !== today && (
                           <span
                             data-cal-beam-label={activeBeamDate}
@@ -1607,7 +1473,6 @@ export function CalendarBoardView({
                       </div>
                     );
                   })()}
-                  {/* 待考尾槽（仅存在日期待考文档时出现，避免空白列挤占主轴宽） */}
                   {hasUndated && (
                     <div className="absolute inset-y-0 right-0 w-[68px] border-l border-[#26243D]/10 bg-[#26243D]/[0.03] flex items-center justify-center">
                       <span className="whitespace-nowrap leading-none font-mono text-[length:var(--text-micro)] text-[color:var(--ink-soft)]">待考</span>
@@ -1616,18 +1481,11 @@ export function CalendarBoardView({
                 </div>
               </div>
 
-              {/* 行列表：顶层文件夹行 + 末尾事件刻度行 + 跨行纵贯时光扫描柱。
-                  每行带 data-cal-row 锚点 + scroll-margin-top（=表头 33px），
-                  使任何锚点滚动把行完整落在 sticky 表头之下，而非压掉一半 */}
               <div
                 key={`${windowDays}-${activeFoldersOnly ? 'a' : 'all'}`}
                 className="relative flex-1 divide-y divide-[#26243D]/[0.06]"
                 onMouseLeave={() => setHoveredDate(null)}
               >
-                {/* 跨行纵贯琉璃光束 + 断层槽：悬停任意日期格或点击右侧迷你月历时，一束柔和光柱贯穿所有目录行。
-                    光束走 transform 位移（避免动画 left 在非等宽列下每次悬停触发重排），
-                    位移量取自统一位置映射（与表头浮标/今日灯标/脉冲柱同一 x）；断层槽是数据区节点，
-                    入场只走 .glx-fade-in（纯 opacity，避免数据区位移动画）。 */}
                 {(activeBeamPct !== null || gapSlots.length > 0) && (
                   <div
                     aria-hidden="true"
@@ -1643,8 +1501,6 @@ export function CalendarBoardView({
                           className="glx-fade-in glx-cal-gap absolute inset-y-0 flex flex-col items-center pt-1"
                           style={{ left: `${g.startPct}%`, width: `${g.endPct - g.startPct}%` }}
                         >
-                          {/* 标签独占顶行，虚线导轨自标签下方起始，
-                              避免窄断层下两条虚线划过「空 N 天」字形。 */}
                           <span className="glx-cal-gap-label whitespace-nowrap rounded-full bg-card/90 px-1 font-mono text-[length:var(--text-micro)] leading-none tabular-nums text-[color:var(--ink-soft)]">
                             空 {g.span} 天
                           </span>
@@ -1695,7 +1551,6 @@ export function CalendarBoardView({
                       '--glx-row-idx': rowIdx,
                     } as React.CSSProperties}
                   >
-                    {/* 行头：单行精简目录名 + 右对齐计数，消除每行重复「X / X 已纳入」 */}
                     <div
                       title={`${displayFolder} · 已纳入 ${row.datedCount} / ${row.total} 份`}
                       className="relative w-40 shrink-0 border-r border-[#26243D]/10 px-3 flex items-center justify-between gap-2"
@@ -1711,9 +1566,7 @@ export function CalendarBoardView({
                         {countText}
                       </span>
                     </div>
-                    {/* 泳道 */}
                     <div className="relative flex-1">
-                      {/* 「历史/更早」聚合槽：本行窗口前的文档按份数折叠，点开才看清单 */}
                       {hasOlder && (
                         <div className="absolute inset-y-0 left-0 flex w-[68px] items-center justify-center border-r border-[#26243D]/10 bg-[#26243D]/[0.03]">
                           {row.older.length > 0 && (
@@ -1740,7 +1593,6 @@ export function CalendarBoardView({
                           )}
                         </div>
                       )}
-                      {/* 定位层（列数 = 窗口天数） */}
                       <div className="absolute inset-y-1" style={{ left: axisLeft, right: axisRight }}>
                         {weekPcts.map((pct, i) => (
                           <div
@@ -1750,18 +1602,12 @@ export function CalendarBoardView({
                             style={{ left: `${pct}%` }}
                           />
                         ))}
-                        {/* Today 竖线（置于热力格与圆点之下 z-0，贯穿全板而不横切数字） */}
                         {todayPct !== null && (
                           <div
                             className="absolute inset-y-0 w-px bg-[color:color-mix(in_srgb,var(--accent-iris)_55%,transparent)] pointer-events-none z-0"
                             style={{ left: `${todayPct}%` }}
                           />
                         )}
-                        {/* 统一经 resolveCalendarSlotMode 自适应零碰撞分流：
-                            · pills（≤3 份）：独立胶囊（紧邻列内居中收紧，绝不撞邻列）；
-                            · heat_dot（单列 ≤13px，如 90 天宽窗）：实心热力圆点；
-                            · compact_heat（单列 <58px 且 2 日内有邻槽，如连续高密日）：严格单列居中热力数字格，宽度锁定 ≤ slotPx-2，零重叠；
-                            · pills_with_chip（宽列如近 7 天，或前后 2 日无邻槽的孤立槽）：保留 3 圆 +「+N」芯片。 */}
                         {row.dated.flatMap(([date, items]) => {
                           const { pills, chipTotal } = splitSlotForRender(items);
                           const slotLeft = `${slotPct(date) ?? 0}%`;
@@ -1937,7 +1783,6 @@ export function CalendarBoardView({
                           );
                         })}
                       </div>
-                      {/* 待考尾槽（仅存在待考文档时渲染） */}
                       {hasUndated && (
                         <div className="absolute inset-y-0 right-0 w-[68px] border-l border-[#26243D]/10 bg-[#26243D]/[0.04]">
                           {row.undated.map((f, j) => (
@@ -1988,11 +1833,8 @@ export function CalendarBoardView({
                   </div>
                 )}
 
-                {/* 目录行全部渲染完毕，下方事件刻度 + 摘要条统一归入 sticky bottom-0 底部栈，彻底根治事件刻度被裁切 */}
               </div>
 
-              {/* 事件刻度行 + 窗口资产构成与节奏摘要条合并为同一 sticky bottom-0 底部栈（不透明页基色），
-                  确保事件脉动柱永不被下方摘要条裁切且常驻与上行日期列 1:1 垂直对齐 */}
               {(() => {
                 const countByFormat = new Map<string, number>();
                 for (const f of files) {
@@ -2018,7 +1860,6 @@ export function CalendarBoardView({
                 );
                 return (
                   <div className="sticky bottom-0 z-10 mt-auto border-t border-[color:var(--glass-hairline)] bg-[color:var(--glass-page-base)]">
-                    {/* 事件刻度行（置于 sticky 栈顶，永远完整可见、零裁切） */}
                     <div
                       data-cal-row="__events__"
                       className="flex h-12 items-stretch bg-[color:var(--glass-page-base)] transition-colors hover:bg-[color:color-mix(in_srgb,var(--accent-iris)_5%,var(--glass-page-base))]"
@@ -2057,7 +1898,6 @@ export function CalendarBoardView({
                               style={{ left: `${todayPct}%` }}
                             />
                           )}
-                          {/* 动态对数脉冲柱：高度映射当日事件量（8..30px），波浪升起，点击即锁定该日 */}
                           {eventTicks.map((t, tickIdx) => {
                             const intensity = Math.log1p(t.count) / Math.log1p(maxEventCount);
                             const barH = Math.round(8 + 22 * intensity);
@@ -2102,10 +1942,8 @@ export function CalendarBoardView({
                       </div>
                     </div>
 
-                    {/* 窗口资产构成与节奏摘要条 */}
                     <div className="px-4 py-2.5 border-t border-[color:var(--glass-hairline)] bg-[color:var(--glass-page-base)]">
                       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px]">
-                        {/* 格式比例微条 */}
                         <div className="flex items-center gap-2.5 min-w-[180px] flex-1">
                           <div className="h-1.5 w-28 shrink-0 rounded-full bg-[color:var(--depth-1-bg)] overflow-hidden flex gap-px">
                             {breakdownEntries
@@ -2131,7 +1969,6 @@ export function CalendarBoardView({
                             {extraFormats.length > 4 && <span>+{extraFormats.length - 4}</span>}
                           </div>
                         </div>
-                        {/* 窗口节奏与峰值（峰值胶囊可一键聚焦该日纵贯光束） */}
                         <div className="flex items-center gap-3 font-mono text-[10.5px] tabular-nums text-[color:var(--ink-soft)] shrink-0">
                           <span>
                             <strong className="font-semibold text-[color:var(--ink-strong)]">{eventTicks.length}</strong> 活跃日 · {inWindowEvents} 变动
@@ -2162,7 +1999,6 @@ export function CalendarBoardView({
           )}
         </ScrollArea>
 
-        {/* 图例条（CardFrameFooter：单行极简符号图例） */}
         <CardFrameFooter className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 border-t border-[color:var(--glass-hairline)] bg-card/85 px-4 py-2 shrink-0">
           <div className="flex flex-wrap items-center gap-3.5">
             {(['md', 'svg', 'pdf'] as const).map((fmt) => {
@@ -2217,7 +2053,6 @@ export function CalendarBoardView({
         </CardFrameFooter>
       </CardFrame>
 
-      {/* 当日清单 Base UI Popover（原生 Positioner 自动避让翻转） */}
       {openSlot && (
         <SlotDayList
           date={openSlot.date}
@@ -2240,7 +2075,6 @@ export function CalendarBoardView({
         />
       )}
 
-      {/* 「历史/更早」槽 Base UI Popover（按日期分组 → 点日期进当日清单） */}
       {openOlder && (
         <OlderSlotList
           label={openOlder.label}
@@ -2267,7 +2101,6 @@ export function CalendarBoardView({
   );
 }
 
-/** Base UI Popover 虚拟/实 DOM 锚点适配器（实 DOM 已脱挂载时自动回落点击矩形）。 */
 function toPopoverAnchor(
   anchor: CalendarPopoverAnchorRect,
   anchorEl?: HTMLElement | null
@@ -2290,7 +2123,6 @@ function toPopoverAnchor(
   };
 }
 
-/** Base UI Popover 宿主壳：浏览器态走原生 Positioner 自动避让翻转，SSR 单测态静态落位。 */
 function CalendarPopoverShell({
   anchor,
   anchorEl,
@@ -2372,12 +2204,9 @@ export function OlderSlotList({
 }: {
   label: string;
   groups: [string, FileRecord[]][];
-  /** 兼容旧调用方的锚点（中心 x / 底边 y）；anchorRect 存在时以其为准 */
   left?: number;
   top?: number;
-  /** 触发格完整矩形（viewport 坐标），弹层避让的唯一几何输入 */
   anchorRect?: CalendarPopoverAnchorRect;
-  /** 实 DOM 触发元素（存在时交由 Base UI Popover Positioner 原生自动避让翻转） */
   anchorEl?: HTMLElement | null;
   onPickDate: (date: string, items: FileRecord[], e: React.MouseEvent<HTMLButtonElement>) => void;
   onJumpToStarMap?: (date: string) => void;
@@ -2394,12 +2223,9 @@ export function OlderSlotList({
   );
   const total = groups.reduce((sum, [, items]) => sum + items.length, 0);
   const shown = groups.slice(0, 60);
-  // 星图直跳语义：取清单内最近一日（groups 按日期倒序，首项即最近日）并如实标注在 title；
-  // 无回调或无数据时不渲染胶囊。
   const latestDate = groups[0]?.[0] ?? null;
   const inner = (
     <>
-      {/* 固定单行两段结构：左「计数主行 + 标签次行」避免截断，右「星图胶囊 + 关闭钮」 */}
       <div className="sticky top-0 z-10 flex items-start justify-between gap-2 border-b border-[#26243D]/10 bg-popover/95 backdrop-blur-md px-3 py-2">
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="whitespace-nowrap font-mono text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)] font-medium tabular-nums text-[color:var(--ink-strong)]">
@@ -2496,12 +2322,9 @@ export function SlotDayList({
 }: {
   date: string;
   items: FileRecord[];
-  /** 兼容旧调用方的锚点（中心 x / 底边 y）；anchorRect 存在时以其为准 */
   left?: number;
   top?: number;
-  /** 触发格完整矩形（viewport 坐标），弹层避让的唯一几何输入 */
   anchorRect?: CalendarPopoverAnchorRect;
-  /** 实 DOM 触发元素（交由 Base UI Popover Positioner 原生自动避让翻转） */
   anchorEl?: HTMLElement | null;
   onOpenDocument: (fileId: string) => void;
   onJumpToStarMap?: (date: string) => void;
@@ -2545,7 +2368,6 @@ export function SlotDayList({
       return next;
     });
   };
-  // 头部次行轻标：目录名（多目录则如实计数），不挤压主行的日期与份数
   const folderLabel = useMemo(() => {
     const folders = Array.from(
       new Set(items.map((f) => (f.folder && f.folder !== '.' ? f.folder : '根目录')))
@@ -2556,7 +2378,6 @@ export function SlotDayList({
   }, [items]);
   const inner = (
     <>
-      {/* 固定单行两段结构：左「日期·份数主行 + 目录次行」避免截断，右「星图胶囊 + 关闭钮」 */}
       <div className="shrink-0 flex items-start justify-between gap-2 border-b border-[#26243D]/10 bg-popover/95 backdrop-blur-md px-3 py-2">
           <div className="flex min-w-0 flex-col gap-0.5">
             <span className="whitespace-nowrap font-mono text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)] font-medium tabular-nums text-[color:var(--ink-strong)]">
@@ -2592,7 +2413,6 @@ export function SlotDayList({
             </button>
           </div>
         </div>
-        {/* 高密日（>6 份）内置轻检索框，百份文档一秒定位 */}
         {items.length > 6 && (
           <div className="shrink-0 border-b border-border/70 bg-card/75 px-2.5 py-1.5">
             <div className="flex items-center gap-1.5 rounded-[var(--r-ctl)] border border-border bg-card px-2 py-1 focus-within:border-[color:var(--ring)] focus-within:ring-2 focus-within:ring-[color:color-mix(in_srgb,var(--ring)_35%,transparent)]">
@@ -2625,7 +2445,6 @@ export function SlotDayList({
             </p>
           ) : (
             filteredGroups.map((g, gIdx) => {
-              // 单成员身份组：与旧版逐条渲染同构（不出现折叠头）
               if (g.members.length === 1) {
                 const f = g.members[0];
                 return (
@@ -2635,7 +2454,6 @@ export function SlotDayList({
                     data-slot-day-item=""
                     data-file-id={f.file_id}
                     onClick={() => onOpenDocument(f.file_id)}
-                    /* 截断标题时在悬停提示中补全相对路径 */
                     title={`${f.title} · ${f.relative_path}`}
                     style={{ '--glx-row-idx': Math.min(gIdx, 10) } as React.CSSProperties}
                     className="glx-row-in flex w-full min-w-0 items-center gap-2 rounded-[8px] px-2 py-1.5 text-left hover:bg-[color:color-mix(in_srgb,var(--accent-iris)_8%,transparent)] cursor-pointer motion-safe:transition-colors"
@@ -2649,7 +2467,6 @@ export function SlotDayList({
                   </button>
                 );
               }
-              // 多成员身份组：折叠为「PLAN ×38 · 12 种内容」，展开见每份完整 relative_path
               const open = expandedGroups.has(g.key);
               const kindsLabel =
                 g.contentKinds > 0 ? `${g.contentKinds} 种内容` : '内容待考';
@@ -2694,7 +2511,6 @@ export function SlotDayList({
                           style={{ backgroundColor: getCalendarFormatColor(f.format).border }}
                         />
                         <span className="min-w-0 break-all font-mono text-[length:var(--text-micro)] leading-[1.45] text-[color:var(--ink-strong)]">
-                          {/* 只显「最小区分目录尾链/核心文件名」，确保同槽同名拷贝仍可互认 */}
                           {(() => {
                             const pfx = minimalDirPrefix(
                               f.relative_path,

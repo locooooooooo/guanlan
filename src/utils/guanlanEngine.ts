@@ -13,7 +13,6 @@ import {
   TimelineEvent,
   WorkspaceConfig,
 } from '../types/guanlan';
-// 引擎侧的时刻/日期文本统一按本地时区生成
 import { formatLocalClock, formatLocalStamp } from './timeFormat';
 
 /**
@@ -33,11 +32,6 @@ export function generateChineseBigrams(text: string): string[] {
   return Array.from(new Set(bigrams));
 }
 
-/**
- * MD 正文行数组与小写行按 revision_id 缓存（模块级）。
- * revision_id 绑定内容 sha256，正文对键不可变，故无需失效逻辑；
- * 容量上限用 Map 插入序做 LRU（命中即续期、超限淘汰最旧），防止无界增长。
- */
 const MD_LINE_CACHE_CAPACITY = 2048;
 
 interface MdLineCacheEntry {
@@ -50,7 +44,6 @@ const mdLineCache = new Map<string, MdLineCacheEntry>();
 function getCachedMdLines(revisionId: string, body: string): MdLineCacheEntry {
   const cached = mdLineCache.get(revisionId);
   if (cached) {
-    // 访问续期：移到插入序末尾，热正文不被淘汰
     mdLineCache.delete(revisionId);
     mdLineCache.set(revisionId, cached);
     return cached;
@@ -95,15 +88,7 @@ export function searchWorkspace(
     folder?: string | 'all';
     role?: string | 'all';
   },
-  /**
-   * T01：/scan 去 MD 内联后的正文回退缓存（revision_id → 正文）。
-   * 镜像 ReaderView.tsx:157-188 的按需回退模式：currentRev.markdownContent 缺失时查缓存。
-   */
   contentCache?: Record<string, string>,
-  /**
-   * 全局命中上限：超过即停止扫描（顶栏快速检索用它守住万级命中；
-   * 未传 = 不设限，保持既有调用方语义）。
-   */
   limit?: number
 ): SearchHit[] {
   const rawQuery = query.trim();
@@ -115,10 +100,6 @@ export function searchWorkspace(
 
   const hits: SearchHit[] = [];
 
-  // p3：按 file_id 全局累计命中数，等价替换原 `hits.filter((h) => h.file_id === …).length`
-  // 的平方级扫描。计数必须在每次 push 时全局累加（而非循环内局部重置），才能与 filter
-  // 语义逐点等价：同一 file_id 重复出现在入参数组、或 MD/SVG 混合分支命中同一 file_id 时，
-  // 后续条目的每文件上限判断仍要看到先前列表项的全部命中。
   const hitCountByFileId = new Map<string, number>();
   const pushHit = (hit: SearchHit): void => {
     hits.push(hit);
@@ -144,27 +125,22 @@ export function searchWorkspace(
       file.revisions.find((r) => r.revision_id === file.current_revision_id) ||
       file.revisions[file.revisions.length - 1];
 
-    // 1. Check filename / path match first
     const pathMatches =
       file.relative_path.toLowerCase().includes(qLower) ||
       file.title.toLowerCase().includes(qLower);
 
-    // 2. If Markdown: check line-by-line with bigram candidate + phrase verification
-    //    正文优先用内联的 markdownContent；缺失时回退 contentCache（按需拉取的当前版本正文）
     const mdBodyText =
       currentRev?.markdownContent ??
       (currentRev && contentCache
         ? contentCache[currentRev.revision_id]
         : undefined);
     if (file.format === 'md' && mdBodyText) {
-      // p3：行数组与小写行按 revision_id 缓存，避免每次调用重复 split + 逐行 toLowerCase
       const { lines, linesLower } = getCachedMdLines(currentRev.revision_id, mdBodyText);
       let matchedInBody = false;
 
       for (let idx = 0; idx < lines.length; idx++) {
         const lineLower = linesLower[idx];
 
-        // Candidate check: all bigrams present, then verify exact contiguous phrase
         const hasAllBigrams =
           queryBigrams.length === 0 || queryBigrams.every((bg) => lineLower.includes(bg));
         if (hasAllBigrams && lineLower.includes(qLower)) {
@@ -187,7 +163,6 @@ export function searchWorkspace(
             snippet: lines[idx].trim(),
             stale: false,
           });
-          // Cap hits per file to keep results scannable
           if ((hitCountByFileId.get(file.file_id) ?? 0) >= 3) break;
         }
       }
@@ -208,7 +183,6 @@ export function searchWorkspace(
       }
     }
 
-    // 3. If SVG: check extracted text nodes first; if no text layer, only match filename
     if (file.format === 'svg' && currentRev) {
       const extracted = currentRev.svgExtractedTexts || [];
       let matchedSvgText = false;
@@ -250,7 +224,6 @@ export function searchWorkspace(
       }
     }
 
-    // 4. If PDF: respect pdfStatus! Unindexed PDFs only match filename; page_indexed PDFs can match page text
     if (file.format === 'pdf' && currentRev) {
       let matchedPdfPage = false;
       if (file.pdfStatus === 'page_indexed' && currentRev.pdfPages) {
@@ -319,7 +292,6 @@ export function searchWorkspaceCapped(
   query: string,
   limit: number = TOPBAR_SEARCH_LIMIT
 ): WorkspaceSearchResult {
-  // 多取一条用来判断「后面还有」：不额外扫全表，命中上限即停止
   const probe = searchWorkspace(files, query, undefined, undefined, limit);
   const truncated = probe.length > limit;
   return {
@@ -372,7 +344,6 @@ export function parseMarkdownOutline(markdown: string): MarkdownSection[] {
     }
   }
 
-  // Populate brief summaryText for explicit callout sections
   for (const sec of sections) {
     const bodyLines = lines
       .slice(sec.startLine, sec.endLine)
@@ -452,8 +423,6 @@ export interface DiffResult {
 export const DIFF_MAX_LINES_PER_SIDE = 20_000;
 export const DIFF_MAX_DP_CELLS = 4_000_000;
 
-/** 单侧正文取源链（/scan 去 MD 内联后按 revision_id 回退缓存，再退 svgSource）。
- *  返回 null 表示「正文尚未取回」（所有来源都缺）——与「确认为空文档」严格区分。 */
 function revisionTextOf(
   rev: Revision,
   contentCache?: Record<string, string>
@@ -465,14 +434,10 @@ function revisionTextOf(
   return null;
 }
 
-/** 正文是否「确属空文档」而非未加载：快照真实存在且字节为 0，且身份哈希非空
- *  （占位版本行 content_sha256 为空串、sizeBytes 为 0，不得当作已确认的空内容）。 */
 function isConfirmedEmptyContent(rev: Revision): boolean {
   return rev.sizeBytes === 0 && Boolean(rev.content_sha256);
 }
 
-/** 同内容/同版本的快捷结果：全部行按 i===j 配对（行号稳定），不分配 DP 表。
- *  相同版本 ID 或已就绪的相同内容直接返回无变化，不分配二维 DP，保留展示需要的行信息。 */
 function unchangedDiffResult(
   fromRev: Revision,
   toRev: Revision,
@@ -501,10 +466,6 @@ export function computeMarkdownDiff(
   file: FileRecord,
   fromRevisionId: string,
   toRevisionId: string,
-  /**
-   * T01：/scan 去 MD 内联后的正文回退缓存（revision_id → 正文）。
-   * markdownContent 缺失时按 revision_id 查缓存，再退到 svgSource。
-   */
   contentCache?: Record<string, string>
 ): DiffResult {
   const fromRev = file.revisions.find((r) => r.revision_id === fromRevisionId);
@@ -522,7 +483,6 @@ export function computeMarkdownDiff(
     };
   }
 
-  // 快照已过保留期限时返回 REVISION_UNAVAILABLE，不悄悄展示当前内容冒充旧内容
   if (!fromRev.snapshotAvailable || !toRev.snapshotAvailable) {
     return {
       ok: false,
@@ -537,8 +497,6 @@ export function computeMarkdownDiff(
     };
   }
 
-  // 正文未加载 ≠ 空文档。任一侧尚未取回正文时明确返回 CONTENT_NOT_LOADED，
-  // 绝不拿空串参与对比（那会把整份文档误报成「全新增」）。
   const oldText = revisionTextOf(fromRev, contentCache);
   const newText = revisionTextOf(toRev, contentCache);
   if (oldText === null && !isConfirmedEmptyContent(fromRev)) {
@@ -570,11 +528,9 @@ export function computeMarkdownDiff(
   const oldContent = oldText ?? '';
   const newContent = newText ?? '';
 
-  // 快捷退出 ①：同版本 ID——正文同源必然相等，直接给全 unchanged（无 DP 分配）
   if (fromRev.revision_id === toRev.revision_id) {
     return unchangedDiffResult(fromRev, toRev, oldContent);
   }
-  // 快捷退出 ②：已就绪的相同内容（逐字相等，O(m+n)）——不同版本同内容 hash 场景同享
   if (oldContent === newContent) {
     return unchangedDiffResult(fromRev, toRev, oldContent);
   }
@@ -582,7 +538,6 @@ export function computeMarkdownDiff(
   const oldLines = oldContent.split('\n');
   const newLines = newContent.split('\n');
 
-  // 行数与 DP 单元数硬预算——超限明确拒绝，不静默截断、不用空 diff 冒充成功
   const m = oldLines.length;
   const n = newLines.length;
   if (m > DIFF_MAX_LINES_PER_SIDE || n > DIFF_MAX_LINES_PER_SIDE) {
@@ -612,7 +567,6 @@ export function computeMarkdownDiff(
     };
   }
 
-  // LCS-based line diff for clean, accurate line numbers（行数组 Int32Array，预算内 16MB 封顶）
   const dp: Int32Array[] = Array.from(
     { length: m + 1 },
     () => new Int32Array(n + 1)
@@ -801,10 +755,6 @@ export function buildLocalRelationGraph(
   allEdges: RelationEdge[],
   maxNodes = 80
 ): LocalGraphResult {
-  // ID Map / 邻接表 / 边引用单遍建表——节点解析 O(1)、邻居查询只看
-  // 邻接表，不再对全部边反复线性扫描；回滚标记单遍历史索引（内容哈希 → 首见序），
-  // 保持 A→B→A 及相邻相同哈希的现行语义；节点/版本节点在物化过程中受 maxNodes
-  // 预算限制（早停不先构造全图），被预算跳过的节点独立计数，不因早停虚报。
   const fileById = new Map(files.map((f) => [f.file_id, f]));
   const decisionById = new Map(decisions.map((d) => [d.decision_id, d]));
 
@@ -836,10 +786,8 @@ export function buildLocalRelationGraph(
   const nodeMap = new Map<string, GraphNode>();
   const includedEdges: RelationEdge[] = [];
   const includedEdgeIds = new Set<string>();
-  // 预算外节点的独立计数（同一 id 只计一次；早停不虚报 truncatedCount）
   const overflowIds = new Set<string>();
   const budgetFull = () => nodeMap.size >= maxNodes;
-  /** 物化节点：预算内加入 nodeMap；预算满则计数到 overflow（不物化） */
   const materialize = (node: GraphNode): boolean => {
     if (nodeMap.has(node.id)) return true;
     if (budgetFull()) {
@@ -863,7 +811,6 @@ export function buildLocalRelationGraph(
   }
   nodeMap.set(centerId, centerNode);
 
-  // 邻接表：单遍按端点索引全部边
   const adjacency = new Map<string, RelationEdge[]>();
   for (const edge of allEdges) {
     const src = adjacency.get(edge.source_id);
@@ -874,7 +821,6 @@ export function buildLocalRelationGraph(
     else adjacency.set(edge.target_id, [edge]);
   }
 
-  // 1-hop 邻居（只遍历中心节点的邻接边）
   const oneHopIds = new Set<string>();
   for (const edge of adjacency.get(centerId) ?? []) {
     const otherId = edge.source_id === centerId ? edge.target_id : edge.source_id;
@@ -890,7 +836,6 @@ export function buildLocalRelationGraph(
     }
   }
 
-  // 中心文件的版本演进节点 + 单遍回滚标记（内容哈希 → 首见；后续同哈希即 A→B→A 恢复）
   const centerFile = fileById.get(centerId);
   if (centerFile && centerFile.revisions.length > 1) {
     const firstSeenByHash = new Map<string, number>();
@@ -933,7 +878,6 @@ export function buildLocalRelationGraph(
     }
   }
 
-  // 二跳：只遍历一跳节点的邻接边（边 Set 去重，不再线性 some）
   let hasTwoHopCandidates = false;
   const scannedTwoHop = new Set<string>();
   for (const oneHopId of oneHopIds) {
@@ -955,12 +899,8 @@ export function buildLocalRelationGraph(
     }
   }
 
-  // 早停后的溢出计数：预算外节点 + 预算内已物化节点的差值（独立统计，不虚报）。
-  // 预算满后 depth===2 的其余二跳候选 resolve 只计数（O(1) 查表），不物化。
   const truncatedCount = Math.max(0, nodeMap.size + overflowIds.size - maxNodes);
 
-  // 边界过滤：与旧「先构造后按 bounded 端点裁边」逐字等价——预算满时先入列的
-  // 版本演进边（端点被预算挤出）在此剔除，不静默保留悬空边
   const materializedIds = new Set(nodeMap.keys());
   const boundedEdges = includedEdges.filter(
     (e) => materializedIds.has(e.source_id) && materializedIds.has(e.target_id)
@@ -1005,7 +945,6 @@ export function validateRootBoundary(
     };
   }
 
-  // If absolute path on Windows (e.g. D:/... or C:/Windows/...)
   if (/^[a-zA-Z]:\//.test(normReq)) {
     if (!normReq.toLowerCase().startsWith(normRoot + '/') && normReq.toLowerCase() !== normRoot) {
       return {
@@ -1075,11 +1014,6 @@ export function executeMcpTool(
     decisions: DecisionAssertion[];
     relations: RelationEdge[];
   },
-  /**
-   * T01：/scan 去 MD 内联后的智能体读取回退。
-   * contentCache（revision_id → 正文）由调用方按需经 fetchRevisionContentsBatch 预取，
-   * search / read / diff 三个工具在 markdownContent 缺失时查缓存。
-   */
   options?: { contentCache?: Record<string, string> }
 ): McpToolResponse {
   const gen = context.config.runtimeStatus.indexGeneration;
@@ -1096,7 +1030,6 @@ export function executeMcpTool(
     };
   }
 
-  // Validate cursor / index_generation consistency
   if (
     req.clientIndexGeneration !== undefined &&
     req.clientIndexGeneration !== gen
@@ -1230,8 +1163,6 @@ export function executeMcpTool(
         };
       }
 
-      // T01：MD 正文不再随 /scan 内联——markdownContent 缺失时回退 contentCache，
-      // 仍缺失则如实返回空正文（绝不拿磁盘当前内容冒充历史版本）
       const rawBody =
         rev.markdownContent ||
         options?.contentCache?.[rev.revision_id] ||
@@ -1415,8 +1346,6 @@ export function formatContextForAgent(
   const header = [
     `# 观澜 (Guanlan MCP) 证据上下文清单`,
     `- 工程根目录：\`${workspaceRoot}\``,
-    // toISOString() 返回 UTC 时刻；直接把 Z 换成 +08:00 会把 UTC 挂钟错标成北京时间（差 8 小时）。
-    // 先平移 8 小时再取 UTC 字段，才是真实的 Asia/Shanghai 时间——证据清单的导出时刻必须可信。
     `- 导出时间：${new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 16).replace('T', ' ')} (+08:00)`,
     `- 条目数量：${pointers.length} 项（均附带独立 file_id、revision_id 与 SHA-256 校验摘要，可在智能体中直接调用 \`read\` / \`diff\` / \`decisions\` 工具核对）`,
     '',
@@ -1435,11 +1364,8 @@ export function formatContextForAgent(
     return [
       `### [${idx + 1}] \`${p.relative_path}\` (${locText})`,
       `- **定位凭证**：\`file_id=${p.file_id}\` · \`revision_id=${p.revision_id}\` · \`index_generation=${p.index_generation}\``,
-      // sha256 输出完整 64 位——凭证必须可核对，截断 16 位让校验形同虚设
       `- **内容哈希**：\`sha256:${p.content_sha256}\` · **观察时间**：\`${p.observed_at}\` · **覆盖度**：\`${p.coverage}\``,
       p.note ? `- **阅读备注**：${p.note}` : '',
-      // 摘录逐字不截断（完整性优先）；无可用正文时不输出空引用行，
-      // 不虚构占位文本——「无摘录」本身是诚实状态
       p.excerpt ? `> ${p.excerpt.replace(/\n/g, '\n> ')}` : '',
       '',
     ]
@@ -1466,9 +1392,6 @@ export function unreadStatusLabel(reason: UnreadReason): string {
 }
 
 /**
- * 计算文件是否存在“自上次阅读后的未读变化”
- */
-/**
  * 未读三态判定：
  * 只比较版本身份（last_read_revision_id vs current_revision_id），O(1)，
  * 不再触发二维 LCS。全库未读徽章/计数/过滤（App、LeftSidebar、GraphCanvasView、
@@ -1483,7 +1406,6 @@ export function hasUnreadChanges(
 ): {
   isUnread: boolean;
   reason: UnreadReason;
-  /** 恒为 []：章节级变更按需经 computeChangedSectionsSinceRead 获取 */
   changedSectionsSinceRead: string[];
 } {
   if (!readingState || !readingState.last_read_revision_id) {
@@ -1507,8 +1429,6 @@ export function hasUnreadChanges(
   };
 }
 
-/** 章节切分（O(行数)）：按 #/#/#-三级标题切块，首块标题记「文档头部」；
- *  块内容哈希用「裁剪后逐行拼接」的轻量指纹（展示级判定，不做语义压缩）。 */
 function sectionFingerprintOf(text: string): Map<string, string> {
   const sections = new Map<string, string>();
   let current = '文档头部';
@@ -1543,7 +1463,6 @@ function sectionFingerprintOf(text: string): Map<string, string> {
 export function computeChangedSectionsSinceRead(
   file: FileRecord,
   readingState?: ReadingState,
-  /** MD 正文不再内联时，差异章节回退 contentCache（revision_id → 正文） */
   contentCache?: Record<string, string>
 ): string[] {
   if (!readingState || !readingState.last_read_revision_id) return [];
@@ -1566,7 +1485,6 @@ export function computeChangedSectionsSinceRead(
   for (const [title, fingerprint] of newSections) {
     if (oldSections.get(title) !== fingerprint) changed.push(title);
   }
-  // 基线独有章节（被整段删除）同样计入变更
   for (const title of oldSections.keys()) {
     if (!newSections.has(title) && !changed.includes(title)) changed.push(title);
   }
@@ -1628,11 +1546,8 @@ export function buildNodeHoverPreviewData(
       rev.summaryNote;
   }
 
-  // 三态文案由 unreadStatusLabel 统一给出，不再在此另拼一套（右栏同源）
   const statusLabel = unreadStatusLabel(unreadInfo.reason);
 
-  // 无 agent_turn_hint 时直接展示版本号与观察时间，不虚构演示轮次
-  // （真实服务端投影的 revision 没有 agent_turn_hint 字段，按时段启发拼轮次文案全是编造）
   const modificationRoundId = rev.agent_turn_hint || rev.revision_id;
   const modificationRoundLabel = rev.agent_turn_hint
     ? `写入轮次 ${rev.agent_turn_hint} · ${formatLocalClock(rev.observed_at)}`
@@ -1684,7 +1599,6 @@ export function computeDynamicEdgePath(
       from.y
     )}, ${midX} ${Math.round(to.y)}, ${Math.round(to.x)} ${Math.round(to.y)}`;
   }
-  // subagent_to_merge
   const ctrlY1 = Math.round(from.y + (to.y - from.y) * 0.55);
   const ctrlY2 = Math.round(to.y - Math.max(20, (to.y - from.y) * 0.25));
   return `M ${Math.round(from.x)} ${Math.round(from.y)} C ${Math.round(

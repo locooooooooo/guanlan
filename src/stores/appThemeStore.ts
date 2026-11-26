@@ -64,7 +64,6 @@ export function readAppThemeMode(): AppThemeMode {
       const parsed: unknown = JSON.parse(raw);
       if (isAppThemeMode(parsed)) return parsed;
     } catch {
-      /* 非 JSON 裸串：继续按原值判 */
     }
     return isAppThemeMode(raw) ? raw : 'light';
   } catch {
@@ -78,7 +77,6 @@ export function saveAppThemeMode(mode: AppThemeMode): void {
   try {
     window.localStorage.setItem(APP_THEME_STORAGE_KEY, JSON.stringify(mode));
   } catch {
-    /* 忽略配额/隐私模式异常 */
   }
 }
 

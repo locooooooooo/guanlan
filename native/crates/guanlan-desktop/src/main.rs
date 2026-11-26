@@ -5,7 +5,6 @@
 //! 桌面壳不复制数据库与索引代码：壳只启动/重绑/连接同一服务实现，
 //! 工作区变更与停机时经 `RunningService::shutdown()` 释放端口、写线程、watcher 与排他锁。
 
-// release 构建不弹控制台窗口；debug 构建保留终端便于看 stderr 诊断
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod config;
@@ -44,7 +43,6 @@ struct DesktopBridgeError {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DesktopSessionState {
-    /// `ready` | `unconfigured` | `root_in_use` | `error`
     status: String,
     endpoint: String,
     root: Option<String>,
@@ -104,7 +102,6 @@ impl DesktopRuntime {
         recent_statuses(&read_config_at(self.config_path.as_deref()))
     }
 
-    /// 全局呼出热键配置（desktop.json `hotkey`；未配置返回 None → main 用默认值）
     fn hotkey_config(&self) -> Option<String> {
         read_config_at(self.config_path.as_deref())
             .hotkey
@@ -123,10 +120,6 @@ impl DesktopRuntime {
         state
     }
 
-    /// 切换（或首次接入）工作区：
-    /// 1) 目录校验；2) 同工作区（同 rootKey）直接复用现役服务；
-    /// 3) 先优雅关闭旧服务释放锁/端口/线程，再启动新服务；
-    /// 4) 若新工作区遇 `ROOT_IN_USE`，回传锁诊断信息与 `previousRoot` 供恢复。
     async fn switch_to(
         &self,
         raw_root: &str,
@@ -268,7 +261,6 @@ impl DesktopRuntime {
         }
     }
 
-    /// 外部文件拖入工作区指定相对目录并立即触发增量索引（< 500ms 出现在今日时间主干）。
     async fn import_external_files(
         &self,
         source_paths: Vec<String>,
@@ -307,13 +299,11 @@ fn now_utc_rfc3339_approx() -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    // 简化 UTC ISO 时间戳（仅供 desktop.json 最近打开排序展示）
     let days = (secs / 86_400) as i64;
     let rem = secs % 86_400;
     let hh = rem / 3_600;
     let mm = (rem % 3_600) / 60;
     let ss = rem % 60;
-    // Howard Hinnant civil-from-days
     let z = days + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
     let doe = (z - era * 146_097) as u64;
@@ -369,13 +359,6 @@ fn dispatch_native_drag_drop(window: &tauri::WebviewWindow, drop_event: &DragDro
     let _ = window.eval(&script);
 }
 
-// ===== 全局呼出热键（Ctrl+K 面板唤起；desktop.json `hotkey` 可配置）=====
-
-/// 热键配置解析（纯函数，单测锁定）：
-/// - 形如 `"mod+mod+key"`，修饰符白名单 ctrl/control/alt/shift/super（大小写无关）；
-/// - 主键：单个字母/数字、F1–F12；
-/// - 输出小写规范化串（`ctrl` 归一为 `control`，与 tauri-plugin-global-shortcut
-///   的 Shortcut 解析口径一致）；非法输入返回 Err（注册处告警并回退默认值）。
 fn parse_hotkey(raw: &str) -> Result<String, String> {
     let parts: Vec<&str> = raw
         .split('+')
@@ -420,8 +403,6 @@ fn parse_hotkey(raw: &str) -> Result<String, String> {
     Ok(format!("{}+{}", modifiers.join("+"), key_lower))
 }
 
-/// 全局热键按下 → 唤起窗口并转发 CustomEvent 给前端（镜像 dispatch_native_drag_drop
-/// 的 eval 通道；前端 desktopBridge.subscribeGlobalShortcut 订阅打开命令面板）。
 fn summon_and_notify(window: &tauri::WebviewWindow, hotkey: &str) {
     let _ = window.show();
     let _ = window.unminimize();
@@ -435,7 +416,6 @@ fn summon_and_notify(window: &tauri::WebviewWindow, hotkey: &str) {
     let _ = window.eval(&script);
 }
 
-/// 构造 Windows 当前用户（HKCU，免 UAC 提权）资源管理器右键菜单「用观澜打开此文件夹」注册命令清单。
 fn build_windows_context_menu_reg_args(exe_path: &str) -> Vec<Vec<String>> {
     let icon_val = format!("{exe_path},0");
     let dir_cmd = format!("\"{exe_path}\" --open \"%1\"");
@@ -549,8 +529,6 @@ fn set_windows_context_menu(enabled: bool) -> Result<bool, String> {
     set_windows_context_menu_impl(enabled)
 }
 
-/// 检查更新的结果。`status`：`available`（有新版本）、`up_to_date`、`not_configured`
-/// （生产包暂未配置更新源，见 docs/subsystems/release-pipeline.md 的「自动更新」）。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DesktopUpdateCheck {
@@ -561,8 +539,6 @@ struct DesktopUpdateCheck {
     pub_date: Option<String>,
 }
 
-/// 更新源是否配置：`plugins.updater.endpoints` 非空。未配置时不去联网——插件在空
-/// endpoints 上会返回 ReleaseNotFound，那不是「已是最新」，也不该当成错误弹出来。
 fn updater_endpoints_configured(app: &tauri::AppHandle) -> bool {
     app.config()
         .plugins
@@ -573,7 +549,6 @@ fn updater_endpoints_configured(app: &tauri::AppHandle) -> bool {
         .is_some_and(|endpoints| !endpoints.is_empty())
 }
 
-/// 把下载进度转成前端 CustomEvent（与拖拽、全局热键同一种注入方式，不用事件插件）。
 fn emit_update_progress(
     window: &tauri::WebviewWindow,
     phase: &str,
@@ -624,8 +599,6 @@ async fn check_desktop_update(app: tauri::AppHandle) -> Result<DesktopUpdateChec
     }
 }
 
-/// 下载并安装更新。Windows 上安装器启动后进程会退出（插件的行为），前端只需要把进度
-/// 显示出来；安装器以 passive 模式运行（配置里的 installMode），不要求用户操作。
 #[tauri::command]
 async fn install_desktop_update(
     app: tauri::AppHandle,
@@ -655,7 +628,6 @@ async fn install_desktop_update(
         )
         .await
         .map_err(|err| format!("UPDATE_INSTALL_FAILED: {err}"))?;
-    // Windows 上安装器接管；其他平台按插件要求重启应用。
     #[cfg(not(windows))]
     app.restart();
     Ok(())
@@ -679,8 +651,6 @@ fn main() {
     }
 
     let runtime = DesktopRuntime::new(default_config_path());
-    // 全局呼出热键（desktop.json `hotkey` 可配置；非法值回退默认并告警——
-    // 可配置性是停机条件：抢占系统常规快捷键且不可配置即停）
     let hotkey_raw = runtime
         .hotkey_config()
         .unwrap_or_else(|| config::DEFAULT_HOTKEY.to_owned());
@@ -697,7 +667,6 @@ fn main() {
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(move |app_handle, _shortcut, event| {
-                    // 仅按下沿触发（松开沿忽略，避免双发）
                     if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
                         if let Some(window) = app_handle.get_webview_window("main") {
                             summon_and_notify(&window, &hotkey_for_handler);
@@ -706,8 +675,6 @@ fn main() {
                 })
                 .build(),
         )
-        // 应用内更新：插件读 tauri.conf.json 的 plugins.updater（公钥与 endpoints）。
-        // 只注册 Rust 侧，前端经 __GUANLAN_UPDATE_BRIDGE__ 调下面的两个命令。
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             save_workspace_file,
@@ -727,7 +694,6 @@ fn main() {
             install_desktop_update
         ])
         .setup(move |app| {
-            // 全局快捷键注册（解析失败的兜底值已保证合法；再失败仅告警不阻断启动）
             use tauri_plugin_global_shortcut::GlobalShortcutExt;
             if let Err(err) = app.global_shortcut().register(hotkey.as_str()) {
                 eprintln!("警告: 全局热键 {hotkey} 注册失败：{err}（应用内 Ctrl+K 仍可用）");
@@ -777,8 +743,6 @@ fn main() {
     });
 }
 
-/// 决策回执与多工作区桥（与 __GUANLAN_API__ / __GUANLAN_BOOT__ 同批注入）：
-/// 浏览器/CLI dev 环境无此桥；NOT_TAURI 兜底防误用。
 const SAVE_BRIDGE_JS: &str = r#"
 window.__GUANLAN_DESKTOP__ = true;
 window.__GUANLAN_SAVE_FILE__ = function (req) {
@@ -987,9 +951,6 @@ async fn import_external_files(
         .await
 }
 
-/// 保存回写请求（键名经 serde rename 对齐前端 camelCase）：
-/// original_content 是前端展示时的原文快照（乐观并发基线），
-/// new_content 是勾选/填空落笔后的完整新文本。
 #[derive(Debug, Deserialize)]
 struct SaveWorkspaceFileRequest {
     #[serde(rename = "relativePath")]
@@ -1006,7 +967,6 @@ struct SaveWorkspaceFileOk {
     bytes: usize,
 }
 
-/// 结构化错误（前端按 code 分支承载：CONFLICT → 引导重开文档）
 #[derive(Debug, Serialize)]
 struct SaveWorkspaceFileErr {
     code: String,
@@ -1022,13 +982,10 @@ impl SaveWorkspaceFileErr {
     }
 }
 
-/// CRLF 归一：比较与写回都以 LF 语义比对，避免 Windows 文本编辑器换行差异误报冲突
 fn normalize_newlines(s: &str) -> String {
     s.replace("\r\n", "\n")
 }
 
-/// 校验相对路径：拒绝绝对路径 / `..` 上跳 / 空段——WebView 侧输入不可信，
-/// 绝不让相对路径逃出工作区根（路径穿越防线）。
 fn validate_relative_path(relative_path: &str) -> Result<PathBuf, SaveWorkspaceFileErr> {
     let trimmed = relative_path.trim();
     if trimmed.is_empty() {
@@ -1061,8 +1018,6 @@ fn validate_relative_path(relative_path: &str) -> Result<PathBuf, SaveWorkspaceF
     Ok(path)
 }
 
-/// 保存回写核心（纯函数便于单测）：乐观并发检查（磁盘内容 == 阅读快照）+
-/// 临时文件写 + 原子 rename 落盘。冲突时不落任何字节。
 fn save_workspace_file_impl(
     root: &Path,
     request: &SaveWorkspaceFileRequest,
@@ -1077,8 +1032,6 @@ fn save_workspace_file_impl(
             "原文件已被外部修改（磁盘内容与阅读快照不一致）",
         ));
     }
-    // 原子写：同目录临时文件 + rename 替换（Windows fs::rename 走
-    // MOVEFILE_REPLACE_EXISTING，可直接覆盖已存在目标），失败不破坏原文件
     let dir = target
         .parent()
         .map(Path::to_path_buf)
@@ -1094,7 +1047,7 @@ fn save_workspace_file_impl(
     std::fs::write(&tmp, request.new_content.as_bytes())
         .map_err(|e| SaveWorkspaceFileErr::new("IO", format!("写临时文件失败：{e}")))?;
     if let Err(e) = std::fs::rename(&tmp, &target) {
-        let _ = std::fs::remove_file(&tmp); // 失败清理：不遗垃圾临时文件
+        let _ = std::fs::remove_file(&tmp);
         return Err(SaveWorkspaceFileErr::new(
             "IO",
             format!("原子替换失败：{e}"),
@@ -1106,7 +1059,6 @@ fn save_workspace_file_impl(
     })
 }
 
-/// Tauri 命令：决策回执保存回写（读取当前活动工作区根，切工作区后自动指向新根）
 #[tauri::command]
 fn save_workspace_file(
     runtime: tauri::State<'_, DesktopRuntime>,
@@ -1137,7 +1089,6 @@ fn save_workspace_file(
 mod save_workspace_file_tests {
     use super::*;
 
-    /// 独立临时目录（进程 id + 用例名隔离，跑完即清）
     struct TempRoot(PathBuf);
     impl TempRoot {
         fn new(tag: &str) -> Self {
@@ -1186,7 +1137,6 @@ mod save_workspace_file_tests {
             save_workspace_file_impl(&root.0, &request("决策回执.md", "阅读快照原文", "新内容"));
         let err = outcome.expect_err("必须冲突");
         assert_eq!(err.code, "CONFLICT");
-        // 冲突不落任何字节
         assert_eq!(std::fs::read_to_string(&doc).unwrap(), "外部已改");
     }
 
@@ -1240,7 +1190,6 @@ mod save_workspace_file_tests {
         assert_eq!(rt.current_state().status, "unconfigured");
         assert!(rt.current_state().endpoint.is_empty());
 
-        // 非法目录不得启动或破坏状态
         let bad = rt
             .switch_to(&base.0.join("missing").to_string_lossy())
             .await;
@@ -1275,7 +1224,6 @@ mod save_workspace_file_tests {
             (code, resp)
         }
 
-        // 连续切换 A → B → C → A，并在存在活跃 SSE 长连接时验证平滑停机重绑与耗时
         let t_a = std::time::Instant::now();
         let s_a = rt.switch_to(&ws_a.to_string_lossy()).await.unwrap();
         let (code_a, body_a) = http_get_bootstrap(&s_a.endpoint).await;
@@ -1285,7 +1233,6 @@ mod save_workspace_file_tests {
         assert!(body_a.contains("\"workspace_id\""));
         assert_eq!(s_a.workspace_name.as_deref(), Some("alpha"));
 
-        // 模拟前端 EventSource 长连接驻留期间直接切工作区
         let addr_a = s_a.endpoint.trim_start_matches("http://").to_owned();
         let mut sse_conn = TcpStream::connect(&addr_a).await.expect("连接 SSE");
         sse_conn
@@ -1332,7 +1279,6 @@ mod save_workspace_file_tests {
         assert_eq!(s_b.status, "ready");
         assert_eq!(code_b, 200);
         assert_ne!(s_a.endpoint, s_b.endpoint);
-        // 旧 SSE 连接必须已关闭（不再阻塞）
         drop(sse_conn);
 
         let t_c = std::time::Instant::now();
@@ -1361,11 +1307,9 @@ mod save_workspace_file_tests {
             "已建库工作区二次切回出首屏应 < 300ms，实测 {ms_a2}ms"
         );
 
-        // 同目录重切幂等复用原端点
         let s_a_same = rt.switch_to(&ws_a.to_string_lossy()).await.unwrap();
         assert_eq!(s_a_same.endpoint, s_a2.endpoint);
 
-        // 模拟外部实例锁定 ws_b → 切换 ws_b 必须进入 root_in_use 并保留 previous_root & 锁诊断
         let holder = guanlan_service::start_readonly_service(guanlan_service::ServeConfig {
             root: ws_b.to_string_lossy().into_owned(),
             port: 0,
@@ -1384,7 +1328,6 @@ mod save_workspace_file_tests {
         assert_eq!(err.code, "ROOT_IN_USE");
         assert!(err.lock_info.unwrap_or_default().contains("pid="));
 
-        // 释放占用后重试即刻恢复 ready
         let b_data_dir = holder.data_dir.clone();
         holder.shutdown().await;
         let recovered = rt.switch_to(&ws_b.to_string_lossy()).await.unwrap();
@@ -1445,7 +1388,6 @@ mod save_workspace_file_tests {
             resp.split("\r\n\r\n").nth(1).unwrap_or("{}").to_owned()
         }
 
-        // 等首次启动 VerifyAll 完成
         for _ in 0..40 {
             let status = http_get(&addr, "/api/v1/status").await;
             if status.contains("\"active_jobs\":[]") {
@@ -1454,7 +1396,6 @@ mod save_workspace_file_tests {
             tokio::time::sleep(std::time::Duration::from_millis(25)).await;
         }
 
-        // 验证越界目录导入被 100% 拦截且不写任何字节到工作区外
         let evil = rt
             .import_external_files(
                 vec![ext_pdf.to_string_lossy().into_owned()],
@@ -1465,7 +1406,6 @@ mod save_workspace_file_tests {
         assert_eq!(evil.code, "INVALID_PATH");
         assert!(!ext.join("外联验收单 (1).pdf").exists());
 
-        // 实测外部 PDF + SVG 拖入指定目录 `inbox/2026-11` → 落盘 → 今日时间主干 < 500ms
         let started = std::time::Instant::now();
         let outcome = rt
             .import_external_files(
@@ -1517,7 +1457,6 @@ mod save_workspace_file_tests {
         std::fs::create_dir_all(&ws_light).unwrap();
         std::fs::write(ws_light.join("README.md"), "# Light\n").unwrap();
 
-        // 模拟含多个大视频文件的工作区：debug 下整盘 SHA-256 需 ~2 秒
         let chunk = vec![0x3Cu8; 1024 * 1024];
         for i in 0..8 {
             let mut f = std::fs::File::create(ws_heavy.join(format!("video_{i:02}.mp4"))).unwrap();
@@ -1532,7 +1471,6 @@ mod save_workspace_file_tests {
             .await
             .expect("打开大工作区");
         assert_eq!(opened.status, "ready");
-        // 给后台 VerifyAll 一点时间进入流式哈希阶段
         tokio::time::sleep(std::time::Duration::from_millis(30)).await;
 
         let started = std::time::Instant::now();
@@ -1551,7 +1489,6 @@ mod save_workspace_file_tests {
             "旧工作区扫描中途切换不应卡死等待扫完，实测 {elapsed_ms}ms"
         );
 
-        // 旧工作区排他锁必须已释放
         let (heavy_data_dir, _, _) =
             guanlan_service::runtime::workspace_lock_context(&ws_heavy.to_string_lossy())
                 .expect("取重工作区锁上下文");
@@ -1570,7 +1507,6 @@ mod save_workspace_file_tests {
     }
 }
 
-/// 全局呼出热键解析与 desktop.json 持久化（纯函数 + 配置 roundtrip）
 #[cfg(test)]
 mod hotkey_tests {
     use super::{config, parse_hotkey};
@@ -1586,16 +1522,12 @@ mod hotkey_tests {
 
     #[test]
     fn rejects_illegal_hotkeys() {
-        // 无修饰符
         assert!(parse_hotkey("k").is_err());
         assert!(parse_hotkey("ctrl").is_err());
-        // 非法主键
         assert!(parse_hotkey("alt+space").is_err());
         assert!(parse_hotkey("alt+F13").is_err());
         assert!(parse_hotkey("alt+;;").is_err());
-        // 未知修饰符
         assert!(parse_hotkey("meta+k").is_err());
-        // 空串
         assert!(parse_hotkey("").is_err());
         assert!(parse_hotkey("++").is_err());
     }
@@ -1613,7 +1545,6 @@ mod hotkey_tests {
         std::fs::create_dir_all(&temp).unwrap();
         let cfg_path = temp.join("desktop.json");
 
-        // 写入含 hotkey 的配置
         let written = config::DesktopConfig {
             last_root: Some(r"H:\demo".to_owned()),
             recent_workspaces: Vec::new(),
@@ -1628,7 +1559,6 @@ mod hotkey_tests {
             "control+shift+k"
         );
 
-        // 旧格式（无 hotkey 字段）向后兼容：反序列化缺省 None
         std::fs::write(&cfg_path, r#"{"lastRoot":"H:\\legacy"}"#).unwrap();
         let legacy = config::read_config_at(Some(&cfg_path));
         assert!(
@@ -1653,7 +1583,6 @@ mod hotkey_tests {
         std::fs::create_dir_all(&temp).unwrap();
         let dir_str = temp.to_string_lossy().into_owned();
 
-        // --open <目录> 与位置参数均应准确识别
         assert_eq!(
             config::parse_cli_startup_dir(&["--open".to_owned(), dir_str.clone()]).as_deref(),
             Some(dir_str.as_str())
@@ -1664,7 +1593,6 @@ mod hotkey_tests {
         );
         assert!(config::parse_cli_startup_dir(&["--unknown".to_owned()]).is_none());
 
-        // HKCU 右键菜单注册命令必须覆盖 Directory 与 Directory\Background 两个入口且免 UAC
         let reg_cmds =
             super::build_windows_context_menu_reg_args(r"C:\Guanlan\guanlan-desktop.exe");
         assert_eq!(reg_cmds.len(), 6);

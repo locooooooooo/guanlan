@@ -1,11 +1,3 @@
-/**
- * 前端交互、无障碍、响应式与韧性回归测试：
- * 1. 触控热区 ≥44px 与无悬停设备（pointer: coarse / hover: none）兜底规则；
- * 2. 去掉装饰性极光渐变、发光光球、UI 表情符号与含糊文案；
- * 3. WCAG AA 对比度计算校核（--ink-faint 明暗双态 + 夜间阅读六阶段令牌 + 全景暗画布选中态）；
- * 4. 空态 / 加载中 / 错误态诚实渲染（绝不把断连伪装成空工作区）、ErrorBoundary 兜底；
- * 5. 全部弹窗/抽屉 Esc + 外部点击关闭、异步防重锁与空字段守卫。
- */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -187,7 +179,6 @@ test('异常韧性：ErrorBoundary 可捕获子组件异常，AgentContextDrawer
   assert.equal(derived.hasError, true);
   assert.equal(derived.message, '空字段异常');
 
-  // 模拟残缺的 /api/v1/context 响应（缺 preset 与 token_budget），验证抽屉不会 TypeError 崩溃
   const malformedServerContext = { ok: true } as unknown as ContextResponse;
   const drawerHtml = renderToStaticMarkup(
     React.createElement(AgentContextDrawer, {

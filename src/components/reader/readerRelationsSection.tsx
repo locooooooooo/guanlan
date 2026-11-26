@@ -1,7 +1,3 @@
-/**
- * 阅读器局部关系图面板：
- * 提供一跳/二跳切换、非重叠列布局 SVG 与关系证据明细。
- */
 
 import React from 'react';
 import { Button } from '../ui/primitives';
@@ -72,7 +68,6 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
           </div>
         </div>
 
-        {/* Interactive SVG Graph Visualization */}
         <div
           className={`rounded-lg border p-4 ${
             paperLightMode ? 'border-[#E3E0D8]' : 'border-[#383633]'
@@ -84,7 +79,6 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
             role="img"
             aria-label="局部对象一跳与二跳关系图"
           >
-            {/* Structured Non-Overlapping Column Layout: Left (Revisions & Decisions) | Center (Selected Object) | Right (Referenced Files & 2-Hop) */}
             {(() => {
               const center = localGraph.nodes.find((n) => n.hop === 0);
               const leftNodes = localGraph.nodes.filter(
@@ -114,7 +108,6 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
 
               return (
                 <>
-                  {/* Edges */}
                   {localGraph.edges.map((edge) => {
                     const p1 = positions.get(edge.source_id);
                     const p2 = positions.get(edge.target_id);
@@ -151,7 +144,6 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
                     );
                   })}
 
-                  {/* Nodes */}
                   {localGraph.nodes.map((node) => {
                     const pos = positions.get(node.id);
                     if (!pos) return null;
@@ -220,7 +212,6 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
             })()}
           </svg>
 
-          {/* Explicit Relation Evidence List */}
           <div className="mt-4 space-y-2">
             <div
               className={`text-xs font-semibold ${
@@ -238,7 +229,6 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
                       ? 'bg-white/60 border-[color:var(--glass-hairline)]'
                       : 'bg-white/60 border-[color:var(--glass-hairline)]'
                   }`}
-                  /* 端点 ID 放入卡片 title 供调试核对，不占正文版面 */
                   title={`${edge.source_id} → ${edge.target_id}`}
                 >
                   <div className="flex items-center justify-between">
@@ -249,8 +239,6 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
                     >
                       {edge.label} ({edge.isInferred ? '虚线推断/同组' : '实线显式证据'})
                     </span>
-                    {/* 等宽位显示「原文 L{n}」；locator 缺省时整行不渲染，
-                        避免与下方已渲染的 {edge.reason} 重复 */}
                     {edge.locator && (
                       <span
                         className="font-mono text-[length:var(--text-micro)] leading-[var(--lh-micro)] tabular-nums text-[color:var(--ink-soft)]"

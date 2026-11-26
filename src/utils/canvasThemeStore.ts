@@ -28,7 +28,6 @@ export function readCanvasTheme(): CanvasTheme {
       const parsed: unknown = JSON.parse(raw);
       if (isCanvasTheme(parsed)) return parsed;
     } catch {
-      /* 非 JSON：继续按裸字符串判 */
     }
     return isCanvasTheme(raw) ? raw : 'xray-dark';
   } catch {
@@ -42,17 +41,9 @@ export function saveCanvasTheme(theme: CanvasTheme): void {
   try {
     window.localStorage.setItem(CANVAS_THEME_STORAGE_KEY, JSON.stringify(theme));
   } catch {
-    /* 忽略 */
   }
 }
 
-/* ── 活值层 ───────────────────────────────────────────────────────────────────
- * 背景：切换此前是 App useState——一次翻转=整棵 App 树两次重渲（canvasTheme 提交 +
- * themeMorphing 类提交），数千 SVG 节点的 reconciliation 与两次全子树样式失效相乘，
- * 实测点击→过渡 2.1s、类移除 4.2s。现在主题值住在本模块（内存单例），
- * 舷窗 data-canvas-theme / theme-morphing 由宿主 App 命令式直写 DOM；
- * 只有分段钮与页签 theme 两个叶子经 useSyncExternalStore 订阅——翻转零重子树重渲。
- * node 裸环境（测试）无 window：readCanvasTheme 守卫回默认，订阅层照常可用。 */
 let currentTheme: CanvasTheme = readCanvasTheme();
 const themeListeners = new Set<() => void>();
 

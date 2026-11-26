@@ -8,43 +8,21 @@ import {
   type DecisionIdentityMemory,
 } from '../utils/decisionBlocks';
 
-/**
- * Inline 拍板卡点表单：正文原位渲染的可交互卡点块。
- *
- * 控件：
- *  - 决定：下拉单选（预设=文档「可选方案/推荐理由」提取 ∪ 服务端 statement.options，
- *    调用方合并）+「自定义…」文本输入；
- *  - 确认人 / 角色：自由文本 + 最近值点选（datalist；无成员数据源时由 localStorage 记忆）；
- *  - 生效范围与日期：影响范围标签 chips（全量专项 / 仅当前分支）+ 自定义文本、
- *    原生 date 选择器（YYYY-MM-DD）。
- *
- * 提交纪律：仅有服务端陈述（statement）时才可提交——回写 .md 是后端拍板 job
- * （CAS 占位符替换、状态变 [Px - 已确认]），前端绝不本地写文件；
- * 无陈述时表单保持可填写但提交禁用并如实提示（诚实降级，不伪造可用性）。
- */
 
-/** 影响范围标签预设 */
 const EFFECTIVE_SCOPE_PRESETS: readonly string[] = ['全量专项', '仅当前分支'];
-/** 自定义决定选项哨兵值 */
 const CUSTOM_OPTION = '__custom__';
 
 export interface DecisionResolveCardProps {
   block: DecisionBlock;
-  /** 服务端陈述（GET /statements 按行号匹配）；null=本地模式（提交禁用） */
   statement: StatementDetailDTO | null;
-  /** 决定下拉预设选项（调用方合并文档提取与 statement.options） */
   presetOptions: readonly string[];
   recommendation?: string | null;
   impactBlocked?: readonly string[] | null;
   impactAllowed?: readonly string[] | null;
   paperLightMode: boolean;
-  /** 父级回写流进行中（202 已受理，轮询未终态） */
   submitting: boolean;
-  /** 提交回调：参数为表单值（载荷组装走 buildDecisionResolvePayload 单一出口） */
   onSubmit: (values: DecisionResolveFormValues) => void;
-  /** 父级结果提示（error=端点/轮询失败；ok=回写成功；conflict=CAS 冲突存草案） */
   notice?: { kind: 'error' | 'ok' | 'conflict'; message: string } | null;
-  /** conflict 提示的「查看版本对比」动作（ReaderView 切 diff_versions 子模式） */
   onShowDiff?: () => void;
 }
 
@@ -77,10 +55,8 @@ const DecisionResolveCard: React.FC<DecisionResolveCardProps> = ({
   const customMode = choice === CUSTOM_OPTION;
   const decisionValue = customMode ? customDecision : choice;
 
-  // 提交门禁：决定必填；确认人必填（回写占位符需要）；有服务端陈述才可提交
   const canSubmit =
     !!statement && !submitting && decisionValue.trim().length > 0 && confirmer.trim().length > 0;
-  // 「已知悉」快捷放行——仍强制走后端 CAS 写回原 .md、扣减未决并解锁下游，绝不跳过写盘
   const canAcknowledge = !!statement && !submitting;
 
   const handleSubmit = () => {
@@ -93,7 +69,6 @@ const DecisionResolveCard: React.FC<DecisionResolveCardProps> = ({
       effectiveDate,
       note: '',
     };
-    // 记忆随提交更新（下次点选预填）；载荷组装由父级走 buildDecisionResolvePayload 单一出口
     setIdentity(rememberDecisionIdentity(identity, confirmer, role));
     onSubmit(values);
   };
@@ -129,7 +104,6 @@ const DecisionResolveCard: React.FC<DecisionResolveCardProps> = ({
       className={`my-3 rounded-lg border ${cardBorder} ${cardBg} p-3.5`}
       aria-label={`拍板卡点：${block.title || block.priority}`}
     >
-      {/* 标题行：优先级 + 状态 + 卡点标题 */}
       <div className="flex flex-wrap items-center gap-2 mb-2.5">
         <span
           className={`rounded-full px-2 py-0.5 text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-medium text-[color:var(--stage-ink-decision-text)] bg-[color:color-mix(in_srgb,var(--stage-ink-decision)_12%,transparent)] tabular-nums`}
@@ -146,7 +120,6 @@ const DecisionResolveCard: React.FC<DecisionResolveCardProps> = ({
         )}
       </div>
 
-      {/* 决定：预设下拉 + 自定义输入（自动提取选项 + 支持自定义） */}
       <div className="flex flex-wrap items-center gap-2 mb-2">
         <span className={labelClass}>决定</span>
         {!customMode ? (
@@ -206,7 +179,6 @@ const DecisionResolveCard: React.FC<DecisionResolveCardProps> = ({
         )}
       </div>
 
-      {/* 确认人 / 角色：自由文本 + 最近值点选（datalist 记忆；无成员数据源——偏差登记） */}
       <div className="flex flex-wrap items-center gap-2 mb-2">
         <span className={labelClass}>确认人</span>
         <input
@@ -240,7 +212,6 @@ const DecisionResolveCard: React.FC<DecisionResolveCardProps> = ({
         </datalist>
       </div>
 
-      {/* 生效范围与日期：影响范围标签 chips + 自定义 + 原生日期选择器 */}
       <div className="flex flex-wrap items-center gap-2 mb-2.5">
         <span className={labelClass}>生效范围</span>
         {EFFECTIVE_SCOPE_PRESETS.map((preset) => (
@@ -278,7 +249,6 @@ const DecisionResolveCard: React.FC<DecisionResolveCardProps> = ({
         />
       </div>
 
-      {/* 影响面摘要（statement.impact_blocked/impact_allowed 两字段不合并——建议 8） */}
       {(impactBlocked?.length ?? 0) + (impactAllowed?.length ?? 0) > 0 && (
         <div className="flex flex-wrap items-center gap-3 mb-2.5 text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)] tabular-nums">
           {!!impactBlocked?.length && <span>阻塞 {impactBlocked.length} 项事项</span>}
@@ -286,7 +256,6 @@ const DecisionResolveCard: React.FC<DecisionResolveCardProps> = ({
         </div>
       )}
 
-      {/* 提交行：三步原子操作提示 + 禁用原因（诚实降级） */}
       <div className="flex flex-wrap items-center gap-2.5">
         <button
           type="button"
@@ -338,7 +307,6 @@ const DecisionResolveCard: React.FC<DecisionResolveCardProps> = ({
         )}
       </div>
 
-      {/* 结果提示（父级回流）：ok / conflict（CAS 冲突存草案 + 查看对比）/ error */}
       {notice && (
         <div
           className={`mt-2.5 rounded border px-2.5 py-1.5 text-[length:var(--text-ui)] leading-[var(--lh-ui)] ${

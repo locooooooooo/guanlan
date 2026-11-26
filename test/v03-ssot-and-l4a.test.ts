@@ -39,7 +39,6 @@ test('DecisionRadar displays server SSOT unresolvedTotal over paginated decision
   assert.match(html, /待拍板/);
   assert.match(html, />288</);
 
-  // Fallback when unresolvedTotal is omitted (unit test / offline compatibility)
   const fallbackHtml = renderToStaticMarkup(
     React.createElement(DecisionRadar, {
       decisions: twoItems,

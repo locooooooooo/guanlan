@@ -1,9 +1,3 @@
-/**
- * 全局常驻目录侧栏外壳：
- * - 在「首页 / 全景溯源 / 知识资产库」全视图常驻可见（可一键折叠，桌面端可拖动右缘改宽 220–480px）；
- * - 点击任意文件直接打开深度阅读（切入 library/read）；点击任意目录直接进入目录工作区视图；
- * - 聚合真实目录树（含空文件夹）、置顶、内联新建/改名、文件夹与文件拖拽、批量整理栏与挂载目录树。
- */
 
 import React, { useRef, useState } from 'react';
 import { LeftSidebar } from '../LeftSidebar';
@@ -87,7 +81,6 @@ export function GlobalDirectorySidebar({ ctx }: { ctx: WorkspaceStoreCtx }) {
       filters={sidebarFilters}
       onUpdateFilters={(partial) => {
         setSidebarFilters((prev) => ({ ...prev, ...partial }));
-        // 在首页或全景溯源页点选具体目录、未读/收藏或智能视图时，无缝切入资产库概览呈现筛选结果
         if (
           (activeTab === 'home' || activeTab === 'panorama') &&
           ((partial.folder !== undefined && partial.folder !== 'all') ||
@@ -216,7 +209,6 @@ export function GlobalDirectorySidebar({ ctx }: { ctx: WorkspaceStoreCtx }) {
 
   return (
     <>
-      {/* 桌面常驻侧栏（全景/画布视图默认让位收起，可随时一键展开）+ 可拖拽调宽把手 */}
       {!desktopCollapsed && (
         <div className="hidden lg:flex h-full shrink-0 relative z-20">
           {sidebarElement}
@@ -247,7 +239,6 @@ export function GlobalDirectorySidebar({ ctx }: { ctx: WorkspaceStoreCtx }) {
         </div>
       )}
 
-      {/* 窄视口抽屉层（lg 以下或主动呼出时） */}
       {isMobileLeftOpen && (
         <div
           className="lg:hidden fixed inset-0 z-40 flex bg-black/20 backdrop-blur-[1px]"

@@ -1,14 +1,3 @@
-/**
- * 专项橱窗真实数据驱动微视觉指纹（零造数纯函数层）。
- *
- * 将任意 TaskPackage + FileRecord 索引映射为三类可验证的真实数据指纹：
- * 1. 近 14 天变更微折线（Sparkline）：按本地日历日（timeFormat.localDay）统计包内真实修订次数，
- *    无变动时诚实输出全 0 基线，绝不伪造波动曲线；
- * 2. 格式构成比例彩带（Format Ribbon）：按 formatMeta.formatUiMeta 13 族语义分类聚合，
- *    严格满足 ∑segment.count === pkg.docs.length；
- * 3. 清晰更新相对时间（Updated Relative Label）：取包内最新真实 observed_at，经
- *    formatRelativeObservedAt 格式化，彻底杜绝「60...」式截断。
- */
 
 import type { FileRecord } from '../types/guanlan';
 import type { TaskPackage } from './taskPackages';
@@ -62,7 +51,6 @@ const FORMAT_CLASS_SHORT_TAG: Record<FormatClass, string> = {
   binary: 'BIN',
 };
 
-/** 按本地 YYYY-MM-DD 往前推 offsetDays 天（纯日历算术，不引入 UTC 日界漂移）。 */
 function shiftLocalDay(anchorDay: string, offsetDays: number): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(anchorDay);
   if (!m) return anchorDay;
@@ -130,7 +118,6 @@ export function buildPackageVisualFingerprint(
   let latestIso = pkg.lastActivity || '';
   let observedAnyRevisionOrActivity = false;
 
-  // 1. 聚合包内真实修订时间至近 14 日桶（零伪造波动）
   for (const doc of pkg.docs) {
     const file = fileById.get(doc.fileId);
     if (!file) continue;
@@ -152,7 +139,6 @@ export function buildPackageVisualFingerprint(
     }
   }
 
-  // 若 fileById 尚未水合修订明细，但 pkg.lastActivity 落在 14 日内，诚实计入该日 1 次已知动态
   if (!observedAnyRevisionOrActivity && pkg.lastActivity) {
     const day = localDay(pkg.lastActivity);
     const bucketIdx = dayIndex.get(day);
@@ -166,7 +152,6 @@ export function buildPackageVisualFingerprint(
   const activeDays = counts.filter((c) => c > 0).length;
   const { polylinePoints, areaPoints } = buildSparklineGeometry(counts);
 
-  // 2. 格式构成比例彩带（严格消费 formatUiMeta SSOT，守恒 ∑count === pkg.docs.length）
   const formatBucket = new Map<
     FormatClass,
     { label: string; shortTag: string; count: number; color: string }
@@ -197,7 +182,6 @@ export function buildPackageVisualFingerprint(
     }))
     .sort((a, b) => b.count - a.count || a.formatClass.localeCompare(b.formatClass));
 
-  // 3. 清晰更新相对时间（无有效时间戳时诚实显示「待更新」，杜绝假时间）
   const updatedRelativeLabel = latestIso
     ? formatRelativeObservedAt(latestIso)
     : '待更新';

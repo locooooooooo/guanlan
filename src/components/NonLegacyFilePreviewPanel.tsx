@@ -429,8 +429,6 @@ export const NonLegacyFilePreviewPanel: React.FC<NonLegacyFilePreviewPanelProps>
     </div>
   );
 
-  // 极轻状态条：文本/图像模式沉底作为 28px 底部脚标（让正文顶格首屏直出，消除顶部第三层工具条），
-  // HTML/Office 模式保留为简洁单行条；重复的系统打开/定位操作收进「详情」或文件头 ··· 菜单。
   const renderCompactHeaderBar = (
     edge: 'bottom' | 'top' | 'none',
     opts?: { includeSystemActions?: boolean }
@@ -478,7 +476,6 @@ export const NonLegacyFilePreviewPanel: React.FC<NonLegacyFilePreviewPanelProps>
     </div>
   );
 
-  // ── 文本 / 源码模式：正文顶格首屏呈现（无顶部重复工具条），快捷复制/入篮轻浮右上角，技术元数据沉底 ──
   if (mode === 'text') {
     return (
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden px-4 py-2">
@@ -517,7 +514,6 @@ export const NonLegacyFilePreviewPanel: React.FC<NonLegacyFilePreviewPanelProps>
     );
   }
 
-  // ── 图片模式：图像顶格满高画布，技术元数据沉底 ──
   if (mode === 'image') {
     return (
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden px-4 py-2">
@@ -564,7 +560,6 @@ export const NonLegacyFilePreviewPanel: React.FC<NonLegacyFilePreviewPanelProps>
     );
   }
 
-  // ── HTML / Office 模式：主内容直出首屏，技术元数据条沉底（消除顶部双层工具条叠加） ──
   if (mode === 'html' || mode === 'office') {
     return (
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-2">
@@ -607,7 +602,6 @@ export const NonLegacyFilePreviewPanel: React.FC<NonLegacyFilePreviewPanelProps>
     );
   }
 
-  // ── L0 仅元数据模式（无内联正文可展示时，元数据即为主要内容，默认完整展开） ──
   return (
     <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
       <div className="max-w-4xl mx-auto w-full space-y-4">

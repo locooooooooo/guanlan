@@ -1,15 +1,3 @@
-/**
- * 线上证据链连线层（跨事项引用与多文档证据链可视化）。
- *
- * 悬停/选中某张事件卡时，同屏渲染该文件与其他**在画布上**的文件卡之间的引用/因果边
- * （relations 单一来源：type 因果类型 + reason 证据理由 + locator 行级锚点）；
- * 连线全部走正交避障路由引擎（绕开卡片本体、呼吸间距出口），线上语义微标签
- * 对文字包围盒做线体裁切（cutout 永不重叠），悬停放大、常态克制。
- *
- * 降噪策略：无悬停/选中时本层渲染 null（零 DOM 零像素），保持静置画面干净。
- * 实时跟随：端点/障碍全部派生自 nodePositions，拖拽/展开/收起经 rAF 合帧 setState
- * 后同帧重算（与既有连线同一派生链，无缓存态可脱钩）。
- */
 import React, { useMemo, useState } from 'react';
 import type { RelationEdge, RelationType } from '../../types/guanlan';
 import {
@@ -31,7 +19,6 @@ import {
 import { DATE_CARD_H, DATE_CARD_W, DEFAULT_NODE_POSITIONS, EVENT_CARD_H, EVENT_CARD_W } from './geometry';
 import type { GraphCanvasCtx } from './useGraphCanvasController';
 
-/** 因果类型界面词（逐项死映射；未知类型诚实回退原值） */
 const RELATION_TYPE_LABELS: Record<RelationType, string> = {
   explicit_reference: '引用',
   derived_from_context: '源自上下文',
@@ -84,8 +71,6 @@ export function facingBindings(
       };
 }
 
-/** 画布上「可见文件卡」矩形登记表：fileId → 宿主矩形（渲染口径与 Scene 层一致：
- *  折叠时事件卡只取前 2 张 + 分类可见性过滤；日期导航卡（fileId=''）不入表） */
 function renderedFileCardRects(ctx: GraphCanvasCtx): Map<string, HostRect> {
   const byId = new Map<string, HostRect>();
   const visibleCards =
@@ -120,7 +105,6 @@ export function assembleRelationEdgeModels(ctx: GraphCanvasCtx): RelationEdgeMod
   const focusNodeId = ctx.hoveredCanvasNodeId || ctx.selectedCanvasNodeId;
   if (!focusNodeId || focusNodeId === 'main_hub' || focusNodeId === 'chronos_deity') return [];
   const rects = renderedFileCardRects(ctx);
-  // 焦点节点：事件卡或来源卡的 file_id（画布节点 id → 文件身份）
   const focusFileId =
     ctx.subAgentCards.find((c) => c.id === focusNodeId)?.fileId ??
     ctx.leftSourceNodes.find((s) => s.id === focusNodeId)?.fileId ??
@@ -133,7 +117,7 @@ export function assembleRelationEdgeModels(ctx: GraphCanvasCtx): RelationEdgeMod
     if (!otherId) continue;
     const hostFrom = rects.get(edge.source_id);
     const hostTo = rects.get(edge.target_id);
-    if (!hostFrom || !hostTo) continue; // 端点不在画布 → 诚实不画（绝不指向空白）
+    if (!hostFrom || !hostTo) continue;
     const dedupeKey = `${edge.source_id}->${edge.target_id}`;
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
@@ -158,9 +142,6 @@ export function assembleRelationEdgeModels(ctx: GraphCanvasCtx): RelationEdgeMod
 export function GraphRelationEdges({ ctx }: { ctx: GraphCanvasCtx }) {
   const models = useMemo(
     () => assembleRelationEdgeModels(ctx),
-    // ctx 为整体对象（控制器每次渲染新引用）；其内部数据源已各自 memo 化，
-    // 本层随 Scene 整树同帧渲染，无需更细依赖拆分
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [ctx]
   );
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
@@ -185,8 +166,6 @@ export function GraphRelationEdges({ ctx }: { ctx: GraphCanvasCtx }) {
             <title>
               {`${model.label.text}${model.label.detail ? ` — ${model.label.detail}` : ''}`}
             </title>
-            {/* 线体（镂空后可见段）：文字区域处线被切开，cutout 永不重叠；
-                path 命中交互关闭（命中区只留给标签胶囊），推断边虚线语义保留 */}
             <path
               d={cutPath}
               fill="none"

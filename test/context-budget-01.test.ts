@@ -1,11 +1,3 @@
-/**
- * context-budget-01：Token 估算与预算条（前后端同源公式）。
- *
- * 向量单源 = native/testdata/token-vectors.json（git 内静态文件，与 Rust
- * include_str! 编译期读取同源；无 seed 依赖）。公式：
- *   est_tokens = ceil(cjk_chars*0.7 + non_cjk_bytes/3.5)
- * CJK 码位：U+3000–U+303F ∪ U+4E00–U+9FFF ∪ U+F900–U+FAFF ∪ U+FF01–U+FF5E。
- */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
@@ -39,17 +31,15 @@ describe('estimateTokensFromText 与冻结向量逐条一致（双端同源）',
   }
 
   test('码位边界：U+FF00/U+FF5F 不在区间（非 CJK 按字节）；U+FF01/U+FF5E 在区间', () => {
-    // 3 字节 / 3.5 = 0.857 → 1（非 CJK 上界公式）
     assert.equal(estimateTokensFromText('\uFF00'), 1);
     assert.equal(estimateTokensFromText('\uFF5F'), 1);
-    // 0.7 → ceil = 1（CJK）
     assert.equal(estimateTokensFromText('\uFF01'), 1);
     assert.equal(estimateTokensFromText('\uFF5E'), 1);
   });
 });
 
 describe('三档注入粒度因子与预算视图', () => {
-  const TEXT = 'Hello 世界'; // 6 non-cjk bytes + 2 cjk → ceil(6/3.5 + 1.4) = ceil(3.114) = 4
+  const TEXT = 'Hello 世界';
 
   test('全文 ×1 / 摘要 ×0.2（降低约 80%）/ 仅决策 ×0.05', () => {
     assert.equal(SUMMARY_GRANULARITY_FACTOR, 0.2);
@@ -75,14 +65,12 @@ describe('三档注入粒度因子与预算视图', () => {
       { fileId: 'mid', granularity: 'full' as const, sizeBytes: 7000 },
       { fileId: 'small', granularity: 'summary' as const, sizeBytes: 35000 },
     ];
-    // est: focus=2000, big=10000, mid=2000, small=2000*0.2=400 → 14400 ≤ 65536 → 不超
     const ok = computeTokenBudget(items);
     assert.equal(ok.overThreshold, false);
     assert.deepEqual(ok.downgradeSuggestions, []);
 
     const tight = computeTokenBudget(items, 10000);
     assert.equal(tight.overThreshold, true);
-    // 降级贪婪序：big(10000) 先降 → 10000→2000，projected=6400 ≤ 10000 收口
     assert.deepEqual(tight.downgradeSuggestions, ['big']);
     assert.equal(tight.threshold, 10000);
     assert.equal(tight.selected, 4);

@@ -1,24 +1,3 @@
-/**
- * 观澜端到端验证 —— 夹具工作区生成 + 期望结果导出 + 身份向量
- *
- * 用法（在仓库根目录执行，不新增依赖）：
- *   node node_modules/tsx/dist/cli.mjs scripts/seed-fixture.ts
- *
- * 做三件事（可重复执行：先整目录清空再重建）：
- *  1. 在 native/testdata/fixture/workspace 下落一套真实文件（md/svg/pdf、
- *     纯日期与带时刻事件、同一文件 A→B→A、仅 mtime 触碰、决策事件、事件量 ≥60 条），
- *     再用现有 Node 对账实现（server/reconcile.ts → FileScanner + WorkspaceStore）
- *     分四轮扫描生成持久库（native/testdata/fixture/data/<rootKey>/index.db，
- *     rootKey 子目录口径见契约 contract-storage.md §3.1）；
- *  2. 用现有 Node 查询实现（server/queries.ts、server/project.ts）导出期望结果 JSON 到
- *     native/testdata/expected/，字段名按 native/docs/contract-query-api.md 的
- *     v1 命名映射（映射表见 expected/_field-map.json）；
- *  3. 用 rootKeyOf 与真实对账管线生成身份向量 native/testdata/identity-vectors.json
- *     （rootKey 与 file_id 样本，覆盖 Windows 反斜杠、大小写混合、正斜杠输入，
- *     算法依据 native/docs/contract-storage.md §2）。
- *
- * 生成器自带不变量断言与公式自检：任一失败以非零码退出，避免把残缺夹具当期望基线。
- */
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -37,29 +16,21 @@ import { projectWorkspace, projectFileHistory, readRevisionContent } from '../se
 import { reconcileWorkspace, type ReconcileReport } from '../server/reconcile';
 import type { FileRecord } from '../src/types/guanlan';
 
-// ---------- 路径：全部相对 guanlan 包根解析，与进程 CWD 无关 ----------
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.resolve(SCRIPT_DIR, '..');
 const TESTDATA = path.join(PKG_ROOT, 'native', 'testdata');
 const FIXTURE_DIR = path.join(TESTDATA, 'fixture');
-const WS_ROOT = path.join(FIXTURE_DIR, 'workspace'); // 夹具工作区根（Rust serve --root 指这里）
-// 持久库目录：契约 contract-storage.md §3.1 与 WorkspaceStore.ts:267-274 同口径——
-// GUANLAN_DATA_DIR 只是 base，其下还须挂 rootKeyOf(root) 子目录。smoke 以
-// GUANLAN_DATA_DIR=<fixture>/data 启动 Rust 服务，服务端 default_data_dir 解析出
-// 本目录后只读打开 index.db；夹具生成必须落在同一物理位置
+const WS_ROOT = path.join(FIXTURE_DIR, 'workspace');
 const DATA_DIR = path.join(FIXTURE_DIR, 'data', rootKeyOf(WS_ROOT));
 const EXPECTED_DIR = path.join(TESTDATA, 'expected');
 const IDENTITY_PATH = path.join(TESTDATA, 'identity-vectors.json');
 
-// 身份向量旁支：独立小工作区，专门产出「大小写混合 / 空格 / 中文」路径的真实 file_id
 const IDENTITY_DIR = path.join(FIXTURE_DIR, 'identity');
 const ID_ROOT = path.join(IDENTITY_DIR, 'workspace');
 const ID_DATA = path.join(IDENTITY_DIR, 'data');
 
-// ---------- 小工具 ----------
 
-/** 固定时刻（UTC ISO）：毫秒用于 utimesSync，字符串用于夹具自述日期 */
 const ts = (iso: string): number => new Date(iso).getTime();
 
 const checkFailures: string[] = [];
@@ -77,15 +48,12 @@ function putFile(rel: string, content: Buffer | string, mtimeIso: string): void 
   const target = path.join(WS_ROOT, rel);
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, content);
-  // utimesSync 接受 Date 对象（数字形态的实参按秒解释，毫秒会 EINVAL）
   const at = new Date(ts(mtimeIso));
   fs.utimesSync(target, at, at);
 }
 
-// ---------- 夹具内容模板（确定性：同一份脚本重放得到同一批字节） ----------
 
 const FILLER_COUNT = 50;
-/** 批量样本的自述日期：2026-09-20 起循环 30 天（2026-09-20 … 2026-10-19） */
 function fillerDate(i: number): string {
   return new Date(Date.UTC(2026, 8, 20 + (i % 30))).toISOString().slice(0, 10);
 }
@@ -100,7 +68,6 @@ function fillerMd(i: number): string {
     `本样本用于端到端验证的事件量与按日聚合检查，内容编号 ${n}，无其他业务语义。`,
     '',
   ];
-  // 前 5 份带格式 B 决策节（### Q1Nx：标题，derive.ts 格式 B），其余为普通样本
   if (i < 5) {
     head.push(
       `### Q10${i + 1}：批量决定 ${n}`,
@@ -133,7 +100,6 @@ const SVG_V2 = [
   '',
 ].join('\n');
 
-/** 极简合法 PDF：对象偏移按实际字节计算，xref 自洽 */
 function buildPdf(): Buffer {
   const streamBody = 'BT /F1 12 Tf 72 720 Td (Guanlan fixture PDF) Tj ET';
   const objects = [
@@ -156,8 +122,6 @@ function buildPdf(): Buffer {
   return Buffer.from(out, 'latin1');
 }
 
-// Q01 决策文件：格式 A（## N 标题 + 沿用编号 + 状态，derive.ts 格式 A）
-// v1 两节均「待确认」，v2 第一节改「已确认」→ 产生 decision_changed
 const Q01_V1 = [
   '# Q01 登录决策记录',
   '',
@@ -197,7 +161,6 @@ const Q05_MD = [
   '',
 ].join('\n');
 
-/** A→B→A 目标文件：A 版字节保留在内存，轮 3 原样写回（同哈希共享快照） */
 const ROLLBACK_A = [
   '# 回滚目标方案',
   '',
@@ -259,16 +222,13 @@ const GUIDE_MD = [
   '',
 ].join('\n');
 
-// ---------- 第一部分：清空并落夹具文件 ----------
 
 function writeFixtureFiles(): void {
-  // 可重复生成：夹具目录、期望目录、身份向量一并清空
   fs.rmSync(FIXTURE_DIR, { recursive: true, force: true });
   fs.rmSync(EXPECTED_DIR, { recursive: true, force: true });
   fs.rmSync(IDENTITY_PATH, { force: true });
   fs.mkdirSync(WS_ROOT, { recursive: true });
 
-  // 带自述日期的 md（v1 occurred = 文档日期，纯日期口径）
   putFile('docs/Q01-登录决策记录.md', Q01_V1, '2026-10-05T08:00:00.000Z');
   putFile('docs/Q05-导出格式决策.md', Q05_MD, '2026-10-07T08:30:00.000Z');
   putFile('docs/方案/回滚目标-方案.md', ROLLBACK_A, '2026-10-06T08:00:00.000Z');
@@ -281,18 +241,15 @@ function writeFixtureFiles(): void {
       '2026-09-18T06:30:00.000Z'
     );
   }
-  // svg：一份含 <text>（svg_text 覆盖），一份不含（filename_only）
   putFile('assets/架构示意图.svg', SVG_V1, '2026-10-01T02:00:00.000Z');
   putFile(
     'assets/logo.svg',
     '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><circle cx="32" cy="32" r="28" fill="#447"/></svg>',
     '2026-09-01T02:00:00.000Z'
   );
-  // pdf：恒 filename_only + unindexed
   putFile('manuals/参考手册.pdf', buildPdf(), '2026-08-15T03:00:00.000Z');
 }
 
-// ---------- 第二部分：四轮真实对账 ----------
 
 interface RoundReport {
   label: string;
@@ -308,24 +265,17 @@ function runReconciliation(): { store: WorkspaceStore; wsId: string; rounds: Rou
     rounds.push({ label, now, report });
   };
 
-  // 轮 1：基线。有自述日期的材料各自入轴（appeared × 55），其余归基线卡；
-  // 同时产出决策事件（Q01/Q02/Q101–Q105 raised，Q05 首次即已确认）。
   run('baseline', '2026-11-10T09:00:00.000Z');
 
-  // 轮 2：四处内容变更 → modified（v2，occurred = mtime，带时刻口径），
-  // Q01 决策节转「已确认」→ decision_changed。
   putFile('docs/Q01-登录决策记录.md', Q01_V2, '2026-10-12T09:30:00.000Z');
   putFile('docs/方案/回滚目标-方案.md', ROLLBACK_B, '2026-10-13T10:00:00.000Z');
   putFile('docs/方案/架构方案.md', ARCH_V2, '2026-10-14T11:00:00.000Z');
   putFile('assets/架构示意图.svg', SVG_V2, '2026-10-15T12:00:00.000Z');
   run('modify', '2026-11-11T10:00:00.000Z');
 
-  // 轮 3：回滚目标写回 A 版原字节 → 第三个版本，与 v1 共享同一快照（A→B→A）。
   putFile('docs/方案/回滚目标-方案.md', ROLLBACK_A, '2026-10-20T09:00:00.000Z');
   run('rollback', '2026-11-12T11:00:00.000Z');
 
-  // 轮 4：使用说明仅触碰 mtime（内容未变 → 不落版本、不产生事件）；
-  // 删除 logo.svg → missing（occurred_at 为空 → undated 事件）。
   const guide = path.join(WS_ROOT, 'docs', '说明', '使用说明.md');
   const at = new Date(ts('2026-10-22T08:00:00.000Z'));
   fs.utimesSync(guide, at, at);
@@ -336,14 +286,9 @@ function runReconciliation(): { store: WorkspaceStore; wsId: string; rounds: Rou
   return { store, wsId: ws.workspace_id, rounds };
 }
 
-// ---------- 第三部分：v1 命名映射（contract-query-api.md §1.3 FileSummary） ----------
 
-/**
- * FileRecord（camelCase 遗留 wire，project.ts:189-206）→ v1 FileSummary（snake_case 新 DTO）。
- * 映射表同时落盘到 expected/_field-map.json，供 Rust DTO 与本脚本对照。
- */
 function toFileSummary(rec: FileRecord, row: FileRow): Record<string, unknown> {
-  const revs = rec.revisions; // project.ts:77 保证按 seq ASC
+  const revs = rec.revisions;
   const current = revs.find((r) => r.revision_id === rec.current_revision_id) ?? revs[revs.length - 1];
   return {
     file_id: rec.file_id,
@@ -357,11 +302,8 @@ function toFileSummary(rec: FileRecord, row: FileRow): Record<string, unknown> {
     revision_count: revs.length,
     first_observed_at: row.first_observed_at,
     last_observed_at: row.last_observed_at,
-    // 契约新增字段：最早版本的 occurred_at（§1.3 first_source_time / §5.1）
     first_source_time: revs[0]?.source_time ?? null,
     coverage: rec.coverage,
-    // 非 PDF 不带 pdf_status 键：FileRecord.pdfStatus 为 undefined 口径（project.ts:201-205，
-    // Rust dto.rs 同注 skip_serializing_if）；冻结成 null 会被键集合并集深比判成差异
     ...(rec.pdfStatus !== undefined ? { pdf_status: rec.pdfStatus } : {}),
     snapshot_available: current?.snapshotAvailable ?? false,
   };
@@ -386,7 +328,6 @@ function buildFacets(summaries: Array<Record<string, unknown>>): {
   return { folders, formats, matters };
 }
 
-/** files 全量摘要：relative_path ASC、file_id 兜底（契约 §1.3 排序固化） */
 function buildFileSummaries(files: FileRecord[], rows: FileRow[]): Array<Record<string, unknown>> {
   const rowById = new Map(rows.map((r) => [r.file_id, r]));
   return files
@@ -399,14 +340,6 @@ function buildFileSummaries(files: FileRecord[], rows: FileRow[]): Array<Record<
     });
 }
 
-/**
- * 事件日桶的决定边界字段：
- * Node 的 `queryEventDays` 不产出 `decision_total` / `decisions_truncated`（这两个字段是
- * v1 契约 §1.5 新增）。期望基线按同一语义补齐：
- * - `decision_total` = 桶内去重 decision_id 数（Node 侧已是「一决定一行」的聚合结果）；
- * - 桶内决定样本上限 20，超出截断并置 `decisions_truncated=true`。
- * 保持「期望值来自 Node 口径 + 契约新增字段」的一致基线，不改动 Node 的查询行为。
- */
 const BUCKET_DECISION_CAP = 20;
 function withBucketDecisionBoundary<T extends { groups: readonly unknown[] }>(result: T): T {
   return {
@@ -428,9 +361,7 @@ function withBucketDecisionBoundary<T extends { groups: readonly unknown[] }>(re
   };
 }
 
-// ---------- 第四部分：期望结果导出 ----------
 
-/** events 全量遍历：limit 200 逐页走到末页（期望只存条目集合与首页统计） */
 function walkAllEvents(
   store: WorkspaceStore,
   wsId: string,
@@ -462,8 +393,6 @@ function exportExpected(
   const facets = buildFacets(summaries);
   const indexGeneration = ws.index_generation;
 
-  // ---- status（§1.2 可比字段；instance_id/api_version/schema_version 属 Rust 实例字段，
-  //      Node 端产不出，smoke 只验其存在与 api_version==='v1'，不做期望比对） ----
   writeJson('status.json', {
     ok: true,
     workspace_id: ws.workspace_id,
@@ -478,12 +407,7 @@ function exportExpected(
       active_files: activeRows.length,
       missing_files: rows.length - activeRows.length,
     },
-    // 默认恒空（contract-query-api.md §1.2）：Rust StatusResponse 恒带 active_jobs: []，
-    // 期望基线须含同键，smoke 的键集合并集深比才不会多出 $.active_jobs 差异
     active_jobs: [],
-    // 增量状态字段（contract-query-api.md §1.2）：L4A 非阻塞进度横幅与
-    // watcher 状态。Node 管线没有 watcher/后台队列，等价口径即「未启用、队列为空」；
-    // 键必须常驻（不按运行模式增删），否则客户端会看到随配置变化的响应形状。
     watcher: {
       enabled: false,
       last_poll_at: null,
@@ -493,7 +417,6 @@ function exportExpected(
     l4a_progress: { done: 0, total: 0, percent: 100, queue_depth: 0 },
   });
 
-  // ---- files 全量摘要（§1.3 FileSummaryPage；本夹具一页放下） ----
   const filesPage = {
     ok: true,
     index_generation: indexGeneration,
@@ -506,7 +429,6 @@ function exportExpected(
   };
   writeJson('files.json', filesPage);
 
-  // ---- events 罐装查询组（§1.4）：smoke 逐组以小页距全页遍历后整体比对 ----
   const eventsQueries: Array<{ name: string; query: Omit<EventQuery, 'workspaceId'> }> = [
     { name: 'events-all-occurred', query: {} },
     { name: 'events-all-observed', query: { order: 'observed' } },
@@ -523,7 +445,7 @@ function exportExpected(
     writeJson(`${name}.json`, {
       name,
       query,
-      traversal_limit: 7, // smoke 翻页页距：逼出多页与游标路径
+      traversal_limit: 7,
       index_generation: full.index_generation,
       snapshot_max_seq: full.snapshot_max_seq,
       total_in_window: full.total_in_window,
@@ -532,16 +454,11 @@ function exportExpected(
       items: full.items,
     });
   }
-  // 首页包络（默认 limit 50）：smoke 对整包逐字段深比（next_cursor 只验型不验值）
   writeJson('events-first-page.json', {
     query: { limit: 50 },
     envelope: queryEvents(store, { workspaceId: wsId, limit: 50 }),
   });
 
-  // ---- events/days（§1.5）：无游标，直接导出整结果 ----
-  // run 用 Node 内部属性名（EventDaysQuery.camelCase），query 冻结 v1 线上参数名
-  // （契约 §1.5：limit_days；旧插件路由读 limitDays，Rust 路由只认 limit_days），
-  // smoke 按冻结值原样重放，两套命名在此解耦
   const daysQueries: Array<{
     name: string;
     run: Omit<EventDaysQuery, 'workspaceId'>;
@@ -552,7 +469,7 @@ function exportExpected(
     { name: 'days-month', run: { granularity: 'month' }, query: { granularity: 'month' } },
     { name: 'days-observed', run: { order: 'observed' }, query: { order: 'observed' } },
     { name: 'days-md', run: { format: 'md' }, query: { format: 'md' } },
-    { name: 'days-limit8', run: { limitDays: 8 }, query: { limit_days: 8 } }, // 折叠更早桶：hidden_days > 0
+    { name: 'days-limit8', run: { limitDays: 8 }, query: { limit_days: 8 } },
   ];
   for (const { name, run, query } of daysQueries) {
     writeJson(`${name}.json`, {
@@ -562,14 +479,12 @@ function exportExpected(
     });
   }
 
-  // ---- events/range（§1.6）：camelCase 保留（§0.1），v1 外层补 index_generation ----
   writeJson('range.json', {
     ok: true,
     ...eventTimeRange(store, wsId),
     index_generation: indexGeneration,
   });
 
-  // ---- 版本链（§1.7）：projectFileHistory 逐字导出（A→B→A 断言在 smoke 做） ----
   const histories: Record<string, unknown> = {};
   for (const row of rows) {
     const h = projectFileHistory(store, row.file_id);
@@ -577,15 +492,12 @@ function exportExpected(
   }
   writeJson('revisions.json', { index_generation: indexGeneration, histories });
 
-  // ---- decisions（§1.9）：DecisionAssertion 遗留 wire 1:1（§0.1） ----
   writeJson('decisions.json', { index_generation: indexGeneration, items: projection.decisions });
 
-  // ---- bootstrap（§1.1）：合并装配；事件/文件为首页，decisions 全量（量小） ----
   const bootstrapEvents = queryEvents(store, { workspaceId: wsId, limit: 50 });
   const bootstrapDays = withBucketDecisionBoundary(
     queryEventDays(store, { workspaceId: wsId, limitDays: 120, samplesPerDay: 6 }),
   );
-  // 处于 missing / trashed 可恢复态的 file_id，供前端剪枝阅读进度时保留
   const recoverableFileIds = rows
     .filter((r) => r.status === 'missing' || String(r.status) === 'trashed')
     .map((r) => r.file_id)
@@ -610,11 +522,10 @@ function exportExpected(
     decisions: projection.decisions,
     relations_total: projection.relations.length,
     config: projection.config,
-    index_jobs: [], // 静态夹具基线恒为空数组
+    index_jobs: [],
     ...(recoverableFileIds.length > 0 ? { recoverable_file_ids: recoverableFileIds } : {}),
   });
 
-  // ---- revision content 样本（§1.8）：md/svg/pdf 各一，字节以 blobs 快照文件为准绳 ----
   const rowByPath = (p: string): FileRow => {
     const r = rows.find((x) => x.current_path === p);
     if (!r) throw new Error(`夹具缺文件行：${p}`);
@@ -631,7 +542,6 @@ function exportExpected(
       format: read.format ?? null,
       content_hash: rev.content_hash,
       size_bytes: bytes.length,
-      // pdf 不返回 text（readRevisionContent 只给 snapshotPath），smoke 改比 raw=1 字节
       text: read.text ?? null,
     };
   };
@@ -641,7 +551,6 @@ function exportExpected(
     pdf: sampleOf(rowByPath('manuals/参考手册.pdf'), 1),
   });
 
-  // ---- 错误包络样本（§0.2）与 smoke 需要的定位信息 ----
   const rollbackRow = rowByPath('docs/方案/回滚目标-方案.md');
   const rollbackRevs = store.revisionsOfFile(rollbackRow.file_id);
   const svgRow = rowByPath('assets/架构示意图.svg');
@@ -685,18 +594,13 @@ function exportExpected(
 
   writeJson('errors.json', {
     not_found: {
-      // 不存在的主体：期望 404 + { ok:false, code:'NOT_FOUND' }（§0.2 码表）
       file_id_sample: `f_${'0'.repeat(24)}`,
       revision_id_sample: `f_${'0'.repeat(24)}_r1`,
       expected: { status: 404, code: 'NOT_FOUND' },
     },
     cursor_stale: {
-      // 不可解码游标：v1 显式 409 CURSOR_STALE（§0.2/§1.4；旧 Node 实现静默按首页处理，
-      // queries.ts:186-187，差异记入 legacy_node_behavior 供对照）
       corrupt_cursor: 'not-a-valid-cursor',
-      // 可解码但字段缺失：同样按游标损坏处理
       empty_object_cursor: Buffer.from('{}', 'utf-8').toString('base64url'),
-      // 指纹不符：smoke 取任一真实首页游标后改动任一筛选参数重放
       fingerprint_mismatch: '构造于运行时（真实游标 + 换 kinds）',
       expected: { status: 409, code: 'CURSOR_STALE' },
       legacy_node_behavior: {
@@ -706,7 +610,6 @@ function exportExpected(
     },
   });
 
-  // ---- v1 字段名映射表（供 Rust DTO 与前端改造对照） ----
   writeJson('_field-map.json', {
     basis: 'native/docs/contract-query-api.md（v1 查询契约）',
     exports: {
@@ -750,12 +653,10 @@ function exportExpected(
   });
 }
 
-// ---------- 第五部分：身份向量（native/docs/contract-storage.md §2） ----------
 
 function exportIdentityVectors(fixtureStore: WorkspaceStore, fixtureWsId: string): void {
   const fixtureWs = fixtureStore.getWorkspace(fixtureWsId)!;
 
-  // 旁支小工作区：用真实对账管线产出「大小写混合 / 空格 / 中文」路径的 file_id
   fs.rmSync(IDENTITY_DIR, { recursive: true, force: true });
   fs.mkdirSync(path.join(ID_ROOT, 'Notes'), { recursive: true });
   fs.mkdirSync(path.join(ID_ROOT, '资料 库'), { recursive: true });
@@ -768,14 +669,12 @@ function exportIdentityVectors(fixtureStore: WorkspaceStore, fixtureWsId: string
   const idRootKey = rootKeyOf(ID_ROOT);
   const idRows = idStore.listFiles(idStore.ensureWorkspace(ID_ROOT).workspace_id, true);
 
-  // file_id 归一化公式（contract-storage.md §2.3）：f_ + sha256(rootKey|斜杠规范化小写路径) 前 24 hex
   const fileIdByFormula = (rootKey: string, relPath: string): string =>
     `f_${createHash('sha256')
       .update(`${rootKey}|${relPath.replace(/\\/g, '/').toLowerCase()}`)
       .digest('hex')
       .slice(0, 24)}`;
 
-  // 自检：管线产出的 file_id 必须与公式一致（防夹具身份漂移）
   for (const row of idRows) {
     const computed = fileIdByFormula(idRootKey, row.current_path);
     check(
@@ -784,7 +683,6 @@ function exportIdentityVectors(fixtureStore: WorkspaceStore, fixtureWsId: string
     );
   }
 
-  // rootKey 样本：path.resolve 各形态（§2.1-2 逐条）。注意 win32 上 path.join 产物是反斜杠形态。
   const wsFwd = WS_ROOT.replace(/\\/g, '/');
   const resolveVariants = [
     { input: WS_ROOT, note: '原生反斜杠绝对路径（path.join 产物）' },
@@ -810,7 +708,6 @@ function exportIdentityVectors(fixtureStore: WorkspaceStore, fixtureWsId: string
     const key = rootKeyOf(v.input);
     return { input: v.input, resolved, root_key: key, workspace_id: `ws_${key}`, note: v.note };
   });
-  // 自检：正斜杠与反斜杠形态的 resolve 结果一致（同一工作区身份），盘符大小写形态必须不同
   const byNote = (frag: string): { resolved: string; root_key: string } => {
     const hit = rootKeyCases.find((c) => c.note.includes(frag));
     if (!hit) throw new Error(`rootKey 样本缺形态：${frag}`);
@@ -828,11 +725,9 @@ function exportIdentityVectors(fixtureStore: WorkspaceStore, fixtureWsId: string
     '盘符大小写形态应产出不同 rootKey（contract-storage.md §2.1-2）'
   );
 
-  // 便携校验：契约文档中的实测样例（contract-storage.md:236）——与文档不符即失败
   const portableRootKey = rootKeyOf('D:\\notebooks\\demo');
   check(portableRootKey === '6d74a29df40616ec', `rootKey 便携样例与契约文档不符：实得 ${portableRootKey}`);
 
-  // file_id 样本：管线 DB 值为准绳；反斜杠 / 大小写输入变体按归一化公式应得同一 ID
   const fileIdCases: Array<Record<string, unknown>> = [];
   for (const row of idRows) {
     const canonical = row.current_path;
@@ -852,7 +747,6 @@ function exportIdentityVectors(fixtureStore: WorkspaceStore, fixtureWsId: string
     }
   }
 
-  // 夹具文件的 file_id 清单：Rust 存储层批次校验的逐行准绳
   const fixtureFileIds = fixtureStore.listFiles(fixtureWsId, true).map((r) => ({
     relative_path: r.current_path,
     file_id: r.file_id,
@@ -888,7 +782,6 @@ function exportIdentityVectors(fixtureStore: WorkspaceStore, fixtureWsId: string
   idStore.close();
 }
 
-// ---------- 第六部分：夹具不变量断言 ----------
 
 function assertInvariants(store: WorkspaceStore, wsId: string, rounds: RoundReport[]): {
   rollbackRevs: Array<{ seq: number; revision_id: string; content_hash: string }>;
@@ -907,7 +800,6 @@ function assertInvariants(store: WorkspaceStore, wsId: string, rounds: RoundRepo
   check(kindCount('workspace_baseline') === 1, `基线卡应恰 1 条：实得 ${kindCount('workspace_baseline')}`);
   check(kindCount('missing') === 1, `missing 事件应恰 1 条（logo.svg 删除）：实得 ${kindCount('missing')}`);
 
-  // A→B→A：三个版本、两份内容（reconcile.ts 头注释的第一轮通过条件）
   let rollbackRevs: Array<{ seq: number; revision_id: string; content_hash: string }> = [];
   const rollback = store
     .db.prepare('SELECT file_id FROM files WHERE workspace_id = ? AND current_path = ?')
@@ -934,7 +826,6 @@ function assertInvariants(store: WorkspaceStore, wsId: string, rounds: RoundRepo
     }
   }
 
-  // 仅 mtime 触碰：使用说明仍只有 1 个版本（内容未变不落版本，reconcile.ts:273-285）
   const guide = store
     .db.prepare('SELECT file_id, last_mtime_ms FROM files WHERE workspace_id = ? AND current_path = ?')
     .get(wsId, 'docs/说明/使用说明.md') as unknown as { file_id: string; last_mtime_ms: number } | undefined;
@@ -950,7 +841,6 @@ function assertInvariants(store: WorkspaceStore, wsId: string, rounds: RoundRepo
   const touchRound = rounds[rounds.length - 1];
   check(touchRound.report.mtimeOnly >= 1, '轮 4 报告未记录 mtimeOnly 触碰');
 
-  // undated 事件来自 missing（occurred_at 为空）→ 供 undated=1 筛选与「日期待考」桶
   const undated = store.db
     .prepare('SELECT COUNT(*) AS n FROM events WHERE workspace_id = ? AND occurred_at IS NULL')
     .get(wsId) as unknown as { n: number };
@@ -959,7 +849,6 @@ function assertInvariants(store: WorkspaceStore, wsId: string, rounds: RoundRepo
   return { rollbackRevs };
 }
 
-// ---------- 主流程 ----------
 
 function main(): void {
   console.log('[1/5] 清空并写入夹具文件 →', WS_ROOT);

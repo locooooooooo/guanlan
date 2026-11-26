@@ -78,8 +78,7 @@ pub fn project_live_metrics(
     })
 }
 
-/// 枚举单个项目的完整目录树（含真实空目录 + 受管活跃文件）
-#[allow(clippy::too_many_arguments)] // 只读投影参数均为独立标量，拆结构体反而增加调用噪音
+#[allow(clippy::too_many_arguments)]
 pub fn project_tree(
     store: &ReadonlyStore,
     project_id: &str,
@@ -89,7 +88,6 @@ pub fn project_tree(
     is_active: bool,
     status: &str,
     limit: usize,
-    // 目录清单（含空目录）由调用方从缓存供给，查询体不做目录遍历
     folder_listing: &crate::index::collector::FolderListing,
 ) -> Result<ProjectTreeResponse, GuanlanError> {
     let ws = store.workspace()?;
@@ -281,7 +279,6 @@ pub fn project_search(
     let mut hits: Vec<CrossProjectSearchHit> = Vec::new();
     let mut seen_files: HashSet<String> = HashSet::new();
 
-    // 1) 混合倒排索引全文检索（索引未就绪时返回空 items，不阻断兜底）
     let sq = SearchQuery {
         q: trimmed.to_owned(),
         format: None,
@@ -309,7 +306,6 @@ pub fn project_search(
         }
     }
 
-    // 2) 标题/路径即时兜底（确保新加入项目或倒排构建前也能立刻命中文件名与路径）
     if hits.len() < clamped {
         let ws = store.workspace()?;
         let needle_lower = trimmed.to_lowercase();

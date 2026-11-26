@@ -1,24 +1,10 @@
 import React from 'react';
 import { ArrowUpRight, Compass, Layers, Scale } from 'lucide-react';
 import type { DecisionStatus, FileFormat } from '../types/guanlan';
-// 五阶段槽位与阶段语义色全部复用 taskPackages 既有单一出口（组件自身零造数）
 import { STAGE_ACCENT, STAGE_SLOT_ORDER } from '../utils/taskPackages';
 import type { StageRole } from '../utils/taskPackages';
 import { cleanDisplayText } from '../utils/displayText';
 
-// ============================================================
-// 首页专题橱窗 · 横排 2 张微渐变专题卡
-//   卡 A：淡琥珀（--feature-grad-amber）「待你拍板的决策」——N 由 HomeView 按
-//         与 DecisionRadar 同口径计算后传入，组件只渲染；
-//   卡 B：淡蓝紫（--feature-grad-blue）「今日最活跃专项」——activePackage 由
-//         HomeView 近 7 天窗口 eventCount 最高者物化成 FeaturedPackageInfo；
-//   斜叠微型卡数据（卡 B 图纸 dataUri / badgeLine）来自 HomeView
-//   （dataUri=该专项最新 SVG 封面、badgeLine=packageBadgeLine 真实派生徽标），组件只渲染；
-//   斜叠排版封面：无 SVG 时走「阶段状态微缩卡」——徽标 + 五段迷你进度排版件，
-//   不放正文文字（避免斜叠纸片与正文区文字重复）。
-//   渐变头图由组件叠 background-image：var(--feature-grad-*)，
-//   卡基座走 depth-2-card + depth-2-card-featured 三层景深工具类。
-// ============================================================
 
 export interface FeaturedDecisionItem {
   decisionId: string;
@@ -32,39 +18,29 @@ export interface FeaturedPackageInfo {
   stage: StageRole;
   docCount: number;
   awaitingAcceptance: number;
-  /** 版本·阶段徽标行（可选字段）：HomeView 调
-      taskPackages.packageBadgeLine(activePackage) 真实派生（如「v8 · 待用户验收」）；
-      空串 = 版本与阶段短语双无，斜叠排版封面只渲染进度轨降级，不造占位 */
   badgeLine?: string;
   cover?: {
     fileId: string;
     title: string;
     format: FileFormat;
     dataUri?: string;
-    /** 兼容保留字段：斜叠封面不渲染正文文字，当前无渲染消费，仍由 HomeView 真实填充 */
     conclusion: string;
   };
 }
 
 export interface FeaturedFocusCardsProps {
-  /** 待拍板决策（HomeView 按雷达同口径过滤取前 2；组件自身零造数） */
   decisionItems: FeaturedDecisionItem[];
   decisionCount: number;
-  /** 今日最活跃专项（HomeView 近 7 天窗口计算；无活跃专项为 null → 渲染诚实空态） */
   activePackage: FeaturedPackageInfo | null;
   onOpenDecision: (decisionId: string) => void;
   onOpenPackageBoard: () => void;
 }
 
-/** 阶段徽标胶囊样式（与 TaskPackageGallery 封面区同名同款，互为镜像——
-    FiveStageRail 双文件既有先例；全 var(--token)，无 hex/rgba） */
 const STAGE_BADGE_PILL_CLASS =
   'w-fit max-w-full truncate rounded-full bg-[color:var(--depth-2-bg)] px-2 py-0.5 ' +
   'text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-medium text-[color:var(--ink-strong)] ' +
   'shadow-[var(--depth-2-shadow)]';
 
-/** 五阶段迷你进度轨（aria-hidden 纯装饰）：到达段按槽位阶段色填充，未达段走 --glass-hairline 微淡底轨
-    （同 8% 墨相，与全站描边/底轨同一色系）。 */
 const FiveStageRail: React.FC<{ stage: StageRole; className?: string }> = ({ stage, className }) => {
   const reachedRank = STAGE_SLOT_ORDER.indexOf(stage);
   return (
@@ -82,8 +58,6 @@ const FiveStageRail: React.FC<{ stage: StageRole; className?: string }> = ({ sta
   );
 };
 
-/** 斜叠微型决策卡：上下分离对角微错位（layer=0 上左主卡 h=70、layer=1 下右副卡 h=44），
- *  两卡垂直零重叠（4px 呼吸间距），避免后卡文字被前卡裁切漏出孤字；保留 glx-fan-front / glx-fan-back 与扫光。 */
 const MiniDecisionCard: React.FC<{
   item: FeaturedDecisionItem;
   layer: 0 | 1;
@@ -106,8 +80,6 @@ const MiniDecisionCard: React.FC<{
         onClick={() => onOpenDecision(item.decisionId)}
         title={`${item.status} · ${cleanQuestion}`}
         aria-label={`查看决策：${cleanQuestion}`}
-        // 斜叠微卡接入 .glx-sheen-card 扫光（reduce 下整层隐藏），
-        // 悬停时箭头同步点亮形成可点击反馈
         className={`group/mini glx-sheen-card flex w-[184px] cursor-pointer flex-col justify-between overflow-hidden rounded-[12px] border border-border/80 bg-card/95 text-left shadow-[0_6px_18px_-6px_rgba(38,36,61,0.14)] dark:shadow-[0_8px_20px_-6px_rgba(0,0,0,0.48)] hover:border-[color:color-mix(in_srgb,var(--accent-wave)_45%,transparent)] hover:shadow-[0_12px_24px_-6px_rgba(168,74,26,0.22)] motion-safe:transition-shadow ${
           layer === 0 ? 'h-[70px] px-2.5 py-2' : 'h-[44px] px-2.5 py-1.5'
         }`}
@@ -129,7 +101,6 @@ const MiniDecisionCard: React.FC<{
                 />
                 {item.status}
               </span>
-              {/* --ink-faint 仅作图标底态，hover 点亮 --accent-iris-deep */}
               <ArrowUpRight
                 className="size-3 shrink-0 text-[color:var(--ink-faint)] motion-safe:transition-colors group-hover/mini:text-[color:var(--accent-iris-deep)]"
                 aria-hidden="true"
@@ -170,7 +141,6 @@ const FeaturedFocusCards: React.FC<FeaturedFocusCardsProps> = ({
   const coverImage = activePackage?.cover?.dataUri ?? null;
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      {/* 卡 A：待拍板决策（简洁实体专题卡）。数字锚点 data-feature-count="decision" */}
       <section
         data-feature-card="decision"
         className="group glx-sheen-card glx-fan-stage depth-2-card depth-2-card-featured relative p-5 sm:p-6 bg-card"
@@ -203,7 +173,6 @@ const FeaturedFocusCards: React.FC<FeaturedFocusCardsProps> = ({
             </div>
           </div>
 
-          {/* 斜叠微型决策卡舞台：上下分离错位（零重叠、零孤字截断） */}
           <div className="relative h-[120px] w-[204px] shrink-0 hidden sm:block">
             {decisionItems.length === 0 ? (
               <div
@@ -231,8 +200,6 @@ const FeaturedFocusCards: React.FC<FeaturedFocusCardsProps> = ({
         </div>
       </section>
 
-      {/* 卡 B：今日最活跃专项（薰衣草琉璃专题卡），整卡点击 = 打开任务包看板。
-          数字锚点 data-feature-count="package"（待验收 N） */}
       <button
         type="button"
         data-feature-card="package"
@@ -288,7 +255,6 @@ const FeaturedFocusCards: React.FC<FeaturedFocusCardsProps> = ({
           </span>
         </span>
 
-        {/* 右侧微缩专项卡（呈现真实徽标、资产量与五段进度轨，无假占位条） */}
         <span className="relative h-[120px] w-[184px] shrink-0 hidden sm:block" aria-hidden="true">
           <span className="glx-fan-front absolute right-2 top-2 flex h-[100px] w-[164px] flex-col justify-between overflow-hidden rounded-[var(--r-block)] border border-border bg-card p-3 shadow-xs">
             {coverImage ? (

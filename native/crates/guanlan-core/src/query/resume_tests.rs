@@ -147,8 +147,6 @@ fn setup(tag: &str) -> (FixtureDb, String, ReadonlyStore) {
             .expect("插入文档状态失败");
     }
 
-    // SUCCESS checkpoint（01-03）之后：PLAN v1（01-04）、README v2（01-05）进入 delta；
-    // README v1（01-01）在 checkpoint 之前，不应进入 delta。
     fixture
         .conn
         .execute(
@@ -170,7 +168,6 @@ fn setup(tag: &str) -> (FixtureDb, String, ReadonlyStore) {
         )
         .expect("插入失败 checkpoint 失败");
 
-    // dec_1：旧版待确认（01-01）→ 新版已确认（01-05，主陈述）
     fixture.statement(
         &ws_id,
         "st_old",
@@ -243,14 +240,12 @@ fn resume_context_returns_latest_success_delta_and_latest_decisions() {
     );
     assert_eq!(checkpoint.output_artifact_version.as_deref(), Some("v1"));
 
-    // 只含 checkpoint 之后的新版本，每文件最新一版
     assert_eq!(resume.delta.len(), 2);
     assert_eq!(resume.delta[0].path, "04-智能体代码/PLAN.md");
     assert_eq!(resume.delta[0].version, "v1");
     assert_eq!(resume.delta[1].path, "04-智能体代码/README.md");
     assert_eq!(resume.delta[1].version, "v2");
 
-    // 每个 decision 取主陈述：dec_1 已确认（新版），dec_2 待确认
     assert_eq!(resume.latest_decisions.len(), 2);
     assert_eq!(resume.latest_decisions[0].decision_id, "dec_1");
     assert_eq!(resume.latest_decisions[0].status, "已确认");
@@ -277,7 +272,6 @@ fn resume_context_without_matching_checkpoint_is_honest() {
     let resume = resume_context(&store, &ws_id, "init_x", Some("交付")).expect("恢复上下文");
     assert!(resume.checkpoint.is_none());
     assert!(resume.delta.is_empty());
-    // 无 checkpoint 仍返回最新决策结果
     assert_eq!(resume.latest_decisions.len(), 2);
     assert!(resume.prompt_context.contains("无可用 SUCCESS checkpoint"));
     cleanup_dir(&fixture.dir);

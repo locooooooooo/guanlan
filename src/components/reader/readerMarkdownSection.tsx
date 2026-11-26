@@ -1,9 +1,3 @@
-/**
- * 阅读器 Markdown 阅读纸分节：
- * 包含章节大纲侧栏、精装手稿纸容器、来源行回退提示、显式提要横幅、
- * 正文三态（错误/加载/正文）、行模型渲染与底部决策回传动作条。
- * 渲染期闭包（renderMarkdownBlock 等）由 controller ctx 提供。
- */
 
 import React from 'react';
 import {
@@ -65,8 +59,6 @@ export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
   } = ctx;
   return (
     <div className="relative flex-1 flex overflow-hidden">
-      {/* 章节大纲侧栏（lg+ 桌面端采用并排停靠侧轨，彻底杜绝遮挡正文标题与段落；
-          中窄视口回退悬浮层；昼夜阅读模式同步切换专属暗色/纸白表面，无标题时展示清晰空态） */}
       {outlineOpen && (
         <aside
           aria-label="章节大纲与提要"
@@ -120,8 +112,6 @@ export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
           ) : (
           <div className="space-y-0.5">
             {outline.map((sec) => {
-              // 大纲「自上次读变更」高亮走章节指纹按需计算
-              // （changedSectionsOutline），不依赖全量 diff 副产物
               const isChangedSinceRead =
                 changedSectionsOutline.includes(sec.title);
               return (
@@ -170,7 +160,6 @@ export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
         </aside>
       )}
 
-      {/* Markdown Main Paper / Dark Reading Surface —— 精装手稿纸浮于柔和画布之上 */}
       <div
         ref={markdownScrollRef}
         onScroll={handleMarkdownScroll}
@@ -180,7 +169,6 @@ export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
             : 'bg-[#0F1117] text-[#F4F3EE]'
         }`}
       >
-        {/* 证据行就近回退的中性提示 */}
         {sourceLineFallback && (
           <div
             role="status"
@@ -208,7 +196,6 @@ export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
             </button>
           </div>
         )}
-        {/* 精装手稿纸容器：正文行宽仍严格锁定 .reader-measure (714px) */}
         <div
           className={`mx-auto max-w-[828px] rounded-[20px] px-7 py-6 md:px-11 md:py-8 transition-colors ${
             paperLightMode
@@ -217,7 +204,6 @@ export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
           }`}
         >
         <div className="reader-measure mx-auto space-y-6">
-          {/* Explicit Callouts Banner (核心结论 / 需你决策，保留原文行段入口，不自动捏造 AI 总结) */}
           {outline.filter((s) => s.isExplicitCallout).length > 0 && (
             <div className="text-xs">
               <button
@@ -294,9 +280,7 @@ export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
             </div>
           )}
 
-          {/* Structured Rendered Markdown Document (16-18px comfortable measure + wide table horizontal scroll) */}
           {bodyPhase === 'error' ? (
-            /* 按版本读取正文失败：明确报错 + 重试，不静默渲染空文档 */
             <div
               role="alert"
               className={`p-4 rounded-lg border text-sm space-y-2 ${
@@ -329,11 +313,6 @@ export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
               </Button>
             </div>
           ) : bodyPhase === 'loading' ? (
-            /* 正文读取挂起只在纸面内显示 loading——外层标题/工具栏/shell 已先渲染
-               （无全局阻塞遮罩）；冷启动对账期正文可能较慢。
-               使用琉璃骨架（条底 color-mix(currentColor) 随昼夜阅读容器文字色自适应，
-               reduced-motion 下流光层隐藏退化为静态骨架）；保留 role="status" 与
-               revision 可诊断信息。 */
             <div
               role="status"
               className={`p-6 rounded-lg border flex flex-col items-center justify-center gap-2.5 text-sm ${
@@ -354,15 +333,9 @@ export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
               </span>
             </div>
           ) : (
-          /* 正文区：17/32（1.88 行高）；衬线体受 html.serif-body-live 开关控制，见 index.css .read-body */
           <article className="read-body space-y-0">
-            {/* 行模型经 useMemo 缓存（依赖 markdownContent 与链接索引），渲染期再叠加
-                易变态（paperLightMode/sourceLine/showLineNumbers/activeSectionId/
-                readingState），避免易变渲染触发正文全量重解析（保活隐藏态同样受益）。 */}
             {markdownBlocks.map((block) => {
               const node = renderMarkdownBlock(block);
-              // Inline 拍板：卡点块范围末块之后追加原位拍板卡
-              //（原文行逐字渲染零改写；Fragment 接管 map 键，块内 wrapLine 键保留）
               const anchorBlock = resolveCardByAnchor.get(block.line);
               return anchorBlock ? (
                 <React.Fragment key={`blk-${block.line}`}>
@@ -379,12 +352,6 @@ export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
         </div>
       </div>
 
-      {/* 决策回执：底部悬浮「决策回传动作条」——勾选 ≥1 项时滑入。
-          悬浮于阅读纸下缘（外层 relative 容器，不随正文滚动）；居中用 Tailwind
-          -translate-x-1/2（v4 落独立 translate 属性），与滑入关键帧操作的 transform
-          属性互不覆盖——居中位移若写进 transform 会被动画终帧 transform:none 抹掉。
-          [保存回写原文件]桌面壳有命令桥（save_workspace_file：冲突检测+
-          原子替换）时可点；浏览器/CLI dev 无桥 → 保持诚实禁用态（只读快照）。 */}
       {decisionSelectedCount >= 1 && (
         <div
           data-decision-action-bar

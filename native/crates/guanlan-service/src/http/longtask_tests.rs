@@ -18,9 +18,6 @@ use tower::ServiceExt;
 use super::{build_router, AppState};
 use guanlan_core::storage::ReadonlyStore;
 
-// ===== 夹具 =====
-
-/// 夹具库 DDL（contract-storage.md §1.1 + §4.3 全部新表）
 const DDL: &str = include_str!("longtask_fixture.ddl.sql");
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(0);
@@ -209,7 +206,6 @@ impl Drop for Fixture {
     }
 }
 
-/// 真实写线程装配（Writer 与夹具库同一物理文件；notices 中枢已装）
 fn app_with_real_jobs(fixture: &Fixture, root: &str) -> axum::Router {
     let store = ReadonlyStore::open(&fixture.db_path).expect("打开夹具库");
     let mut claimed = store;
@@ -275,7 +271,6 @@ async fn post_json(app: &axum::Router, uri: &str, body: &str) -> (StatusCode, se
     )
 }
 
-/// 轮询任务到终态（写线程异步执行；200ms 间隔，5s 上限）
 async fn poll_job(app: &axum::Router, job_id: &str) -> serde_json::Value {
     for _ in 0..50 {
         let (_, json) = get(app, &format!("/api/v1/jobs/{job_id}")).await;
@@ -292,8 +287,6 @@ fn sha256_of(content: &str) -> String {
     use sha2::{Digest, Sha256};
     hex::encode(Sha256::digest(content.as_bytes()))
 }
-
-// ===== 状态投影 =====
 
 #[tokio::test]
 async fn state_overview_returns_projection() {
@@ -320,7 +313,6 @@ async fn state_overview_returns_projection() {
     assert_eq!(json["artifacts"][0]["stage"], "决策");
     assert_eq!(json["artifacts"][0]["file_id"], "f_doc");
 
-    // initiative_id 过滤
     let (_, filtered) = get(
         &app,
         &format!("/api/v1/state-overview?initiative_id={initiative_id}"),
@@ -354,8 +346,6 @@ fn app_for_readonly(fixture: &Fixture, root: &str) -> axum::Router {
         notices: None,
     })
 }
-
-// ===== statements + resolve 全链 =====
 
 #[tokio::test]
 async fn statements_wire_mapping_and_detail_projection() {
@@ -409,11 +399,9 @@ async fn statements_wire_mapping_and_detail_projection() {
     assert_eq!(items[0]["confirmer_hint"], "张三");
     assert_eq!(items[0]["line_start"], 7);
 
-    // confirmed 词映射：无已确认陈述 → 空集
     let (_, empty) = get(&app, "/api/v1/statements?file_id=f_d&status=confirmed").await;
     assert_eq!(empty["items"].as_array().expect("items").len(), 0);
 
-    // 缺 file_id → 400
     let (status, _) = get(&app, "/api/v1/statements").await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
@@ -425,7 +413,6 @@ async fn resolve_returns_202_and_writeback_completes_with_new_revision() {
     let ws_id = fixture.workspace(&root);
     let initiative_id = fixture.initiative(&ws_id, "01-演示专项", "pending_review");
 
-    // 磁盘文件与最新版本哈希一致（CAS 前提）
     let content = "---\nrevision: 1\n---\n\n# 03-待确认事项\n\n[P1 - 待确认] 属性字典与历史更新策略\n决定：___\n确认人：___\n";
     let hash = sha256_of(content);
     fixture.write_blob(&hash, content.as_bytes());
@@ -449,8 +436,6 @@ async fn resolve_returns_202_and_writeback_completes_with_new_revision() {
         10,
         r#"{"priority":"P1"}"#,
     );
-    // 前置门禁链（蓝图→计划→决策）：上游槽位未 completed 会把决策槽门禁在
-    // queued——补齐蓝图与计划两个阶段的文档，拍板唤醒链路才完整
     let blueprint_content = "# 需求单
 
 范围与边界
@@ -480,7 +465,6 @@ async fn resolve_returns_202_and_writeback_completes_with_new_revision() {
         plan_content,
     )
     .expect("写计划阶段磁盘文件");
-    // 拍板前前置态：上一轮 reconcile 已把决策槽置 suspended_on_hitl（持久态）
     let decision_node_id = format!(
         "node_{}",
         guanlan_core::index::ident::stable_key(&format!("{initiative_id}|决策|await_decision"))
@@ -505,7 +489,6 @@ async fn resolve_returns_202_and_writeback_completes_with_new_revision() {
         r#"{"decision":"采用两阶段状态锁","confirmer":"架构组","effective_date":"2026-11-18"}"#,
     )
     .await;
-    // 拍板端点恒返回 202（端点永不 409）
     assert_eq!(status, StatusCode::ACCEPTED, "{json}");
     assert_eq!(json["ok"], true);
     assert_eq!(json["statement_id"], "stmt_p1");
@@ -526,7 +509,6 @@ async fn resolve_returns_202_and_writeback_completes_with_new_revision() {
         0
     );
 
-    // 文件内容：状态词 + 占位符 + frontmatter revision
     let updated = std::fs::read_to_string(fixture.dir.join("01-演示专项").join("03-待确认事项.md"))
         .expect("读回写文件");
     assert!(updated.contains("[P1 - 已确认]"), "{updated}");
@@ -534,8 +516,6 @@ async fn resolve_returns_202_and_writeback_completes_with_new_revision() {
     assert!(updated.contains("确认人：架构组"));
     assert!(updated.contains("revision: 2"));
 
-    // 决策槽机械唤醒：决策槽由 suspended → completed（本轮重算）
-    // ——迁移事件在 events 表可查
     let (status, events) = get(&app, "/api/v1/events?kinds=task_node_moved&limit=50").await;
     assert_eq!(status, StatusCode::OK);
     let moved = events["items"]
@@ -583,7 +563,6 @@ async fn resolve_cas_conflict_lands_draft_branch() {
         3,
         r#"{"priority":"P1"}"#,
     );
-    // 磁盘内容与版本哈希不一致（CAS 前提被破坏）
     std::fs::create_dir_all(fixture.dir.join("01-演示专项")).expect("建目录");
     std::fs::write(
         fixture.dir.join("01-演示专项").join("03-待确认事项.md"),
@@ -613,7 +592,6 @@ async fn resolve_cas_conflict_lands_draft_branch() {
     assert!(writeback["cas_conflict"]["disk_content_hash"].is_string());
     assert!(writeback["draft_id"].is_string());
 
-    // 草案落库 + 磁盘未被覆盖
     let (_, drafts) = get(&app, "/api/v1/revision-proposals?status=proposed").await;
     assert_eq!(drafts["items"].as_array().expect("items").len(), 1);
     assert_eq!(drafts["items"][0]["conflict"], true);
@@ -661,8 +639,6 @@ async fn resolve_on_archived_initiative_is_conflict() {
     assert_eq!(json["code"], "CONFLICT");
 }
 
-// ===== checkpoint 同步受理 + tasks =====
-
 #[tokio::test]
 async fn checkpoint_commit_is_synchronous_201_and_advances_node() {
     let fixture = Fixture::new("ckpt");
@@ -676,7 +652,6 @@ async fn checkpoint_commit_is_synchronous_201_and_advances_node() {
     fixture.task_node(&ws_id, &initiative_id, &node_id, "执行", "running");
     let app = app_with_real_jobs(&fixture, &root);
 
-    // 先拿真实 initiative_id
     let real_initiative = fixture
         .conn
         .query_row("SELECT initiative_id FROM initiatives LIMIT 1", [], |row| {
@@ -698,10 +673,8 @@ async fn checkpoint_commit_is_synchronous_201_and_advances_node() {
         .as_str()
         .expect("ckpt")
         .starts_with("ckpt_"));
-    // node_id 缺省按 (initiative_id, stage) 反查 → 推进 completed
     assert_eq!(json["node_state"], "completed", "{json}");
 
-    // 恢复查询：最近一次 SUCCESS 在列
     let (_, list) = get(
         &app,
         &format!("/api/v1/checkpoints?initiative_id={real_initiative}&status=SUCCESS"),
@@ -709,7 +682,6 @@ async fn checkpoint_commit_is_synchronous_201_and_advances_node() {
     .await;
     assert_eq!(list["items"].as_array().expect("items").len(), 1);
 
-    // tasks 端点：五槽位节点（本夹具仅建了执行槽）状态为 completed
     let (_, tasks) = get(
         &app,
         &format!("/api/v1/initiatives/{real_initiative}/tasks"),
@@ -721,7 +693,6 @@ async fn checkpoint_commit_is_synchronous_201_and_advances_node() {
     assert_eq!(nodes[0]["node_kind"], "await_decision", "夹具行原样透传");
     assert!(nodes[0]["depends"].is_array());
 
-    // 404：未知专项（校验失败 checkpoint 不落库）
     let (status, json) = post_json(
         &app,
         "/api/v1/checkpoints",
@@ -731,8 +702,6 @@ async fn checkpoint_commit_is_synchronous_201_and_advances_node() {
     assert_eq!(status, StatusCode::NOT_FOUND, "{json}");
     assert_eq!(json["code"], "NOT_FOUND");
 }
-
-// ===== Agent 草案全链 =====
 
 #[tokio::test]
 async fn revision_proposals_full_chain() {
@@ -763,19 +732,16 @@ async fn revision_proposals_full_chain() {
     assert_eq!(json["conflict"], false, "磁盘与基准一致 → 无冲突预览");
     let draft_id = json["draft_id"].as_str().expect("draft_id").to_owned();
 
-    // 轮询：report.proposal
     let final_json = poll_job(&app, json["job_id"].as_str().expect("job_id")).await;
     assert_eq!(final_json["state"], "completed", "{final_json}");
     assert_eq!(final_json["result"]["proposal"]["cas_ok"], true);
     assert_eq!(final_json["result"]["proposal"]["status"], "proposed");
 
-    // 列表
     let (_, list) = get(&app, "/api/v1/revision-proposals?status=proposed").await;
     assert_eq!(list["items"].as_array().expect("items").len(), 1);
     assert_eq!(list["items"][0]["source"], "agent");
     assert_eq!(list["items"][0]["path"], "01-演示专项/方案.md");
 
-    // adopt：磁盘与基准一致 → 内容写入 → 新版本
     let (status, adopt) = post_json(
         &app,
         &format!("/api/v1/revision-proposals/{draft_id}/adopt"),
@@ -788,12 +754,10 @@ async fn revision_proposals_full_chain() {
     assert_eq!(adopt_final["result"]["adopt"]["cas_ok"], true);
     assert!(adopt_final["result"]["adopt"]["new_revision_id"].is_string());
 
-    // 磁盘已是 v2 内容
     let disk =
         std::fs::read_to_string(fixture.dir.join("01-演示专项").join("方案.md")).expect("读磁盘");
     assert!(disk.contains("Agent 改写"), "{disk}");
 
-    // dismiss 另一草案
     let (_status, create2) = post_json(
         &app,
         "/api/v1/revision-proposals",
@@ -817,8 +781,6 @@ async fn revision_proposals_full_chain() {
     assert_eq!(dismiss_final["result"]["dismiss"]["status"], "dismissed");
 }
 
-// ===== 采纳落版 → 自动生成执行槽 Checkpoint（含 output_artifact_version）=====
-
 #[tokio::test]
 async fn adopt_auto_generates_execution_checkpoint_with_artifact_version() {
     let fixture = Fixture::new("adopt_ckpt");
@@ -831,8 +793,6 @@ async fn adopt_auto_generates_execution_checkpoint_with_artifact_version() {
     let base_revision = fixture.revision(&ws_id, "f_d", 1, &hash);
     fixture.file(&ws_id, "f_d", "01-演示专项/方案.md", Some(&base_revision));
     fixture.artifact_state("f_d", &ws_id, &initiative_id, "计划", "executing");
-    // 前置门禁：蓝图/计划/决策槽 completed 才轮到执行槽（compute_slots 链式门禁）——
-    // 补蓝图阶段文档（有内容）与决策阶段文档（pending=0）
     let bp_content = "# 需求总览\n";
     let bp_hash = sha256_of(bp_content);
     fixture.write_blob(&bp_hash, bp_content.as_bytes());
@@ -866,7 +826,6 @@ async fn adopt_auto_generates_execution_checkpoint_with_artifact_version() {
         .expect("落版 id")
         .to_owned();
 
-    // 采纳报告应带自动检查点（checkpoint_id + 推进后槽位态）
     let auto_ckpt = &adopt_final["result"]["adopt"]["auto_checkpoint"];
     let checkpoint_id = auto_ckpt["checkpoint_id"]
         .as_str()
@@ -875,7 +834,6 @@ async fn adopt_auto_generates_execution_checkpoint_with_artifact_version() {
     assert!(checkpoint_id.starts_with("ckpt_"), "{auto_ckpt}");
     assert_eq!(auto_ckpt["node_state"], "completed", "{auto_ckpt}");
 
-    // checkpoint 行：执行槽 SUCCESS、产出指向新版本，且带版本号 v2
     let (_, list) = get(
         &app,
         &format!("/api/v1/checkpoints?initiative_id={initiative_id}&status=SUCCESS"),
@@ -898,14 +856,11 @@ async fn adopt_auto_generates_execution_checkpoint_with_artifact_version() {
         "备注自述自动落点：{list}"
     );
 
-    // checkpoint_committed 事件（payload 含 output_artifact_version）
     let (_, events) = get(&app, "/api/v1/events?kinds=checkpoint_committed&limit=10").await;
     let committed = events["items"].as_array().expect("events");
     assert_eq!(committed.len(), 1, "{events}");
     assert_eq!(committed[0]["subject_id"], checkpoint_id);
 }
-
-// ===== archive / reopen =====
 
 #[tokio::test]
 async fn archive_then_reopen_initiative() {
@@ -917,7 +872,6 @@ async fn archive_then_reopen_initiative() {
     fixture.artifact_state("f_d", &ws_id, &initiative_id, "决策", "delivered");
     let app = app_with_real_jobs(&fixture, &root);
 
-    // archive：202 → 写线程显式 archived + 事件 + recompute
     let (status, json) = post_json(
         &app,
         &format!("/api/v1/initiatives/{initiative_id}/archive"),
@@ -933,7 +887,6 @@ async fn archive_then_reopen_initiative() {
         "已交付态归档无 warn：{final_json}"
     );
 
-    // 非已交付态归档 → warn
     let (status, reopen) = post_json(
         &app,
         &format!("/api/v1/initiatives/{initiative_id}/reopen"),
@@ -956,7 +909,6 @@ async fn archive_then_reopen_initiative() {
         "重开后为 draft，归档应带 warn：{archive2_final}"
     );
 
-    // initiative_archived 事件
     let (status, events) = get(&app, "/api/v1/events?kinds=initiative_archived&limit=50").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
@@ -965,8 +917,6 @@ async fn archive_then_reopen_initiative() {
         "两次归档各一条：{events}"
     );
 }
-
-// ===== diff =====
 
 #[tokio::test]
 async fn diff_job_produces_summary_card_and_sections() {
@@ -1006,7 +956,6 @@ async fn diff_job_produces_summary_card_and_sections() {
         "至少一个差异区块"
     );
 
-    // result 端点四分支
     let (_, result_json) = get(
         &app,
         &format!(
@@ -1019,8 +968,6 @@ async fn diff_job_produces_summary_card_and_sections() {
     assert!(result_json["result"]["summary"].is_object());
     assert_eq!(result_json["next_cursor"], serde_json::Value::Null);
 }
-
-// ===== 外部智能体写入 CAS 安全网、独立草案分支与 derived_from_context 因果边 =====
 
 #[tokio::test]
 async fn e02_propose_creates_independent_draft_branch_without_touching_disk_and_exposes_diff_content(
@@ -1092,7 +1039,6 @@ async fn e02_propose_creates_independent_draft_branch_without_touching_disk_and_
         "v2-agent-draft"
     );
 
-    // 停机红线：未经采纳的草案绝不覆盖磁盘原稿
     let disk_after_propose =
         std::fs::read_to_string(fixture.dir.join("01-演示专项").join("02-实施计划.md"))
             .expect("读磁盘");
@@ -1114,7 +1060,6 @@ async fn e02_propose_creates_independent_draft_branch_without_touching_disk_and_
         format!("sha256:{}", &spec_hash[..16])
     );
 
-    // 多模态 Diff 审阅接口返回基准版/磁盘现态/草案快照
     let (status, content_json) = get(
         &app,
         &format!("/api/v1/revision-proposals/{draft_id}/content"),
@@ -1146,7 +1091,6 @@ async fn e02_concurrent_human_edit_blocks_adopt_via_cas_without_losing_any_chara
 
     let app = app_with_real_jobs(&fixture, &root);
 
-    // 1. Agent 基于 v1 提交草案（此时尚无冲突）
     let agent_draft = "# 设计文档\n初始条目\nAgent 新增方案段落\n";
     let (status, accepted) = post_json(
         &app,
@@ -1165,11 +1109,9 @@ async fn e02_concurrent_human_edit_blocks_adopt_via_cas_without_losing_any_chara
     assert_eq!(propose_job["state"], "completed");
     let draft_id = accepted["draft_id"].as_str().expect("draft_id");
 
-    // 2. 人类并行编辑了同一文档
     let human_edit = "# 设计文档\n初始条目\n人类刚补充的关键红线条款（绝不可丢失）\n";
     std::fs::write(&doc_path, human_edit).expect("模拟人类并发编辑");
 
-    // 3. 查看草案内容：实时识别 conflict=true，并分别给出磁盘现态与草案正文
     let (status, diff_json) = get(
         &app,
         &format!("/api/v1/revision-proposals/{draft_id}/content"),
@@ -1180,7 +1122,6 @@ async fn e02_concurrent_human_edit_blocks_adopt_via_cas_without_losing_any_chara
     assert_eq!(diff_json["disk_text"], human_edit);
     assert_eq!(diff_json["proposed_text"], agent_draft);
 
-    // 4. 尝试采纳：CAS 拦截，绝不覆盖人类修改，并把草案持久化标记 conflict=true
     let (status, adopt_accepted) = post_json(
         &app,
         &format!("/api/v1/revision-proposals/{draft_id}/adopt"),
@@ -1201,7 +1142,6 @@ async fn e02_concurrent_human_edit_blocks_adopt_via_cas_without_losing_any_chara
         sha256_of(human_edit)
     );
 
-    // 铁律核验：人工字字完好，草案标 conflict=true 仍处于 proposed 等待手工合并
     let disk_final = std::fs::read_to_string(&doc_path).expect("读磁盘");
     assert_eq!(disk_final, human_edit, "CAS 冲突下绝不可丢字或覆盖人类编辑");
     let (_, drafts) = get(&app, "/api/v1/revision-proposals?status=proposed").await;
@@ -1265,7 +1205,6 @@ async fn e02_adopt_advances_version_backs_up_original_and_writes_derived_from_co
     assert_eq!(propose_job["state"], "completed");
     let draft_id = accepted["draft_id"].as_str().expect("draft_id");
 
-    // 采纳落盘
     let (status, adopt_accepted) = post_json(
         &app,
         &format!("/api/v1/revision-proposals/{draft_id}/adopt"),
@@ -1285,7 +1224,6 @@ async fn e02_adopt_advances_version_backs_up_original_and_writes_derived_from_co
         "应至少写入上游规范 + 基线版本 2 条 derived_from_context 因果边：{adopt_job}"
     );
 
-    // 磁盘已更新，且原稿 v1 快照在私有 blobs/ 中完好保留（可供瞬间回滚）
     assert_eq!(std::fs::read_to_string(&plan_path).expect("读盘"), plan_v2);
     let backup_blob = fixture
         .db_path
@@ -1299,12 +1237,10 @@ async fn e02_adopt_advances_version_backs_up_original_and_writes_derived_from_co
         plan_v1
     );
 
-    // 正式版本号已推进到 seq=2（v2）
     let (status, revs) = get(&app, "/api/v1/files/f_plan/revisions").await;
     assert_eq!(status, StatusCode::OK, "{revs}");
     assert_eq!(revs["revisions"].as_array().expect("revisions").len(), 2);
 
-    // /api/v1/relations 返回 derived_from_context 因果边（f_plan -> f_spec）
     let (status, rels) = get(&app, "/api/v1/relations").await;
     assert_eq!(status, StatusCode::OK, "{rels}");
     let derived_edge = rels["items"]
@@ -1359,7 +1295,6 @@ async fn e02_dismiss_rejects_draft_with_reason_and_never_touches_disk() {
     let _ = poll_job(&app, accepted["job_id"].as_str().expect("job_id")).await;
     let draft_id = accepted["draft_id"].as_str().expect("draft_id");
 
-    // 退回重做
     let (status, dismiss_accepted) = post_json(
         &app,
         &format!("/api/v1/revision-proposals/{draft_id}/dismiss"),
@@ -1375,7 +1310,6 @@ async fn e02_dismiss_rejects_draft_with_reason_and_never_touches_disk() {
         "不得删除人工审批步骤，请保留并补充回滚预案"
     );
 
-    // 待审列表清空，磁盘原稿纹丝未动，且落有 proposal_dismissed 审计事件
     let (_, proposed) = get(&app, "/api/v1/revision-proposals?status=proposed").await;
     assert_eq!(proposed["items"].as_array().expect("items").len(), 0);
     assert_eq!(std::fs::read_to_string(&rel_path).expect("读盘"), v1);
@@ -1383,8 +1317,6 @@ async fn e02_dismiss_rejects_draft_with_reason_and_never_touches_disk() {
     let (_, events) = get(&app, "/api/v1/events?kinds=proposal_dismissed&limit=10").await;
     assert_eq!(events["items"].as_array().expect("events").len(), 1);
 }
-
-// ===== context =====
 
 #[tokio::test]
 async fn context_assembles_initiative_preset_with_both_modes() {
@@ -1411,7 +1343,6 @@ async fn context_assembles_initiative_preset_with_both_modes() {
         6,
         r#"{"priority":"P1"}"#,
     );
-    // 第二份文档（蓝图阶段）：阶段摘要 + 当前阶段全量 → 默认预设应含 ≥2 条
     let plan_content = "# 需求单
 
 范围与边界
@@ -1451,21 +1382,17 @@ async fn context_assembles_initiative_preset_with_both_modes() {
         items.iter().any(|item| item["granularity"] == "summary"),
         "各阶段摘要"
     );
-    // 决策汇总：P1 未决在列
     let pending = json["decisions"]["pending"].as_array().expect("pending");
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0]["priority"], "P1");
-    // Token 预算
     assert_eq!(json["token_budget"]["threshold"], 65536);
     assert!(json["token_budget"]["est_tokens"].as_u64().expect("est") > 0);
-    // 模式 A：XML 结构
     let markdown = json["markdown"].as_str().expect("markdown");
     assert!(markdown.starts_with("<guanlan_context "), "{markdown}");
     assert!(markdown.contains("<confirmed_decisions"));
     assert!(markdown.contains("<pending_blockers"));
     assert!(markdown.contains("<reference_files"));
     assert!(markdown.contains("<writeback_protocol"));
-    // 模式 B：payload
     let payload = &json["payload"];
     assert_eq!(payload["protocol"], "guanlan-mcp/v1");
     assert!(
@@ -1482,7 +1409,6 @@ async fn context_assembles_initiative_preset_with_both_modes() {
     assert_eq!(payload["guardrails"]["require_version_bump"], true);
     assert_eq!(payload["initiative"]["id"], real);
 
-    // document 入口缺 focus_file_id → 400
     let (status, _) = post_json(&app, "/api/v1/context", r#"{"intent":"document"}"#).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
@@ -1493,7 +1419,6 @@ async fn e03_context_four_granularities_upstream_snippets_secret_redaction_and_z
     let root = fixture.root();
     let ws_id = fixture.workspace(&root);
 
-    // 上游规范文档
     let spec_body = "# 01-系统架构规范\n结论：全部本地写回必须经 CAS 冲突检查与脱敏护栏。\n## 安全红线\n绝不允许在上下文包内泄露本机密钥。\n";
     let spec_hash = sha256_of(spec_body);
     fixture.write_blob(&spec_hash, spec_body.as_bytes());
@@ -1505,7 +1430,6 @@ async fn e03_context_four_granularities_upstream_snippets_secret_redaction_and_z
         Some(&spec_rev),
     );
 
-    // 实施计划两版（v1 -> v2，v2 内含模拟密钥以验脱敏护栏）
     let plan_v1 = "# 02-实施计划\n- [ ] 实现基础组装器\n旧版临时方案。\n";
     let plan_v1_hash = sha256_of(plan_v1);
     fixture.write_blob(&plan_v1_hash, plan_v1.as_bytes());
@@ -1529,14 +1453,12 @@ async fn e03_context_four_granularities_upstream_snippets_secret_redaction_and_z
         Some(&plan_rev2),
     );
 
-    // 敏感 .env 文件（停机红线：绝不得被自动预选，显式传入也必须脱敏拦截）
     let env_body = "AWS_SECRET_ACCESS_KEY=SuperSecretAwsKey999999999999\n";
     let env_hash = sha256_of(env_body);
     fixture.write_blob(&env_hash, env_body.as_bytes());
     let env_rev = fixture.revision(&ws_id, "f_env", 1, &env_hash);
     fixture.file(&ws_id, "f_env", ".env", Some(&env_rev));
 
-    // 建立非标准阶段（「待分类」）专项，验证零空态兜底
     let init_id = "init_e03";
     fixture
         .conn
@@ -1549,7 +1471,6 @@ async fn e03_context_four_granularities_upstream_snippets_secret_redaction_and_z
     fixture.artifact_state("f_spec", &ws_id, init_id, "待分类", "draft");
     fixture.artifact_state("f_plan", &ws_id, init_id, "待分类", "draft");
 
-    // 写入显式引用边：f_plan -> f_spec
     fixture
         .conn
         .execute(
@@ -1561,7 +1482,6 @@ async fn e03_context_four_granularities_upstream_snippets_secret_redaction_and_z
 
     let app = app_for_readonly(&fixture, &root);
 
-    // 1. 专项入口（非标准阶段）：100% 自动预填核心关联材料，且绝不含 .env
     let (status, init_resp) = post_json(
         &app,
         "/api/v1/context",
@@ -1579,7 +1499,6 @@ async fn e03_context_four_granularities_upstream_snippets_secret_redaction_and_z
         "敏感 .env 文件绝不得被自动预选"
     );
 
-    // 2. 文档入口：自动预选焦点全文 + 上游规范片段 + 脱敏护栏生效
     let (status, doc_resp) = post_json(
         &app,
         "/api/v1/context",
@@ -1616,14 +1535,12 @@ async fn e03_context_four_granularities_upstream_snippets_secret_redaction_and_z
         doc_resp["token_budget"]["est_chars"].as_u64().unwrap_or(0) > 0,
         "预算含实时字符数"
     );
-    // payload.context_bundle[0].hash 应为真实 blob SHA-256 前 16 位
     let expected_hash_prefix = format!("sha256:{}", &plan_v2_hash[..16]);
     assert_eq!(
         doc_resp["payload"]["context_bundle"][0]["hash"],
         expected_hash_prefix
     );
 
-    // 3. 同参数再次请求：逐字节确定性一致
     let (_, doc_resp_2) = post_json(
         &app,
         "/api/v1/context",
@@ -1633,7 +1550,6 @@ async fn e03_context_four_granularities_upstream_snippets_secret_redaction_and_z
     assert_eq!(doc_resp["markdown"], doc_resp_2["markdown"]);
     assert_eq!(doc_resp["payload"], doc_resp_2["payload"]);
 
-    // 4. 四档粒度对比：full > summary / diff_only > metadata_only
     let (_, full_r) = post_json(
         &app,
         "/api/v1/context",
@@ -1677,7 +1593,6 @@ async fn e03_context_four_granularities_upstream_snippets_secret_redaction_and_z
         "仅元数据路径不得内联正文片段"
     );
 
-    // 5. 显式传入 .env 文件也强制被脱敏护栏拦截
     let (status, env_resp) = post_json(
         &app,
         "/api/v1/context",
@@ -1701,11 +1616,9 @@ async fn e03_mcp_host_config_merges_existing_servers_and_rejects_remote_endpoint
     let _ws = fixture.workspace(&root);
     let app = app_for_readonly(&fixture, &root);
 
-    // 已有其他 MCP 服务的 .mcp.json 必须被无损保留
     let existing = r#"{"mcpServers":{"otherTool":{"command":"node","args":["other.js"]}}}"#;
     std::fs::write(fixture.dir.join(".mcp.json"), existing).expect("写初始 .mcp.json");
 
-    // 1. 非回环端点必须拒绝
     let (status, bad) = post_json(
         &app,
         "/api/v1/mcp/host-config",
@@ -1714,7 +1627,6 @@ async fn e03_mcp_host_config_merges_existing_servers_and_rejects_remote_endpoint
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{bad}");
 
-    // 2. 非 dry_run 且未 confirm=true → 400
     let (status, no_confirm) = post_json(
         &app,
         "/api/v1/mcp/host-config",
@@ -1723,7 +1635,6 @@ async fn e03_mcp_host_config_merges_existing_servers_and_rejects_remote_endpoint
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{no_confirm}");
 
-    // 3. ZCode 原子合并写入 .mcp.json：保留 otherTool，新增 guanlan 且 env 仅含 GUANLAN_ENDPOINT
     let (status, zcode_res) = post_json(
         &app,
         "/api/v1/mcp/host-config",
@@ -1751,7 +1662,6 @@ async fn e03_mcp_host_config_merges_existing_servers_and_rejects_remote_endpoint
         "env 仅允许 GUANLAN_ENDPOINT，绝不混入本机环境变量"
     );
 
-    // 4. Cursor 写入 .cursor/mcp.json
     let (status, cursor_res) = post_json(
         &app,
         "/api/v1/mcp/host-config",
@@ -1763,15 +1673,12 @@ async fn e03_mcp_host_config_merges_existing_servers_and_rejects_remote_endpoint
     assert!(fixture.dir.join(".cursor").join("mcp.json").exists());
 }
 
-// ===== 原位拍板（HITL）唤醒任务与批阅看板联动 =====
-
 #[tokio::test]
 async fn e04_hitl_writeback_syncs_md_sqlite_and_review_board_under_200ms_and_unlocks_downstream() {
     let fixture = Fixture::new("e04_hitl_unlock");
     let root = fixture.root();
     let _ws = fixture.workspace(&root);
 
-    // 创建真实专项目录与 01-蓝图 / 02-计划 / 03-待确认决策.md，走真实索引建初始态
     let init_dir = fixture.dir.join("03-批阅专项");
     std::fs::create_dir_all(&init_dir).expect("建目录");
     std::fs::write(init_dir.join("01-需求蓝图.md"), "# 蓝图\n核心目标清晰。\n").expect("写蓝图");
@@ -1786,7 +1693,6 @@ async fn e04_hitl_writeback_syncs_md_sqlite_and_review_board_under_200ms_and_unl
     let settled = poll_job(&app, job["job_id"].as_str().expect("job_id")).await;
     assert_eq!(settled["state"], "completed", "{settled}");
 
-    // 1. 拍板前：看板应将该专项归入「待拍板（pending_decision）」，pending_p1 = 1
     let (status, board_before) = get(&app, "/api/v1/review-board").await;
     assert_eq!(status, StatusCode::OK, "{board_before}");
     assert_eq!(
@@ -1805,7 +1711,6 @@ async fn e04_hitl_writeback_syncs_md_sqlite_and_review_board_under_200ms_and_unl
         .expect("initiative_id")
         .to_owned();
 
-    // 2. 原位拍板（模拟阅读器提交或点击「已知悉」），记录端到端耗时
     let wall_start = std::time::Instant::now();
     let (status, accepted) = post_json(
         &app,
@@ -1833,8 +1738,6 @@ async fn e04_hitl_writeback_syncs_md_sqlite_and_review_board_under_200ms_and_unl
         "拍板写回 + SQLite 版本提交 + 状态机重算应 <200ms，实测 core={core_elapsed_ms}ms wall={wall_elapsed}ms"
     );
 
-    // 3. 三处状态 100% 同步验证：
-    // ① 源文件 .md 已原位更新为 [P1 - 已确认] 且 revision 递增
     let disk_after = std::fs::read_to_string(&decision_path).expect("读回 .md");
     assert!(disk_after.contains("[P1 - 已确认]"), "{disk_after}");
     assert!(
@@ -1843,14 +1746,12 @@ async fn e04_hitl_writeback_syncs_md_sqlite_and_review_board_under_200ms_and_unl
     );
     assert!(disk_after.contains("revision: 2"), "{disk_after}");
 
-    // ② SQLite 已提交新版本且 statements 变为「已确认」
     let file_id = card_before["pending_statements"][0]["file_id"]
         .as_str()
         .expect("file_id");
     let (_, revs) = get(&app, &format!("/api/v1/files/{file_id}/revisions")).await;
     assert_eq!(revs["revisions"].as_array().expect("revs").len(), 2);
 
-    // ③ 批阅看板立即流转出 pending_decision → dispatchable（已解锁下游）
     let (status, board_after) = get(&app, "/api/v1/review-board").await;
     assert_eq!(status, StatusCode::OK, "{board_after}");
     assert_eq!(
@@ -1876,7 +1777,6 @@ async fn e04_review_board_unknown_orphan_detection_repair_and_anti_skip_review_g
     let rev = fixture.revision(&ws_id, "f_exec", 1, &h);
     fixture.file(&ws_id, "f_exec", "04-失联专项/04-执行实现.md", Some(&rev));
 
-    // 建立专项与一个 1 小时前仍在 running 且无回执的孤儿执行槽
     let init_id = "init_e04_orphan";
     fixture
         .conn
@@ -1898,7 +1798,6 @@ async fn e04_review_board_unknown_orphan_detection_repair_and_anti_skip_review_g
 
     let app = app_with_real_jobs(&fixture, &root);
 
-    // 1. 超过 30 分钟无回执：必须诚实标 unknown 并附孤儿诊断与合法修复动作
     let (status, board) = get(
         &app,
         "/api/v1/review-board?now=2026-11-21T09:00:00Z&stall_threshold_secs=1800",
@@ -1915,7 +1814,6 @@ async fn e04_review_board_unknown_orphan_detection_repair_and_anti_skip_review_g
             >= 3600
     );
 
-    // 2. 停机红线：试图跳过人工审阅直接置 completed → 400 拒绝
     let (status, bad_repair) = post_json(
         &app,
         &format!("/api/v1/review-board/{init_id}/repair-orphan"),
@@ -1924,7 +1822,6 @@ async fn e04_review_board_unknown_orphan_detection_repair_and_anti_skip_review_g
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{bad_repair}");
 
-    // 3. 合法人工孤儿修复：reset_to_dispatchable → 落盘并流转为可派发
     let (status, repair_acc) = post_json(
         &app,
         &format!("/api/v1/review-board/{init_id}/repair-orphan"),
@@ -1946,7 +1843,6 @@ async fn e04_review_board_unknown_orphan_detection_repair_and_anti_skip_review_g
         "{board_repaired}"
     );
 
-    // 4. 即使专项状态被标为 delivered，只要有未批阅 Agent 草案，绝不进 completed，强制留在 awaiting_receipt
     fixture
         .conn
         .execute(
@@ -1969,8 +1865,6 @@ async fn e04_review_board_unknown_orphan_detection_repair_and_anti_skip_review_g
     );
 }
 
-// ===== summary =====
-
 #[tokio::test]
 async fn file_summary_reads_persisted_summary() {
     let fixture = Fixture::new("summary");
@@ -1980,7 +1874,6 @@ async fn file_summary_reads_persisted_summary() {
     fixture.write_blob(&hash, b"# A\n## B\n");
     let revision_id = fixture.revision(&ws_id, "f_d", 1, &hash);
     fixture.file(&ws_id, "f_d", "docs/a.md", Some(&revision_id));
-    // 预沉淀摘要行
     fixture
         .conn
         .execute(
@@ -2006,8 +1899,6 @@ async fn file_summary_reads_persisted_summary() {
     assert_eq!(summary["decisions_digest"]["p0"], 1);
 }
 
-// ===== index-jobs 扩展 + cancel =====
-
 #[tokio::test]
 async fn index_jobs_external_kinds_and_validation() {
     let fixture = Fixture::new("jobsx");
@@ -2015,7 +1906,6 @@ async fn index_jobs_external_kinds_and_validation() {
     let _ws = fixture.workspace(&root);
     let app = app_with_real_jobs(&fixture, &root);
 
-    // set_initiative_dirs：202 → 写线程幂等覆盖 meta
     let (status, json) = post_json(
         &app,
         "/api/v1/index-jobs",
@@ -2026,11 +1916,9 @@ async fn index_jobs_external_kinds_and_validation() {
     let final_json = poll_job(&app, json["job_id"].as_str().expect("job_id")).await;
     assert_eq!(final_json["state"], "completed", "{final_json}");
 
-    // changed_paths：缺 paths → 400
     let (status, json) = post_json(&app, "/api/v1/index-jobs", r#"{"kind":"changed_paths"}"#).await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{json}");
 
-    // l4a_summary：空队列也能跑完
     let (status, json) = post_json(&app, "/api/v1/index-jobs", r#"{"kind":"l4a_summary"}"#).await;
     assert_eq!(status, StatusCode::ACCEPTED);
     let final_json = poll_job(&app, json["job_id"].as_str().expect("job_id")).await;
@@ -2040,7 +1928,6 @@ async fn index_jobs_external_kinds_and_validation() {
         "l4a 结果分支可空可对象"
     );
 
-    // 内部 kind 直提 → 400
     let (status, json) = post_json(
         &app,
         "/api/v1/index-jobs",
@@ -2053,7 +1940,6 @@ async fn index_jobs_external_kinds_and_validation() {
         .expect("err")
         .contains("decision_writeback"));
 
-    // 未知 kind → 400 新文案
     let (status, json) = post_json(
         &app,
         "/api/v1/index-jobs",
@@ -2066,7 +1952,6 @@ async fn index_jobs_external_kinds_and_validation() {
         .expect("err")
         .contains("metadata_reconcile"));
 
-    // cancel：已结束任务 → 409 CONFLICT
     let (_, done) = post_json(&app, "/api/v1/index-jobs", r#"{"kind":"l4a_summary"}"#).await;
     let final_json = poll_job(&app, done["job_id"].as_str().expect("job_id")).await;
     assert_eq!(final_json["state"], "completed");
@@ -2082,12 +1967,9 @@ async fn index_jobs_external_kinds_and_validation() {
     assert_eq!(status, StatusCode::CONFLICT, "{cancel_json}");
     assert_eq!(cancel_json["code"], "CONFLICT");
 
-    // cancel：不存在 → 404
     let (status, _) = post_json(&app, "/api/v1/jobs/job_不存在/cancel", "{}").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
-
-// ===== SSE =====
 
 #[tokio::test]
 async fn sse_stream_sends_hello() {
@@ -2115,7 +1997,6 @@ async fn sse_stream_sends_hello() {
         Some("text/event-stream"),
         "SSE content-type 应为 text/event-stream"
     );
-    // hello 帧（立即到达）
     let mut body = response.into_body();
     let frame = tokio::time::timeout(std::time::Duration::from_secs(2), body.frame())
         .await
@@ -2197,8 +2078,6 @@ async fn resume_context_endpoint_returns_delta_and_latest_decisions() {
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
-// ===== 身份保真文件操作（rename / move / trash + 还原重连）=====
-
 struct IsolatedTrashDriver {
     trash_dir: PathBuf,
 }
@@ -2279,7 +2158,6 @@ async fn a05_file_rename_move_trash_and_restore_roundtrip() {
         notices: Some(crate::runtime::NoticeHub::new()),
     });
 
-    // 1) 非法改名/越界路径拦截
     let (status, bad) = post_json(
         &app,
         &format!("/api/v1/files/{file_id}/rename"),
@@ -2289,7 +2167,6 @@ async fn a05_file_rename_move_trash_and_restore_roundtrip() {
     assert_eq!(status, StatusCode::BAD_REQUEST, "{bad}");
     assert_eq!(bad["code"], "BAD_REQUEST");
 
-    // 2) 安全重命名：保留 file_id 与全部历史/决定/别名
     let (status, renamed) = post_json(
         &app,
         &format!("/api/v1/files/{file_id}/rename"),
@@ -2302,7 +2179,6 @@ async fn a05_file_rename_move_trash_and_restore_roundtrip() {
     assert_eq!(renamed["new_path"], "01-演示专项/03-拍板清单.md");
     assert!(ws_root_dir.join("01-演示专项/03-拍板清单.md").is_file());
 
-    // 3) 安全跨目录移动
     let (status, bad_move) = post_json(
         &app,
         &format!("/api/v1/files/{file_id}/move"),
@@ -2323,7 +2199,6 @@ async fn a05_file_rename_move_trash_and_restore_roundtrip() {
     assert_eq!(moved["file_id"], file_id);
     assert_eq!(moved["new_path"], "02-归档专项/定稿/03-拍板清单.md");
 
-    // 验证历史版本链 + 事件 + 别名 + 决定 100% 连续
     let (status, rev_json) = get(
         &app,
         &format!("/api/v1/files/{file_id}/revisions?include=events,aliases"),
@@ -2347,7 +2222,6 @@ async fn a05_file_rename_move_trash_and_restore_roundtrip() {
         "02-归档专项/定稿/03-拍板清单.md"
     );
 
-    // 4) 移入回收站：confirm=false 拦截；confirm=true 落隔离回收站且不永久删除
     let (status, unconfirmed) = post_json(
         &app,
         &format!("/api/v1/files/{file_id}/trash"),
@@ -2368,7 +2242,6 @@ async fn a05_file_rename_move_trash_and_restore_roundtrip() {
     assert_eq!(trashed["trash_recoverable"], true);
     assert!(trash_dir.join("03-拍板清单.md").is_file());
 
-    // bootstrap 下发 recoverable_file_ids 保护前端阅读进度不剪枝，/files?status=recoverable 可查
     let (status, boot) = get(&app, "/api/v1/bootstrap").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(boot["files_total"], 0);
@@ -2378,7 +2251,6 @@ async fn a05_file_rename_move_trash_and_restore_roundtrip() {
     assert_eq!(rec_page["total_matched"], 1);
     assert_eq!(rec_page["items"][0]["status"], "trashed");
 
-    // 5) 从回收站还原后，触发对账自动重连原 file_id
     std::fs::rename(
         trash_dir.join("03-拍板清单.md"),
         ws_root_dir.join("02-归档专项/定稿/03-拍板清单.md"),
@@ -2398,8 +2270,6 @@ async fn a05_file_rename_move_trash_and_restore_roundtrip() {
     jobs.shutdown();
 }
 
-/// 事项资料胶囊端到端测试：两阶段预览门禁（未预览/过期令牌 400 PREVIEW_REQUIRED）、敏感目录自动排除、
-/// 正文脱敏、双模式输出（with_snapshots / manifest_only）以及另一台观澜秒开核验与沙箱文件读取。
 #[tokio::test]
 async fn f01_context_capsule_preview_export_inspect_and_file_read() {
     let base = std::env::temp_dir().join(format!(
@@ -2459,7 +2329,6 @@ async fn f01_context_capsule_preview_export_inspect_and_file_read() {
         notices: Some(crate::runtime::NoticeHub::new()),
     });
 
-    // 停机红线：未预览直接导出 → 400 PREVIEW_REQUIRED
     let (status, err_json) = post_json(
         &app,
         "/api/v1/capsules/export",
@@ -2481,7 +2350,6 @@ async fn f01_context_capsule_preview_export_inspect_and_file_read() {
         "{err_json}"
     );
 
-    // 阶段一：预览自动排除 .env 与 secrets/，估算体积并生成 preview_token
     let (status, preview) = post_json(
         &app,
         "/api/v1/capsules/preview",
@@ -2501,7 +2369,6 @@ async fn f01_context_capsule_preview_export_inspect_and_file_read() {
         "{preview}"
     );
 
-    // 阶段二：携带真实 token + confirmed_preview=true 导出
     let (status, exported) = post_json(
         &app,
         "/api/v1/capsules/export",
@@ -2522,7 +2389,6 @@ async fn f01_context_capsule_preview_export_inspect_and_file_read() {
     assert!(!out_dir.join("files/01-胶囊交付/.env").exists());
     assert!(!out_dir.join("files/01-胶囊交付/secrets/prod.txt").exists());
 
-    // 另一台观澜秒开核验：inspect + file 读取证据 + 路径穿越拦截
     let (status, inspected) = post_json(
         &app,
         "/api/v1/capsules/inspect",
@@ -2552,7 +2418,6 @@ async fn f01_context_capsule_preview_export_inspect_and_file_read() {
     assert!(text.contains("[REDACTED_SECRET]"), "{text}");
     assert!(!text.contains("ghp_1234567890"), "{text}");
 
-    // 越界读取 capsule_manifest 或 ../ 必须拒绝
     let (status, jail_err) = post_json(
         &app,
         "/api/v1/capsules/file",
@@ -2569,8 +2434,6 @@ async fn f01_context_capsule_preview_export_inspect_and_file_read() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// 存储运维端到端测试：SHA-256 完整性校验、决定证据铁律保护 GC（预演+执行）、
-/// 全量开放导出与一键脱敏诊断包 ZIP 下载/落盘。
 #[tokio::test]
 async fn f02_storage_integrity_iron_law_gc_open_export_and_diagnostic_zip() {
     let base = std::env::temp_dir().join(format!(
@@ -2590,7 +2453,6 @@ async fn f02_storage_integrity_iron_law_gc_open_export_and_diagnostic_zip() {
     let ws_root = ws_root_dir.to_string_lossy().into_owned();
     let mut writer = guanlan_core::index::Writer::open_at(&data_dir, &ws_root).expect("创建可写库");
 
-    // 生成 4 个版本：v1(基线)、v2(无决定纯过程版)、v3(绑定决定证据)、v4(最新)
     std::fs::write(&doc_path, "# 定稿 v1\n基线初稿\n").unwrap();
     guanlan_core::index::reconcile(
         &mut writer,
@@ -2620,7 +2482,6 @@ async fn f02_storage_integrity_iron_law_gc_open_export_and_diagnostic_zip() {
     )
     .unwrap();
 
-    // 回拨版本时间为超期
     writer
         .conn()
         .execute(
@@ -2650,13 +2511,11 @@ async fn f02_storage_integrity_iron_law_gc_open_export_and_diagnostic_zip() {
         notices: Some(crate::runtime::NoticeHub::new()),
     });
 
-    // 1. GET /api/v1/storage/integrity → 4 份快照全部健康
     let (status, integ) = get(&app, "/api/v1/storage/integrity").await;
     assert_eq!(status, StatusCode::OK, "{integ}");
     assert_eq!(integ["ok"], true, "{integ}");
     assert_eq!(integ["healthy_blobs"], 4, "{integ}");
 
-    // 2. POST /api/v1/storage/gc (dry_run=true → execute dry_run=false)
     let (status, gc_dry) = post_json(
         &app,
         "/api/v1/storage/gc",
@@ -2686,13 +2545,11 @@ async fn f02_storage_integrity_iron_law_gc_open_export_and_diagnostic_zip() {
     assert_eq!(gc_exec["dry_run"], false);
     assert_eq!(gc_exec["deleted_blobs_count"], 1);
 
-    // 执行瘦身后再次完整性核验必须 100% PASS（剩余 v1/v3/v4 三份受保护快照）
     let (status, integ2) = get(&app, "/api/v1/storage/integrity").await;
     assert_eq!(status, StatusCode::OK, "{integ2}");
     assert_eq!(integ2["ok"], true, "{integ2}");
     assert_eq!(integ2["healthy_blobs"], 3, "{integ2}");
 
-    // 3. POST /api/v1/export/workspace 全量开放导出
     let export_dir = base.join("open-export");
     let (status, exp) = post_json(
         &app,
@@ -2709,7 +2566,6 @@ async fn f02_storage_integrity_iron_law_gc_open_export_and_diagnostic_zip() {
     assert!(export_dir.join("ledger/events.jsonl").is_file());
     assert!(export_dir.join("ledger/DECISIONS.md").is_file());
 
-    // 4. POST /api/v1/storage/diagnostic-zip + GET /api/v1/storage/diagnostic-zip
     let diag_path = base.join("diag.zip");
     let (status, diag) = post_json(
         &app,
@@ -2751,7 +2607,6 @@ async fn f02_storage_integrity_iron_law_gc_open_export_and_diagnostic_zip() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// 与 http_tests.rs 的 test_exec_config 等价（跨测试模块不可见，本地复制）
 fn test_exec_config() -> super::query_exec::QueryConfig {
     super::query_exec::QueryConfig {
         wait_deadline: std::time::Duration::from_secs(5),

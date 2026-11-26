@@ -1,11 +1,3 @@
-/**
- * 司辰「时光步进回放」与「今日/本周沉淀手记」纯函数引擎。
- *
- * 纪律：
- * - 零 DOM / 零 React 依赖，可由 node:test 直测；
- * - 100% 源自真实 SQL 事件、版本链、决策断言与已排空 L4A 摘要，绝不造数；
- * - 严守 occurred_at / observed_at 时间口径与 isCandidateOnly 候选过滤。
- */
 
 import type {
   DecisionAssertion,

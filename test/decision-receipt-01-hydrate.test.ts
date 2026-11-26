@@ -9,33 +9,7 @@ import {
   DECISION_RECEIPT_STORAGE_KEY,
 } from '../src/components/ReaderView';
 
-/**
- * 决策回执可交互能力（阅读工匠票）定向单测。
- *
- * 断言清单：
- *  C1  「□ A) …」双项成簇 → 区带整体 hydrate，文本逐字（含标号 A)）；
- *  C2  ☑/☒ 原文已选态 → initialChecked=true；
- *  C3  「- [ ] /- [x]」任务行成簇 → hydrate 且已选态正确；
- *  C4  填空行自命中关键词（「确认人：___」）→ 单项 hydrate；
- *  C5  单项 + 前行引语关键词（「请选择…」）→ hydrate；
- *  C6  单项 + 最近上方标题关键词（「### 需你决策」）→ hydrate；
- *  C7  单项无任何语境信号 → 不 hydrate（Map 无该行，渲染层逐字回退）；
- *  C8  普通文章行内提及「□」→ 不 hydrate；
- *  C9  光杆「□」行（无内容）→ 非 item；
- *  C10 代码围栏内「□ …」→ 不 hydrate（围栏必断带）；
- *  C11 桥接行 ≤2 不断带；>2 断带后单项无信号不 hydrate；
- *  C12 「□ 3.5mm 转接头」文本逐字保留（无标号误剥——保守红线）；
- *  C13 「■」装饰字符不识别；
- *  C14 任务行内嵌填空（「- [ ] 名称：___」）→ checkbox + 文本含 ___ 供渲染层切槽；
- *  C15 列表填空行剥一个列表标记（「- 联系人：___」→「联系人：___」）；
- *  S1  fillPromptOf：尾冒号剥离 / 全空格折叠 / 无文字回退原文；
- *  I1  buildDecisionReceiptInstruction：标题/来源/版本/[x] 语法/填空段齐备，
- *      空段整节省略，「未回写原文件」如实声明；
- *  K1  快照存取：save→load 回环；损坏 JSON → null；非法条目 → null；
- *      node 无 window 环境：load null / save 不炸。
- */
 
-// ---------- C 组：命中解析 ----------
 
 function itemsOf(markdown: string): Map<number, { text: string; checked?: boolean }> {
   const out = new Map<number, { text: string; checked?: boolean }>();
@@ -146,7 +120,6 @@ describe('parseDecisionFormItems · 命中与保守回退', () => {
       '□ C) 断带后单项',
     ].join('\n');
     const items = itemsOf(md);
-    // A/B 成带 hydrate；C 单项且前后无决策语境信号 → 不 hydrate
     assert.deepEqual([...items.keys()], [1, 4]);
     assert.equal(items.get(4)?.text, 'B) 同带第二项（隔 2 行仍续带）');
   });
@@ -185,7 +158,6 @@ describe('parseDecisionFormItems · 命中与保守回退', () => {
   });
 });
 
-// ---------- S 组：填空提示 ----------
 
 describe('fillPromptOf', () => {
   test('S1 尾冒号剥离与回退', () => {
@@ -195,7 +167,6 @@ describe('fillPromptOf', () => {
   });
 });
 
-// ---------- I 组：指令组装 ----------
 
 describe('buildDecisionReceiptInstruction', () => {
   test('I1 全量组装与空段省略', () => {
@@ -233,7 +204,6 @@ describe('buildDecisionReceiptInstruction', () => {
   });
 });
 
-// ---------- K 组：快照存取（node 无 window + 假 localStorage） ----------
 
 describe('决策快照存取', () => {
   test('K1 node 无 window：load null / save 不炸', () => {
@@ -262,21 +232,17 @@ describe('决策快照存取', () => {
       assert.deepEqual(snap, { checks: { '3': true, '4': false }, fills: { '5:0': '350mm' } });
       assert.equal(loadDecisionReceiptSnapshot('fileA::missing'), null);
 
-      // 存储键正确（guanlan.decisionReceipt.v1）
       assert.ok(store.has(DECISION_RECEIPT_STORAGE_KEY));
 
-      // 损坏 JSON → null（不抛）
       store.set(DECISION_RECEIPT_STORAGE_KEY, '{not-json');
       assert.equal(loadDecisionReceiptSnapshot('fileA::rev1'), null);
 
-      // 非法条目（checks 值非布尔）→ null
       store.set(
         DECISION_RECEIPT_STORAGE_KEY,
         JSON.stringify({ 'fileA::rev1': { checks: { '3': 'yes' }, fills: {} } })
       );
       assert.equal(loadDecisionReceiptSnapshot('fileA::rev1'), null);
 
-      // 非对象/数组整体 → null
       store.set(DECISION_RECEIPT_STORAGE_KEY, JSON.stringify([1, 2]));
       assert.equal(loadDecisionReceiptSnapshot('fileA::rev1'), null);
     } finally {

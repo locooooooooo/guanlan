@@ -1,10 +1,3 @@
-/**
- * DerivedSummary 缓存与发布粒度验收测试：
- * - 派生摘要按版本身份缓存：同版同内容引用复用（不再全量重解析）；
- * - 「未加载 → 已加载」状态跃迁触发一次重算，此后复用；
- * - 新版本 = 新条目；缓存 LRU 容量生效；
- * - extractCoreSummary 各格式（md/svg/pdf）口径不因缓存改变（回归）。
- */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
@@ -59,7 +52,6 @@ test('#30 同版同内容引用：重复调用命中缓存（不重复解析，�
   const entriesAfterFirst = derivedSummaryCacheStatsForTest();
   assert.equal(entriesAfterFirst, 1);
 
-  // 同一字符串实例反复调用（模拟每次发布/画布卡片/任务包分组各自调用一次）
   for (let i = 0; i < 5; i++) {
     assert.equal(extractCoreSummary(file), first, '缓存命中返回同一产物');
   }
@@ -68,17 +60,15 @@ test('#30 同版同内容引用：重复调用命中缓存（不重复解析，�
 
 test('#30 未加载 → 已加载跃迁：正文到达触发一次重算，此后复用', () => {
   clearDerivedSummaryCacheForTest();
-  const rev = revision({ revision_id: 'rev_b' }); // 未加载：无 markdownContent
+  const rev = revision({ revision_id: 'rev_b' });
   const file = fileOf([rev]);
   const unloaded = extractCoreSummary(file);
   assert.equal(unloaded.includes('元数据'), false, 'summaryNote 元数据串被 condense 治理');
 
-  // 正文补齐（revisionContentStore 返回的新字符串实例）
   const loadedRev = revision({ revision_id: 'rev_b', markdownContent: CONTENT_A });
   const loaded = extractCoreSummary(fileOf([loadedRev]));
   assert.equal(loaded.includes('方案 B'), true, '正文到达后从真实内容摘取');
 
-  // 此后复用（同引用）
   assert.equal(extractCoreSummary(fileOf([loadedRev])), loaded);
   assert.equal(derivedSummaryCacheStatsForTest(), 1, '同版只占一个条目');
 });
@@ -93,7 +83,6 @@ test('#30 新版本 = 新条目；旧版条目保留（LRU 内）', () => {
   assert.equal(s2.includes('方案 C'), true, '新版本按新内容摘取');
   assert.equal(derivedSummaryCacheStatsForTest(), 2);
 
-  // 回滚到 v1（A→B→A 场景）：命中既有条目
   assert.equal(extractCoreSummary(fileOf([r1, r2], 'rev_v1')), s1);
   assert.equal(derivedSummaryCacheStatsForTest(), 2);
 });
@@ -104,7 +93,6 @@ test('#30 内容变化（同版不同字符串实例，如 detail 重并入）�
   const file = fileOf([rev]);
   const first = extractCoreSummary(file);
 
-  // 同内容的新字符串实例（detail 重并入路径会产生新实例；slice 断开 V8 驻留）
   const revReloaded = revision({ revision_id: 'rev_c', markdownContent: CONTENT_A.slice() });
   const second = extractCoreSummary(fileOf([revReloaded]));
   assert.equal(second, first, '同内容派生结果一致（重算一次后归一）');
@@ -143,12 +131,10 @@ test('#30 单文件正文变化只重算该文件派生结果，分组其余文�
   const a = mk('f_a', '01-方案文档/a.md', CONTENT_A);
   const b = mk('f_b', '01-方案文档/b.md', CONTENT_B);
 
-  // 第一次发布：全量解析（缓存冷）
   groupFilesIntoPackages([a, b]);
   const entriesAfterFirst = derivedSummaryCacheStatsForTest();
   assert.equal(entriesAfterFirst, 2, '两文件各占一个条目');
 
-  // 单文件正文补齐 = 新版本（rev_f_b_r2）：分组重跑时 a 复用缓存，只新增 b 的条目
   const rev = revision({ revision_id: 'rev_f_b_r2', markdownContent: '# 核心结论\nB 的最新结论。\n\n## 背景\nx。' });
   const bReloaded: FileRecord = { ...b, revisions: [...b.revisions, rev], current_revision_id: rev.revision_id };
   groupFilesIntoPackages([a, bReloaded]);

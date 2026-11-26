@@ -77,7 +77,6 @@ interface FileContextMenuProps {
   onRenameFile?: (target: FileOpActionTarget) => void;
   onMoveFile?: (target: FileOpActionTarget) => void;
   onTrashFile?: (target: FileOpActionTarget) => void;
-  /** Quiet.md 目录操控：文件置顶 / 文件夹增删改移 */
   isPinnedFile?: (fileId: string) => boolean;
   onTogglePinFile?: (fileId: string) => void;
   onCreateDocumentInFolder?: (folderRelativePath: string) => void;
@@ -85,15 +84,11 @@ interface FileContextMenuProps {
   onRenameFolder?: (folderRelativePath: string) => void;
   onMoveFolder?: (folderRelativePath: string) => void;
   onTrashFolder?: (folderRelativePath: string) => void;
-  /** 单文件已读态判定与标已读/标未读切换 */
   isFileUnread?: (fileId: string) => boolean;
   onMarkFileRead?: (fileId: string, revisionId?: string) => void;
   onMarkFileUnread?: (fileId: string) => void;
-  /** 本目录全部标为已读（推进该目录下活跃文件的已读基线，8 秒可撤销） */
   onMarkFolderRead?: (folderRelativePath: string) => void;
-  /** 本目录全部标为未读（清除该目录下活跃文件的已读基线，8 秒可撤销） */
   onMarkFolderUnread?: (folderRelativePath: string) => void;
-  /** 工作区私有目录静默治理（时间轴/星图隐藏噪点，磁盘零写入，随时恢复） */
   isFolderMuted?: (folderRelativePath: string) => boolean;
   onToggleMuteFolder?: (folderRelativePath: string) => void;
 }

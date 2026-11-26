@@ -24,14 +24,12 @@ export type FormatClass =
   | 'binary';
 
 const EXTENSION_CLASSES: Record<string, FormatClass> = {
-  // Markdown
   md: 'markdown',
   markdown: 'markdown',
   mdown: 'markdown',
   mkd: 'markdown',
   mdx: 'markdown',
   rmd: 'markdown',
-  // 纯文本
   txt: 'text',
   text: 'text',
   log: 'text',
@@ -44,7 +42,6 @@ const EXTENSION_CLASSES: Record<string, FormatClass> = {
   readme: 'text',
   license: 'text',
   changelog: 'text',
-  // 源码与配置
   ts: 'code',
   tsx: 'code',
   js: 'code',
@@ -149,10 +146,8 @@ const EXTENSION_CLASSES: Record<string, FormatClass> = {
   prettierrc: 'code',
   tex: 'code',
   bib: 'code',
-  // 矢量图
   svg: 'vector',
   svgz: 'vector',
-  // 位图
   png: 'image',
   apng: 'image',
   jpg: 'image',
@@ -175,7 +170,6 @@ const EXTENSION_CLASSES: Record<string, FormatClass> = {
   xcf: 'image',
   ai: 'image',
   eps: 'image',
-  // 版式与办公文档
   pdf: 'document',
   doc: 'document',
   docx: 'document',
@@ -187,7 +181,6 @@ const EXTENSION_CLASSES: Record<string, FormatClass> = {
   epub: 'document',
   mobi: 'document',
   pages: 'document',
-  // 表格与数据
   xlsx: 'spreadsheet',
   xlsm: 'spreadsheet',
   xlsb: 'spreadsheet',
@@ -198,14 +191,12 @@ const EXTENSION_CLASSES: Record<string, FormatClass> = {
   tsv: 'spreadsheet',
   numbers: 'spreadsheet',
   parquet: 'spreadsheet',
-  // 演示稿
   pptx: 'presentation',
   pptm: 'presentation',
   ppt: 'presentation',
   ppsx: 'presentation',
   odp: 'presentation',
   key: 'presentation',
-  // 归档
   zip: 'archive',
   '7z': 'archive',
   rar: 'archive',
@@ -220,7 +211,6 @@ const EXTENSION_CLASSES: Record<string, FormatClass> = {
   apk: 'archive',
   msi: 'archive',
   iso: 'archive',
-  // 音频
   mp3: 'audio',
   wav: 'audio',
   flac: 'audio',
@@ -232,7 +222,6 @@ const EXTENSION_CLASSES: Record<string, FormatClass> = {
   aiff: 'audio',
   mid: 'audio',
   midi: 'audio',
-  // 视频
   mp4: 'video',
   m4v: 'video',
   mkv: 'video',
@@ -246,7 +235,6 @@ const EXTENSION_CLASSES: Record<string, FormatClass> = {
   mpeg: 'video',
   m2ts: 'video',
   ogv: 'video',
-  // 字体
   ttf: 'font',
   otf: 'font',
   woff: 'font',
@@ -276,11 +264,8 @@ export interface FormatUiMeta {
   label: string;
   formatClass: FormatClass;
   classLabel: string;
-  /** 侧栏 / 首页圆点颜色 */
   dotColor: string;
-  /** 图集卡片徽标样式 */
   badgeClass: string;
-  /** 日历卡片语义配色 */
   calendarColor: { text: string; border: string; bg: string };
 }
 
@@ -485,7 +470,6 @@ export function snapshotTierDescription(format: string | null | undefined): {
   };
 }
 
-// ===== 全景域过滤 SSOT（全部资产 / 业务文档 / 工程代码，严格 MECE 计数守恒） =====
 
 export type AssetDomainFilter = 'all' | 'business' | 'code';
 

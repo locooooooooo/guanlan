@@ -126,14 +126,12 @@ describe('工作区路径防线与原生系统桥接', () => {
     assert.equal(imported.ok, false);
     if (!imported.ok) assert.equal(imported.code, 'NOT_DESKTOP');
 
-    // 无桥时 resolveDesktopAbsolutePath 按工作区安全规则本地计算，越界仍返回 null
     assert.equal(
       await resolveDesktopAbsolutePath('docs/readme.md', 'H:\\demo'),
       'H:\\demo\\docs\\readme.md'
     );
     assert.equal(await resolveDesktopAbsolutePath('../secret.txt', 'H:\\demo'), null);
 
-    // 剪贴板在无桥时回退到 navigator.clipboard
     const copiedTexts: string[] = [];
     Object.defineProperty(globalThis, 'navigator', {
       configurable: true,
@@ -228,7 +226,6 @@ describe('工作区路径防线与原生系统桥接', () => {
       assert.deepEqual(imported.data.indexedRelativePaths, ['01-需求/方案.pdf']);
     }
 
-    // 原生剪贴板优先
     const webFallbackCalls: string[] = [];
     Object.defineProperty(globalThis, 'navigator', {
       configurable: true,
@@ -242,11 +239,9 @@ describe('工作区路径防线与原生系统桥接', () => {
     });
     assert.deepEqual(await copyTextWithDesktopFallback('01-需求/方案.pdf'), { ok: true });
     assert.deepEqual(webFallbackCalls, []);
-    // 原生失败时安全回退 Web 剪贴板
     assert.deepEqual(await copyTextWithDesktopFallback('FAIL_NATIVE'), { ok: true });
     assert.deepEqual(webFallbackCalls, ['FAIL_NATIVE']);
 
-    // 原生拖放事件订阅与取消
     const dropEvents: NativeDragDropEvent[] = [];
     const unsubscribe = subscribeNativeDragDrop((ev) => dropEvents.push(ev));
     const winObj = (globalThis as unknown as { window: { dispatchEvent: (e: unknown) => boolean } })

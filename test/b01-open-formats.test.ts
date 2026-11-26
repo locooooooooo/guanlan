@@ -252,7 +252,6 @@ describe('/api/v1/storage/stats 与 /api/v1/storage/policy 客户端联调', () 
 
 describe('前端视图接线防退化断言', () => {
   it('设置弹层、阅读器与侧栏已接入全格式与存储统计组件', () => {
-    // 拆解 ModalsAndDrawers 后，WorkspaceSettingsModal 实现位于 components/modals/WorkspaceSettingsModal.tsx
     const modals = [
       'components/ModalsAndDrawers.tsx',
       'components/modals/WorkspaceSettingsModal.tsx',

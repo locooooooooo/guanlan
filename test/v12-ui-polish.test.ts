@@ -1,13 +1,3 @@
-/**
- * v1.2.0 细节打磨回归防线：
- *  1. ShortcutsCheatSheetModal：Portal 挂载逃逸 TopHeader backdrop-blur / z-30 裁切与进度条横穿、
- *     真实构建版本透出（清零硬编码模型名）与暗夜深色遮罩；
- *  2. AppLibraryStage：目录面包屑栏与提示横幅清零硬编码 bg-white，暗夜模式不再刺眼发白；
- *  3. NonLegacyFilePreviewPanel + formatMeta：暗夜态快照徽标与全 13 类格式徽标双态高对比、
- *     版本与观测日期不被长 revision_id 截断、图片加载失败提供重试入口；
- *  4. WorkspaceSettingsModal + StorageUsageSection：清零内部代号与表名、
- *     清零硬编码 bg-white、实时配额口径与下方存储面板一致、全站弹层暗夜遮罩统一。
- */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -207,7 +197,6 @@ test('Polish-04 · 内容优先排版：源码/预览收折技术元数据、阅
     coverage: 'full_text',
   };
 
-  // 1. 文本/源码预览：顶部压缩为单行工具条，SHA-256 与策略说明默认折叠，不再叠放旧版双头与 64vh 嵌套限高
   const textHtml = renderToStaticMarkup(
     React.createElement(NonLegacyFilePreviewPanel, {
       activeFile: tsFile,
@@ -226,7 +215,6 @@ test('Polish-04 · 内容优先排版：源码/预览收折技术元数据、阅
   assert.ok(!textHtml.includes('max-h-[64vh]'), '源码区应占满剩余阅读视口高度，不再硬裁 64vh');
   assert.ok(textHtml.includes('export const ok = true;'), '源码正文应直接呈现');
 
-  // 2. 纯元数据模式（无内联正文可展示时）默认展开完整 L0 元数据卡片
   const binRev: Revision = { ...tsRev, revision_id: 'rev_bin_v1', snapshotAvailable: false };
   const binFile: FileRecord = {
     ...tsFile,
@@ -247,7 +235,6 @@ test('Polish-04 · 内容优先排版：源码/预览收折技术元数据、阅
   );
   assert.ok(metaOnlyHtml.includes('data-preview-meta-drawer=""'), '无内联正文时 L0 元数据网格应默认展开');
 
-  // 3. AppLibraryStage：目录工作栏仅概览态渲染，阅读态与筛选不匹配提示合流为单条
   const stageSrc = readSrc('components/app/AppLibraryStage.tsx');
   assert.ok(
     stageSrc.includes("libraryMode === 'overview' && sidebarFilters.folder !== 'all'"),
@@ -255,7 +242,6 @@ test('Polish-04 · 内容优先排版：源码/预览收折技术元数据、阅
   );
   assert.ok(stageSrc.includes('data-reader-filter-mismatch=""'), '阅读态筛选不匹配应提供紧凑单条提示');
 
-  // 4. ReaderView：返回面包屑并入 Row 1 标题行 + 单版本文件隐藏无效的「无可比较的版本 / 历史快照 (1)」
   const readerHtmlSingle = renderToStaticMarkup(
     React.createElement(ReaderView, {
       files: [tsFile],
@@ -283,7 +269,6 @@ test('Polish-04 · 内容优先排版：源码/预览收折技术元数据、阅
   assert.ok(!readerHtmlSingle.includes('无可比较的版本'), '单版本文件不得用置灰的「无可比较的版本」占位');
   assert.ok(!readerHtmlSingle.includes('历史快照 (1)'), '单版本文件不得在 Row 2 重复展示「历史快照 (1)」');
 
-  // 多版本文件正常展示历史快照入口
   const tsRev2: Revision = { ...tsRev, revision_id: 'rev_ts_v2', versionNumber: 2 };
   const multiRevFile: FileRecord = {
     ...tsFile,
@@ -315,7 +300,6 @@ test('Polish-04 · 内容优先排版：源码/预览收折技术元数据、阅
   );
   assert.ok(readerHtmlMulti.includes('历史快照 (2)'), '多版本文件应正常展示历史快照入口');
 
-  // 5. AppBanners：全景溯源页签新事件细条精简冗余说明并提供一键暂收入口；阅读态不弹窗打断
   const bannerHtml = renderToStaticMarkup(
     React.createElement(AppBanners, {
       ctx: {
@@ -345,7 +329,6 @@ test('Polish-04 · 内容优先排版：源码/预览收折技术元数据、阅
 });
 
 test('Polish-05 · 信息降密：扫描态并入同步胶囊、时光机合流单右栏与未变章节折叠、预览工具条沉底与专项胶囊收拢', () => {
-  // 1. 后台扫描中不再顶出通栏横幅（收编入 TopHeader 同步胶囊）；扫描失败保留重试横幅
   const runningBannerHtml = renderToStaticMarkup(
     React.createElement(AppBanners, {
       ctx: {
@@ -403,7 +386,6 @@ test('Polish-05 · 信息降密：扫描态并入同步胶囊、时光机合流�
   );
   assert.ok(scanningHeaderHtml.includes('扫描中…'), '扫描进度应直接体现在 TopHeader 同步胶囊内');
 
-  // 2. MdHumanDiffPanel：有变与未变章节并存时默认折叠未变章节；决定/待办 0 变化压缩为单行轻提示
   const mdDiff = buildMarkdownHumanDiff(
     ['# 文档', '## 未变章 A', '原文 A', '## 改动章 B', '旧内容 B', '## 未变章 C', '原文 C'].join('\n'),
     ['# 文档', '## 未变章 A', '原文 A', '## 改动章 B', '新内容 B', '## 未变章 C', '原文 C'].join('\n')
@@ -416,7 +398,6 @@ test('Polish-05 · 信息降密：扫描态并入同步胶囊、时光机合流�
   assert.ok(!mdHtml.includes('未变章 A'), '未变章节默认折叠以降低垂直密度');
   assert.ok(mdHtml.includes('data-element-changes-empty=""'), '决定/待办无变化时压缩为单行静默提示');
 
-  // 3. NonLegacyFilePreviewPanel：文本正文置顶，工具条沉底并浮出轻量复制/入篮操作
   const tsRev: Revision = {
     revision_id: 'rev_p5_v1',
     file_id: 'f_p5_01',
@@ -465,7 +446,6 @@ test('Polish-05 · 信息降密：扫描态并入同步胶囊、时光机合流�
   assert.ok(codeIdx > 0 && footerIdx > codeIdx, '源码正文应位于底部状态脚标之前（首屏正文顶格直出）');
   assert.ok(codeHtml.includes('data-preview-floating-actions=""'), '应提供右上角轻悬浮复制/入篮入口');
 
-  // 4. ReaderView：所属专项五阶段 Stepper 默认收拢为单枚下拉胶囊，不再平铺 5 步按钮
   const pkg = groupFilesIntoPackages([tsFile])[0] ?? null;
   const readerHtml = renderToStaticMarkup(
     React.createElement(ReaderView, {
@@ -494,7 +474,6 @@ test('Polish-05 · 信息降密：扫描态并入同步胶囊、时光机合流�
   assert.ok(readerHtml.includes('data-reader-initiative-pill=""'), '专项五阶段应默认收拢为紧凑胶囊触发器');
   assert.ok(!readerHtml.includes('aria-label="五阶段进度 Stepper"'), '未点击展开前不应在 Row 2 常驻铺满五阶段 Stepper');
 
-  // 5. 全景/画布视图默认收起左侧目录栏（释放横向空间，用户可随时一键展开）
   const sidebarShellSrc = readSrc('components/app/GlobalDirectorySidebar.tsx');
   assert.ok(
     sidebarShellSrc.includes("activeTab === 'panorama' ? !dirShell.panoramaSidebarOpen : dirShell.sidebarCollapsed"),
@@ -503,7 +482,6 @@ test('Polish-05 · 信息降密：扫描态并入同步胶囊、时光机合流�
 });
 
 test('Polish-06 · 全局视图去噪：清零 SVG/PDF/MD 工程黑话与 coverage 键值、阅读态屏蔽事件通栏、顶栏去大数字与静默态收拢', () => {
-  // 1. SVG 阅读器：不再展示「受限安全矢量预览」「可提取文字节点」「SVG 可提取文字检索层」「coverage=svg_text」
   const svgRev: Revision = {
     revision_id: 'rev_svg_p6',
     file_id: 'f_svg_p6',
@@ -561,7 +539,6 @@ test('Polish-06 · 全局视图去噪：清零 SVG/PDF/MD 工程黑话与 covera
   assert.ok(svgReaderHtml.includes('data-svg-extracted-texts-toggle=""'), '有提取文字时在工具栏提供按需展开开关');
   assert.ok(svgReaderHtml.includes('v1</button>'), '单版本文件顶栏以极淡 v1 呈现，不加橙底「(最新)」噪音');
 
-  // 2. PDF 阅读器：索引正常态不再铺陈「阅读能力：内嵌阅读器可用」「检索索引状态」「按版本 rev_xxx 快照直读」
   const pdfRev: Revision = {
     revision_id: 'rev_pdf_p6',
     file_id: 'f_pdf_p6',
@@ -616,7 +593,6 @@ test('Polish-06 · 全局视图去噪：清零 SVG/PDF/MD 工程黑话与 covera
   assert.ok(!pdfReaderHtml.includes('检索索引状态'), 'PDF 索引正常态不展示技术索引状态条');
   assert.ok(!pdfReaderHtml.includes('真实 PDF 原页 · 按版本'), 'PDF 卡片头部不再泄露内部 revision_id');
 
-  // 3. TopHeader：主导航 Tab 不再常驻 20272 / 5588 超大数字；常态同步走静默图标；空证据篮走纯图标
   const calmHeaderHtml = renderToStaticMarkup(
     React.createElement(TopHeader, {
       activeTab: 'library',
@@ -657,7 +633,6 @@ test('Polish-06 · 全局视图去噪：清零 SVG/PDF/MD 工程黑话与 covera
   assert.ok(calmHeaderHtml.includes('class="sr-only">证据篮</span>'), '空证据篮收拢为静默图标，有收集项时再展文字与角标');
   assert.ok(!calmHeaderHtml.includes('data-island-ring'), '顶栏阅读抽屉入口收拢为单图标，不再渲染三枚彩色圆环');
 
-  // 4. HTML / Office 预览：技术元数据条沉底，不再在阅读器顶栏与内容工具栏之间叠出第三条横栏
   const htmlRev: Revision = {
     ...svgRev,
     revision_id: 'rev_html_p6',

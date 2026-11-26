@@ -17,14 +17,9 @@ import type {
 } from '../services/apiTypes';
 import { MultiProjectOverviewStrip } from './MultiProjectOverviewStrip';
 import { formatUiMeta } from '../utils/formatMeta';
-// 首页聚合口径全部复用既有单一出口：未读三态、任务包分组同概览看板，
-// 高价值待阅走统计契约（computeHighValueReading/highValueReadingHeading）——
-// 组件内零造数，不新建任何判定或接口。
 import { hasUnreadChanges } from '../utils/guanlanEngine';
-// SVG 封面编码走 per-file 预览缓存单一出口（原组件内 AtlasView 同式拷贝退役）
 import { getFilePreviewEntry } from '../utils/filePreviewCache';
 import { computeHighValueReading, highValueReadingHeading } from '../utils/highValueReading';
-// 统一状态机 SSOT：决策状态词与未决口径单一出口（与 DecisionRadar 同源）
 import {
   DECISION_STATUS_CONFLICT,
   DECISION_STATUS_PENDING,
@@ -39,10 +34,8 @@ import {
 import type { PackageDoc, TaskPackage } from '../utils/taskPackages';
 import { localDay } from '../utils/timeFormat';
 import { BRAND_SLOGAN, BRAND_SLOGAN_NOTE } from '../utils/brandIdentity';
-// 品牌界面 + coss Frame/CardFrame 容器
 import { Button, IconButton } from './ui/primitives';
 import { Badge, CardFrame, Frame, FramePanel } from './ui';
-// 专题橱窗：两张微渐变专题卡 + 任务包视觉预览网格（替换原「任务动态」节）
 import FeaturedFocusCards from './FeaturedFocusCards';
 import type { FeaturedDecisionItem, FeaturedPackageInfo } from './FeaturedFocusCards';
 import TaskPackageGallery from './TaskPackageGallery';
@@ -66,38 +59,22 @@ interface HomeViewProps {
   files: FileRecord[];
   readingStates: Record<string, ReadingState>;
   events: TimelineEvent[];
-  /** /summary 的真实计数；首页已不再展示统计大数字，字段保留待统一改接线 */
   summary: WorkspaceSummary | null;
-  /** /events/days 按日聚合——事件走势小图的唯一数据源 */
   eventDays: EventDaysResult | null;
-  /** App 已算好的「最近 7 天」列表（文档日期 = revisions[0].source_time 本地日历日） */
   recentItems: HomeRecentItem[];
-  /** 待拍板决策原始数组（接线前缺省 []——N=0 渲染空态，不炸不造数） */
   decisions?: DecisionAssertion[];
-  /** 服务端全库未决待拍板真实总数（避免分页加载造成统计偏差） */
   decisionsUnresolvedTotal?: number | null;
   onOpenDoc: (fileId: string) => void;
-  /** 续读入口：与左栏目录 / 悬浮岛同一链路（钉回上次读到的版本） */
   onResumeReading: (fileId: string) => void;
   onMarkFullyRead: (fileId: string, revisionId: string) => void;
   onOpenPackageBoard: () => void;
   onOpenPanorama: () => void;
-  /** 带日期直飞全景星图（锁定 activeDate 语义，绝不 toggle）——
-      司辰徽记「今日切片」与事件走势柱图共用同一接线点；
-      缺省时点击降级为无日期的 onOpenPanorama（仍诚实可达，不锁定具体日） */
   onOpenPanoramaAt?: (date: string) => void;
-  /** 带日期直飞全景日历（锁定 activeDate + 聚焦当日沉淀卡）——
-      走势区「日历看该日」次级入口；缺省时该入口不渲染 */
   onOpenCalendarAt?: (date: string) => void;
-  /** 点击卡 A 斜叠决策微型卡 → 顶栏雷达对应项（接线前缺省 no-op） */
   onOpenDecision?: (decisionId: string) => void;
-  /** 打开「司辰手记」今日/本周沉淀简报抽屉 */
   onOpenChronosDigest?: () => void;
-  /** App 级 /state-overview 唯一数据源，透传任务包橱窗渲染六态徽标 */
   stateOverview?: StateOverviewResponse | null;
-  /** 文件右键菜单 */
   systemActions?: DesktopFileActionCallbacks;
-  /** Quiet.md 多项目并存总览：存在时首页顶部展示跨项目工作台与汇总脉搏 */
   multiProject?: {
     overview: ProjectsOverviewResponseDto | null;
     projects: ProjectEntryDto[];
@@ -107,16 +84,13 @@ interface HomeViewProps {
     onOpenCrossDecision: (item: CrossProjectDecisionItemDto) => void;
     onOpenCrossFile: (item: CrossProjectRecentFileDto) => void;
   };
-  /** 后端连接状态与错误重试（断连时诚实显示错误态，绝不伪装成空工作区） */
   dataSource?: 'loading' | 'real' | 'error';
   dataError?: string | null;
   retryingConnection?: boolean;
   onRetryConnection?: () => void;
-  /** 首页有界预水合 SVG 封面（让带真实架构图的专项打开即现原图，而非退回空白线） */
   onPrefetchSvgCover?: (fileId: string, revisionId: string) => void;
 }
 
-/** 当前版本解析：与 AtlasView/RightInspector 同款口径（current_revision_id 优先，缺失取末版） */
 function currentRevisionOf(file: FileRecord) {
   return (
     file.revisions.find((r) => r.revision_id === file.current_revision_id) ||
@@ -124,7 +98,6 @@ function currentRevisionOf(file: FileRecord) {
   );
 }
 
-/** 按时段问候 + 本地长日期（zh-CN；展示层自取当下时刻，不参与任何数据口径） */
 function greetingHeader(): { greeting: string; dateLabel: string } {
   const now = new Date();
   const hour = now.getHours();
@@ -138,7 +111,6 @@ function greetingHeader(): { greeting: string; dateLabel: string } {
   return { greeting, dateLabel };
 }
 
-/** 近 7 天本地日历日窗口（含今天），键为 YYYY-MM-DD——与 App.recentItems 同一套本地拼接口径 */
 function lastSevenDays(): string[] {
   const days: string[] = [];
   const today = new Date();
@@ -151,17 +123,10 @@ function lastSevenDays(): string[] {
   return days;
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-// 纯函数出口（无 DOM 依赖，test/ui-ux-polish-04-polish.test.ts 直测）：
-// 走势柱模型（可点击时光入口）与司辰今日徽记摘要全部真实派生，组件内零造数。
-// 新增/演进分类与 graphEvents.computeTrunkAccumulation 同一语义出处
-// （appeared/discovered/workspace_baseline = 新增·首次纳入，其余 = 内容演进）。
-// ══════════════════════════════════════════════════════════════════════════
 
 /** 走势柱图桶数上限：近 24 天（day 粒度） */
 export const HOME_TREND_BAR_LIMIT = 24;
 
-/** 「今日新增/首次纳入」类事件 kind——与 computeTrunkAccumulation 的 added 口径逐字同源 */
 const CHRONOS_ADDED_KINDS = ['appeared', 'discovered', 'workspace_baseline'] as const;
 
 /** 精确 YYYY-MM-DD 校验（含真实历法日：02-30 等伪日期拒绝；'' 日期待考恒 false） */
@@ -177,11 +142,8 @@ export function isExactDayDate(value: string): boolean {
 
 /** 事件走势柱模型：进图桶（'' 日期待考恒排除）+ 直跳可行性判定 */
 export interface HomeTrendBar {
-  /** YYYY-MM-DD（或服务端给出的其他非空桶键；非法键 jumpable=false） */
   date: string;
   count: number;
-  /** day 粒度且日期为精确 YYYY-MM-DD 才可作直跳载荷；
-      week/month 聚合桶与畸形键诚实禁跳（只有 day 桶能定位到某日） */
   jumpable: boolean;
 }
 
@@ -204,16 +166,11 @@ export function buildHomeTrendBars(eventDays: EventDaysResult | null): HomeTrend
 
 /** 司辰今日徽记摘要：全部从真实 eventDays 今日桶派生，零造数 */
 export interface ChronosTodaySummary {
-  /** 今日本地日历日（YYYY-MM-DD，与 lastSevenDays 同一口径，不引 UTC 日界） */
   date: string;
-  /** eventDays 存在今日 day 粒度桶；false = 徽记诚实降级为「今日暂无新动态」 */
   found: boolean;
   dayCount: number;
-  /** 今日新增/首次纳入（appeared + discovered + workspace_baseline） */
   addedCount: number;
-  /** 今日内容演进（其余非新增事件） */
   modifiedCount: number;
-  /** 事件聚合口径（occurred=业务发生 / observed=系统采集）——徽记文案显式声明，绝不混写 */
   order: 'occurred' | 'observed' | null;
 }
 
@@ -289,17 +246,12 @@ const HomeView: React.FC<HomeViewProps> = ({
   const [pulseMode, setPulseMode] = useState<'stacked' | 'cumulative'>('stacked');
   const [hoveredPulseIdx, setHoveredPulseIdx] = useState<number | null>(null);
 
-  // 司辰今日徽记：今天 = 本地日历日（与 lastSevenDays 同一口径，不引 UTC 日界）；
-  // 摘要全部由真实 eventDays 今日桶派生（buildChronosTodaySummary 零造数）
   const today = useMemo(() => localDay(new Date().toISOString()), []);
   const chronos = useMemo(() => buildChronosTodaySummary(eventDays, today), [eventDays, today]);
 
-  // 近 7 天本地日历日窗口（含今天）——卡 B「今日最活跃专项」的事件窗口唯一依据
   const weekDays = useMemo(lastSevenDays, []);
   const windowStart = weekDays[0];
 
-  // 任务包：与 AtlasView 看板同一条纯函数链（group → enrich），事件缺省时不造 eventCount；
-  // 分组 base 抽共享 memo——卡 B 近 7 天窗口回填（activePackage）复用同一次分组结果
   const packagesBase = useMemo(() => groupFilesIntoPackages(files), [files]);
   const packages = useMemo(
     () =>
@@ -307,13 +259,8 @@ const HomeView: React.FC<HomeViewProps> = ({
     [packagesBase, events]
   );
 
-  // 文件索引：近期待阅行回查 / 卡 B 待验收计数 / Gallery 共用
   const fileById = useMemo(() => new Map(files.map((f) => [f.file_id, f])), [files]);
 
-  // SVG 封面 dataUri：per-file 预览缓存单一出口（filePreviewCache）——此处原是
-  // AtlasView 同式的又一份拷贝（每次 files 身份变化全量重清洗重编码），已收敛；
-  // 修订未变 O(1) 命中，仅新到文件编码一次。同份 map 喂 Gallery 封面与卡 B 斜叠图纸，
-  // 封面与斜叠图因此同源不缺供，不依赖 optional 静默降级
   const svgDataUris = useMemo(() => {
     const map: Record<string, string> = {};
     for (const f of files) {
@@ -324,9 +271,6 @@ const HomeView: React.FC<HomeViewProps> = ({
     return map;
   }, [files]);
 
-  // 卡 B：近 7 天窗口（lastSevenDays 首日）内事件回填后 eventCount 最高者。
-  // 窗口过滤用 ev.observed_at 本地日——与 enrichPackagesWithEvents 的 lastActivity 同一时间源；
-  // 活跃链与旧 activePackages 同式（有动静者按最近活动降序），计数并列时更近期者胜出
   const activePackage = useMemo<TaskPackage | null>(() => {
     const windowedEvents = events.filter((e) => localDay(e.observed_at) >= windowStart);
     const enriched =
@@ -340,12 +284,6 @@ const HomeView: React.FC<HomeViewProps> = ({
     return active.reduce((best, p) => (p.eventCount > best.eventCount ? p : best), active[0]);
   }, [packagesBase, events, windowStart]);
 
-  // 卡 B 物化（FeaturedPackageInfo）：待验收 N = 交付阶段文档中未读数
-  // （reason !== 'up_to_date'，与统计 pending 口径一致）；封面文档 = 有 dataUri 的
-  // svg 中当前版最新者（「最新 SVG 封面」——docs 是阅读顺序不是时间序，按
-  // currentRevisionOf observed_at 取 max，时间全缺则首份兜底），无 svg → 承载
-  // latestConclusion 的文档（排版封面），无结论 → 不发 cover；badgeLine = packageBadgeLine
-  // 真实派生（斜叠排版封面消费）
   const activePackageInfo = useMemo<FeaturedPackageInfo | null>(() => {
     if (!activePackage) return null;
     const awaitingAcceptance = activePackage.docs.filter((d) => {
@@ -388,11 +326,6 @@ const HomeView: React.FC<HomeViewProps> = ({
     };
   }, [activePackage, fileById, readingStates, svgDataUris]);
 
-  // 卡 A：与 DecisionRadar 同口径——候选（isCandidateOnly）只作线索不计入；
-  // 待拍板 = 来源不一致(冲突) + 待确认。状态词与未决过滤收敛到
-  // stateProjection 单一出口（UNRESOLVED/DECISION_STATUS_* 常量），不双份硬编码；
-  // 展示序镜像雷达分区（冲突优先，区内 byBlocked 同式排序取前 2；byBlocked 为
-  // 雷达模块内私有比较器，此处按其实现镜像并注明出处）
   const decisionItems = useMemo<FeaturedDecisionItem[]>(() => {
     const considered = (decisions ?? []).filter((d) => !d.isCandidateOnly);
     const byBlocked = (a: DecisionAssertion, b: DecisionAssertion) =>
@@ -410,7 +343,6 @@ const HomeView: React.FC<HomeViewProps> = ({
       status: d.status,
     }));
   }, [decisions]);
-  // 未决计数与 DecisionRadar unresolvedCount 同一出口（优先消费服务端全库未决总数）
   const decisionCount = useMemo(
     () =>
       typeof decisionsUnresolvedTotal === 'number' && decisionsUnresolvedTotal >= 0
@@ -419,14 +351,12 @@ const HomeView: React.FC<HomeViewProps> = ({
     [decisions, decisionsUnresolvedTotal]
   );
 
-  // 近期待阅：统计单一出口（高价值∩未读，entries 已排序），展示层只截前 6
   const highValueStats = useMemo(
     () => computeHighValueReading(files, readingStates),
     [files, readingStates]
   );
   const todoEntries = useMemo(() => highValueStats.entries.slice(0, 6), [highValueStats.entries]);
 
-  // 首页有界预水合专项 SVG 封面（至多 8 份，按 revisionId 去重，避免重复拉取）
   const prefetchedSvgRevsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!onPrefetchSvgCover || dataSource !== 'real') return;
@@ -438,13 +368,10 @@ const HomeView: React.FC<HomeViewProps> = ({
     }
   }, [packages, fileById, dataSource, onPrefetchSvgCover]);
 
-  // 事件走势：纯函数出口（可点击时光入口）——''（日期待考）桶不进图，升序取最近
-  // 24 桶；只有 day 粒度且日期为精确 YYYY-MM-DD 的桶才可作直跳载荷（聚合桶诚实禁跳）
   const trendBars = useMemo(() => buildHomeTrendBars(eventDays), [eventDays]);
   const pulse = useMemo(() => buildPulseComposition(trendBars, eventDays), [trendBars, eventDays]);
   const trendMax = Math.max(1, ...trendBars.map((g) => g.count));
   const trendTotal = trendBars.reduce((acc, g) => acc + g.count, 0);
-  // 「日历看该日」次级入口落点：最近一个有事件的直跳日（无则不渲染入口）
   const calendarJumpDate = useMemo(() => latestJumpableTrendDate(trendBars), [trendBars]);
 
   if (dataSource === 'error' && files.length === 0) {
@@ -495,9 +422,7 @@ const HomeView: React.FC<HomeViewProps> = ({
 
   return (
     <div className="depth-0-surface relative flex-1 min-h-0 overflow-y-auto">
-      {/* 对称居中画布（ReadingIsland 已收编顶栏，取消右侧多余 pr-16 留白） */}
       <div className="relative mx-auto w-full max-w-6xl space-y-6 px-4 pb-14 pt-6 sm:px-6 sm:pt-7">
-        {/* 问候头 + 工作区状态胶囊 + 快捷入口 */}
         <header
           className="glx-hero-reveal flex flex-wrap items-end justify-between gap-4"
           style={{ '--glx-stagger': 0 } as React.CSSProperties}
@@ -535,12 +460,6 @@ const HomeView: React.FC<HomeViewProps> = ({
                   </>
                 )}
               </div>
-              {/* 司辰今日徽记胶囊：今日新增/演进微摘要全部真实派生（eventDays 今日桶
-                  by_kind，新增分类与 computeTrunkAccumulation 同一语义出处；未命中日诚实
-                  降级为「今日暂无新动态」，绝不重复 meta 胶囊的资产/待拍板统计）。
-                  悬停轻摇（motion-safe 变换，component 侧过渡不进共享动效层）呼应星图司辰；
-                  点击直飞司辰星图今日切片（onOpenPanoramaAt 锁定 activeDate，缺省降级为
-                  无日期的 onOpenPanorama——仍诚实可达）。 */}
               <button
                 type="button"
                 data-chronos-badge={chronos.found ? 'today' : 'idle'}
@@ -607,7 +526,6 @@ const HomeView: React.FC<HomeViewProps> = ({
           </div>
         </header>
 
-        {/* 多项目工作台总览条（Quiet.md 多目录平级卡片 + 跨项目待拍板与动态） */}
         {multiProject && multiProject.projects.length > 0 && (
           <div
             className="glx-hero-reveal"
@@ -625,7 +543,6 @@ const HomeView: React.FC<HomeViewProps> = ({
           </div>
         )}
 
-        {/* 专题橱窗：卡 A 待拍板决策 / 卡 B 今日最活跃专项 */}
         <div
           className="glx-hero-reveal"
           style={{ '--glx-stagger': 2 } as React.CSSProperties}
@@ -639,12 +556,10 @@ const HomeView: React.FC<HomeViewProps> = ({
           />
         </div>
 
-        {/* 首屏视觉驾驶舱：左侧事件演进脉冲图（堆叠/累计切换）+ 右侧工作区态势图谱 */}
         <div
           className="glx-hero-reveal grid grid-cols-1 gap-5 lg:grid-cols-12 lg:items-stretch"
           style={{ '--glx-stagger': 3 } as React.CSSProperties}
         >
-          {/* 事件走势：堆叠构成 / 累计脉冲双视图 + 顶部零遮挡明细条 + 活跃日均线 */}
           <CardFrame
             aria-label="事件走势"
             className="flex flex-col justify-between rounded-2xl border border-border/80 bg-card p-5 shadow-xs lg:col-span-7"
@@ -655,7 +570,6 @@ const HomeView: React.FC<HomeViewProps> = ({
                   <h2 className="text-[15px] leading-[22px] font-semibold tracking-tight text-foreground whitespace-nowrap">
                     事件走势
                   </h2>
-                  {/* 堆叠构成 / 累计曲线 切换：同一份真实数据的两种读法 */}
                   <div
                     role="tablist"
                     aria-label="事件走势视图切换"
@@ -698,8 +612,6 @@ const HomeView: React.FC<HomeViewProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  {/* 日历次级直跳——落点 = 最近一个有事件的直跳日（latestJumpableTrendDate
-                      真实派生，不造「峰值日」概念）；缺 onOpenCalendarAt 时入口不渲染 */}
                   {calendarJumpDate && onOpenCalendarAt && (
                     <button
                       type="button"
@@ -721,7 +633,6 @@ const HomeView: React.FC<HomeViewProps> = ({
                 </div>
               </div>
 
-              {/* 零遮挡交互明细 / 图例条：悬停任意柱条或曲线节点即时展开真实构成与代表事件 */}
               {(() => {
                 const activePt = hoveredPulseIdx !== null ? pulse.points[hoveredPulseIdx] ?? null : null;
                 return (
@@ -821,7 +732,6 @@ const HomeView: React.FC<HomeViewProps> = ({
                   className="relative mt-3 flex h-[152px] items-end gap-1.5 pb-1"
                   onMouseLeave={() => setHoveredPulseIdx(null)}
                 >
-                  {/* 柔和背景辅助刻度线（明暗双态自适应）+ 日均参考线 */}
                   <div
                     aria-hidden="true"
                     className="pointer-events-none absolute inset-x-0 top-0 bottom-1 flex flex-col justify-between"
@@ -853,10 +763,6 @@ const HomeView: React.FC<HomeViewProps> = ({
                     const isPeak = g.count === trendMax && g.count > 0;
                     const isHovered = hoveredPulseIdx === idx;
                     const heightPct = Math.max(8, (g.count / trendMax) * 100);
-                    // 可点击时光入口——jumpable 桶渲染为 button（data-home-trend-bar 承载
-                    // 精确 YYYY-MM-DD 直跳载荷）；week/month 聚合桶与畸形键保持 div（诚实禁跳，
-                    // 不可假装能定位到某日）。柱高仍是 inline height:%（视觉量，非动画量——
-                    // 生长动效只有既有 glx-bar-rise 的 scaleY）。
                     const tipParts = [
                       `${g.date.slice(5)} · ${g.count} 条`,
                       point?.hasKindBreakdown
@@ -989,7 +895,6 @@ const HomeView: React.FC<HomeViewProps> = ({
                           <stop offset="100%" stopColor="var(--accent-iris-deep)" stopOpacity="0.02" />
                         </linearGradient>
                       </defs>
-                      {/* 辅助横向虚线：与柱图视觉坐标保持统一 */}
                       <line
                         x1="8"
                         y1="14"
@@ -1126,7 +1031,6 @@ const HomeView: React.FC<HomeViewProps> = ({
             })()}
           </CardFrame>
 
-          {/* 工作区态势图谱：态势环 / 阶段流 / 格式谱 三视图切换 */}
           <HomeWorkspaceVisuals
             className="lg:col-span-5"
             files={files}
@@ -1140,7 +1044,6 @@ const HomeView: React.FC<HomeViewProps> = ({
           />
         </div>
 
-        {/* 任务包橱窗（C2） */}
         <div
           className="glx-hero-reveal"
           style={{ '--glx-stagger': 4 } as React.CSSProperties}
@@ -1155,7 +1058,6 @@ const HomeView: React.FC<HomeViewProps> = ({
           />
         </div>
 
-        {/* 近期待阅：coss Frame + FramePanel 精密托盘，带阶段胶囊与快速已读勾选 */}
         <section
           aria-label="近期待阅"
           className="glx-hero-reveal"

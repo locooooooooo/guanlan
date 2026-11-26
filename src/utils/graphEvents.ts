@@ -1,14 +1,3 @@
-/**
- * 观澜 —— 工程画布的事件场景映射
- *
- * 把真实时间绑定到 X-Ray 主干：
- * - 标尺刻度 = 真实日期（不是固定的 0:00 / 1:00 / 2:00）
- * - 中央卡片 = 发生了什么（日期、事项、依据版本）
- * - 虚线折叠组 = 一天内同一明确事项的事件；无事项标识时只按日期分组
- * - 司辰沿当前筛选后的真实序列移动（由 activeDate + navigator 驱动）
- *
- * 这里只做纯映射，不碰任何坐标、曲线或动效；渲染仍由 GraphCanvasView 负责。
- */
 
 import type {
   EventDayGranularity,
@@ -17,27 +6,18 @@ import type {
   EventDaysResult,
 } from '../services/workspaceClient';
 import type { FileFormat, FileRecord, TimelineEvent } from '../types/guanlan';
-// 画布角标与日期标签统一按本地时区取值
 import { formatLocalClock, localDay } from './timeFormat';
-// 同日同文件合并（语义聚合层既有导出）——mergeDayRevisions 按 file_id+本地日历日成桶，
-// dayMergeLabel 产出合并口径标签；版本号由调用方经 resolveVersion 注入，本层不伪造
 import { mergeDayRevisions, type DayRevisionMerge } from './taskPackages';
-// 任务空间桌面：任务包分组容器与富预览卡数据——分组判定/核心结论/缩略图清洗全部
-// 复用既有单源导出（taskPackages.groupFilesIntoPackages / extractCoreSummary /
-// filePreviewCache 的 SVG 清洗编码与正文预览），本层只做画布形态的装配，禁止复写任何判定逻辑
 import {
   groupFilesIntoPackages,
   type PackageKind,
   type StageRole,
 } from './taskPackages';
-// 预览物化（SVG dataUri / 正文前三行）走 per-file 缓存单一出口——原本层私有
-// markdownBodyPreview 与行内 SVG 编码已迁入该模块（依赖方向 graphEvents→cache→guanlanEngine 无环）
 import { getFilePreviewEntry } from './filePreviewCache';
 
 export type CanvasCapability = 'MD' | 'DEC' | 'REV' | 'SVG' | 'TIM' | 'PDF' | 'REL';
 
 export interface CanvasEventCard {
-  /** 兼容现有画布的 8 个布局槽位（sub_01..sub_08） */
   slotId: string;
   eventId: string;
   fileId: string;
@@ -45,35 +25,16 @@ export interface CanvasEventCard {
   decisionId: string | null;
   kind: string;
   kindLabel: string;
-  /** 卡片第一行大字：文件类事件=文件名（shortPath）；决策类=`${code} ${kindLabel}`（如 Q02 来源不一致） */
   fileName: string;
-  /** 同组内重名文件的目录前缀（如 run-A）；空串=无歧义不加前缀 */
   dirPrefix: string;
-  /** 第一行右随的灰色变更段（如 v2 → v3 / 新出现 v1）。
-   *  GE 层恒为空串：EventDayItem 没有真实版本号，禁止伪造；
-   *  由画布（GraphCanvasView）按 revisionId → FileRecord.revisions[].versionNumber 解析回填 */
   changeLabel: string;
-  /** 底部角标：HH:MM（当天时刻，不重复完整日期；不带[分类]前缀，语义由徽章行独家承载） */
   cornerLabel: string;
-  /** 身份去重：>1 时为「同基名拷贝并组卡」——N = 本桶已取回样本内并掉的同基名拷贝数
-   *  （诚实口径：样本内计数，绝不冒充全桶计数；全桶余量由组头「N 条待展开」承载） */
   mergedCount?: number;
-  /** 身份去重：并组卡所属桶的事件总数（供调用方与 mergedCount 对照，样本不足时如实透出） */
   mergedBucketTotal?: number;
-  /** 同 file_id 同日合并记录（mergeDayRevisions 产出，含 vFirst/vLast/evolutionCount）。
-   *  仅当日 ≥2 条事件且 buildCanvasEventScene 注入 resolveVersion 时存在——此时该卡代表
-   *  同一文件当日全部小版本演进，changeLabel 由画布按 dayMergeLabel 渲染（v1 → v3 · 今日演进 2 次）；
-   *  缺省（未注入 resolveVersion）恒缺省，保留逐卡行为。 */
   mergedDay?: DayRevisionMerge;
-  /** 当天时刻 HH:MM（observed_at 时刻分量，右栏行尾复用） */
   observedClock: string;
-  /** 行 2 右侧/右栏 timeRange 展示的事件日期（occurred 日 YYYY-MM-DD / 日期待考） */
   dateLabel: string;
-  /** 所属组桶键（day=YYYY-MM-DD；week=周一；month=YYYY-MM；''=待考）——
-   *  画布选中调光按桶键比对（isNodeInActiveTimeSlice），与 dateLabel 分离，
-   *  observed 口径/周月聚合下不再因卡片日期与桶键格式不同而整组误降透明度 */
   bucketDate: string;
-  /** 事件真实格式；null = 无法判定（工作区级事件/旧数据）→ UI 落中性，不再猜成 md */
   format: string | null;
   roleLabel: string;
   activeBadges: CanvasCapability[];
@@ -85,18 +46,14 @@ export interface CanvasEventCard {
 }
 
 export interface CanvasDayGroup {
-  /** 桶键：day=YYYY-MM-DD；week=该周周一；month=YYYY-MM；空字符串表示日期待考 */
   date: string;
   label: string;
   count: number;
-  /** 当桶不同事项数（按业务决定 ID 去重） */
   matterCount: number;
   kinds: Record<string, number>;
-  /** 当桶文件格式分布（md/svg/pdf 计数，决策事件已由服务端回填） */
   formats: Record<string, number>;
   matters: Array<{ id: string; code: string; status: string; count: number }>;
   cards: CanvasEventCard[];
-  /** 未在首屏展开的事件数（超出的事项进入既有折叠组） */
   more: number;
 }
 
@@ -104,33 +61,21 @@ export interface CanvasNavigatorEntry {
   date: string;
   label: string;
   count: number;
-  /** 当桶计数最高的真实格式；无可判定格式时为 null（中性） */
   format: FileFormat | null;
-  /** 当桶格式计数，供导航节点透出「MD×n · SVG×n」 */
   formats: Record<string, number>;
 }
 
 export interface CanvasRulerTick {
-  /** 桶键（day/week=YYYY-MM-DD，month=YYYY-MM）；标尺覆盖首末事件桶之间的每个日历日（day 粒度时空档日也有格子） */
   date: string;
   label: string;
-  /** 当桶事件数；空档日为 0 */
   count: number;
-  /** 当桶事件类型分布（by_kind）；空档日为空对象 */
   kinds: Record<string, number>;
-  /** 当桶文件格式分布（formats）；空档日为空对象 */
   formats: Record<string, number>;
-  /** 是否为有事件的日子；false = 空档日占位刻度（表达时间在流逝） */
   hasEvents: boolean;
-  /** 本刻度的桶粒度；day 粒度刻度可缺省。week/month 为聚合刻度，点按下钻到日 */
   granularity?: EventDayGranularity;
-  /** true = 「更早 N 天/周/月」截断提示刻度：不承载事件、不可选中日期 */
   isTruncation?: boolean;
-  /** 截断提示刻度折叠掉的更早桶数 */
   hiddenDays?: number;
-  /** true = 连续长空档压缩刻度（把跨越数月/数年的 0 事件空档收束为单枚视觉断层标记） */
   isGap?: boolean;
-  /** 空档刻度跨越的空档天数 */
   gapDays?: number;
 }
 
@@ -143,7 +88,6 @@ export interface CanvasEventScene {
   ruler: CanvasRulerTick[];
   active: CanvasDayGroup | null;
   activeDate: string;
-  /** 当前标尺桶粒度（来自服务端返回；缺省 day） */
   granularity: EventDayGranularity;
   totals: { events: number; days: number; undated: number; matters: number };
   hasRealEvents: boolean;
@@ -232,16 +176,11 @@ export const CANVAS_SEMANTIC_LABELS: Record<CanvasCapability, string> = {
   REL: '引用',
 };
 
-/**
- * 事件真实格式：以服务端随事件返回的 format 为准（决策事件已从 payload 回填）；
- * 无法判定时返回 null，UI 落中性——不再拿文件扩展名猜测、更不会把未知事件当 md。
- */
 function formatOf(item: EventDayItem): string | null {
   const f = item.format?.trim().toLowerCase();
   return f ? f : null;
 }
 
-/** 把格式 token 映射为画布既有能力徽标（仅 MD/SVG/PDF 有独立能力位，其余归入卡片 format 字段展示） */
 function capabilityOfFormat(format: string | null): CanvasCapability | null {
   if (format === 'md' || format === 'markdown') return 'MD';
   if (format === 'svg') return 'SVG';
@@ -255,7 +194,6 @@ export function toCanvasCard(
   item: EventDayItem,
   slotIndex: number,
   ambiguous: Set<string> = new Set(),
-  /** 所属组桶键（toGroup 透传 group.date）；缺省 ''（日期待考） */
   bucketDate: string = ''
 ): CanvasEventCard {
   const format = formatOf(item);
@@ -263,8 +201,6 @@ export function toCanvasCard(
   const isDecision = item.kind === 'decision_raised' || item.kind === 'decision_changed';
   const name = shortPath(item.file_path, item.file_title);
 
-  // 行1 大字：决策类事件以「编号 + 状态变化」为主（如 Q02 来源不一致）；
-  // 文件类事件以「哪个文件」为主。目录前缀独立成 dirPrefix，不拼进文件名。
   const fileName = isDecision ? `${item.code ?? '—'} ${kindLabel}` : name;
   const dirPrefix = !isDecision && ambiguous.has(name) ? parentDir(item) : '';
 
@@ -286,9 +222,6 @@ export function toCanvasCard(
     if (cap) highlighted.push(cap);
   } else if (item.time_basis === 'document_self') highlighted.push('TIM');
 
-  // 底部角标：HH:MM（observed_at 时刻分量，去重后仅保留时刻）——
-  // 分类语义由卡底徽章行独家承载（pickSemanticCapabilityCodes 第 1 枚与原 corner 分类代码恒同源，
-  // [分类] 前缀在同卡重复显示，删除）；CANVAS_SEMANTIC_LABELS 仍被徽章体系使用，保留不删
   const observedClock = formatLocalClock(item.observed_at);
   const cornerLabel = observedClock;
 
@@ -302,7 +235,6 @@ export function toCanvasCard(
     kindLabel,
     fileName,
     dirPrefix,
-    // 真实版本号只在 FileRecord.revisions 里；GE 层没有该数据，留空由画布解析，不伪造
     changeLabel: '',
     cornerLabel,
     observedClock,
@@ -327,22 +259,14 @@ function groupLabel(date: string): string {
   return date || '日期待考';
 }
 
-/**
- * R1-identity-dedup：同基名拷贝样本并组的下限。
- * ≥3 份「不同 file_id」的同基名样本才并成一张 ×N 卡——首扫日 6 个槽位被同一 basename
- * 的拷贝事件占满（六张同貌卡）的解法；恰好 2 份重名仍走既有 dirPrefix 双卡区分
- * （v04-canvas-events 用例写死该行为，2 份不足以判定「拷贝群」）。
- */
 const SAMPLES_MERGE_MIN = 3;
 
 function toGroup(
   group: EventDayGroup,
   slotOffset: number,
   maxCards: number,
-  /** revision_id → versionNumber 解析器；缺省 = 同日同文件合并关闭（逐卡展示） */
   resolveVersion?: (revisionId: string | null) => number | null
 ): CanvasDayGroup {
-  // 同组内重名的文件（如多个 run 目录各自的 README/PLAN/HANDOFF）加目录前缀区分
   const nameCounts = new Map<string, number>();
   for (const s of group.samples) {
     const n = shortPath(s.file_path, s.file_title);
@@ -354,17 +278,9 @@ function toGroup(
       .map(([n]) => n)
   );
 
-  // 卡片网格左上→右下由新到旧（全画布统一「上新下旧」）：
-  // 先按语义层级排序——决策/内容修改类恒在前（首屏可见），其余（含全部 appeared：文档自述日期/
-  // 新出现（文件时间）/新出现）沉后；同层内仍按 (occurred_at || observed_at) 降序（次级键不变），排序保持稳定。
-  // 镜像服务端取样优先级（queries.ts 同一 CASE WHEN 规则）：服务端已被优先选入样本的决策/修改事件，
-  // 客户端重排后仍居首屏前部，首扫新出现聚簇不再挤占决策卡位
   const tierOf = (s: EventDayItem): number =>
     s.kind === 'decision_raised' || s.kind === 'decision_changed' || s.kind === 'modified' ? 0 : 1;
 
-  // 样本池构建——resolveVersion 注入时先做同 file_id 同日合并（mergeDayRevisions），
-  // 每个 file_id 至多保留一条代表样本（桶内 observed_at 最大者，与 merge.headline 同源）；
-  // 无 file_id 的决策/工作区级事件原样入池。缺省时池 = 原始样本，后续装配逐卡展示。
   const mergedByFile = new Map<
     string,
     { merge: DayRevisionMerge; representative: EventDayItem; consumedCount: number }
@@ -393,8 +309,6 @@ function toGroup(
     return ka < kb ? 1 : ka > kb ? -1 : 0;
   });
 
-  // 身份去重：基名 → 异文件样本数（决策事件是独立事项、无 file_id 的事件不参与并组）。
-  // 池内每个 file_id 至多一条代表样本，计数即「异文件数」，同 file_id 多版本不再重复计数。
   const isDecisionSample = (s: EventDayItem) =>
     s.kind === 'decision_raised' || s.kind === 'decision_changed';
   const distinctFilesByName = new Map<string, Set<string>>();
@@ -406,11 +320,6 @@ function toGroup(
     else distinctFilesByName.set(n, new Set([s.file_id]));
   }
 
-  // 卡片装配：遍历全部有序代表样本，同基名拷贝群先并成一张 ×N 卡再计入卡数——
-  // 首屏卡位不再被同 basename 拷贝占满（首屏 6 卡=6 份不同事项）。×N 取「样本内」成员数：
-  // 服务端取样器不改，样本不足以代表全桶时绝不把 ×N 写成全桶口径（诚实呈现在卡面行2前缀）。
-  // 「先同 file_id 同日合并、再跨 file_id 同基名并组」两规则互不覆盖；
-  // representedSamples 恒按「卡面承载的原始样本数」累计（合并卡 = 桶内事件条数），more 口径不变。
   const cards: CanvasEventCard[] = [];
   const consumed = new Set<string>();
   let representedSamples = 0;
@@ -421,7 +330,6 @@ function toGroup(
     const distinct = !isDecisionSample(s) && s.file_id ? distinctFilesByName.get(name) : undefined;
     const mergedInfo = s.file_id ? mergedByFile.get(s.file_id) : undefined;
     if (distinct && distinct.size >= SAMPLES_MERGE_MIN) {
-      // 收集该基名下未消费且 file_id 互异的代表样本（保持新→旧序；首位最新者为卡面代表）
       const members: EventDayItem[] = [];
       const seenFiles = new Set<string>();
       for (const x of orderedSamples) {
@@ -434,7 +342,6 @@ function toGroup(
       for (const x of members) consumed.add(x.event_id);
       const representative = members[0];
       const merged = toCanvasCard(representative, slotOffset + cards.length, new Set(), group.date);
-      // 并组卡承载的原始样本数 = 各成员代表样本（未合并为 1，已合并为桶内条数）之和
       const memberRawCount = members.reduce(
         (sum, x) => sum + (mergedByFile.get(x.file_id ?? '')?.consumedCount ?? 1),
         0
@@ -444,12 +351,10 @@ function toGroup(
         : undefined;
       cards.push({
         ...merged,
-        // 跨目录拷贝无单一目录前缀，置空不伪装；行2 前缀明示样本内计数
         dirPrefix: '',
         detail: `×${members.length} 样本内同基名拷贝 · ${representative.headline}`,
         mergedCount: members.length,
         mergedBucketTotal: group.count,
-        // 并组卡首位代表若本身是同日合并文件，合并标签随卡透出（代表=当日最新写入）
         ...(leadingMerge && leadingMerge.merged ? { mergedDay: leadingMerge } : {}),
       });
       representedSamples += memberRawCount;
@@ -458,7 +363,6 @@ function toGroup(
     consumed.add(s.event_id);
     const card = toCanvasCard(s, slotOffset + cards.length, ambiguous, group.date);
     if (mergedInfo && mergedInfo.merge.merged) {
-      // 同 file_id 同日合并卡：携带合并记录（画布以 dayMergeLabel 渲染 changeLabel）
       cards.push({ ...card, mergedDay: mergedInfo.merge });
       representedSamples += mergedInfo.consumedCount;
     } else {
@@ -483,12 +387,10 @@ function toGroup(
     formats: group.formats || {},
     matters: Array.from(mattersMap.values()),
     cards,
-    // 未展开数按「已呈现在卡上的事件数」扣减（并组卡一次承载 N 份样本，不再按卡数虚增）
     more: Math.max(0, group.count - representedSamples),
   };
 }
 
-/** 解析 YYYY-MM-DD 为 UTC 时间戳；非法日期返回 null */
 function dayTime(date: string): number | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
   const [y, m, d] = date.split('-').map(Number);
@@ -532,13 +434,6 @@ export function bucketRange(
   return { from: date, to: date };
 }
 
-/**
- * 把「只有有事件日子」的分组展开成逐日日历序列（新 → 旧，全画布统一「上新下旧」）：
- * index 0 = 最新一天（渲染时落在主干最顶端），向下越旧；
- * 每个日历日一格，空档日为 hasEvents=false 的占位刻度，
- * 有事件的日子携带该日 count / by_kind / formats 供刻度长度与分段颜色驱动。
- * 依赖 Date.UTC 算日差，不受时区/夏令时影响。
- */
 function buildCalendarRuler(groups: EventDayGroup[]): CanvasRulerTick[] {
   const datedAsc = groups
     .filter((g) => g.date !== '' && dayTime(g.date) !== null)
@@ -550,7 +445,6 @@ function buildCalendarRuler(groups: EventDayGroup[]): CanvasRulerTick[] {
   const endT = dayTime(datedAsc[datedAsc.length - 1].date)!;
   const DAY_MS = 86_400_000;
 
-  // 自最新一天（endT）递减迭代：输出 index 0 = 最新日期（升序展开后 reverse 的等价实现）
   const ruler: CanvasRulerTick[] = [];
   for (let t = endT; t >= startT; t -= DAY_MS) {
     const date = new Date(t).toISOString().slice(0, 10);
@@ -571,11 +465,6 @@ function buildCalendarRuler(groups: EventDayGroup[]): CanvasRulerTick[] {
   return ruler;
 }
 
-/**
- * week/month 聚合标尺（新 → 旧，与逐日标尺同向「上新下旧」）：一个桶一个刻度，
- * label 带粒度后缀（如「11-02 周起」「2026-10」），
- * 桶内 count / by_kind / formats 合并供刻度长度与分段颜色驱动。
- */
 function buildBucketRuler(groups: EventDayGroup[], granularity: EventDayGranularity): CanvasRulerTick[] {
   return groups
     .filter((g) => g.date !== '')
@@ -591,7 +480,6 @@ function buildBucketRuler(groups: EventDayGroup[], granularity: EventDayGranular
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 }
 
-/** 「更早 N 天/周/月」截断提示刻度：把超出 limitDays 的更早历史折叠成一个明示截断的桶（T03） */
 function truncationTick(hidden: number, granularity: EventDayGranularity): CanvasRulerTick {
   const unit = granularity === 'month' ? '月' : granularity === 'week' ? '周' : '天';
   return {
@@ -635,7 +523,6 @@ export function dedupeEventGroupsByDate(groups: EventDayGroup[]): EventDayGroup[
       order.push(g.date);
       continue;
     }
-    // 同键并组：计数轴求和，样本/决策轴拼接（保持出现序；下游 maxCards 自行截断）
     const byKind = { ...existing.by_kind };
     for (const [kind, n] of Object.entries(g.by_kind)) {
       byKind[kind] = (byKind[kind] ?? 0) + n;
@@ -677,7 +564,6 @@ export function dedupeTicksByDate(ticks: CanvasRulerTick[]): CanvasRulerTick[] {
   return out;
 }
 
-/** 格式化长空档提示词（例如 4730 天 → 「跨越 13 年」；45 天 → 「空档 45 天」）。 */
 function formatRulerGapLabel(days: number): string {
   if (days >= 365) {
     const years = Math.max(1, Math.round(days / 365));
@@ -807,20 +693,12 @@ export function buildCanvasEventScene(
   const dated = groups.filter((g) => g.date !== '');
 
   const navigator: CanvasNavigatorEntry[] = groups.slice(0, 4).map((g) => {
-    // 读真实格式分布（formats）取计数最高者，并透出「MD×n · SVG×n」计数；
-    // 之前这里把事件种类（EventKind）当格式推导——种类永不等于 svg/pdf，导航器恒显回退值 md。
     const format =
       (Object.entries(g.formats).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null) as CanvasNavigatorEntry['format'];
     return { date: g.date, label: g.label, count: g.count, format, formats: g.formats };
   });
 
-  // 时间轴忠实于时间（day 粒度：覆盖首末事件日之间的每个日历日，新 → 旧（index 0 = 最新，画在主干最顶端），
-  // 空档日以占位刻度表达时间流逝；日期待考不进轴）。
-  // week/month 粒度为一个聚合桶一个刻度（label 带粒度后缀，点按下钻到日）；
-  // 超出 limitDays 被折叠的更早历史，以「更早 N 天/周/月」提示刻度置于轴尾（主干最底端），明示截断不再静默消失。
   const hiddenDays = Math.max(0, Number(days.hidden_days) || 0);
-  // 标尺与折叠组同源——喂去重后的桶（buildCalendarRuler 内部本就有 Map 去重，
-  // 但 buildBucketRuler 是一桶一刻度的直映，喂原始重复桶会渲染重复周/月刻度）
   const ruler: CanvasRulerTick[] =
     granularity === 'day'
       ? buildCalendarRuler(dedupedGroups)
@@ -849,35 +727,22 @@ export function buildCanvasEventScene(
   };
 }
 
-// ==================== 1.3：列表「同文件同日多版本」折叠 ====================
-// 问题：PLAN.md 一天内演进 20 次 → 旧时间线按「身份 × 分钟」成簇，20 个不同分钟
-// 就是 20 张卡逐行刷屏。修法：同一 file_id + 同一日历日（发生/采集单一口径）的
-// 「出现 / 内容修改」事件折成 1 条主卡，子版本默认不挂 DOM，点 [展开历史 ▾] 才渲染。
-// 纯函数、零 React 依赖：组件只负责取数与渲染，折叠口径在此单一出口，单测覆盖。
 
 export interface SameFileDayVersionItem {
-  /** 事件唯一 id（TimelineEvent.event_id） */
   eventId: string;
   fileId: string;
-  /** 事件类型（TimelineEvent.kind） */
   kind: string;
-  /** 事件在同口径下的日历日（YYYY-MM-DD）；空串 = 日期待考 / 不参与折叠 */
   day: string;
-  /** revision 版本号（FileRecord.revisions 查表；查不到为 null，禁止伪造） */
   versionNumber: number | null;
 }
 
 export interface SameFileDayVersionGroup {
-  /** 组键 = `${fileId}|${day}` */
   key: string;
   fileId: string;
   day: string;
-  /** 成员在入参数组中的下标，保持入参顺序（调用方已按「上新下旧」排好） */
   indices: number[];
-  /** 成员事件 id（与 indices 同序） */
   eventIds: string[];
   count: number;
-  /** 成员版本号最小/最大值；全部查不到时为 null */
   versionMin: number | null;
   versionMax: number | null;
 }
@@ -949,13 +814,10 @@ export function versionFoldCardTitle(
   return `${subject} 检测到连续更新 (${versionFoldRangeLabel(group)})`;
 }
 
-// ==================== 事件卡核心变更摘要直出 ====================
 
 /** 「检测到更新」类事件卡的核心变更摘要（CanvasEventCard.changeSummary 承载） */
 export interface CanvasChangeSummary {
-  /** +/- 行数（服务端 diff 链真实统计）；无法诚实取得时为 null，UI 不伪造 */
   counts: { added: number; removed: number } | null;
-  /** 一句描述（如「修改发布机构建文档头部」）；无章节信息时为空串 */
   description: string;
 }
 
@@ -977,15 +839,10 @@ export interface CanvasChangeSummary {
  */
 export function deriveCanvasChangeSummary(input: {
   changedSections?: string[] | null;
-  /** 服务端事件 detail（TimelineEvent.detail）；缺省/空串安全 */
   detail?: string | null;
-  /** 事件 payload 结构化行数；两个都到位才采信，缺任一个都不拿半个真值凑数 */
   addedLines?: number;
   removedLines?: number;
 }): CanvasChangeSummary {
-  // ① +/- 行数：优先结构化 payload 真值（章节变更事件靠它，detail 无定式）；
-  // 缺失时回退 detail 的「（+N/-M 行）」定式解析（全半角括号都收，兼容未回填
-  // 映射的旧事件），两路都取不到才是 null——绝不编数
   let counts: CanvasChangeSummary['counts'] = null;
   if (
     typeof input.addedLines === 'number' &&
@@ -1002,7 +859,6 @@ export function deriveCanvasChangeSummary(input: {
     }
   }
 
-  // ② 一句描述：取首个变更章节 → 「修改{章节}」；多章节补「等 N 处」计数
   const sections = (input.changedSections ?? []).map((s) => s.trim()).filter(Boolean);
   let description = '';
   if (sections.length > 0) {
@@ -1011,16 +867,11 @@ export function deriveCanvasChangeSummary(input: {
         ? `修改${sections[0]} 等 ${sections.length} 处章节`
         : `修改${sections[0]}`;
   } else if (counts) {
-    // 纯哈希变化（无章节名）：行数即摘要本体，描述留空由 UI 只排行数
     description = '';
   }
   return { counts, description };
 }
 
-// ==================== 事件卡行1/行3 措辞单一出口 ====================
-// 事件卡四行布局的措辞统一由本文件出口，避免组件内散写——版本跨度胶囊、变更章节摘要行
-// 都在本文件出口；dayMergeLabel（taskPackages）保持原有口径不动（日历/看板
-// 消费方口径不变），画布卡用 versionSpanCapsule 产出紧凑措辞。
 
 /**
  * 事件卡行1 右「版本跨度胶囊」措辞（单一出口）：
@@ -1033,11 +884,8 @@ export function deriveCanvasChangeSummary(input: {
  *   适配 280px 卡行1 右侧轻量灰胶囊的宽度预算。
  */
 export function versionSpanCapsule(input: {
-  /** 同日同文件合并记录（mergeDayRevisions 产物）；存在且 merged=true 时优先采用 */
   merged?: DayRevisionMerge | null;
-  /** 事件类型（modified / appeared；merged 生效时忽略） */
   kind?: string;
-  /** 事件修订解析出的版本号（EventDayItem 无版本号，由调用方从 FileRecord.revisions 查表注入） */
   version?: number | null;
 }): string {
   const m = input.merged;
@@ -1058,7 +906,6 @@ export function versionSpanCapsule(input: {
   return '';
 }
 
-/** 变更章节摘要行的章节名拼接口上限：3 个章节名后以「/ …」收口（总次数由描述段承载） */
 const CHANGE_DIGEST_SECTION_CAP = 3;
 
 /**
@@ -1070,7 +917,6 @@ const CHANGE_DIGEST_SECTION_CAP = 3;
  */
 export function canvasChangeDigestLine(input: {
   changedSections?: string[] | null;
-  /** deriveCanvasChangeSummary 的 description（「修改X」/「修改X 等 N 处章节」） */
   description?: string | null;
 }): string {
   const sections = (input.changedSections ?? []).map((s) => s.trim()).filter(Boolean);
@@ -1150,7 +996,6 @@ export function polishEventCardDigestLine(input: {
   });
 }
 
-// ==================== 展开框组头全量措辞 ====================
 
 /** 组头尾段（彩色 tspan 锚点，与 fanOutDayHeaderLine 同源同串尾——组件按此切分双色） */
 export const FANOUT_DAY_HEADER_TAIL = '点击查看全天 →）';
@@ -1170,29 +1015,16 @@ export function fanOutDayHeaderLine(
   return `${dateLabel} · 共 ${eventCount} 条事件（已合并为 ${activeDocCount} 份活跃文档 · ${FANOUT_DAY_HEADER_TAIL}`;
 }
 
-// ==================== 任务空间桌面：任务包分组与富预览卡数据 ====================
-// 画布从「竖干+空壳卡」演进为「任务包分组容器横排 + 280px 富预览卡」的数据面：
-// 每个任务包一个分组（PackageGroupFrame 渲染），包内每份文档一张富预览卡
-// （RichDocPreviewCard 渲染）。判定逻辑零复写——归属/阶段/结论全部来自
-// taskPackages 既有导出；本层只补画布形态需要的字段（版本胶囊串/正文前 3 行/
-// 变更章节行/SVG 缩略 dataUri）并按工作流向（包内最近事件）排序。
 
 /** 富预览卡数据（CanvasPackageGroup.docs 成员；字段与 RichDocPreviewCardProps 对齐） */
 export interface CanvasPackageGroupDoc {
   fileId: string;
   title: string;
   format: FileFormat;
-  /** 版本胶囊原串（「BUILD · v{N}」；N=当前修订 versionNumber，无修订回 1）——
-   *  data-cv-rich-card-version 锚点值即本串原样透出，组件层不得再拼装 */
   versionLabel: string;
-  /** 核心结论（taskPackages.extractCoreSummary 产物；无正文为空串，由卡片显式占位） */
   conclusion: string;
-  /** 前 3 行正文预览（md=markdown 正文行；pdf=首页抽取文字行；svg 恒缺省） */
   bodyPreview?: string[];
-  /** 变更章节行：changedSectionsFromPrev（相对上一版有改动的章节）→ kind 恒『修改』，
-   *  色值与 DocumentTimeMachineView.KIND_COLOR 同源令牌（消费点走 canvasWidgets.css） */
   diffSections?: { kind: '修改' | '新增' | '删除'; title: string; line?: number }[];
-  /** SVG 缩略图 dataUri：清洗 + 编码走 filePreviewCache 单源（AtlasView/HomeView 同一缓存） */
   svgThumbDataUri?: string;
 }
 
@@ -1215,10 +1047,8 @@ export function buildCanvasPackageGroups(
   files: FileRecord[],
   events: TimelineEvent[]
 ): CanvasPackageGroup[] {
-  // ① 任务包归属：groupFilesIntoPackages 已完成 G1→G2→G3→G5 级联与 readingOrder 排序
   const packages = groupFilesIntoPackages(files);
 
-  // ② 文件 → 最近事件时刻（工作流向排序键；无 file_id 的工作区级事件不参与）
   const lastEventAtByFile = new Map<string, string>();
   for (const ev of events) {
     if (!ev.file_id) continue;
@@ -1227,10 +1057,6 @@ export function buildCanvasPackageGroups(
   }
 
   const fileById = new Map(files.map((f) => [f.file_id, f]));
-  // 物化收敛：画布分组容器每包只渲染前 6 张卡（消费方已核——GraphCanvasView.tsx:1521
-  // PACKAGE_GROUP_MAX_CARDS=6、:1525 shown=min(docs.length,6)、:4146 group.docs.slice(0, shown)
-  // 唯一渲染点，:4134 docCount 用 docs.length 不依赖预览字段；grep 全仓 + test/ 零其他消费方），
-  // 故第 7+ 张卡的 bodyPreview/svgThumbDataUri/diffSections 不再物化（原实现每包全量重算）
   const PACKAGE_GROUP_PREVIEW_LIMIT = 6;
   const groups: CanvasPackageGroup[] = packages.map((pkg) => ({
     pkgId: pkg.id,
@@ -1250,14 +1076,10 @@ export function buildCanvasPackageGroups(
         versionLabel: `BUILD · v${rev?.versionNumber ?? 1}`,
         conclusion: doc.conclusion,
       };
-      // 预览字段走 per-file 缓存单一出口（filePreviewCache.getFilePreviewEntry）：
-      // md 正文剥离 / pdf 首页抽取 / SVG 清洗编码判定原样收敛在缓存层，修订未变 O(1) 命中，
-      // 避免「任一次 files 身份变化就全量重编码」；此处只做展示卡范围裁剪
       if (file && docIdx < PACKAGE_GROUP_PREVIEW_LIMIT) {
         const preview = getFilePreviewEntry(file);
         if (preview.bodyPreview) item.bodyPreview = preview.bodyPreview;
         if (preview.svgDataUri) item.svgThumbDataUri = preview.svgDataUri;
-        // 变更章节行：changedSectionsFromPrev 语义即「相对上一版修改的章节」→ kind 恒『修改』
         if (rev?.changedSectionsFromPrev?.length) {
           item.diffSections = rev.changedSectionsFromPrev
             .slice(0, 4)
@@ -1268,7 +1090,6 @@ export function buildCanvasPackageGroups(
     }),
   }));
 
-  // ③ 工作流向排序：包内最近事件新→旧；无事件（''）置尾；同刻按 pkgId 升序稳定
   const lastActivityOf = (group: CanvasPackageGroup): string => {
     let latest = '';
     for (const doc of group.docs) {
@@ -1291,20 +1112,14 @@ export function buildCanvasPackageGroups(
     .map(({ group }) => group);
 }
 
-// ==================== 司辰时光沉淀引擎：时间流逝 → 文件一点一点累积 ====================
 
 export interface TrunkAccumulationPoint {
   date: string;
   dayCount: number;
-  /** 当日新增/首次纳入记录数（appeared / discovered / workspace_baseline） */
   addedCount: number;
-  /** 当日内容演进/修改记录数（modified 及其他非新增事件） */
   modifiedCount: number;
-  /** 自最早历史累积至当日的事件沉淀总数（时间轴自底向上单调递增） */
   cumulativeEvents: number;
-  /** 归一化累积沉积比例（0.16..1.0），驱动主干时光沉淀轮廓带由细渐宽 */
   accumulationRatio: number;
-  /** 当日结晶层宽强度（0..1，对数缩放保证大小活跃日均有清晰层次） */
   strataIntensity: number;
 }
 
@@ -1312,12 +1127,10 @@ export interface ActiveAccumulationSummary {
   date: string;
   cumulativeEvents: number;
   totalEvents: number;
-  /** 截至激活日的累积占比（0..100 整数） */
   cumulativePercent: number;
   dayCount: number;
   addedCount: number;
   modifiedCount: number;
-  /** 激活日在全部活跃沉淀日中的时间序位（1 = 最早，totalActiveDays = 最新） */
   chronologicalOrder: number;
   totalActiveDays: number;
 }
@@ -1342,7 +1155,6 @@ export function computeTrunkAccumulation(ticks: CanvasRulerTick[]): TrunkAccumul
   let running = 0;
   const logMax = Math.log1p(Math.max(1, maxDayCount));
 
-  // 自底（最早）向顶（最新）累积，真实反映时间流逝与文件一点一点沉积的过程
   for (let i = ticks.length - 1; i >= 0; i -= 1) {
     const t = ticks[i];
     const isMetaTick = Boolean(t.isGap || t.isTruncation);

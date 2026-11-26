@@ -1,7 +1,3 @@
-/**
- * Quiet.md 多项目并存管理 Hook（全局项目列表、多项目树懒加载、零重启焦点切换、
- * 跨项目总览汇总、跨项目置顶以及对任意非激活项目的原地目录/文档操控）。
- */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
@@ -125,7 +121,6 @@ export function useMultiProjects({
         const nextActive = listRes.data.active_project_id;
         setProjects(nextList);
         setActiveProjectId(nextActive);
-        // 首次进入默认展开当前激活项目，其余展开态沿用本地持久化
         if (nextActive && !expandedRef.current.has(nextActive)) {
           setExpandedProjects((prev) => {
             if (prev.has(nextActive)) return prev;
@@ -150,16 +145,11 @@ export function useMultiProjects({
     [enabled, loadProjectTree]
   );
 
-  // 启动与数据变更时刷新全局多项目列表与总览
   useEffect(() => {
     if (!enabled) return;
     void refreshAll({ reloadExpandedTrees: true });
   }, [enabled, workspaceEpoch, bootstrapNonce, refreshAll]);
 
-  // 有项目正在扫描时轻轮询（1.2s）直至全部就绪：只刷新项目列表与总览计数。
-  // 目录树不跟着每拍重拉——扫描中的项目树每一拍都在变，这里带上 reloadExpandedTrees
-  // 会把其它已展开项目的整棵树反复塞进只读连接池（见 query 子系统：目录枚举曾拖垮
-  // 检索与翻页）。树改为扫描结束后补一次，或用户展开时取。
   const anyScanning = useMemo(
     () => projects.some((p) => p.is_scanning || p.status === 'scanning'),
     [projects]
@@ -172,8 +162,6 @@ export function useMultiProjects({
     return () => clearInterval(timer);
   }, [enabled, anyScanning, refreshAll]);
 
-  // 扫描收尾补一次目录树：扫描期间树没跟着轮询刷新，这里补上；只补已展开的
-  // 非激活项目（激活项目的树由它自己的取数路径管）。
   const wasScanningRef = useRef(anyScanning);
   useEffect(() => {
     if (wasScanningRef.current && !anyScanning) {
@@ -235,8 +223,6 @@ export function useMultiProjects({
       setActiveProjectId(res.data.active_project_id);
       const nextActiveId = res.data.active_project_id;
       setExpandedProjects((prev) => {
-        // 添加并激活相当于一次聚焦切换：新项目展开，旧的聚焦项目收起；
-        // 只添加不激活时保留当前展开集（多项目同时展开仍是显式能力）。
         const next =
           nextActiveId && nextActiveId !== activeProjectId
             ? new Set([
@@ -280,8 +266,6 @@ export function useMultiProjects({
       setProjects(res.data.projects);
       setActiveProjectId(res.data.active_project_id);
       setExpandedProjects((prev) => {
-        // 聚焦切换：新项目展开，旧的聚焦项目收起；用户手动展开的其他项目保持。
-        // 不能因新项目已在展开集里就提前返回——旧聚焦项目仍要收起。
         const next = new Set(
           expandedProjectsAfterActivate(
             prev,
@@ -311,7 +295,6 @@ export function useMultiProjects({
       }
       setProjects(res.data.projects);
       setActiveProjectId(res.data.active_project_id);
-      // 同步跨项目置顶里的项目名称
       if (patch.name) {
         const nextName = res.data.project.name;
         setGlobalPins((prev) => {
@@ -383,7 +366,6 @@ export function useMultiProjects({
     [projects, refreshAll, showToast]
   );
 
-  // ===== 跨项目置顶 =====
   const toggleGlobalPin = useCallback((item: GlobalPinnedFile) => {
     setGlobalPins((prev) => {
       const exists = prev.some(
@@ -397,7 +379,6 @@ export function useMultiProjects({
     });
   }, []);
 
-  // ===== 对任意非激活项目的原地目录/文档 CRUD =====
   const handleCreateFolderInProject = useCallback(
     async (projectId: string, parentDir: string, name: string): Promise<string | null> => {
       const res = await postCreateFolderInProject(
@@ -431,7 +412,6 @@ export function useMultiProjects({
       await loadProjectTree(projectId, true);
       void refreshAll();
       showToast('ok', `已新建文档「${res.data.relative_path}」`);
-      // 新建后直接切到该项目并打开文档进行阅读
       await handleActivateProject(projectId, {
         projectId,
         fileId: res.data.file_id,

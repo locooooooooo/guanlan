@@ -13,31 +13,18 @@
 /// 格式族：快照档位、渲染族与过滤语法的判定依据。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FormatClass {
-    /// Markdown 文档（`.md` / `.markdown`）
     Markdown,
-    /// 纯文本（`.txt` / `.log` / `.rst` …）
     Text,
-    /// 可语法高亮的源码与配置（`.ts` / `.py` / `.json` / `.yaml` …）
     Code,
-    /// 矢量图（`.svg`）
     Vector,
-    /// 位图（`.png` / `.jpg` / `.webp` …）
     Image,
-    /// 版式文档（`.pdf` / `.docx` / `.rtf` / `.epub` …）
     Document,
-    /// 表格（`.xlsx` / `.csv` / `.tsv` …）
     Spreadsheet,
-    /// 演示稿（`.pptx` / `.odp` …）
     Presentation,
-    /// 压缩包（`.zip` / `.7z` / `.tar.gz` …）
     Archive,
-    /// 音频
     Audio,
-    /// 视频
     Video,
-    /// 字体
     Font,
-    /// 其它二进制（未知扩展名 / 无扩展名）
     Binary,
 }
 
@@ -243,14 +230,11 @@ impl FileFormat {
 /// 由 token（扩展名）判定格式族。
 pub fn class_of_token(token: &str) -> FormatClass {
     match token {
-        // ---- Markdown ----
         "md" | "markdown" | "mdown" | "mkd" | "mdx" | "rmd" => FormatClass::Markdown,
 
-        // ---- 纯文本 ----
         "txt" | "text" | "log" | "rst" | "adoc" | "asciidoc" | "nfo" | "me" | "1st" | "readme"
         | "license" | "changelog" => FormatClass::Text,
 
-        // ---- 源码与配置（可语法高亮） ----
         "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts" | "coffee" | "py" | "pyi"
         | "pyw" | "rb" | "rs" | "go" | "java" | "kt" | "kts" | "scala" | "groovy" | "gradle"
         | "c" | "h" | "cc" | "cpp" | "cxx" | "hpp" | "hh" | "c++" | "h++" | "cs" | "fs" | "fsx"
@@ -270,43 +254,33 @@ pub fn class_of_token(token: &str) -> FormatClass {
         | "prettierrc" | "editor" | "vimrc" | "bashrc" | "zshrc" | "profile" | "tex" | "bib"
         | "sty" | "cls" => FormatClass::Code,
 
-        // ---- 矢量图 ----
         "svg" | "svgz" => FormatClass::Vector,
 
-        // ---- 位图 ----
         "png" | "apng" | "jpg" | "jpeg" | "jfif" | "jpe" | "webp" | "gif" | "bmp" | "dib"
         | "ico" | "cur" | "tif" | "tiff" | "avif" | "heic" | "heif" | "jxl" | "jp2" | "j2k"
         | "ppm" | "pgm" | "pbm" | "pnm" | "tga" | "pcx" | "exr" | "hdr" | "raw" | "cr2" | "nef"
         | "arw" | "dng" | "psd" | "xcf" | "ai" | "eps" => FormatClass::Image,
 
-        // ---- 版式文档 ----
         "pdf" | "doc" | "docx" | "docm" | "dot" | "dotx" | "rtf" | "odt" | "epub" | "mobi"
         | "azw" | "azw3" | "fb2" | "pages" => FormatClass::Document,
 
-        // ---- 表格 ----
         "xlsx" | "xlsm" | "xlsb" | "xls" | "xlt" | "xltx" | "ods" | "csv" | "tsv" | "numbers"
         | "parquet" => FormatClass::Spreadsheet,
 
-        // ---- 演示稿 ----
         "pptx" | "pptm" | "ppt" | "pps" | "ppsx" | "odp" | "key" => FormatClass::Presentation,
 
-        // ---- 压缩包 ----
         "zip" | "7z" | "rar" | "tar" | "gz" | "tgz" | "bz2" | "tbz" | "xz" | "txz" | "zst"
         | "lz" | "lzma" | "cab" | "jar" | "war" | "ear" | "whl" | "egg" | "apk" | "aab" | "ipa"
         | "deb" | "rpm" | "msi" | "iso" => FormatClass::Archive,
 
-        // ---- 音频 ----
         "mp3" | "wav" | "flac" | "aac" | "m4a" | "ogg" | "oga" | "opus" | "wma" | "aiff"
         | "aif" | "mid" | "midi" | "amr" | "ape" | "mka" => FormatClass::Audio,
 
-        // ---- 视频 ----
-        // 注：`.ts` / `.mts` 优先归入源码（TypeScript）；MPEG-TS 流使用 `.m2ts`
         "mp4" | "m4v" | "mkv" | "webm" | "mov" | "qt" | "avi" | "wmv" | "flv" | "f4v" | "mpg"
         | "mpeg" | "mpe" | "3gp" | "3g2" | "m2ts" | "vob" | "rmvb" | "rm" | "asf" | "ogv" => {
             FormatClass::Video
         }
 
-        // ---- 字体 ----
         "ttf" | "otf" | "woff" | "woff2" | "eot" | "ttc" | "fon" => FormatClass::Font,
 
         _ => FormatClass::Binary,
@@ -316,9 +290,7 @@ pub fn class_of_token(token: &str) -> FormatClass {
 /// 快照档位：决定「是否复制一份去重快照」。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SnapshotTier {
-    /// 全量去重快照（内容写进 `blobs/`，可回看历史原文）。
     Full,
-    /// 仅记身份、尺寸、mtime 与流式哈希——**不复制字节**，`snapshot_available = 0`。
     MetadataOnly,
 }
 
@@ -397,11 +369,9 @@ impl SnapshotPolicy {
     /// 判定某个文件的快照档位。
     pub fn tier_for(&self, class: FormatClass, size_bytes: i64) -> SnapshotTier {
         match class {
-            // 音频/视频/字体/未知二进制：只记身份、尺寸、mtime 与流式哈希
             FormatClass::Audio | FormatClass::Video | FormatClass::Font | FormatClass::Binary => {
                 SnapshotTier::MetadataOnly
             }
-            // 文本型：< text_max 全量快照
             FormatClass::Markdown
             | FormatClass::Text
             | FormatClass::Code
@@ -413,7 +383,6 @@ impl SnapshotPolicy {
                     SnapshotTier::MetadataOnly
                 }
             }
-            // 二进制型（位图/文档/演示稿/压缩包）：< binary_max 全量快照
             FormatClass::Image
             | FormatClass::Document
             | FormatClass::Presentation
@@ -428,7 +397,6 @@ impl SnapshotPolicy {
     }
 }
 
-/// 读环境变量里的非负整数
 fn read_env_i64(key: &str) -> Option<i64> {
     std::env::var(key)
         .ok()
@@ -484,27 +452,22 @@ mod tests {
     #[test]
     fn tier_policy_follows_three_bands() {
         let policy = SnapshotPolicy::default();
-        // 文本型 < 10MB → 全量快照
         assert_eq!(
             policy.tier_for(FormatClass::Markdown, 5 * 1024 * 1024),
             SnapshotTier::Full
         );
-        // 文本型 ≥ 10MB → 只记元数据
         assert_eq!(
             policy.tier_for(FormatClass::Code, 12 * 1024 * 1024),
             SnapshotTier::MetadataOnly
         );
-        // 二进制型 < 50MB → 全量快照
         assert_eq!(
             policy.tier_for(FormatClass::Image, 20 * 1024 * 1024),
             SnapshotTier::Full
         );
-        // 二进制型 ≥ 50MB → 只记元数据
         assert_eq!(
             policy.tier_for(FormatClass::Document, 50 * 1024 * 1024),
             SnapshotTier::MetadataOnly
         );
-        // 音视频永远只记元数据（2GB 视频不复制快照）
         assert_eq!(
             policy.tier_for(FormatClass::Video, 2 * 1024 * 1024 * 1024),
             SnapshotTier::MetadataOnly

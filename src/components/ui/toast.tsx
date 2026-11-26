@@ -10,11 +10,6 @@ import type * as React from 'react';
 import { cn } from '../../lib/cn';
 import { buttonVariants } from './button';
 
-/**
- * 观澜 · Toast & AnchoredToast 原语（基于 @base-ui/react/toast，对齐 coss.com/ui）。
- * - ToastProvider：全局右下角层叠通知栈（支持撤销按钮、滑动关闭与重复触发微反馈）；
- * - AnchoredToastProvider：贴附操作按钮旁的微气泡反馈（复制路径 / 确立已读等轻提示）。
- */
 const TOAST_ICONS = {
   error: CircleAlertIcon,
   info: InfoIcon,

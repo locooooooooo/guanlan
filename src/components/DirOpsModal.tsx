@@ -1,10 +1,3 @@
-/**
- * Quiet.md 风格文件夹与批量文件操作弹窗（独立组件，零裸色值）：
- * - folder-move：可搜索目标目录选择器（自动隐藏自身、当前父目录与全部后代目录防成环）；
- * - folder-trash：强制勾选二次确认，移入系统回收站（绝不永久删除）；
- * - batch-move：可搜索目标目录选择器，一次批量移动多份文件（保持 file_id 连续）；
- * - batch-trash：强制勾选二次确认，批量移入系统回收站。
- */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -73,7 +66,7 @@ export const DirOpsModal: React.FC<DirOpsModalProps> = ({
     } else {
       setTargetDir('');
     }
-  }, [request]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [request]);
 
   const filteredDirs = useMemo(() => {
     const q = filterText.trim().toLowerCase();

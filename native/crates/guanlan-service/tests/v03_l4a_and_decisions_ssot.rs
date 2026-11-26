@@ -87,7 +87,6 @@ fn v03_l4a_auto_drain_after_scan_and_no_busy() {
         std::thread::sleep(Duration::from_millis(20));
     }
 
-    // 无需人工 POST l4a_summary：轮询只读库等待自动排空至 100% / queue_depth=0
     let store = ReadonlyStore::open_at(&ws.data_dir, &ws.root_str()).expect("readonly store");
     let drain_deadline = Instant::now() + Duration::from_secs(5);
     loop {
@@ -103,7 +102,6 @@ fn v03_l4a_auto_drain_after_scan_and_no_busy() {
         std::thread::sleep(Duration::from_millis(30));
     }
 
-    // 验证 SSE 通道确实发出了 l4a 通知
     let mut saw_l4a_notice = false;
     while let Ok(notice) = notice_rx.try_recv() {
         if notice.kinds.iter().any(|k| k == "l4a") {
@@ -113,7 +111,6 @@ fn v03_l4a_auto_drain_after_scan_and_no_busy() {
     }
     assert!(saw_l4a_notice, "自动排空必须通过 SSE 广播 l4a 通知");
 
-    // 抽查首篇文档摘要已真实生成
     let boot = bootstrap(&store, &BootstrapQuery::default()).expect("bootstrap");
     let first_id = &boot.files.items[0].file_id;
     let summary_resp = file_summary(&store, first_id).expect("file_summary");
@@ -132,7 +129,6 @@ fn v03_l4a_startup_drain_and_evicted_snapshot_marks_failed_and_readonly_respects
     let ws = TempWorkspace::new("startup-drain");
     ws.write_md("docs/a.md", "# A\n\n有效正文。\n");
 
-    // 先手动建库并植入两条 queued：一条真实文档 + 一条无版本/无快照的坏行（模拟配额淘汰卡死场景）
     {
         let mut writer = Writer::open_at(&ws.data_dir, &ws.root_str()).expect("open writer");
         let report = reconcile(&mut writer, &ReconcileOptions::default()).expect("reconcile");
@@ -172,7 +168,6 @@ fn v03_l4a_startup_drain_and_evicted_snapshot_marks_failed_and_readonly_respects
             .expect("insert orphan");
     }
 
-    // ① 关闭启动自动排空（CLI serve 无 --watch 零启动写契约）：队列保持原样不动
     {
         let writer = Writer::open_at(&ws.data_dir, &ws.root_str()).expect("open writer");
         let jobs = IndexJobManager::start_with_options(writer, None, false);
@@ -185,7 +180,6 @@ fn v03_l4a_startup_drain_and_evicted_snapshot_marks_failed_and_readonly_respects
         jobs.shutdown();
     }
 
-    // ② 开启启动自动排空（桌面壳 / --watch）：有效条变 done、坏条标 failed 退出队列，queue_depth 归 0
     {
         let writer = Writer::open_at(&ws.data_dir, &ws.root_str()).expect("open writer");
         let jobs = IndexJobManager::start_with_options(writer, None, true);
@@ -212,7 +206,6 @@ fn v03_l4a_startup_drain_and_evicted_snapshot_marks_failed_and_readonly_respects
 #[test]
 fn v03_decisions_ssot_matches_beyond_100_page_limit() {
     let ws = TempWorkspace::new("decisions-ssot");
-    // 构造 125 条未决待确认决策（超过默认 limit=100），检验全站三出口计数零误差
     let mut body = String::from("# 决策总表\n\n");
     for i in 1..=125 {
         body.push_str(&format!(

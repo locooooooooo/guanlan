@@ -16,7 +16,6 @@ pub fn list_candidates(
     for candidate in candidates {
         let mut members = Vec::with_capacity(candidate.members.len());
         for member in &candidate.members {
-            // 成员文件可能已被删除/移动：文件行缺失时如实降级为 file_id 卡
             let (relative_path, title) = match store.file_by_id(&member.file_id)? {
                 Some(file) => {
                     let title = if file.title.is_empty() {
@@ -56,11 +55,9 @@ pub fn list_candidates(
     })
 }
 
-/// 库内候选行读取（ Writer 层接口复用；只读连接上同一 SELECT 面）
 fn writer_candidates(
     store: &ReadonlyStore,
 ) -> Result<Vec<crate::index::writer::CandidateFull>, GuanlanError> {
-    // 只读侧直接以相同 SQL 形状读取（不依赖 Writer 实例）
     use crate::index::writer::{CandidateFull, CandidateMemberRow, CandidateRow};
 
     let conn = store.conn();

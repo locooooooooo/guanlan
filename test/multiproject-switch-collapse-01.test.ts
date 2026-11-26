@@ -3,22 +3,6 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-/**
- * 多项目聚焦切换：展开集不能越切越多 —— 契约测试。
- *
- * 事故：从 guanlan 切到 GuanLan 后，左侧目录栏里旧聚焦项目的树仍保持展开，
- * 两个项目的文件夹同时占满侧栏；expandedProjects 还会持久化到 localStorage，
- * 重启后依旧两份。
- *
- * 规则（纯函数见 sidebarTree.expandedProjectsAfterActivate）：
- *  ① 新的聚焦项目展开；
- *  ② 旧的聚焦项目收起（即使新项目本来就在展开集里，也不能提前返回）；
- *  ③ 用户手动展开的其他项目保持——多项目同时展开仍是显式能力。
- *
- * 本文件守的是接线：hook 里两个入口（添加并激活 / 切换聚焦）都必须走该纯函数。
- * node:test 没有 DOM/hook 运行器，行为规则由 sidebarTree.test.ts 覆盖，这里按本仓
- * 既有做法用源码子串断言接线。
- */
 
 function readSrc(path: string): string {
   return readFileSync(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8');

@@ -1,36 +1,4 @@
 #!/usr/bin/env node
-/**
- * 观澜统一门禁 —— 一条命令跑完 CI 的 frontend 与 rust-desktop 作业所跑的全部检查；
- * `--full` 再追加 smoke 作业的那几步。
- *
- * 用法（在仓库根目录执行）：
- *   npm run gate             # 类型检查、前端单测、Vite 构建、安装包配置校验、
- *                            # cargo fmt / clippy / test（整个 workspace）
- *   npm run gate -- --full   # 追加：release 构建 CLI、生成夹具、冒烟、Node ↔ Rust 写入对拍
- *   node scripts/gate.mjs [--full]
- *
- * 替你做三件直接照抄命令时容易漏的事：
- * 1. cargo 一律在 native/ 下执行。rustup 只在 cwd 位于该目录时才读 rust-toolchain.toml，
- *    在仓库根目录跑会用成 rustup 的默认工具链，「本地通过 = CI 通过」就不成立了。
- * 2. 会运行 Rust 代码的步骤统一在一个临时的 GUANLAN_DATA_DIR 下跑，跑完删除。不设它时，
- *    服务与桌面壳的部分测试会写 %LOCALAPPDATA%\Guanlan\workspaces\，也就是已安装的观澜
- *    正在用的数据目录。纯前端的步骤不设它，与 CI 一致。
- * 3. cargo 不在 PATH 上时去 $CARGO_HOME/bin 与 ~/.cargo/bin 找（非交互 shell 常常不带它），
- *    找不到就明确报错。
- *
- * 第一步失败就停，后面没跑的步骤如实列为「未跑」。结束时打印一份运行记录（每步的结果、
- * 耗时、测试数），可以直接贴进提交正文的「运行」一节，格式见 docs/code-standards.md。
- *
- * Rust 测试里提前返回（跳过）的那些算在「通过」里，其实什么都没验证。libtest 会截获通过的测试
- * 打印的内容，扫输出找不到它们的 [skip]。所以 cargo test 那一步设了 GUANLAN_TEST_SKIP_LOG，
- * 测试把自己跳过的原因记进那个文件，运行记录里逐个点名，不计入验证。
- *
- * 已知的偶发失败：npm run build 冷启动时 @tailwindcss/oxide 的提取器偶尔 panic
- * （crates/oxide/src/extractor/boundary.rs，index out of bounds），重跑即过。门禁只对
- * 这一种失败自动重试一次，并在记录里注明重试过；其余失败不重试。
- *
- * 末尾几个纯函数（判定与输出解析）导出给 test/gate-scripts.test.ts；被导入时不执行门禁。
- */
 
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -43,9 +11,7 @@ const REPO = path.resolve(path.dirname(SCRIPT), '..');
 const NATIVE = path.join(REPO, 'native');
 const IS_WIN = process.platform === 'win32';
 const TSX_CLI = path.join(REPO, 'node_modules', 'tsx', 'dist', 'cli.mjs');
-/** 只保留输出的末尾这么多字符用于统计，整个 workspace 的测试输出远小于它。 */
 const TAIL_CHARS = 400_000;
-/** 安装包脚本产出的 release 版命令行程序（相对仓库根，始终用正斜杠写，运行记录里要贴得出去）。 */
 const RELEASE_EXE_REL = 'native/target/release/guanlan.exe';
 
 const USAGE = `观澜统一门禁
@@ -60,7 +26,6 @@ const USAGE = `观澜统一门禁
   -h, --help   显示这份用法
 `;
 
-// ---------- 可被测试的纯函数 ----------
 
 const ANSI = new RegExp(String.raw`\u001b\[[0-9;]*m`, 'g');
 
@@ -104,10 +69,7 @@ export function describeResult(result, step) {
       tests = `，${counts.passed} 通过 / ${counts.failed} 失败`;
     }
   }
-  // 被跳过的测试算在「通过」里，但什么都没验证。libtest 会截获通过的测试打印的内容，所以不能
-  // 靠扫输出：Rust 测试提前返回时把「测试名: 原因」写进 GUANLAN_TEST_SKIP_LOG，这里读那份记录。
   if (result.skipped !== undefined && result.skipped.length > 0) {
-    // 每条是「完整路径::测试名: 原因」，记录里只放测试名；原因在步骤跑完时已经打全了
     const names = result.skipped.map((line) => line.split('::').pop()?.split(': ')[0] ?? line);
     notes.push(`${result.skipped.length} 个测试跳过、什么都没验证（不计入）：${names.join('、')}`);
   }
@@ -144,7 +106,6 @@ export function recordCommand(full) {
   return full ? 'npm run gate -- --full' : 'npm run gate';
 }
 
-// ---------- 主流程 ----------
 
 function isFile(candidate) {
   try {
@@ -154,7 +115,6 @@ function isFile(candidate) {
   }
 }
 
-/** 按 PATH（Windows 下再按 PATHEXT）找一个可执行文件；找不到返回 null。 */
 function findOnPath(name) {
   const dirs = (process.env.PATH ?? '').split(path.delimiter).filter(Boolean);
   const names = IS_WIN
@@ -215,7 +175,6 @@ export function buildSteps(cargoFile) {
     label: `cargo ${args.join(' ')}`,
     ...extra,
   });
-  // 运行时用绝对路径，运行记录里写相对仓库的路径：记录是要贴进提交说明的，不该带着本机目录
   const releaseExe = path.join(REPO, ...RELEASE_EXE_REL.split('/'));
   const tsScriptStep = (id, script, scriptArgs, displayArgs) => ({
     id,
@@ -254,7 +213,6 @@ export function buildSteps(cargoFile) {
   ]);
 }
 
-/** 取一条命令的输出：字符串时经 shell 执行，数组时直接执行、不经 shell。失败返回空串。 */
 function capture(cmd, cwd) {
   const out = Array.isArray(cmd)
     ? spawnSync(cmd[0], cmd.slice(1), { cwd, encoding: 'utf8' })
@@ -262,11 +220,9 @@ function capture(cmd, cwd) {
   return out.status === 0 ? (out.stdout ?? '').trim() : '';
 }
 
-/** 输出原样转给终端，同时留下末尾一段用于统计测试数。 */
 function runOnce(step, env) {
   return new Promise((resolve) => {
     const started = Date.now();
-    // spawn(command, args, options)：数组形式的命令要拆成可执行文件与参数两部分。
     const command = Array.isArray(step.cmd) ? step.cmd[0] : step.cmd;
     const args = Array.isArray(step.cmd) ? step.cmd.slice(1) : [];
     const child = spawn(command, args, {
@@ -301,7 +257,6 @@ async function runStep(step, env) {
   return { ...(await runOnce(step, env)), retried: true };
 }
 
-// Windows 上 SQLite 句柄在进程退出后可能晚一点才释放，删不干净就稍后再试几次。
 async function removeDir(dir) {
   for (let attempt = 0; attempt < 5 && fs.existsSync(dir); attempt += 1) {
     try {
@@ -330,7 +285,6 @@ async function main() {
   const cargo = findCargo();
   const head = capture('git rev-parse --short HEAD', REPO);
   const dirty = capture('git status --porcelain', REPO).length > 0;
-  // 在 native/ 下执行，报出来的才是 rust-toolchain.toml 锁定的那个版本。
   const rustcBin = cargo.file ? path.join(path.dirname(cargo.file), IS_WIN ? 'rustc.exe' : 'rustc') : null;
   const toolchain =
     cargo.file === null
@@ -338,12 +292,10 @@ async function main() {
       : (rustcBin && isFile(rustcBin) ? capture([rustcBin, '--version'], NATIVE) : capture([cargo.file, '--version'], NATIVE));
   const steps = buildSteps(cargo.file);
   const sandboxDir = fs.mkdtempSync(path.join(os.tmpdir(), 'guanlan-gate-'));
-  // 兜底：无论脚本怎么退出（包括中途抛异常），退出时都试着删掉临时目录。
   process.on('exit', () => {
     try {
       fs.rmSync(sandboxDir, { recursive: true, force: true });
     } catch {
-      // 句柄还没释放，删不掉：结尾处会提示手动删除
     }
   });
 
@@ -360,7 +312,6 @@ async function main() {
   console.log(`  Rust 步骤的数据目录：${sandboxDir}`);
   console.log('');
 
-  // Rust 测试把提前返回（跳过）的测试记在这里，见文件头
   const skipLogFile = path.join(sandboxDir, 'test-skips.log');
   const envFor = (step) => envForStep(step, { cargoFile: cargo.file, sandboxDir, skipLogFile });
 
@@ -387,7 +338,6 @@ async function main() {
           .split('\n')
           .map((line) => line.trim())
           .filter(Boolean);
-        // 先把每条的原因打全，运行记录里只放得下测试名
         for (const line of result.skipped) process.stdout.write(`  跳过的测试：${line}\n`);
       }
     }
@@ -433,7 +383,6 @@ async function main() {
   process.exitCode = failed.length > 0 ? 1 : 0;
 }
 
-// 只有被直接执行时才跑门禁；被测试文件导入时不跑。
 const invokedDirectly =
   process.argv[1] !== undefined &&
   fs.existsSync(process.argv[1]) &&

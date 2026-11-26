@@ -1,7 +1,3 @@
-/**
- * 左侧浮动 Chrome · Sources 来源面板：
- * 承载七个分类折叠组（I/R/S/A/M/C/H）与收起窄条，数据一律来自 controller ctx。
- */
 
 import React from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
@@ -52,7 +48,6 @@ export function GraphSourcesPanel({ ctx }: { ctx: GraphCanvasCtx }) {
         sourcesPanelCollapsed ? 'w-auto' : 'w-[206px]'
       } rounded-xl bg-[color:color-mix(in_srgb,var(--cv-card)_92%,var(--cv-panel))] backdrop-blur-md border border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_10%,transparent)] flex flex-col overflow-hidden z-20`}
     >
-      {/* Header Row */}
       <div className={sourcesPanelCollapsed ? 'px-2.5 py-1.5' : 'px-3.5 pt-3.5 pb-2'}>
         <div className="flex items-center justify-between">
           {!sourcesPanelCollapsed && (
@@ -98,7 +93,6 @@ export function GraphSourcesPanel({ ctx }: { ctx: GraphCanvasCtx }) {
           </div>
         </div>
 
-        {/* Built in / Project Root Summary Row：该行不可折叠故不放箭头装饰，名称取动态工作区名 */}
         {!sourcesPanelCollapsed && (
           <div className="mt-3 flex items-center justify-between text-[11.5px] text-[color:var(--cv-ink-3)] py-1">
             <div className="flex items-center gap-2">
@@ -111,10 +105,8 @@ export function GraphSourcesPanel({ ctx }: { ctx: GraphCanvasCtx }) {
         )}
       </div>
 
-      {/* Scrollable Category List with Generous Vertical Breathing Room（收起时整列隐藏） */}
       {!sourcesPanelCollapsed && (
       <div className="flex-1 overflow-y-auto px-3.5 pb-3.5 space-y-2.5 text-xs">
-        {/* 1. I · Instructions / MD Specs (Expanded by default with clean unboxed items) */}
         <div className="pt-1 border-t border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_6%,transparent)]">
           <div
             onClick={() => toggleGroup('MD')}
@@ -178,7 +170,6 @@ export function GraphSourcesPanel({ ctx }: { ctx: GraphCanvasCtx }) {
               openFileReader={openFileReader}
             />
           )}
-        {/* 2. R · Rules (DEC 决策台账) */}
         <div className="pt-2 border-t border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_6%,transparent)]">
           <div
             onClick={() => toggleGroup('DEC')}
@@ -244,7 +235,6 @@ export function GraphSourcesPanel({ ctx }: { ctx: GraphCanvasCtx }) {
           )}
         </div>
 
-        {/* 3. S · Skills (REV 版本快照) */}
         <div className="pt-1">
           <div
             onClick={() => toggleGroup('REV')}
@@ -283,7 +273,6 @@ export function GraphSourcesPanel({ ctx }: { ctx: GraphCanvasCtx }) {
           )}
         </div>
 
-        {/* 4. A · Agents (SVG 架构图纸) */}
         <div className="pt-1">
           <div
             onClick={() => toggleGroup('SVG')}
@@ -339,8 +328,6 @@ export function GraphSourcesPanel({ ctx }: { ctx: GraphCanvasCtx }) {
                     exploreAfterClick(file.file_id);
                   }}
                   onDoubleClick={() => {
-                    // 侧栏行双击仍直开阅读器（旧 readAfterDoubleClick 同行为）；
-                    // 先取消 pending 单击下钻，防 240ms 后画布被切走
                     cancelExplore();
                     openFileReader(file.file_id);
                   }}
@@ -353,7 +340,6 @@ export function GraphSourcesPanel({ ctx }: { ctx: GraphCanvasCtx }) {
           )}
         </div>
 
-        {/* 5. M · Memory (TIM 时间线轮次) */}
         <div className="pt-1">
           <div
             onClick={() => toggleGroup('TIM')}
@@ -394,7 +380,6 @@ export function GraphSourcesPanel({ ctx }: { ctx: GraphCanvasCtx }) {
                       key={day.date || 'undated'}
                       type="button"
                       onClick={() =>
-                        // 再次点击当前日期取消选中
                         selectDate(scene.activeDate === day.date ? undefined : day.date)
                       }
                       className={`block text-[10.5px] font-mono cursor-pointer truncate max-w-[170px] ${
@@ -423,7 +408,6 @@ export function GraphSourcesPanel({ ctx }: { ctx: GraphCanvasCtx }) {
           )}
         </div>
 
-        {/* 6. C · MCP servers (PDF 规范) */}
         <div className="pt-1">
           <div
             onClick={() => toggleGroup('PDF')}
@@ -479,8 +463,6 @@ export function GraphSourcesPanel({ ctx }: { ctx: GraphCanvasCtx }) {
                     exploreAfterClick(file.file_id);
                   }}
                   onDoubleClick={() => {
-                    // 侧栏行双击仍直开阅读器（旧 readAfterDoubleClick 同行为）；
-                    // 先取消 pending 单击下钻，防 240ms 后画布被切走
                     cancelExplore();
                     openFileReader(file.file_id);
                   }}
@@ -493,7 +475,6 @@ export function GraphSourcesPanel({ ctx }: { ctx: GraphCanvasCtx }) {
           )}
         </div>
 
-        {/* 7. H · Hooks (跨文档引用依据) */}
         <div className="pt-1">
           <div
             onClick={() => toggleGroup('REL')}

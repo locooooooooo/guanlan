@@ -34,7 +34,6 @@ use crate::storage::{internal_sql, ReadonlyStore};
 /// 工作区全量开放导出协议版本
 pub const OPEN_EXPORT_SCHEMA_VERSION: &str = "guanlan.open_export.v1";
 
-/// 触发治理/决定保护的关键事件类型（与账本事件族一致 + decision_detected）
 const PROTECTED_GOVERNANCE_EVENT_KINDS: &[&str] = &[
     "decision_detected",
     "decision_confirmed",
@@ -47,10 +46,6 @@ const PROTECTED_GOVERNANCE_EVENT_KINDS: &[&str] = &[
     "initiative_archived",
     "initiative_reopened",
 ];
-
-// ============================================================
-// 1. 全量 blob SHA-256 完整性校验（100% 诚实影响范围报告）
-// ============================================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImpactedRevisionRef {
@@ -159,7 +154,6 @@ pub(crate) fn verify_blobs_integrity_on_conn(
     blobs_dir: &Path,
     workspace_id: &str,
 ) -> Result<BlobIntegrityReport, GuanlanError> {
-    // 1. 读取全部文件映射（file_id -> current_path）
     let mut file_paths: HashMap<String, String> = HashMap::new();
     {
         let mut stmt = conn
@@ -176,7 +170,6 @@ pub(crate) fn verify_blobs_integrity_on_conn(
         }
     }
 
-    // 2. 收集全部 snapshot_available = 1 的版本（按 content_hash 分组）
     let mut revs_by_hash: BTreeMap<String, Vec<ImpactedRevisionRef>> = BTreeMap::new();
     let mut expected_bytes_by_hash: HashMap<String, u64> = HashMap::new();
     {
@@ -222,7 +215,6 @@ pub(crate) fn verify_blobs_integrity_on_conn(
         }
     }
 
-    // 同步纳入 blobs 表中的大小期望与无 revision 引用的登记项
     let mut all_referenced_hashes: HashSet<String> = revs_by_hash.keys().cloned().collect();
     {
         let mut stmt = conn
@@ -243,7 +235,6 @@ pub(crate) fn verify_blobs_integrity_on_conn(
             }
         }
     }
-    // 还要纳入待处理草案 proposed_content_hash，避免把草案内容误判为孤儿 blob
     if let Ok(mut stmt) = conn.prepare(
         "SELECT proposed_content_hash FROM revision_drafts WHERE workspace_id = ?1 AND status IN ('proposed', 'pending', 'conflict')",
     ) {
@@ -256,7 +247,6 @@ pub(crate) fn verify_blobs_integrity_on_conn(
         }
     }
 
-    // 3. 逐份流式核验 SHA-256
     let mut checked_blobs: usize = 0;
     let mut healthy_blobs: usize = 0;
     let mut corrupted_count: usize = 0;
@@ -351,7 +341,6 @@ pub(crate) fn verify_blobs_integrity_on_conn(
         }
     }
 
-    // 4. 统计磁盘上未被任何活跃 revision/草案引用的孤儿 blob
     let disk_blobs = collect_disk_blob_files(blobs_dir);
     let mut orphan_blob_count: usize = 0;
     let mut orphan_blob_bytes: u64 = 0;
@@ -436,10 +425,6 @@ fn query_impacts_for_revisions(
     Ok((decisions, event_count))
 }
 
-// ============================================================
-// 2. 存储瘦身 GC（决定证据铁律保护，绝不误删）
-// ============================================================
-
 fn default_older_than_days() -> u32 {
     30
 }
@@ -521,7 +506,6 @@ struct GcPlan {
     orphan_files_to_delete: Vec<(String, PathBuf, u64)>,
 }
 
-/// 将 ISO-8601 字符串（`YYYY-MM-DDTHH:MM:SS...`）解析为 Unix 秒（UTC）
 fn parse_iso_epoch_secs(iso: &str) -> Option<i64> {
     let s = iso.trim();
     if s.len() < 10 {
@@ -566,7 +550,6 @@ fn build_gc_plan(
     let keep_recent = req.keep_recent_per_file.max(1);
     let cutoff_secs = now_epoch_secs.saturating_sub(i64::from(req.older_than_days) * 86_400);
 
-    // 1. 加载全部文件（current_path + last_revision_id）
     let mut file_paths: HashMap<String, String> = HashMap::new();
     let mut latest_rev_ids: HashSet<String> = HashSet::new();
     {
@@ -593,8 +576,6 @@ fn build_gc_plan(
         }
     }
 
-    // 2. 收集全部铁律保护 revision_id 集合
-    // 2a. statements（决定/结论陈述直接引用的版本）
     let mut decision_evidence_revs: HashSet<String> = HashSet::new();
     {
         let mut stmt = conn
@@ -608,7 +589,6 @@ fn build_gc_plan(
         }
     }
 
-    // 2b. edges（因果/引用/决策依据边引用的源版本与目标版本）
     let mut edge_evidence_revs: HashSet<String> = HashSet::new();
     {
         let mut stmt = conn
@@ -634,7 +614,6 @@ fn build_gc_plan(
         }
     }
 
-    // 2c. 关键治理/决定/采纳/检查点事件引用的版本
     let mut governance_event_revs: HashSet<String> = HashSet::new();
     {
         let mut stmt = conn
@@ -657,7 +636,6 @@ fn build_gc_plan(
         }
     }
 
-    // 2d. artifact_states.selected_revision_id、checkpoints.output_revision_id 与待处理 revision_drafts
     let mut extra_protected_revs: HashSet<String> = HashSet::new();
     let mut draft_protected_hashes: HashSet<String> = HashSet::new();
     if let Ok(mut stmt) = conn.prepare(
@@ -695,7 +673,6 @@ fn build_gc_plan(
         }
     }
 
-    // 3. 加载全部带快照的 revision（按 file_id 分组，按 seq 降序排列以便计算 recent 窗口）
     #[derive(Clone)]
     struct RevSnap {
         revision_id: String,
@@ -736,7 +713,6 @@ fn build_gc_plan(
         }
     }
 
-    // 4. 对每条 revision 判定「保留 / 受铁律保护 / 可清理」
     let mut retained_hashes: HashSet<String> = draft_protected_hashes;
     let mut protected_revisions_count: usize = 0;
     let mut protected_decision_evidence_count: usize = 0;
@@ -794,7 +770,6 @@ fn build_gc_plan(
         }
     }
 
-    // 5. 计算去重后真正可释放的物理 blob（绝不删被任何 retained/protected revision 共享的 blob！）
     let mut deletable_hash_sizes: BTreeMap<String, u64> = BTreeMap::new();
     let mut skipped_shared_blob_count: usize = 0;
     let mut pruned_samples: Vec<GcPrunedRevisionSample> = Vec::new();
@@ -835,7 +810,6 @@ fn build_gc_plan(
         }
     }
 
-    // 统计受保护/保留的唯一 blob 字节数
     let mut protected_unique_hashes: HashSet<String> = HashSet::new();
     let mut protected_bytes: u64 = 0;
     for rev in &retained_revs {
@@ -854,7 +828,6 @@ fn build_gc_plan(
         }
     }
 
-    // 6. 识别孤儿磁盘 blob（既不在 retained_hashes 也不在 deletable_hash_sizes）
     let mut orphan_files_to_delete: Vec<(String, PathBuf, u64)> = Vec::new();
     if req.remove_orphan_blobs {
         for (name, path, size) in collect_disk_blob_files(blobs_dir) {
@@ -943,7 +916,6 @@ pub fn execute_storage_gc(
     let now_iso = clock::now_iso();
     let summary_clone = plan.summary.clone();
 
-    // 1. 短事务提交数据库变更（只把 snapshot_available 置 0、移除归零 blobs 行，绝不删 revision 身份/事件/决定）
     writer.transaction(|w| {
         for rev_id in &pruned_ids {
             w.conn()
@@ -963,7 +935,6 @@ pub fn execute_storage_gc(
                 .execute("DELETE FROM blobs WHERE content_hash = ?1", params![hash])
                 .map_err(internal_sql)?;
         }
-        // 更新剩余活跃 blobs 的精确引用计数
         w.conn()
             .execute(
                 "UPDATE blobs
@@ -975,7 +946,6 @@ pub fn execute_storage_gc(
             )
             .map_err(internal_sql)?;
 
-        // 记录瘦身维护事件
         if summary_clone.pruned_revisions_count > 0
             || summary_clone.deleted_blobs_count > 0
             || summary_clone.deleted_orphan_blobs_count > 0
@@ -1025,7 +995,6 @@ pub fn execute_storage_gc(
         Ok(())
     })?;
 
-    // 2. 数据库提交成功后再物理删除无引用的磁盘 blob 与孤儿文件
     let blobs_dir = writer.blobs_dir().to_path_buf();
     for hash in &hashes_to_delete {
         let p = if hash.len() >= 2 {
@@ -1045,10 +1014,6 @@ pub fn execute_storage_gc(
 
     Ok(plan.summary)
 }
-
-// ============================================================
-// 3. 工作区级全量开放导出（零锁定：全部快照 + JSONL/MD 账本）
-// ============================================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkspaceOpenExportRequest {
@@ -1136,7 +1101,6 @@ pub fn export_workspace_open_archive(
     let conn = store.conn();
     let mut total_bytes: u64 = 0;
 
-    // 1. files.jsonl
     let mut file_paths: HashMap<String, String> = HashMap::new();
     let mut files_jsonl = String::new();
     let mut files_count: usize = 0;
@@ -1175,7 +1139,6 @@ pub fn export_workspace_open_archive(
         }
     }
 
-    // 2. path_aliases.jsonl
     let mut aliases_jsonl = String::new();
     {
         let mut stmt = conn
@@ -1204,7 +1167,6 @@ pub fn export_workspace_open_archive(
         }
     }
 
-    // 3. revisions.jsonl + 收集可用快照哈希
     let mut revisions_jsonl = String::new();
     let mut revisions_count: usize = 0;
     let mut available_hashes: BTreeSet<String> = BTreeSet::new();
@@ -1288,7 +1250,6 @@ pub fn export_workspace_open_archive(
         }
     }
 
-    // 4. events.jsonl + TIMELINE.md（严格保留 occurred_at / observed_at 双口径）
     let mut events_jsonl = String::new();
     let mut timeline_md = String::from(
         "# 工作区全量时间演进账本（ledger/TIMELINE.md）\n\n> 保留业务发生时间 `occurred_at` 与系统采集时间 `observed_at` 双口径不混写。\n\n",
@@ -1352,7 +1313,6 @@ pub fn export_workspace_open_archive(
         }
     }
 
-    // 5. decisions.jsonl + DECISIONS.md
     let mut decisions_jsonl = String::new();
     let mut decisions_md = String::from(
         "# 工作区全量决定与证据账本（ledger/DECISIONS.md）\n\n| 编号 | 状态 | 事项/问题 | 证据锚点（文件与行号） | 原文摘录 |\n| :--- | :---: | :--- | :--- | :--- |\n",
@@ -1422,7 +1382,6 @@ pub fn export_workspace_open_archive(
         }
     }
 
-    // 6. edges.jsonl
     let mut edges_jsonl = String::new();
     let mut edges_count: usize = 0;
     {
@@ -1474,7 +1433,6 @@ pub fn export_workspace_open_archive(
         }
     }
 
-    // 7. 拷贝全部可用历史去重快照
     let mut snapshots_exported: usize = 0;
     let mut snapshots_missing: usize = 0;
     if req.include_snapshots {
@@ -1599,10 +1557,6 @@ pub fn export_workspace_open_archive(
     })
 }
 
-// ============================================================
-// 4. 一键脱敏运行诊断包 ZIP（纯 Rust 标准 PKWARE/DEFLATE）
-// ============================================================
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiagnosticZipResponse {
     pub ok: bool,
@@ -1615,7 +1569,6 @@ pub struct DiagnosticZipResponse {
     pub sandbox_ok: bool,
 }
 
-/// 确定性脱敏诊断文本：替换工作区根目录、数据目录、用户主目录并执行密钥/凭据清洗
 fn redact_diagnostic_text(raw: &str, ws_root: &str, data_dir: &str) -> (String, usize) {
     let mut text = raw.to_owned();
     let mut hits: usize = 0;
@@ -1643,7 +1596,6 @@ fn redact_diagnostic_text(raw: &str, ws_root: &str, data_dir: &str) -> (String, 
             }
         }
     }
-    // 长路径优先替换，避免前缀冲突
     replacements.sort_by_key(|a| std::cmp::Reverse(a.0.len()));
     replacements.dedup_by(|a, b| a.0 == b.0);
 
@@ -1695,18 +1647,17 @@ pub(crate) fn build_standard_zip(entries: &[(&str, &[u8])]) -> Result<Vec<u8>, G
         let name_len = u16::try_from(name_bytes.len())
             .map_err(|_| GuanlanError::Internal("ZIP 文件名过长".to_owned()))?;
 
-        // Local file header (PK\x03\x04)
         buf.extend_from_slice(&0x0403_4b50u32.to_le_bytes());
-        buf.extend_from_slice(&20u16.to_le_bytes()); // version needed: 2.0
-        buf.extend_from_slice(&0x0800u16.to_le_bytes()); // UTF-8 filename flag
-        buf.extend_from_slice(&8u16.to_le_bytes()); // method: DEFLATE
-        buf.extend_from_slice(&0u16.to_le_bytes()); // mod time
-        buf.extend_from_slice(&0x5821u16.to_le_bytes()); // mod date (2024-01-01)
+        buf.extend_from_slice(&20u16.to_le_bytes());
+        buf.extend_from_slice(&0x0800u16.to_le_bytes());
+        buf.extend_from_slice(&8u16.to_le_bytes());
+        buf.extend_from_slice(&0u16.to_le_bytes());
+        buf.extend_from_slice(&0x5821u16.to_le_bytes());
         buf.extend_from_slice(&crc32.to_le_bytes());
         buf.extend_from_slice(&comp_len.to_le_bytes());
         buf.extend_from_slice(&uncomp_len.to_le_bytes());
         buf.extend_from_slice(&name_len.to_le_bytes());
-        buf.extend_from_slice(&0u16.to_le_bytes()); // extra len
+        buf.extend_from_slice(&0u16.to_le_bytes());
         buf.extend_from_slice(&name_bytes);
         buf.extend_from_slice(&compressed);
 
@@ -1724,23 +1675,22 @@ pub(crate) fn build_standard_zip(entries: &[(&str, &[u8])]) -> Result<Vec<u8>, G
 
     for rec in &records {
         let name_len = rec.name.len() as u16;
-        // Central directory file header (PK\x01\x02)
         buf.extend_from_slice(&0x0201_4b50u32.to_le_bytes());
-        buf.extend_from_slice(&20u16.to_le_bytes()); // version made by
-        buf.extend_from_slice(&20u16.to_le_bytes()); // version needed
-        buf.extend_from_slice(&0x0800u16.to_le_bytes()); // UTF-8 flag
-        buf.extend_from_slice(&8u16.to_le_bytes()); // DEFLATE
-        buf.extend_from_slice(&0u16.to_le_bytes()); // mod time
-        buf.extend_from_slice(&0x5821u16.to_le_bytes()); // mod date
+        buf.extend_from_slice(&20u16.to_le_bytes());
+        buf.extend_from_slice(&20u16.to_le_bytes());
+        buf.extend_from_slice(&0x0800u16.to_le_bytes());
+        buf.extend_from_slice(&8u16.to_le_bytes());
+        buf.extend_from_slice(&0u16.to_le_bytes());
+        buf.extend_from_slice(&0x5821u16.to_le_bytes());
         buf.extend_from_slice(&rec.crc32.to_le_bytes());
         buf.extend_from_slice(&rec.compressed_size.to_le_bytes());
         buf.extend_from_slice(&rec.uncompressed_size.to_le_bytes());
         buf.extend_from_slice(&name_len.to_le_bytes());
-        buf.extend_from_slice(&0u16.to_le_bytes()); // extra len
-        buf.extend_from_slice(&0u16.to_le_bytes()); // comment len
-        buf.extend_from_slice(&0u16.to_le_bytes()); // disk number start
-        buf.extend_from_slice(&0u16.to_le_bytes()); // internal attrs
-        buf.extend_from_slice(&0u32.to_le_bytes()); // external attrs
+        buf.extend_from_slice(&0u16.to_le_bytes());
+        buf.extend_from_slice(&0u16.to_le_bytes());
+        buf.extend_from_slice(&0u16.to_le_bytes());
+        buf.extend_from_slice(&0u16.to_le_bytes());
+        buf.extend_from_slice(&0u32.to_le_bytes());
         buf.extend_from_slice(&rec.local_header_offset.to_le_bytes());
         buf.extend_from_slice(&rec.name);
     }
@@ -1751,15 +1701,14 @@ pub(crate) fn build_standard_zip(entries: &[(&str, &[u8])]) -> Result<Vec<u8>, G
     let entry_count = u16::try_from(records.len())
         .map_err(|_| GuanlanError::Internal("ZIP 条目数溢出".to_owned()))?;
 
-    // End of central directory record (PK\x05\x06)
     buf.extend_from_slice(&0x0605_4b50u32.to_le_bytes());
-    buf.extend_from_slice(&0u16.to_le_bytes()); // disk number
-    buf.extend_from_slice(&0u16.to_le_bytes()); // cd start disk
+    buf.extend_from_slice(&0u16.to_le_bytes());
+    buf.extend_from_slice(&0u16.to_le_bytes());
     buf.extend_from_slice(&entry_count.to_le_bytes());
     buf.extend_from_slice(&entry_count.to_le_bytes());
     buf.extend_from_slice(&cd_size.to_le_bytes());
     buf.extend_from_slice(&cd_offset.to_le_bytes());
-    buf.extend_from_slice(&0u16.to_le_bytes()); // zip comment len
+    buf.extend_from_slice(&0u16.to_le_bytes());
 
     Ok(buf)
 }
@@ -1775,7 +1724,6 @@ pub fn build_diagnostic_zip_bytes(
     let ledger = verify_decision_ledger(store)?;
     let sandbox = audit_workspace_file_paths(store)?;
 
-    // 读取最近 50 条 job_runs 摘要（脱敏后入包）
     let mut recent_jobs: Vec<serde_json::Value> = Vec::new();
     if let Ok(mut stmt) = store.conn().prepare(
         "SELECT job_id, kind, state, phase, created_at, updated_at, error
@@ -1971,8 +1919,6 @@ mod tests {
         out
     }
 
-    /// 停机红线铁律测试：GC 必须永久保护首版基线、最新定稿、决定 statements 引用版本、
-    /// 因果 edges 引用版本以及被受保护版本共享的去重 blob；仅清理超期无引用过程快照与孤儿 blob。
     #[test]
     fn f02_gc_iron_law_protects_decision_and_edge_evidence_snapshots_and_shared_blobs() {
         let ws = TempMaintWs::new("gc-iron-law");
@@ -1982,29 +1928,23 @@ mod tests {
 
         let mut writer = Writer::open_at(&ws.data, ws.root.to_str().unwrap()).unwrap();
 
-        // v1: 基线首版（seq=1，必保）
         fs::write(&plan_path, "# 架构定稿 v1\n初稿内容。\n").unwrap();
         reconcile(&mut writer, &ReconcileOptions::default()).unwrap();
 
-        // v2: 纯过程草稿（无决定无边，超期后应被瘦身）
         fs::write(&plan_path, "# 架构定稿 v2\n纯过程草稿，将被安全瘦身。\n").unwrap();
         reconcile(&mut writer, &ReconcileOptions::default()).unwrap();
 
-        // v3: 带关键决定陈述（铁律保护！）
         let v3_body =
             "# 架构定稿 v3\n- [P1 - 已确认] 采用铁律保护策略（决定：GC 绝不误删决定依据）\n";
         fs::write(&plan_path, v3_body).unwrap();
         reconcile(&mut writer, &ReconcileOptions::default()).unwrap();
 
-        // v4: 带跨文件引用边（铁律保护！）
         fs::write(&plan_path, "# 架构定稿 v4\n详见 [附录](02-附录.md)。\n").unwrap();
         reconcile(&mut writer, &ReconcileOptions::default()).unwrap();
 
-        // v5: 内容回退与 v3 完全一致（去重共享同一物理 blob；即便 v5 是过程版，也绝不能删共享 blob！）
         fs::write(&plan_path, v3_body).unwrap();
         reconcile(&mut writer, &ReconcileOptions::default()).unwrap();
 
-        // v6: 当前最新版（必保）
         fs::write(&plan_path, "# 架构定稿 v6\n最新稳定正文。\n").unwrap();
         reconcile(&mut writer, &ReconcileOptions::default()).unwrap();
 
@@ -2016,7 +1956,6 @@ mod tests {
         let revs = writer.revisions_of_file(&file.file_id).unwrap();
         assert_eq!(revs.len(), 6, "应生成 6 个历史版本");
 
-        // 把全部历史版本回拨到 2024-01-01，使其全部满足 older_than_days=30；并放一个孤儿 blob
         writer
             .conn()
             .execute(
@@ -2030,8 +1969,6 @@ mod tests {
             orphan_dir.join("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         fs::write(&orphan_file, b"orphan-garbage-blob").unwrap();
 
-        // 先干跑 dry_run=true（keep_recent=1，只靠规则保护 v1/v3/v4/v6，而 v2 与 v5 为过程版）
-        // 注意：v5 与 v3 共享内容且 v5 无独立 statements 行（如果重抽产生 statement 也会被保护，这里删掉 v5 的非必要 statement 以专门验证共享 blob 保护）
         let v5_id = &revs[4].revision_id;
         writer
             .conn()
@@ -2067,7 +2004,6 @@ mod tests {
         assert!(preview.protected_decision_evidence_count >= 1);
         assert!(preview.protected_edge_evidence_count >= 1);
 
-        // 真正执行 GC（dry_run = false）
         let exec_res = execute_storage_gc(
             &mut writer,
             &StorageGcRequest {
@@ -2082,7 +2018,6 @@ mod tests {
         assert_eq!(exec_res.deleted_orphan_blobs_count, 1);
         assert!(!orphan_file.exists(), "孤儿 blob 应已清理");
 
-        // 校验铁律：v1(基线)、v3(决定依据)、v4(因果边依据)、v6(最新) 物理快照全部 100% 完好！
         let revs_after = writer.revisions_of_file(&file.file_id).unwrap();
         for seq_protected in [1i64, 3, 4, 6] {
             let r = revs_after.iter().find(|r| r.seq == seq_protected).unwrap();
@@ -2096,7 +2031,6 @@ mod tests {
                 "受保护版本 v{seq_protected} 物理快照必须完好存在"
             );
         }
-        // v2 独立过程快照应已删除且标记 snapshot_available = 0（版本身份行保留不删！）
         let v2_after = revs_after.iter().find(|r| r.seq == 2).unwrap();
         assert_eq!(v2_after.snapshot_available, 0);
         assert!(!store
@@ -2104,7 +2038,6 @@ mod tests {
             .unwrap()
             .exists());
 
-        // 完整性复检必须 100% PASS（零误伤）
         let integrity = verify_blobs_integrity(&store).unwrap();
         assert!(
             integrity.ok,
@@ -2113,7 +2046,6 @@ mod tests {
         assert_eq!(integrity.orphan_blob_count, 0);
     }
 
-    /// 停机红线：损坏或缺失的快照必须 100% 诚实报告影响的文件、版本、决定与事件数
     #[test]
     fn f02_integrity_check_honestly_reports_corrupted_and_missing_blob_impacts() {
         let ws = TempMaintWs::new("integrity");
@@ -2130,7 +2062,6 @@ mod tests {
 
         let mut writer = Writer::open_at(&ws.data, ws.root.to_str().unwrap()).unwrap();
         reconcile(&mut writer, &ReconcileOptions::default()).unwrap();
-        // 二次保存写入 file_modified 事件绑定到最新版本
         fs::write(
             ws.root.join("01-核心专项/01-决定单.md"),
             "# 决定单 v2\n- [P1 - 已确认] 数据库选型（决定：SQLite WAL 模式 + 定时备份）\n",
@@ -2140,12 +2071,10 @@ mod tests {
         let ws_rec = writer.workspace().unwrap();
         let store = ReadonlyStore::open_at(&ws.data, ws.root.to_str().unwrap()).unwrap();
 
-        // 完好状态应 PASS
         let clean = verify_blobs_integrity(&store).unwrap();
         assert!(clean.ok);
         assert_eq!(clean.healthy_blobs, 3);
 
-        // 人为篡改 01-决定单.md 对应的 blob，并删除 02-说明.md 对应的 blob
         let f1 = writer
             .find_file_by_path(&ws_rec.workspace_id, "01-核心专项/01-决定单.md")
             .unwrap()
@@ -2194,7 +2123,6 @@ mod tests {
         );
     }
 
-    /// 零锁定全量开放导出 + 一键脱敏诊断包 ZIP 测试
     #[test]
     fn f02_open_export_and_sanitized_diagnostic_zip() {
         let ws = TempMaintWs::new("export-diag");
@@ -2205,7 +2133,6 @@ mod tests {
         .unwrap();
         let mut writer = Writer::open_at(&ws.data, ws.root.to_str().unwrap()).unwrap();
         reconcile(&mut writer, &ReconcileOptions::default()).unwrap();
-        // 写入一条带本机路径与模拟密钥的失败任务日志，检验诊断包脱敏能力
         let ws_rec = writer.workspace().unwrap();
         writer
             .conn()
@@ -2224,7 +2151,6 @@ mod tests {
 
         let store = ReadonlyStore::open_at(&ws.data, ws.root.to_str().unwrap()).unwrap();
 
-        // 1. 全量开放导出
         let export_out = ws.dir.join("open-archive");
         let exp = export_workspace_open_archive(
             &store,
@@ -2243,7 +2169,6 @@ mod tests {
         assert!(Path::new(&exp.timeline_md_path).is_file());
         assert!(export_out.join("snapshots/INDEX.md").is_file());
 
-        // 2. 一键脱敏诊断包 ZIP
         let diag_zip = ws.dir.join("diag.zip");
         let diag = export_diagnostic_zip(&store, Some(diag_zip.to_str().unwrap())).unwrap();
         assert!(diag.ok);

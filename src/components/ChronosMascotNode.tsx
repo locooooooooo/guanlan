@@ -2,14 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 
 interface ChronosMascotNodeProps {
-  /** 真实事件模式下的时间口径文案（紧凑日期 + 条数/沉淀） */
   epochLabel?: string;
   x: number;
   y: number;
   activeTimeSlice: 'all' | '0:00' | '1:00' | '2:00';
   isHovered: boolean;
   isSelected: boolean;
-  /** 时光流转自动重演中：星盘略加速并亮起温润涟漪 */
   isPlaying?: boolean;
   prefersReducedMotion?: boolean;
   onMouseEnter: () => void;
@@ -20,10 +18,6 @@ interface ChronosMascotNodeProps {
 
 const MASCOT_SRC = '/assets/chronos-mascot.png';
 
-/**
- * Strips the contiguous white background (including inner pockets like the crescent staff arc)
- * via multi-seed BFS flood-fill while preserving 100% of the character's hair, beard, and shading.
- */
 function useTransparentMascotImage(src: string): string {
   const [processedUrl, setProcessedUrl] = useState<string>(src);
 
@@ -48,7 +42,6 @@ function useTransparentMascotImage(src: string): string {
         const imgData = ctx.getImageData(0, 0, w, h);
         const data = imgData.data;
 
-        // 若源 PNG 四角本就是透明通道（RGBA 抠图资源），直接原样呈现，避免二次采样与白发边缘误伤
         const cornersTransparent =
           data[3] === 0 &&
           data[(w - 1) * 4 + 3] === 0 &&
@@ -82,7 +75,6 @@ function useTransparentMascotImage(src: string): string {
           }
         };
 
-        // Seed all 4 borders
         for (let x = 0; x < w; x += 2) {
           pushSeed(x, 0);
           pushSeed(x, h - 1);
@@ -92,7 +84,6 @@ function useTransparentMascotImage(src: string): string {
           pushSeed(w - 1, y);
         }
 
-        // Seed enclosed background pockets (inside crescent staff, between staff & robe, between boots)
         pushSeed(w * 0.21, h * 0.18);
         pushSeed(w * 0.23, h * 0.26);
         pushSeed(w * 0.28, h * 0.34);
@@ -138,7 +129,6 @@ function useTransparentMascotImage(src: string): string {
           }
         }
 
-        // Soft anti-alias feathering on the 1px boundary adjacent to transparent background
         for (let y = 1; y < h - 1; y++) {
           for (let x = 1; x < w - 1; x++) {
             const pos = y * w + x;
@@ -198,7 +188,6 @@ export const ChronosMascotNode: React.FC<ChronosMascotNodeProps> = ({
   const transparentMascotUrl = useTransparentMascotImage(MASCOT_SRC);
   const [castPulseCount, setCastPulseCount] = useState(0);
 
-  // Smooth 60fps astrolabe & sigil rotation via d3-timer（默认自检 prefers-reduced-motion，所有宿主视图一致尊重无障碍减动效）
   const outerAstrolabeRef = useRef<SVGGElement | null>(null);
   const innerRuneRingRef = useRef<SVGGElement | null>(null);
   const staffSigilRef = useRef<SVGGElement | null>(null);
@@ -227,7 +216,6 @@ export const ChronosMascotNode: React.FC<ChronosMascotNodeProps> = ({
     };
   }, [isPlaying, effectiveReducedMotion]);
 
-  // W09：真实事件模式由 epochLabelProp 传入真实「日期 · 条数」；无真实事件时只展示中性时间片口径，不写死演示轮次
   const epochLabel = epochLabelProp ?? (
     activeTimeSlice === 'all'
       ? '全域时间线'
@@ -247,7 +235,6 @@ export const ChronosMascotNode: React.FC<ChronosMascotNodeProps> = ({
         onClickCycleTime();
       }}
     >
-      {/* 1. Ground Shadow under the levitating Time God */}
       <ellipse
         cx="68"
         cy="132"
@@ -267,9 +254,7 @@ export const ChronosMascotNode: React.FC<ChronosMascotNodeProps> = ({
         strokeDasharray="4 6"
       />
 
-      {/* 2. Dual Counter-Rotating Astrolabe Halo & Clock Hands behind the Time Deity */}
       <g transform="translate(68, 62)">
-        {/* Outer Clockwise Astrolabe Ring with 12 Chrono Dial Ticks */}
         <g ref={outerAstrolabeRef} data-testid="d3-timer-outer-astrolabe">
           <circle
             r="58"
@@ -316,7 +301,6 @@ export const ChronosMascotNode: React.FC<ChronosMascotNodeProps> = ({
           })}
         </g>
 
-        {/* Cardinal Roman Numerals on the Celestial Dial */}
         <text
           x="0"
           y="-46"
@@ -366,7 +350,6 @@ export const ChronosMascotNode: React.FC<ChronosMascotNodeProps> = ({
           IX
         </text>
 
-        {/* Inner Counter-Clockwise Temporal Rune Ring */}
         <g ref={innerRuneRingRef}>
           <circle
             r="43"
@@ -381,7 +364,6 @@ export const ChronosMascotNode: React.FC<ChronosMascotNodeProps> = ({
           <circle cx="-43" cy="0" r="2.1" style={{ fill: 'var(--cv-lav)' }} />
         </g>
 
-        {/* Rotating Celestial Clock Hands */}
         <g className="animate-clock-hour">
           <line
             x1="0"
@@ -409,7 +391,6 @@ export const ChronosMascotNode: React.FC<ChronosMascotNodeProps> = ({
           <circle cx="0" cy="-50" r="2.2" style={{ fill: 'var(--cv-ink)' }} />
         </g>
 
-        {/* Click Time-Warp Cast Shockwave */}
         {castPulseCount > 0 && (
           <circle
             key={`cast-wave-${castPulseCount}`}
@@ -421,7 +402,6 @@ export const ChronosMascotNode: React.FC<ChronosMascotNodeProps> = ({
           />
         )}
 
-        {/* Active / Hover / Playing Synaptic Shockwave Ring */}
         {(isHovered || isSelected || isPlaying || activeTimeSlice !== 'all') && (
           <circle
             r="59"
@@ -433,9 +413,7 @@ export const ChronosMascotNode: React.FC<ChronosMascotNodeProps> = ({
         )}
       </g>
 
-      {/* 3. Levitating Time God Mascot Illustration + Articulated Wings + Staff Rift + Hourglass Flowing Sand */}
       <g className="animate-chronos-float">
-        {/* Glow Aura behind Character */}
         <circle
           cx="68"
           cy="64"
@@ -445,7 +423,6 @@ export const ChronosMascotNode: React.FC<ChronosMascotNodeProps> = ({
           className="cv-stream-glow"
         />
 
-        {/* Articulated Left Ethereal Wing (Flapping behind left shoulder) */}
         <g transform="translate(48, 58)">
           <g style={{ transformOrigin: '0px 0px' }} className="animate-wing-left">
             <path
@@ -467,7 +444,6 @@ export const ChronosMascotNode: React.FC<ChronosMascotNodeProps> = ({
           </g>
         </g>
 
-        {/* Articulated Right Ethereal Wing (Flapping behind right shoulder) */}
         <g transform="translate(88, 58)">
           <g style={{ transformOrigin: '0px 0px' }} className="animate-wing-right">
             <path
@@ -489,7 +465,6 @@ export const ChronosMascotNode: React.FC<ChronosMascotNodeProps> = ({
           </g>
         </g>
 
-        {/* The Uploaded Mascot Illustration (with transparent background) */}
         <image
           href={transparentMascotUrl}
           x="6"
@@ -499,7 +474,6 @@ export const ChronosMascotNode: React.FC<ChronosMascotNodeProps> = ({
           preserveAspectRatio="xMidYMid meet"
         />
 
-        {/* Crescent Chrono-Staff Arcane Rift & Rotating Gem Sigil (Left side of mascot) */}
         <g transform="translate(38, 30)">
           <line
             x1="0"
@@ -540,7 +514,6 @@ export const ChronosMascotNode: React.FC<ChronosMascotNodeProps> = ({
           />
         </g>
 
-        {/* Hourglass Flowing Sand Stream, 3D Tilted Vortex & Time Motes (Right side of mascot) */}
         <g transform="translate(102, 46)">
           <line
             x1="0"
@@ -589,7 +562,6 @@ export const ChronosMascotNode: React.FC<ChronosMascotNodeProps> = ({
         </g>
       </g>
 
-      {/* 4. Frosted Timekeeper Pedestal Badge Underneath Chronos（宽 128 严守 CHRONOS_MASCOT_WIDTH=132） */}
       <g transform="translate(2, 136)">
         <rect
           x="0"

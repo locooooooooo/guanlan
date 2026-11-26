@@ -21,16 +21,11 @@ use crate::error::GuanlanError;
 ///
 /// 只剥前缀不改写分隔符：斜杠/相对段归一交给 win32 `resolve`（单一职责）。
 pub fn strip_extended_prefix(path: &str) -> String {
-    // 大小写无关匹配前缀（Windows 对设备前缀同样大小写无关）。
-    // 必须用 get() 按字符边界取前缀：path.len() 是字节数，非 ASCII 路径
-    // （如 `F:/观澜项目`）的第 8 字节可能落在多字节字符中间，直接 `path[..n]`
-    // 会在启动挂载规范化阶段 panic（end byte index is not a char boundary）。
     let starts_with = |prefix: &str| {
         path.get(..prefix.len())
             .is_some_and(|head| head.eq_ignore_ascii_case(prefix))
     };
     if starts_with("\\\\?\\UNC\\") {
-        // \\?\UNC\srv\share\x → \\srv\share\x（UNC 规范形式）
         format!("\\\\{}", &path[8..])
     } else if starts_with("\\\\?\\") {
         path[4..].to_owned()
@@ -59,8 +54,6 @@ pub fn normalize_mount_root_with(
     let stripped = strip_extended_prefix(root_path);
     let resolved = resolver(&stripped)?;
     let mut out = strip_extended_prefix(&resolved);
-    // 尾部分隔符收口：UNC 根 resolve 结果带尾反斜杠（\\srv\share\），其余形态
-    // resolve 已无尾分隔符；这里统一剥到无尾（`C:\` 盘根不受影响——剥的是尾，非根）
     while out.len() > 1 && out.ends_with('\\') {
         out.truncate(out.len() - 1);
     }
@@ -86,13 +79,9 @@ pub fn mount_display_name(normalized: &str) -> String {
 /// 两个规范化绝对路径的包含关系（大小写无关；组件级前缀——`ab` 不匹配 `a`）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PathRelation {
-    /// 同一路径
     Equal,
-    /// `a` 是 `b` 的祖先目录（a 包含 b）
     AncestorOf,
-    /// `a` 是 `b` 的后代目录（b 包含 a）
     DescendantOf,
-    /// 互不包含
     Disjoint,
 }
 
@@ -143,9 +132,6 @@ mod tests {
         normalize_mount_root_with(p, &resolve_inject).expect("规范化失败")
     }
 
-    /// 回归：非 ASCII 根路径不得在扩展前缀探测时 panic。
-    /// `F:/观澜项目` 的第 8 字节落在多字节字符「澜」中间，旧实现直接
-    /// `path[..8]` 会以 `not a char boundary` 在启动阶段崩掉整个进程。
     #[test]
     fn non_ascii_root_does_not_panic_on_prefix_probe() {
         for p in [
@@ -156,19 +142,15 @@ mod tests {
         ] {
             assert_eq!(strip_extended_prefix(p), p);
         }
-        // 真正的前缀仍必须剥离（尾段为中文同样安全）
         assert_eq!(strip_extended_prefix("\\\\?\\F:\\观澜项目"), "F:\\观澜项目");
         assert_eq!(
             strip_extended_prefix("\\\\?\\UNC\\srv\\分享\\观澜项目"),
             "\\\\srv\\分享\\观澜项目"
         );
-        // 启动路径规范化链路（serv / 桌面壳均会走）不得 panic
         assert_eq!(norm("F:/观澜项目"), "F:\\观澜项目");
         assert_eq!(norm("\\\\?\\F:\\观澜项目"), "F:\\观澜项目");
     }
 
-    /// 验收「Windows 长路径/混合斜杠目录规范化结果无 \\?\ 泄漏且哈希稳定一致」：
-    /// 同一目录的四种写法归一到同一字符串、同一 mount_key
     #[test]
     fn plain_semantics_stable_hash_across_long_path_and_mixed_slashes() {
         let clean = norm(r"H:\archive\legacy-a");
@@ -191,18 +173,15 @@ mod tests {
         assert_eq!(k1, k2, "哈希对长路径写法稳定");
         assert_eq!(k1, k3, "哈希对混合斜杠写法稳定");
         assert_eq!(k1.len(), 16);
-        // 规范化是幂等变换：规范化产物再规范化不动（挂载身份可重复推导）
         assert_eq!(norm(&clean), clean);
     }
 
-    /// 相对路径按 win32 resolve 口径归一（与 root_key 同源移植，不新增第二套规则）
     #[test]
     fn relative_paths_resolve_against_cwd() {
         assert_eq!(norm("archive\\legacy-a"), r"H:\archive\legacy-a");
         assert_eq!(norm("./archive/./legacy-a"), r"H:\archive\legacy-a");
     }
 
-    /// 展示名取末段；盘根与 UNC 根回退
     #[test]
     fn display_name_takes_last_segment() {
         assert_eq!(mount_display_name(r"H:\archive\legacy-a"), "legacy-a");
@@ -210,7 +189,6 @@ mod tests {
         assert_eq!(mount_display_name(r"\\srv\share"), "share");
     }
 
-    /// 父子互斥判定：相等 / 祖先 / 后代 / 无关；大小写无关；`ab` 不是 `a` 的子目录
     #[test]
     fn path_relation_component_wise_and_case_insensitive() {
         let a = r"H:\work";
@@ -228,14 +206,12 @@ mod tests {
             PathRelation::Disjoint,
             "跨盘无关"
         );
-        // 防御性容忍混合分隔符与尾分隔符（调用方应传规范化路径）
         assert_eq!(
             path_relation("H:/work/", r"h:\work\sub"),
             PathRelation::AncestorOf
         );
     }
 
-    /// 设备路径 `\\.\` 不属于可 plain 化的挂载形态：原样保留，交给互斥/存在性校验拒绝
     #[test]
     fn device_paths_are_left_untouched() {
         assert_eq!(
@@ -246,7 +222,6 @@ mod tests {
         assert_eq!(strip_extended_prefix(r"\\\\?\UNC\srv"), r"\\\\?\UNC\srv");
     }
 
-    /// cwd 不可无损表示时 fail fast（错误码 NOT 兜底吞掉——身份哈希绝不静默漂移）
     #[test]
     fn normalize_propagates_resolver_error() {
         let boom = |_p: &str| -> Result<String, GuanlanError> {

@@ -40,7 +40,6 @@ export type FileOpSubmitPayload =
       fileId: string;
       targetDir: string;
       newName?: string;
-      /** 确认制引用修复：用户在弹窗显式勾选后才为 true（绝不静默改写原文档）。 */
       updateReferences?: boolean;
     }
   | { kind: 'trash'; fileId: string; confirm: true };
@@ -49,7 +48,6 @@ export type FileOpSubmitPayload =
 export interface ReferenceImpactState {
   loading: boolean;
   items: AffectedReferenceItem[];
-  /** 桌面壳保存桥是否可用（false＝修复能力诚实禁用，只读预览清单）。 */
   saveAvailable: boolean;
 }
 
@@ -60,7 +58,6 @@ export interface FileOpsModalProps {
   serverError: string | null;
   onClose: () => void;
   onSubmit: (payload: FileOpSubmitPayload) => Promise<void> | void;
-  /** 移动/改名涉及被 Markdown 决定证据引用的目标时的受影响引用清单。 */
   referenceImpact?: ReferenceImpactState | null;
 }
 
@@ -156,7 +153,6 @@ export const FileOpsModal: React.FC<FileOpsModalProps> = ({
   }, [moveNewName, request, targetDir]);
 
   const filteredFolders = useMemo(() => {
-    // 防成环——目录列表自动隐藏被移动文件当前所在目录（同目录落点为无效目标，只保留合法目标）。
     const candidates = folderOptions.filter((dir) => dir !== currentDir);
     const q = folderFilter.trim().toLowerCase();
     if (!q) return candidates;
@@ -191,7 +187,6 @@ export const FileOpsModal: React.FC<FileOpsModalProps> = ({
         kind: 'rename',
         fileId: request.fileId,
         newName: renameCheck.normalizedName,
-        // 确认制：仅用户显式勾选且保存桥可用时才同步更新引用路径
         updateReferences: referenceRepairSelectable ? updateReferencesConfirmed : undefined,
       });
     } else if (request.kind === 'move' && moveCheck?.ok) {
@@ -261,7 +256,6 @@ export const FileOpsModal: React.FC<FileOpsModalProps> = ({
         className="glass-pop glx-modal-in w-full max-w-lg rounded-[var(--r-card)] overflow-hidden flex flex-col"
         style={{ border: 'none' }}
       >
-        {/* 顶栏 */}
         <div className="px-6 py-4 border-b border-[color:var(--glass-hairline)] bg-card/85 backdrop-blur-md flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-[length:var(--text-item-title)] leading-[var(--lh-item-title)] font-semibold text-[color:var(--ink-strong)] flex items-center gap-2">
@@ -281,9 +275,7 @@ export const FileOpsModal: React.FC<FileOpsModalProps> = ({
           </IconButton>
         </div>
 
-        {/* 主体 */}
         <div className="p-5 space-y-4">
-          {/* 文件身份卡 */}
           <div className="px-3 py-2.5 rounded-[var(--r-block)] border border-[color:var(--glass-hairline)] bg-muted/45 space-y-1">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[length:var(--text-ui-body)] font-medium text-[color:var(--ink-strong)] truncate">
@@ -314,7 +306,6 @@ export const FileOpsModal: React.FC<FileOpsModalProps> = ({
             </div>
           </div>
 
-          {/* 模式 1：重命名 */}
           {request.kind === 'rename' && (
             <div className="space-y-2.5">
               <label
@@ -353,7 +344,6 @@ export const FileOpsModal: React.FC<FileOpsModalProps> = ({
             </div>
           )}
 
-          {/* 模式 2：跨目录移动 */}
           {request.kind === 'move' && (
             <div className="space-y-3">
               <div className="space-y-1.5">
@@ -375,8 +365,6 @@ export const FileOpsModal: React.FC<FileOpsModalProps> = ({
                 />
               </div>
 
-              {/* 现有目录快选（可输入过滤的目标目录选择器——过滤输入常驻；
-                  列表自动隐藏当前所在目录防成环，只呈现合法目标） */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[length:var(--text-micro)] text-[color:var(--ink-soft)]">
@@ -424,7 +412,6 @@ export const FileOpsModal: React.FC<FileOpsModalProps> = ({
                 </div>
               </div>
 
-              {/* 可选同步改名 */}
               <div className="space-y-1">
                 <label
                   htmlFor="guanlan-file-move-rename-input"
@@ -463,7 +450,6 @@ export const FileOpsModal: React.FC<FileOpsModalProps> = ({
             </div>
           )}
 
-          {/* 模式 3：移入系统回收站（强制二次确认） */}
           {request.kind === 'trash' && (
             <div className="space-y-3">
               <div className="p-3 rounded-[var(--r-block)] border border-[color:var(--btn-danger-border)] bg-[color:color-mix(in_srgb,var(--stage-ink-exec)_6%,transparent)] space-y-1.5 text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-strong)]">
@@ -493,10 +479,6 @@ export const FileOpsModal: React.FC<FileOpsModalProps> = ({
             </div>
           )}
 
-          {/* 确认制引用路径修复（移动/改名涉及被 Markdown 决定证据引用的目标）：
-              弹窗预览受影响引用清单，用户显式勾选后才同步更新相对路径——
-              严格确认制，绝不静默改写原文档；取消＝零改写；
-              保存桥不可用（浏览器/CLI 只读环境）＝修复能力诚实禁用 */}
           {referenceImpactVisible && (
             <div
               className="space-y-2"
@@ -579,7 +561,6 @@ export const FileOpsModal: React.FC<FileOpsModalProps> = ({
             </div>
           )}
 
-          {/* 服务端返回错误 */}
           {serverError && (
             <div
               role="alert"
@@ -592,7 +573,6 @@ export const FileOpsModal: React.FC<FileOpsModalProps> = ({
           )}
         </div>
 
-        {/* 底部动作栏 */}
         <div className="px-5 py-3 border-t border-[color:var(--glass-hairline)] bg-muted/45 flex items-center justify-end gap-2">
           <Button
             variant="secondary"

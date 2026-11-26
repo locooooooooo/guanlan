@@ -66,7 +66,6 @@ fn v04_batch_reading_baseline_5000_files_fast_idempotent_and_exact_undo() {
     let mut writer = Writer::open_at(&ws.data_dir, &ws.root_str()).expect("writer");
     let ws_id = writer.workspace().expect("ws").workspace_id;
 
-    // 批量植入 5,000 份活跃文件（分属 alpha / beta 两大目录），模拟真实 5,500+ 超大工程
     writer
         .transaction(|w| {
             let conn = w.conn();
@@ -96,7 +95,6 @@ fn v04_batch_reading_baseline_5000_files_fast_idempotent_and_exact_undo() {
         })
         .expect("seed 5000 files");
 
-    // 先对 01-业务方案 做目录级确立已读基线（仅影响 2000 份，不越界）
     let folder_resp = writer
         .batch_reading_state(&ReadingStateBatchRequest {
             action: "mark_baseline".to_owned(),
@@ -108,7 +106,6 @@ fn v04_batch_reading_baseline_5000_files_fast_idempotent_and_exact_undo() {
     assert_eq!(folder_resp.affected_count, 2000);
     assert_eq!(folder_resp.undo_items.len(), 2000);
 
-    // 撤销还原 01-业务方案，恢复 5000 份全未读以测全库 5,000 份耗时
     let restore_folder = writer
         .batch_reading_state(&ReadingStateBatchRequest {
             action: "restore".to_owned(),
@@ -118,7 +115,6 @@ fn v04_batch_reading_baseline_5000_files_fast_idempotent_and_exact_undo() {
         .expect("restore folder");
     assert_eq!(restore_folder.affected_count, 2000);
 
-    // 预置 1 条旧已读记录（模拟已读过 v0，现文件已是 v1）以验证撤销能 100% 还原旧版本
     writer
         .conn()
         .execute(
@@ -128,7 +124,6 @@ fn v04_batch_reading_baseline_5000_files_fast_idempotent_and_exact_undo() {
         )
         .expect("seed old read state");
 
-    // 5,000 份全库一键确立已读基线：必须 < 150ms
     let t0 = Instant::now();
     let full_resp = writer
         .batch_reading_state(&ReadingStateBatchRequest {
@@ -145,7 +140,6 @@ fn v04_batch_reading_baseline_5000_files_fast_idempotent_and_exact_undo() {
         "5,000 份批量确立已读基线耗时 {elapsed_ms}ms 超过 150ms 预算"
     );
 
-    // 幂等性验证：二次调用受影响数量恒为 0
     let second_resp = writer
         .batch_reading_state(&ReadingStateBatchRequest {
             action: "mark_baseline".to_owned(),
@@ -155,7 +149,6 @@ fn v04_batch_reading_baseline_5000_files_fast_idempotent_and_exact_undo() {
         .expect("second idempotent call");
     assert_eq!(second_resp.affected_count, 0, "重复确立基线必须严格幂等");
 
-    // 模拟 1 份文件产生新版本 v2 -> 仅该 1 份重新亮起未读
     writer
         .conn()
         .execute(
@@ -178,7 +171,6 @@ fn v04_batch_reading_baseline_5000_files_fast_idempotent_and_exact_undo() {
         "r_00042_v2"
     );
 
-    // 撤销还原整批 5,000 份：验证 f_00000 回到 r_00000_v0，其余 4,999 份恢复未读（清空）
     let undo_resp = writer
         .batch_reading_state(&ReadingStateBatchRequest {
             action: "restore".to_owned(),
@@ -214,7 +206,6 @@ fn v04_real_reconcile_change_lights_up_only_modified_file() {
         .expect("mark baseline");
     assert_eq!(baseline.affected_count, 3);
 
-    // 真实修改 01-方案/b.md 并再次对账
     ws.write_md("01-方案/b.md", "# B\n\n第二版新增结论：采用方案 A。\n");
     reconcile(&mut writer, &ReconcileOptions::default()).expect("second reconcile");
 
@@ -249,7 +240,6 @@ fn reading_state_mark_read_mark_unread_and_like_escape_windows_paths() {
                                '2026-11-23T08:00:00Z', 1763884800000.0, ?5, 'active')",
                 )
                 .expect("prep");
-            // 含下划线 `_` 与 `%` 的目录名、以及 Windows 反斜杠路径，用于检验 LIKE 转义与跨分隔符匹配
             let rows = [
                 ("f_under", "_qa/report.md", "report", "r_under_1"),
                 ("f_similar", "xqa/other.md", "other", "r_similar_1"),
@@ -265,7 +255,6 @@ fn reading_state_mark_read_mark_unread_and_like_escape_windows_paths() {
         })
         .expect("seed");
 
-    // 1. `_qa` 绝不可误伤 `xqa`
     let under_resp = writer
         .batch_reading_state(&ReadingStateBatchRequest {
             action: "mark_baseline".to_owned(),
@@ -277,7 +266,6 @@ fn reading_state_mark_read_mark_unread_and_like_escape_windows_paths() {
     assert_eq!(under_resp.affected_count, 1);
     assert_eq!(under_resp.updated_items[0].file_id, "f_under");
 
-    // 2. `100%_done` 绝不可误伤 `100abc_done`
     let pct_resp = writer
         .batch_reading_state(&ReadingStateBatchRequest {
             action: "mark_baseline".to_owned(),
@@ -289,7 +277,6 @@ fn reading_state_mark_read_mark_unread_and_like_escape_windows_paths() {
     assert_eq!(pct_resp.affected_count, 1);
     assert_eq!(pct_resp.updated_items[0].file_id, "f_pct");
 
-    // 3. Windows 反斜杠路径也能被 `/` 前缀准确命中
     let win_resp = writer
         .batch_reading_state(&ReadingStateBatchRequest {
             action: "mark_baseline".to_owned(),
@@ -301,7 +288,6 @@ fn reading_state_mark_read_mark_unread_and_like_escape_windows_paths() {
     assert_eq!(win_resp.affected_count, 1);
     assert_eq!(win_resp.updated_items[0].file_id, "f_win");
 
-    // 4. 单文件 mark_read 落库 + 幂等
     let single_read = writer
         .batch_reading_state(&ReadingStateBatchRequest {
             action: "mark_read".to_owned(),
@@ -325,7 +311,6 @@ fn reading_state_mark_read_mark_unread_and_like_escape_windows_paths() {
         .expect("idempotent mark_read");
     assert_eq!(single_read_again.affected_count, 0);
 
-    // 5. 单文件 mark_unread 精确清除 + restore 撤销还原
     let single_unread = writer
         .batch_reading_state(&ReadingStateBatchRequest {
             action: "mark_unread".to_owned(),
@@ -347,7 +332,6 @@ fn reading_state_mark_read_mark_unread_and_like_escape_windows_paths() {
         .iter()
         .any(|it| it.file_id == "f_similar"));
 
-    // 6. 目录级 mark_unread（含转义）+ restore 撤销还原
     let folder_unread = writer
         .batch_reading_state(&ReadingStateBatchRequest {
             action: "mark_unread".to_owned(),

@@ -3,36 +3,24 @@ import assert from 'node:assert/strict';
 import { isMoveBlockedBySelfDrag } from './useSidebarTreeDrag';
 import { relativeHrefFromDir, rewriteMarkdownReferences } from './useReferencePathRepair';
 
-/**
- * 行为锁定：树内拖拽防成环纯函数 + Markdown 引用路径改写纯函数
- * （拖向自身 100% 拦截防成环；引用修复严格确认制、锚点/语法保真）。
- */
 
 test('isMoveBlockedBySelfDrag：拖回当前所在目录 100% 拦截（大小写无关）', () => {
   assert.equal(isMoveBlockedBySelfDrag('需求/提案', '需求/提案'), true);
-  assert.equal(isMoveBlockedBySelfDrag('', ''), true); // 根目录拖回根
+  assert.equal(isMoveBlockedBySelfDrag('', ''), true);
   assert.equal(isMoveBlockedBySelfDrag('需求/提案', ''), false);
   assert.equal(isMoveBlockedBySelfDrag('', '需求/提案'), false);
-  assert.equal(isMoveBlockedBySelfDrag(null, '需求/提案'), false); // 非拖拽中
-  // Windows 大小写无关（盘符根工作区口径）
+  assert.equal(isMoveBlockedBySelfDrag(null, '需求/提案'), false);
   assert.equal(isMoveBlockedBySelfDrag('Docs/Spec', 'docs/spec'), true);
   assert.equal(isMoveBlockedBySelfDrag('C:\\Docs', 'C:/Docs'), true);
-  // 反斜杠归一
   assert.equal(isMoveBlockedBySelfDrag('需求\\提案', '需求/提案'), true);
 });
 
 test('relativeHrefFromDir：相对路径语义与 documentLinks.resolve 互逆', () => {
-  // 同目录
   assert.equal(relativeHrefFromDir('需求/提案', '需求/提案/登录方案-架构.svg'), '登录方案-架构.svg');
-  // 下钻
   assert.equal(relativeHrefFromDir('', '设计/图纸/图.svg'), '设计/图纸/图.svg');
-  // 上跳
   assert.equal(relativeHrefFromDir('需求/提案', '设计/图.svg'), '../../设计/图.svg');
-  // 根源文档
   assert.equal(relativeHrefFromDir('', '交付/清单/验收.docx'), '交付/清单/验收.docx');
-  // 公共前缀
   assert.equal(relativeHrefFromDir('需求/提案', '需求/提案/子/图.svg'), '子/图.svg');
-  // 空格转义（裸 href 语法不允许空格）
   assert.equal(relativeHrefFromDir('', '我的 文件/图.pdf'), '我的%20文件/图.pdf');
 });
 
@@ -46,7 +34,7 @@ test('rewriteMarkdownReferences：行内 Markdown 链接精确替换（锚点/�
     '无关链接：[别的](别的.md) 不动。',
   ].join('\n');
   const rewritten = rewriteMarkdownReferences(content, source, '证据/审计报告.pdf', '交付/归档/审计报告.pdf');
-  assert.equal(rewritten.changed, 2); // 页码证据链接 + code span
+  assert.equal(rewritten.changed, 2);
   const lines = rewritten.text.split('\n');
   assert.equal(lines[0], '架构见 [架构图](登录方案-架构.svg) 与 [登录](./登录网关.md)。');
   assert.equal(

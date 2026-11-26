@@ -1,12 +1,3 @@
-/**
- * 首页工作区态势图谱（首屏右侧视觉驾驶舱）：
- * 用三组零造数的定制可视化替代散文说明，细节下沉到交互悬浮与模式切换中：
- *  1. 态势环（overview）：SVG 阅读覆盖圆环（已读/更新待复读/未读新件）+ 拍板态势比例条；
- *  2. 阶段流（stages）：五阶段推进流（蓝图 → 计划 → 决策 → 执行 → 交付）横向比例轨；
- *  3. 格式谱（formats）：全库格式构成彩带 + ≤5 项分组明细（低频格式收拢并留悬浮明细）。
- *
- * 所有数值由 src/utils/homeInsights.ts 纯函数严格守恒派生，零虚构估算。
- */
 
 import React, { useMemo, useState } from 'react';
 import { ArrowUpRight, CheckCircle2 } from 'lucide-react';
@@ -80,7 +71,6 @@ export const HomeWorkspaceVisuals: React.FC<HomeWorkspaceVisualsProps> = ({
     ? stageFlow.nodes.find((n) => n.stage === hoveredStage) ?? null
     : stageFlow.nodes.find((n) => n.docCount > 0) ?? null;
 
-  // 拍板态势比例条分母：已加载决策 + 服务端未展开差额
   const decisionBarDenom =
     decisionGauge.conflictCount +
     decisionGauge.pendingCount +
@@ -93,7 +83,6 @@ export const HomeWorkspaceVisuals: React.FC<HomeWorkspaceVisualsProps> = ({
       data-home-visual-cockpit=""
       className={`flex flex-col justify-between rounded-2xl border border-border/80 bg-card p-5 shadow-xs ${className ?? ''}`}
     >
-      {/* 顶栏：极简标题 + 三态图表切换控件 */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-baseline gap-2 min-w-0">
           <h2 className="text-[15px] leading-[22px] font-semibold tracking-tight text-foreground whitespace-nowrap">
@@ -132,7 +121,6 @@ export const HomeWorkspaceVisuals: React.FC<HomeWorkspaceVisualsProps> = ({
         </div>
       </div>
 
-      {/* 主图区：三张定制可视化按切换展示 */}
       {tab === 'overview' && (
         <div data-home-visual-panel="overview" className="mt-4 flex flex-1 flex-col justify-between gap-4">
           {reading.total === 0 ? (
@@ -151,7 +139,6 @@ export const HomeWorkspaceVisuals: React.FC<HomeWorkspaceVisualsProps> = ({
             </div>
           ) : (
             <div className="flex flex-col sm:flex-row lg:flex-col xl:flex-row items-center gap-3.5">
-              {/* 定制 SVG 阅读覆盖环 */}
               <div className="relative flex shrink-0 items-center justify-center">
                 <svg
                   viewBox="0 0 120 120"
@@ -193,7 +180,6 @@ export const HomeWorkspaceVisuals: React.FC<HomeWorkspaceVisualsProps> = ({
                     );
                   })}
                 </svg>
-                {/* 中心读数：默认展示已读覆盖率，悬浮切换为对应分段明细 */}
                 <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
                   <span className="font-mono text-[22px] leading-none font-bold tabular-nums text-foreground">
                     {activeSlice ? `${activeSlice.pct}%` : `${reading.readPct}%`}
@@ -209,7 +195,6 @@ export const HomeWorkspaceVisuals: React.FC<HomeWorkspaceVisualsProps> = ({
                 </div>
               </div>
 
-              {/* 右侧三态图例（3 项低认知负荷，悬浮联动圆环高光） */}
               <div className="flex-1 min-w-0 w-full space-y-1.5">
                 {reading.slices.map((slice) => {
                   const isFocused = hoveredSlice === slice.key;
@@ -249,7 +234,6 @@ export const HomeWorkspaceVisuals: React.FC<HomeWorkspaceVisualsProps> = ({
             </div>
           )}
 
-          {/* 底部伴随视轨：拍板态势比例条（100% 诚实反映冲突 / 待确认 / 未展开差额 / 已定案） */}
           <div
             data-decision-gauge=""
             className="rounded-xl border border-border/70 bg-muted/30 px-3.5 py-2.5 space-y-2"
@@ -458,7 +442,6 @@ export const HomeWorkspaceVisuals: React.FC<HomeWorkspaceVisualsProps> = ({
                 })}
               </div>
 
-              {/* 悬浮详情脚条：展示当前聚焦阶段的真实代表专项，点按直达 */}
               <div className="flex items-center justify-between gap-2 rounded-xl border border-border/70 bg-muted/30 px-3 py-2 text-[11px]">
                 <span className="min-w-0 truncate text-muted-foreground">
                   {activeStageNode && activeStageNode.topPackages.length > 0 ? (
@@ -493,7 +476,6 @@ export const HomeWorkspaceVisuals: React.FC<HomeWorkspaceVisualsProps> = ({
           ) : (
             <>
               <div className="space-y-3">
-                {/* 比例彩带：真实 ∑count === files.length */}
                 <div
                   data-format-atlas-ribbon=""
                   className="flex h-3 w-full overflow-hidden rounded-full bg-muted/70"
@@ -510,7 +492,6 @@ export const HomeWorkspaceVisuals: React.FC<HomeWorkspaceVisualsProps> = ({
                   ))}
                 </div>
 
-                {/* 分组明细（≤5 项，低认知负荷） */}
                 <div className="space-y-1.5">
                   {formatAtlas.entries.map((entry) => {
                     const detailTitle = entry.collapsedDetails

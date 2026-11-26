@@ -1,6 +1,3 @@
-/**
- * Sources 面板 · Instructions(MD) 展开清单组件。
- */
 import React from 'react';
 import { hasUnreadChanges } from '../../utils/guanlanEngine';
 import { taskPackageOf, stageOfPath } from '../../utils/taskPackages';
@@ -45,8 +42,6 @@ export function GraphSourcesMdList({
         const matchedCard = subAgentCards.find((c) => c.fileId === file.file_id);
         const isSelected = (activeFileRecord?.file_id || '') === file.file_id;
         const latestRev = file.revisions[file.revisions.length - 1];
-        // 行首不再直接展示截断的完整 relative_path，改为「任务包 chip + 核心文档名」，
-        // 完整路径收进 title 悬浮（与卡片同源同口径 taskPackageOf/stageOfPath）
         const pkg = taskPackageOf(file.relative_path);
         const docBase = basenameOf(file.relative_path);
         const revKb = Math.max(1, Math.round((latestRev?.sizeBytes || 0) / 1024));
@@ -62,8 +57,6 @@ export function GraphSourcesMdList({
               exploreAfterClick(file.file_id);
             }}
             onDoubleClick={() => {
-              // 侧栏行双击仍直开阅读器（旧 readAfterDoubleClick 同行为）；
-              // 先取消 pending 单击下钻，防 240ms 后画布被切走
               cancelExplore();
               openFileReader(file.file_id);
             }}

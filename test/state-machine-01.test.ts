@@ -1,15 +1,7 @@
-/**
- * state-machine-01：统一状态机 SSOT 场景测试。
- *
- * 验收口径：专项卡片、专项详情下拉（橱窗筛选词表）、星图节点、文档顶栏四处视图
- * 的状态徽标词与计数全部来自 stateProjection 单一出口——跨视图同词、状态一致性 100%。
- * 形制沿用本仓测试纪律：纯函数与导出常量断言，不渲染 SVG/组件，禁 import .css。
- */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
-// ── SSOT：词表、迁移、投影 ──
 import {
   DOC_STATE_LABEL,
   DECIDED_DECISION_STATUSES,
@@ -26,13 +18,10 @@ import {
   unresolvedDecisionCount,
 } from '../src/utils/stateProjection';
 import type { StateSignals } from '../src/utils/stateProjection';
-// ── 专项卡片路径（首页/概览橱窗共用） ──
 import { packageBadgeLine } from '../src/utils/taskPackages';
 import type { TaskPackage } from '../src/utils/taskPackages';
-// ── 契约镜像（wire DTO 编译锁 + 状态行词表一致性） ──
 import type { ArtifactStateView, InitiativeStateView, StatementDetailDTO, TaskNodeView } from '../src/services/apiTypes';
 
-// ================= 四视图同词 =================
 
 describe('四视图状态徽标同词（stateProjection 单一出口）', () => {
   it('① 专项卡片：packageBadgeLine 由 SSOT 短语组合（v8 · 待用户验收）', () => {
@@ -59,7 +48,6 @@ describe('四视图状态徽标同词（stateProjection 单一出口）', () => 
     assert.ok(executing && awaiting);
     assert.equal(executing.label, STAGE_BADGE_PHRASE['执行']);
     assert.equal(awaiting.label, STAGE_BADGE_PHRASE['交付']);
-    // 消灭「待验收 vs 待用户验收」分叉：筛选词必须与卡片徽标短语逐字一致
     assert.equal(awaiting.label, '待用户验收');
   });
 
@@ -67,7 +55,6 @@ describe('四视图状态徽标同词（stateProjection 单一出口）', () => 
     assert.equal(artifactStageBadgeText('待分类', true), '决策');
     assert.equal(artifactStageBadgeText('执行', false), '执行');
     assert.equal(artifactStageBadgeText('待分类', false), '');
-    // 阶段词与 SSOT 阶段词表同域（六阶段键齐全）
     for (const stage of ['蓝图', '计划', '决策', '执行', '交付', '待分类'] as const) {
       assert.ok(stage in STAGE_BADGE_PHRASE);
     }
@@ -91,7 +78,6 @@ describe('四视图状态徽标同词（stateProjection 单一出口）', () => 
   });
 });
 
-// ================= 迁移规则回归锁 =================
 
 describe('迁移规则回归锁（镜像 Rust next_artifact_state）', () => {
   const base: StateSignals = {
@@ -145,7 +131,6 @@ describe('迁移规则回归锁（镜像 Rust next_artifact_state）', () => {
   });
 });
 
-// ================= wire DTO 形状编译锁 =================
 
 describe('wire DTO 形状（apiTypes v1.2 新增节编译锁）', () => {
   it('StateOverviewResponse 的 initiative/artifact 行字段齐备（契约 A）', () => {
@@ -176,7 +161,6 @@ describe('wire DTO 形状（apiTypes v1.2 新增节编译锁）', () => {
       pending_p2: 0,
       last_activity_at: null,
     };
-    // 状态词与 SSOT 词表同域（六态/六阶段互认）
     assert.ok(initiative.state in DOC_STATE_LABEL);
     assert.ok(artifact.state in DOC_STATE_LABEL);
     assert.ok(initiative.current_stage in STAGE_BADGE_PHRASE);
@@ -219,14 +203,12 @@ describe('wire DTO 形状（apiTypes v1.2 新增节编译锁）', () => {
   });
 });
 
-// ================= /state-overview 接线回归锁 =================
 
 describe('接线回归：/state-overview 有调用方，四视图消费六态词', () => {
   const readSrc = (rel: string): string =>
     readFileSync(new URL(rel, import.meta.url), 'utf8');
 
   it('App 调用 fetchStateOverview，并把同一份响应下传四处视图', () => {
-    // 拆层后 App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
     const app = [
       '../src/App.tsx',
       '../src/stores/useWorkspaceStore.tsx',
@@ -263,7 +245,6 @@ describe('接线回归：/state-overview 有调用方，四视图消费六态词
   });
 
   it('文档顶栏 / 专项详情条消费六态词（ReaderView）', () => {
-    // 拆层后阅读器实现 = 装配层 + 行为控制器——联合文本断言（语义不变）
     const src = [
       '../src/components/ReaderView.tsx',
       '../src/components/reader/useReaderController.tsx',
@@ -284,7 +265,6 @@ describe('接线回归：/state-overview 有调用方，四视图消费六态词
   });
 
   it('星图节点消费六态词（artifact 行优先，无行回退阶段词）', () => {
-    // 拆层后画布实现 = 装配层 + 行为控制器 + Scene 层——联合文本断言（语义不变）
     const src = [
       '../src/components/GraphCanvasView.tsx',
       '../src/components/graph/useGraphCanvasController.tsx',

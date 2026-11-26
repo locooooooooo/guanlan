@@ -30,28 +30,19 @@ use guanlan_core::error::GuanlanError;
 use guanlan_core::query;
 use guanlan_core::storage::ReadonlyStore;
 
-/// 挂载侧车文件名（主区数据目录内，观澜私有区；契约 §13）
 const SIDECAR_FILE: &str = "mounts.json";
-/// 侧车格式版本（结构变更整体重置，不迁移——挂载是可重建的轻状态）
 const SIDECAR_VERSION: i64 = 1;
 
-/// 单个挂载条目（注册表内部态；store=Some 即在线）
 struct MountEntry {
     mount_key: String,
-    /// 规范化后的参考区根路径
     root_path: String,
-    /// 参考区数据目录（挂载时解析；随侧车持久化——重启按原目录重开，不受
-    /// 后续 GUANLAN_DATA_DIR 环境漂移影响）
     ref_data_dir: PathBuf,
     name: String,
     added_at: String,
-    /// 在线时持有只读连接；离线为 None
     store: Option<ReadonlyStore>,
-    /// 最后已知摘要（在线探测成功即刷新；离线降级时保留字段、置 offline）
     last_known: Option<MountedWorkspaceInfo>,
 }
 
-/// 侧车记录（serde 形状；与 [`MountEntry`] 一一对应）
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct MountRecord {
     mount_key: String,
@@ -68,9 +59,6 @@ struct MountSidecar {
     mounts: Vec<MountRecord>,
 }
 
-/// 参考区数据目录解析器：给规范化根路径定位其 `index.db` 所在数据目录。
-/// 生产默认 [`default_ref_data_dir`]（与索引侧同源：GUANLAN_DATA_DIR 整体替换 base）；
-/// 测试经 [`MountRegistry::set_test_data_dirs`] 注入显式映射。
 type RefDataDirResolver = Arc<dyn Fn(&str) -> Result<PathBuf, GuanlanError> + Send + Sync>;
 
 /// 挂载注册表（AppState 持 Arc 共享；全部方法经内部互斥锁串行）
@@ -79,12 +67,9 @@ pub struct MountRegistry {
 }
 
 struct RegistryInner {
-    /// 侧车所在目录（主区数据目录）；None = 不持久化（idle 装配）
     data_dir: Option<PathBuf>,
-    /// 规范化后的主区根路径（互斥校验基准）；None = idle 装配（跳过主区校验）
     primary_root: Option<String>,
     entries: Vec<MountEntry>,
-    /// 参考区数据目录解析器
     resolver: RefDataDirResolver,
 }
 
@@ -136,8 +121,6 @@ impl MountRegistry {
         };
         let mut entries = Vec::new();
         for record in records {
-            // 优先按侧车记录的参考区数据目录重开（挂载时解析的原值）；旧格式
-            // / 缺失时回退 default_data_dir 解析。打不开 = 离线降级
             let ref_dir = if record.ref_data_dir.is_empty() {
                 default_ref_data_dir(&record.root_path)
             } else {
@@ -218,7 +201,6 @@ impl MountRegistry {
         let name = mount_display_name(normalized);
 
         let mut inner = self.inner.lock().unwrap_or_else(|p| p.into_inner());
-        // ① 与主区互斥（外挂目录严禁与主区互为父子）
         if let Some(primary) = &inner.primary_root {
             match path_relation(primary, normalized) {
                 PathRelation::Equal => {
@@ -239,7 +221,6 @@ impl MountRegistry {
                 PathRelation::Disjoint => {}
             }
         }
-        // ② 与既有挂载互斥 / 重复挂载
         for entry in &inner.entries {
             match path_relation(&entry.root_path, normalized) {
                 PathRelation::Equal => {
@@ -262,13 +243,11 @@ impl MountRegistry {
                 )));
             }
         }
-        // ③ 目录存在性
         if !Path::new(normalized).is_dir() {
             return Err(GuanlanError::NotFound(format!(
                 "参考目录不存在或不可访问：{normalized}"
             )));
         }
-        // ④ 参考区数据目录与索引库（测试显式目录优先；生产走注入的解析器）
         let ref_data_dir = match explicit_data_dir {
             Some(dir) => dir.to_path_buf(),
             None => (inner.resolver)(normalized)?,
@@ -283,9 +262,7 @@ impl MountRegistry {
                 e
             }
         })?;
-        // ⑤ 现读在线摘要
         let info = probe_summary(&store, normalized, &name)?;
-        // ⑥ 入表 + 持久化
         inner.entries.push(MountEntry {
             mount_key: mount_key.clone(),
             root_path: normalized.to_owned(),
@@ -325,7 +302,6 @@ impl MountRegistry {
                         entry.last_known = Some(live.clone());
                         live
                     }
-                    // 探测失败：参考区目录/索引库刚被移走或损坏 → 原位离线降级
                     Err(e) => {
                         entry.store = None;
                         let offline = offline_info(entry, format!("在线探测失败，已离线：{e}"));
@@ -446,7 +422,6 @@ impl MountRegistry {
             if let Some(store) = entry.store.as_ref() {
                 match query::search(store, search_query) {
                     Ok(resp) => response = Some(resp),
-                    // 单区检索失败：原位降级离线（诚实口径），不拖垮其余挂载区
                     Err(e) => {
                         entry.store = None;
                         info = offline_info(entry, format!("检索失败，已离线：{e}"));
@@ -460,7 +435,6 @@ impl MountRegistry {
     }
 }
 
-/// 默认参考区数据目录解析器（与生产索引侧同源解析：GUANLAN_DATA_DIR 整体替换 base）
 fn default_ref_data_dir(normalized_root: &str) -> Result<PathBuf, GuanlanError> {
     guanlan_core::storage::default_data_dir(normalized_root)
 }
@@ -469,7 +443,6 @@ fn default_resolver() -> RefDataDirResolver {
     Arc::new(default_ref_data_dir)
 }
 
-/// 打开参考区只读库并认领工作区行（认领失败 = 库内无可认领行 = 未被观澜索引）
 fn open_reference_store(
     ref_data_dir: &Path,
     normalized_root: &str,
@@ -483,8 +456,6 @@ fn open_reference_store(
     ReadonlyStore::open_at(ref_data_dir, normalized_root)
 }
 
-/// 在线摘要现读：root_key / index_generation / active 文件数 / search_state。
-/// 结果即「最后已知摘要」的最新值（挂载身份字段由登记项补齐）。
 fn probe_summary(
     store: &ReadonlyStore,
     normalized_root: &str,
@@ -508,7 +479,6 @@ fn probe_summary(
     })
 }
 
-/// 离线摘要：保留最后已知字段 + 离线原因（绝不伪造 online=true）
 fn offline_info(entry: &MountEntry, error: String) -> MountedWorkspaceInfo {
     let mut info = entry
         .last_known
@@ -519,7 +489,6 @@ fn offline_info(entry: &MountEntry, error: String) -> MountedWorkspaceInfo {
     info
 }
 
-/// 从未成功在线（重启装载即失败且无侧车摘要）：最小诚实信息
 fn minimal_info(entry: &MountEntry) -> MountedWorkspaceInfo {
     MountedWorkspaceInfo {
         mount_id: format!("m_{}", entry.mount_key),
@@ -536,15 +505,12 @@ fn minimal_info(entry: &MountEntry) -> MountedWorkspaceInfo {
     }
 }
 
-/// 侧车装载/降级共用：置 offline 并附原因
 fn mark_offline(mut info: MountedWorkspaceInfo, error: String) -> MountedWorkspaceInfo {
     info.online = false;
     info.error = Some(error);
     info
 }
 
-/// 侧车原子落盘（tmp + rename；失败仅 stderr 告警——内存登记仍是事实源，
-/// 挂载是可重建的轻状态，不为侧车 IO 打断挂载语义）
 fn persist_sidecar(inner: &RegistryInner) {
     let Some(data_dir) = &inner.data_dir else {
         return;
@@ -584,7 +550,6 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    /// 最小可认领库 DDL（workspaces + files + revisions + meta；探针所需全集）
     const LITE_DDL: &str = r#"
 CREATE TABLE IF NOT EXISTS workspaces (
   workspace_id TEXT PRIMARY KEY, root_path TEXT NOT NULL UNIQUE, root_key TEXT NOT NULL,
@@ -607,7 +572,6 @@ CREATE TABLE IF NOT EXISTS revisions (
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 "#;
 
-    /// 临时目录守卫（测试结束清理）
     struct TempGuard(PathBuf);
     impl TempGuard {
         fn new(tag: &str) -> Self {
@@ -630,7 +594,6 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         }
     }
 
-    /// 建一个"曾被观澜索引过"的最小参考工作区（1 active 文件 + 1 版本）
     fn make_reference_ws(base: &Path, tag: &str) -> (String, PathBuf) {
         let root = base.join(tag);
         std::fs::create_dir_all(&root).expect("建参考目录");
@@ -663,8 +626,6 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         (root.to_string_lossy().into_owned(), data_dir)
     }
 
-    /// 互斥矩阵：自我挂载 / 子目录 / 父目录 / 与既有挂载嵌套 → MOUNT_REJECTED；
-    /// 重复挂载（含 \\?\ 长路径与混合斜杠写法）→ CONFLICT
     #[test]
     fn mount_rejects_nesting_and_duplicates_deterministically() {
         let base = TempGuard::new("mutex");
@@ -682,7 +643,6 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
             "最小库无检索索引 → 诚实 absent"
         );
 
-        // 重复挂载（同路径 / \\?\ 长路径 / 混合斜杠）→ CONFLICT（规范化收敛同一身份）
         for variant in [
             ref_root.clone(),
             format!(r"\\?\{}", ref_root),
@@ -697,15 +657,13 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
             );
         }
 
-        // 自我挂载（主区基准）→ MOUNT_REJECTED
-        // （idle 无主区基准；带主区基准的注册表经 load 构造，空目录=空侧车）
         let dir = base.0.join("data-primary");
         std::fs::create_dir_all(&dir).expect("建主区数据目录");
         let with_primary = MountRegistry::load(&dir, &primary.to_string_lossy());
         for candidate in [
             primary.to_string_lossy().into_owned(),
             primary.join("nested").to_string_lossy().into_owned(),
-            base.0.to_string_lossy().into_owned(), // 主区的父目录
+            base.0.to_string_lossy().into_owned(),
         ] {
             let err = with_primary
                 .mount_at(&candidate, &ref_data)
@@ -716,7 +674,6 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
             );
         }
 
-        // 与既有挂载嵌套（参考区的子/父目录）→ MOUNT_REJECTED
         let ref_parent = std::path::Path::new(&ref_root)
             .parent()
             .expect("参考区父目录")
@@ -733,7 +690,6 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         }
     }
 
-    /// 侧车 roundtrip：挂载后落盘、重启 load 重开在线；溯源点查与版本读路由可用
     #[test]
     fn sidecar_roundtrip_and_provenance() {
         let base = TempGuard::new("sidecar");
@@ -746,10 +702,8 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         let registry = MountRegistry::load(&data_dir, &primary.to_string_lossy());
         let info = registry.mount_at(&ref_root, &ref_data).expect("挂载");
         assert!(info.online);
-        // 侧车已落盘
         assert!(data_dir.join(SIDECAR_FILE).exists(), "挂载后应写侧车");
 
-        // 溯源：file_id 命中挂载区
         let hit = registry
             .provenance_file("f_ref")
             .expect("溯源查询失败")
@@ -757,7 +711,6 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         assert_eq!(hit.mount_id, info.mount_id);
         assert!(registry.provenance_file("f_other").unwrap().is_none());
 
-        // 版本级读路由：revision 溯源 + 在指定挂载区执行查询
         let mount_id = registry
             .find_revision("f_ref_r1")
             .expect("版本溯源失败")
@@ -769,7 +722,6 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
             .expect("挂载区执行失败");
         assert!(rev_ok);
 
-        // 重启装载：重开同一侧车 → 在线
         let reloaded = MountRegistry::load(&data_dir, &primary.to_string_lossy());
         let listed = reloaded.list();
         assert_eq!(listed.len(), 1);
@@ -777,7 +729,6 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         assert_eq!(listed[0].mount_id, info.mount_id);
         assert_eq!(listed[0].file_count, 1);
 
-        // 卸载 → 侧车同步移除；未知 mount_id 404
         reloaded.unmount(&info.mount_id).expect("卸载失败");
         assert!(reloaded.list().is_empty());
         let err = reloaded
@@ -786,7 +737,6 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         assert!(matches!(err, GuanlanError::NotFound(_)));
     }
 
-    /// 离线降级：重启时索引库打不开 → online=false + 最后已知摘要保留（绝不伪造在线）
     #[test]
     fn offline_mount_keeps_last_known_summary() {
         let base = TempGuard::new("offline");
@@ -795,7 +745,6 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         let primary = base.0.join("primary");
         std::fs::create_dir_all(&primary).expect("建主区");
 
-        // 手写侧车：一条指向不存在目录的挂载 + 完整最后已知摘要
         let sidecar = serde_json::json!({
             "version": 1,
             "mounts": [{
@@ -831,7 +780,6 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         let gone = &listed[0];
         assert!(!gone.online, "索引库不可达必须诚实离线");
         assert!(gone.error.as_deref().unwrap_or_default().contains("离线"));
-        // 最后已知摘要逐字段保留（验收「离线时优雅显示最后已知摘要」）
         assert_eq!(gone.root_key, "rk_was_online");
         assert_eq!(gone.index_generation, 5);
         assert_eq!(gone.search_state, "ready");

@@ -93,7 +93,6 @@ export function useQuickPreview({
 }: UseQuickPreviewOptions) {
   const [target, setTarget] = useState<QuickPreviewTarget | null>(null);
 
-  // 工作区切换时自动关闭轻预览并清空旧工作区预览缓存
   useEffect(() => {
     setTarget(null);
     clearQuickPreviewCache();
@@ -129,7 +128,6 @@ export function useQuickPreview({
     [activeTab, panoramaMode, files, filteredFiles, events, target]
   );
 
-  // 全局 Space 快捷键：画布选中节点 / 时间线选中卡片 / 左栏目录选中文件（不抢输入框与阅读正文滚动）
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (target !== null) return;
@@ -148,14 +146,11 @@ export function useQuickPreview({
           return;
         }
         if (document.querySelector('[data-esc-layer="open"]')) return;
-        // 顶栏按钮 / 药丸工具条保留原生 Space 触发
         if (el.closest('header')) return;
         if (el.closest('[data-testid="canvas-pill-toolbar"]')) return;
         const insideSidebar = Boolean(el.closest('aside[aria-label="阅读状态与目录树"]'));
         const insideCanvasNode = Boolean(el.closest('[data-node-id]'));
-        // 按钮除画布节点与左栏条目外不截断
         if (el.tagName === 'BUTTON' && !insideSidebar && !insideCanvasNode) return;
-        // 知识资产库阅读态正文区内，Space 保留翻页滚动（左栏/概览除外）
         if (activeTab === 'library' && libraryMode === 'read' && !insideSidebar) {
           return;
         }

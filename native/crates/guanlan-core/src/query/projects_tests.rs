@@ -10,8 +10,6 @@ use crate::test_support::{cleanup_dir, open_store, FixtureDb};
 #[test]
 fn project_tree_returns_supplied_folders_without_reading_disk() {
     let fixture = FixtureDb::new("project-tree-folders");
-    // 夹具根目录是虚的（`H:\guanlan-core-fixture\...`），磁盘上不存在：
-    // 若查询体自己去枚举目录，只能得到空清单。
     let root = fixture.root();
     let ws_id = fixture.workspace(&root, 0, None);
     fixture.file(&ws_id, "f1", "docs/a.md", "md", "方案", "active", None);

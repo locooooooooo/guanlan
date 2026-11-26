@@ -1,16 +1,3 @@
-/**
- * 画布视口裁剪与卡片描述
- *
- * 为什么抽成纯函数：GraphCanvasView 是 4800 行的巨型组件，视口裁剪与卡片物化
- * 一旦内联就只能在浏览器里「看效果」验证。这里是纯数据变换——输入布局/视口/索引，
- * 输出「该挂载哪些包」与「卡片要什么 props」，可直接单测。
- *
- * 两条纪律：
- * 1. **裁剪不改变世界坐标**：布局坐标仍由完整包序列算出（跨包定位、小地图、
- *    双击打开都依赖全局位置），裁剪只决定「这一帧挂不挂 DOM」。
- * 2. **保留焦点包**：即使焦点包在视口外也挂载——它是选中态与叙事抽屉的目标，
- *    突然消失会让联动断裂。
- */
 
 /** 每包最多展示的卡片数（画布栅格上限；超出由容器头 docCount 诚实承载） */
 export const PACKAGE_GROUP_MAX_CARDS = 6;
@@ -32,22 +19,13 @@ export interface WorldViewport {
 
 /** 裁剪参数 */
 export interface CullOptions {
-  /** 视口外预留边距（世界单位）：拖动/缩放时预挂相邻包，避免入画瞬间空白 */
   marginX?: number;
-  /** 焦点任务包 id：即使可视区外也保留挂载 */
   focusPkgId?: string;
-  /** 关闭裁剪（小地图全量预览、测试对比用） */
   disabled?: boolean;
 }
 
 export const DEFAULT_CULL_MARGIN_X = 480;
 
-/* ═══ 全图元 AABB 视口裁剪 + 四分之一倍频程（quarter-octave）缩放分桶 LOD ═══
- * 把「任务包横向裁剪」推广为「任意世界矩形对视口」
- * 的通用 AABB 裁剪，并给缩小鸟瞰加缩放分桶 LOD——桶距取 quarter-octave（log2(k)×4
- * 向下取整，每档 ≈1.19×），LOD 档位只在跨档时翻转（连续缩放不抖动），缩小到
- * 鸟瞰档自动退化为轻骨架（收流星/激光/富卡正文等重排大户，规避 foreignObject 重绘）。
- * 裁剪纪律保持一致：只决定「这一帧挂不挂 DOM」，世界坐标照常由完整序列算出。 */
 
 /** 通用世界矩形（x/y 左上角 + 尺寸） */
 export interface WorldRect {
@@ -142,7 +120,6 @@ export function cullRectsByViewport(
   return ids;
 }
 
-/* ── quarter-octave 缩放分桶 LOD ── */
 
 /** LOD 满档下限：k ≥ 0.5 全保真（基准机位 k=1 与折叠组近景 k≈0.62 都在此档，
  *  像素基线镜头零变化）；0.25 ≤ k < 0.5 收纯装饰层；k < 0.25 轻骨架。 */
@@ -174,13 +151,9 @@ export function lodTierForScale(k: number): CanvasLodTier {
  *  重绘大户）；skeleton：再收流式粒子/传导线/泳道光点流动（保留主干、里程碑、
  *  折叠组与事件卡骨架——空间语言在鸟瞰仍可辨）。 */
 export interface CanvasLodGates {
-  /** 流星雨 + 星闪层（0A 场景装饰） */
   meteors: boolean;
-  /** X-Ray 激光扫线（里程碑层宿主） */
   laser: boolean;
-  /** 流式粒子（传导线/泳道上的 SMIL 光点） */
   liveFlow: boolean;
-  /** 事件卡与富预览卡正文细节（skeleton 档保留骨架外壳） */
   cardDetails: boolean;
 }
 
@@ -207,15 +180,12 @@ export function visiblePackageGroupIds(
     return ids;
   }
   const margin = options.marginX ?? DEFAULT_CULL_MARGIN_X;
-  // 视口宽度异常（尚未测量）时保守全挂
   if (!(viewport.width > 0)) {
     for (const layout of layouts) ids.add(layout.pkgId);
     return ids;
   }
   for (const layout of layouts) {
     const focused = Boolean(options.focusPkgId && layout.pkgId === options.focusPkgId);
-    // 纵向「整条桌面带」用有限极大带表达（±Infinity 相加会产生 NaN 使判定恒 false）；
-    // MAX_VALUE 覆盖任何有限视口 y → 纵向恒相交，与旧横向特化判定同源
     const rect: WorldRect = {
       x: layout.x,
       y: 0,

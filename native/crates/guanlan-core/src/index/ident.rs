@@ -34,8 +34,6 @@ pub fn stable_key(input: &str) -> String {
     base36(hash)
 }
 
-/// 无符号 32 位 → base36 字符串（JS `Number.prototype.toString(36)` 口径：
-/// 小写字母表、无前导零、零值为 `"0"`）。
 fn base36(mut value: u32) -> String {
     const DIGITS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
     if value == 0 {
@@ -141,13 +139,11 @@ mod tests {
 
     #[test]
     fn stable_short_is_sha256_prefix() {
-        // node -e "console.log(require('crypto').createHash('sha256').update('a/b.md').digest('hex').slice(0,12))"
         assert_eq!(stable_short("a/b.md"), "5a05f1b231ec");
     }
 
     #[test]
     fn stable_key_uses_utf16_code_units() {
-        // 代理对按两个码元计：'😀' 是 0xD83D 0xDE00
         let emoji = stable_key("😀");
         let manual = {
             let mut h: u32 = 2_166_136_261;
@@ -158,7 +154,6 @@ mod tests {
             base36(h)
         };
         assert_eq!(emoji, manual);
-        // 与码点口径必须不同（否则说明实现退化成 chars()）
         let mut by_char: u32 = 2_166_136_261;
         for ch in "😀".chars() {
             by_char ^= ch as u32;
@@ -190,7 +185,6 @@ mod tests {
         assert_eq!(detect_role("a/x.md", "x", "svg"), "素材");
         assert_eq!(detect_role("a/x.md", "x", "pdf"), "说明");
         assert_eq!(detect_role("a/x.md", "x", "md"), "其他");
-        // 路径含「需求」也算需求角色
         assert_eq!(detect_role("需求/x.md", "x", "md"), "需求");
     }
 }

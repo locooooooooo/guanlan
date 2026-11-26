@@ -1,11 +1,3 @@
-/**
- * 画布视口渲染与卡片物化验收测试：
- * - 包容器按视口 + 预留边距挂载（不再「每包限 6 卡但全渲染所有包」）；
- * - 焦点包即使出视口也保留挂载（选中态/叙事抽屉不断链）；
- * - 包间流向线只在两端都挂载时画（不产生指向空白的悬空线）；
- * - 卡片描述按包文档一次性物化，与节点位置无关（拖动不重建）；
- * - 组件契约：visible 门控渲染与派生计算、逐卡不再 files.find。
- */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -20,8 +12,6 @@ import {
 } from '../src/utils/canvasViewport';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// 拆层后，画布实现 = 薄装配层（GraphCanvasView）+ 行为控制器 + Scene 五分节——
-// 组件契约断言读取联合文本（断言原文与语义不变，路径跟随拆分）。
 const CANVAS_SRC = [
   'components/GraphCanvasView.tsx',
   'components/graph/useGraphCanvasController.tsx',
@@ -35,7 +25,6 @@ const CANVAS_SRC = [
   .join('\n');
 const KNOWLEDGE_SRC = readFileSync(join(__dirname, '..', 'src', 'components', 'KnowledgeGraph.tsx'), 'utf8');
 
-/** 造 n 个包：每个宽 300，间距 64，从 x=0 开始横排 */
 function layoutsOf(n: number, width = 300, gap = 64) {
   const layouts = [];
   let x = 0;
@@ -47,11 +36,10 @@ function layoutsOf(n: number, width = 300, gap = 64) {
 }
 
 test('#27 视口裁剪：只挂载与「视口 + 边距」相交的包，其余不挂', () => {
-  const layouts = layoutsOf(20); // 总宽 20*364 ≈ 7280
+  const layouts = layoutsOf(20);
   const viewport = { x: 0, y: 0, width: 800, height: 600 };
   const ids = visiblePackageGroupIds(layouts, viewport, { focusPkgId: undefined });
 
-  // 视口右界 800 + 边距 480 = 1280；pkg_0..pkg_3（x≤1092，右界 1392）之内
   assert.equal(ids.has('pkg_0'), true);
   assert.equal(ids.has('pkg_3'), true, '边距内的相邻包预挂载');
   assert.equal(ids.has('pkg_19'), false, '远端包不挂载');
@@ -61,7 +49,6 @@ test('#27 视口裁剪：只挂载与「视口 + 边距」相交的包，其余�
 
 test('#27 视口裁剪：焦点包即使完全在视口外也保留', () => {
   const layouts = layoutsOf(20);
-  // 视口在最左，焦点在很远的最右
   const viewport = { x: 0, y: 0, width: 400, height: 600 };
   const ids = visiblePackageGroupIds(layouts, viewport, { focusPkgId: 'pkg_19' });
   assert.equal(ids.has('pkg_19'), true, '焦点包必须挂载（否则选中态/抽屉目标消失）');
@@ -74,7 +61,6 @@ test('#27 视口裁剪：视口跟随平移/缩放，滚动后挂载集合随之
   const right = visiblePackageGroupIds(layouts, { x: 5000, y: 0, width: 600, height: 600 });
   assert.equal(left.has('pkg_0'), true);
   assert.equal(left.has('pkg_19'), false);
-  // 20 包总宽 ≈7216：视口移到 x=5000 时，落在其附近的是 pkg_13（x≈4732）
   assert.equal(right.has('pkg_13'), true, '平移到右侧后该区间的包进入挂载集合');
   assert.equal(right.has('pkg_0'), false, '左侧包移出后卸载');
   assert.equal(right.has('pkg_0') || right.has('pkg_1') || right.has('pkg_2'), false);
@@ -132,11 +118,9 @@ test('#27 卡片描述：按包一次性物化，同入参复用（拖动不重�
   assert.deepEqual(cards[0].diffSections, [{ kind: '修改', title: '第二章' }], '演进视图保留变更章节');
   assert.equal(cards[1].format, 'svg');
 
-  // 版本视图：diffSections 不进入卡片（与旧渲染口径一致）
   const version = buildCardDescriptors(layouts, { evolutionView: false });
   assert.equal(version.get('pkg_a')![0].diffSections, undefined);
 
-  // 同入参再算一次：内容相等（组件侧以 memo 复用，不逐帧重算）
   const again = buildCardDescriptors(layouts, { evolutionView: true });
   assert.deepEqual(again.get('pkg_a'), cards);
 });
@@ -156,19 +140,16 @@ test('#27 卡片描述：按 shown 截断（每包上限沿用 PACKAGE_GROUP_MAX
 });
 
 test('#27 组件契约：画布按 visible 门控渲染与派生计算，逐卡不再线性查文件', () => {
-  // 隐藏时早退（组件仍挂载，state 不丢；拆层后早退在装配层，写法 props.visible）
   assert.match(
     CANVAS_SRC,
     /if \(!props\.visible\) return null;/,
     '隐藏时不应渲染整棵 SVG'
   );
-  // 分组与卡片派生按 visible 门控
   assert.match(
     CANVAS_SRC,
     /visible \? buildCanvasPackageGroups\(files, events\) : \[\]/,
     '隐藏时跳过任务包分组构建'
   );
-  // 共享 ID Map
   assert.match(CANVAS_SRC, /const fileById = useMemo\(/, '应有共享文件 ID Map');
   assert.match(
     CANVAS_SRC,
@@ -180,11 +161,9 @@ test('#27 组件契约：画布按 visible 门控渲染与派生计算，逐卡�
     /files\.find\(\(f\) => f\.file_id === doc\.fileId\)/,
     '卡片循环内不应再有线性 files.find'
   );
-  // 视口裁剪接入渲染
   assert.match(CANVAS_SRC, /mountedPkgIds\.has\(group\.pkgId\)/, '渲染应按挂载集合裁剪');
   assert.match(CANVAS_SRC, /shouldDrawGroupConnector\(/, '连线应经纯函数判定');
   assert.match(CANVAS_SRC, /packageCardsByPkg\.get\(group\.pkgId\)/, '卡片取预建描述');
-  // 视口裁剪默认边距
   assert.equal(DEFAULT_CULL_MARGIN_X > 0, true);
 });
 

@@ -1,26 +1,3 @@
-/**
- * 首页可视化驾驶舱（feat/home-visual-cockpit）纯函数与渲染契约。
- *
- * 守住的行为：
- * 1. buildPulseComposition 按真实 by_kind 拆分「新增纳入 / 决策拍板 / 内容演进」，
- *    并守恒 added + decision + evolved === count；缺失 by_kind 时 hasKindBreakdown=false，
- *    绝不捏造拆分；累计曲线严格单调不减。
- * 2. buildReadingCoverageModel 严格守恒 read + updated + unread === files.length，
- *    SVG 圆环弧段 dashArray 非负且不越界。
- * 3. buildDecisionGaugeModel 在服务端全库未决总数高于已加载样本时，差额进入
- *    unloadedUnresolved，绝不拿样本外推全库分布。
- * 4. buildFormatAtlasModel 主列 ≤ 5 项且 Σ count === files.length；低频格式收拢进
- *    「其它格式」并保留 collapsedDetails 明细。
- * 5. pickHomeCoverSvgCandidates 每包至多 1 份、总量受 limit 硬封顶、跳过已加载 svgSource。
- * 6. SSR：HomeView 默认渲染「构成」堆叠模式与态势环，并保留既有直跳锚点。
- *
- * 手动破坏验证（逐个变异的实跑结果见提交正文）：
- * - 去掉 buildPulseComposition 的守恒钳制（added 不再 Math.min(count, …)）后，
- *   用例在「新增类计数被钳到桶 count 上界」处变红；
- * - 去掉 buildFormatAtlasModel 的 5 项收拢后，用例在「主列控制在 5 项以内」处变红；
- * - 去掉 pickHomeCoverSvgCandidates 的 limit 封顶后，用例在「limit 封顶」处变红；
- * - 把 HomeView 的默认走势模式改成累计后，用例在「默认构成堆叠模式」处变红。
- */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import React from 'react';
@@ -136,7 +113,6 @@ test('buildPulseComposition：按真实 by_kind 守恒拆分，缺失明细时�
       decision_total: 2,
       headline: '首次纳入方案 A',
     },
-    // 新增类计数故意超过桶 count：模型必须钳制，不能让拆分之和越界
     { date: '2026-11-02', count: 6, by_kind: { appeared: 99 } },
     { date: '2026-11-03', count: 0 },
   ]);
@@ -170,7 +146,6 @@ test('buildPulseComposition：按真实 by_kind 守恒拆分，缺失明细时�
   assert.equal(model.peakDate, '2026-11-01');
   assert.equal(model.activeBuckets, 2);
 
-  // 累计曲线严格单调不减，且几何坐标落在视窗内
   const cumulatives = model.points.map((p) => p.cumulative);
   assert.deepEqual(cumulatives, [10, 16, 16]);
   for (let i = 1; i < model.points.length; i += 1) {
@@ -181,7 +156,6 @@ test('buildPulseComposition：按真实 by_kind 守恒拆分，缺失明细时�
   assert.ok(model.cumulativeArea.length > 0);
   assert.ok(model.avgLineBottomPct > 0 && model.avgLineBottomPct < 100);
 
-  // 没有 by_kind 时诚实标记为不可拆分，不虚构比例
   const bare = buildPulseComposition(
     [{ date: '2026-11-05', count: 8, jumpable: true }],
     dayResult([{ date: '2026-11-05', count: 8 }])
@@ -415,7 +389,6 @@ test('pickHomeCoverSvgCandidates：每包至多一份、总量封顶、跳过已
   );
   assert.equal(picked[0]?.fileId, 's2', '未加载的首份 SVG 优先入队');
 
-  // 封顶要真的被卡住才算测到：3 个专项各有 1 份候选，limit=1 时第 3 个专项不得再入队
   assert.deepEqual(
     pickHomeCoverSvgCandidates(packages, fileById, 1).map((p) => p.fileId),
     ['s2'],
@@ -461,7 +434,6 @@ test('SSR：首页默认渲染构成堆叠与态势环，保留既有直跳锚�
 
   assert.ok(html.includes('data-home-visual-cockpit'), '态势图谱驾驶舱挂载');
   assert.ok(html.includes('data-home-visual-panel="overview"'), '默认展示态势环');
-  // 两个切换按钮都带 data-home-trend-mode，只查标记存在恒为真；要看的是哪个处于选中态
   assert.ok(
     /<button[^>]*aria-selected="true"[^>]*data-home-trend-mode="stacked"/.test(html),
     '默认构成堆叠模式'

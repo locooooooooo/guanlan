@@ -20,30 +20,15 @@ import {
 } from '../src/components/DocumentTimeMachineView';
 import { getCanvasTheme, type CanvasTheme } from '../src/utils/canvasThemeStore';
 
-/**
- * 单文档版本时光机「司辰琉璃化」与纸面/夜航双主题 —— 契约测试。
- *
- * 锁死四条量化验收口径：
- *  ① 双主题切换：分段钮渲染 + 活值订阅 + 舷窗 DOM 直写（命令式，不入 React state）；
- *  ② 版本增量条纯函数：+add/-del 比例几何 + 数据源（服务端真实行数，无数据不伪造）；
- *  ③ 动效 reduced-motion 降级：新增类「声明 + 停帧」双登记，且只动 transform/opacity；
- *  ④ 几何保绿：主干 path 逐字不变 + trunkEnd ≤ 640 上界（tl02 契约不回归）。
- *
- * 既有护栏不破：test/tl02-machine-geometry.test.ts（主干几何）/ test/canvas-theme.test.ts
- * （双主题令牌与 attr↔选择器同词汇）必须全绿——本文件只做增量锁定。
- */
 
-/** 读 src/ 下源文件（相对 test/ 目录，须带 ../src/ 前缀） */
 function readSrc(path: string): string {
   return readFileSync(fileURLToPath(new URL(`../src/${path}`, import.meta.url)), 'utf8');
 }
 
-/** 去掉 CSS 注释后再做裸色值扫描（注释里的历史 hex 迁移记录不算规则）。 */
 function cssRules(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, '');
 }
 
-/** 时光机夹具：最小 FileRecord（时光机只读渲染，不触发取数——useEffect 在 SSR 不跑）。 */
 function makeFile(id: string): FileRecord {
   return {
     file_id: id,
@@ -75,13 +60,11 @@ function renderMachine() {
   );
 }
 
-// ---------- ① 双主题（纸面 / 夜航） ----------
 
 test('时光机·双主题：分段钮渲染双态 + 活值自订阅 + 舷窗 DOM 命令式直写（主题值不入 React state）', () => {
   const html = renderMachine();
   const text = html.replace(/<!-- -->/g, '');
 
-  // ① 分段钮本体：group + 两枚 aria-pressed 钮（夜航 / 纸面）
   assert.ok(html.includes('data-machine-theme-seg'), '时光机顶栏提供主题分段钮锚点');
   assert.ok(html.includes('aria-label="画布主题"'), '分段钮具备 group 语义与可读名');
   assert.ok(text.includes('>夜航<'), '夜航档文案在位');
@@ -90,7 +73,6 @@ test('时光机·双主题：分段钮渲染双态 + 活值自订阅 + 舷窗 DO
   assert.ok(/aria-label="切换画布为纸面主题"/.test(html), '纸面档切换钮具备可读名');
   assert.ok(/aria-label="切换画布为夜航主题"/.test(html), '夜航档切换钮具备可读名');
 
-  // ② 叶子自订阅活值层（主题值不入 React state——翻转只重渲本叶子）
   const src = readSrc('components/DocumentTimeMachineView.tsx');
   assert.ok(src.includes('useSyncExternalStore(subscribeCanvasTheme, getCanvasTheme'), '分段钮自订阅 canvasThemeStore');
   assert.ok(src.includes('applyCanvasTheme(next)'), '翻转走活值层（更新活值 + 本机持久化 + 通知订阅者）');
@@ -102,10 +84,8 @@ test('时光机·双主题：分段钮渲染双态 + 活值自订阅 + 舷窗 DO
     '主题值不得进 React state（双主题活值层纪律）',
   );
 
-  // ③ 活值层本身：非法值回默认、同值短路（沿用 canvas-theme 契约，不重复造口径）
   assert.equal(getCanvasTheme(), 'xray-dark', '无本机偏好时默认夜航');
 
-  // ④ 浅档 CSS 覆写选择器字面必须逐字 = store 枚举（'xray-light'，禁 'light'/'dark'）
   const graphCss = readSrc('components/eventGraph.css');
   assert.ok(
     graphCss.includes(".dark-porthole[data-canvas-theme='xray-light'] .event-stage.event-stage-machine"),
@@ -121,7 +101,6 @@ test('时光机·双主题：浅/夜两档背板各有专属覆写块（点阵�
   const graphCss = readSrc('components/eventGraph.css');
   const rules = cssRules(graphCss);
 
-  // ① 两档背板各一块（夜航默认块 + 纸面覆写块）
   assert.ok(graphCss.includes('.event-stage.event-stage-machine {'), '时光机舞台有专属背板块（点阵 + 星尘 + 光晕）');
   assert.ok(
     graphCss.includes(".dark-porthole[data-canvas-theme='xray-light'] .event-stage.event-stage-machine {"),
@@ -129,13 +108,11 @@ test('时光机·双主题：浅/夜两档背板各有专属覆写块（点阵�
   );
   assert.ok(rules.includes('radial-gradient'), '背板走径向渐变（柔和光晕 + 点阵星尘）');
 
-  // ② 画布色值纪律：规则里禁裸 hex / rgba（色值一律走 --cv-* 令牌 + color-mix）
   const hexMatches = rules.match(/#[0-9a-fA-F]{3,8}\b/g) ?? [];
   assert.deepEqual(hexMatches, [], `eventGraph.css 规则不得出现裸 hex：${hexMatches.join(',')}`);
   const rgbaMatches = rules.match(/rgba?\(/g) ?? [];
   assert.deepEqual(rgbaMatches, [], `eventGraph.css 规则不得出现裸 rgba：${rgbaMatches.join(',')}`);
 
-  // ③ TSX 侧同样零裸色值（stroke/fill/stopColor 一律 var(--cv-*)）
   const tsx = readSrc('components/DocumentTimeMachineView.tsx');
   const tsxRules = tsx.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   assert.deepEqual(tsxRules.match(/#[0-9a-fA-F]{6}\b/g) ?? [], [], 'TSX 不得出现裸 hex');
@@ -144,10 +121,8 @@ test('时光机·双主题：浅/夜两档背板各有专属覆写块（点阵�
   assert.ok(tsx.includes('style={{ stopColor: SELECT_COLOR }}'), '渐变 stop 用 style.stopColor（不写 stop-color 属性）');
 });
 
-// ---------- ② 版本增量条纯函数 ----------
 
 test('时光机·版本增量条纯函数：比例几何逐字 + 无真实行数时诚实留空（零造数）', () => {
-  // ① 常规：新增 12 / 删除 3 → 80% / 20%，文案 '+12/-3'
   const bar = computeVersionDeltaBar(12, 3);
   assert.equal(bar.added, 12);
   assert.equal(bar.removed, 3);
@@ -158,16 +133,13 @@ test('时光机·版本增量条纯函数：比例几何逐字 + 无真实行数
   assert.equal(bar.label, '+12/-3');
   assert.equal(bar.addedPct + bar.removedPct, 100, '两段比例合计恒 100%');
 
-  // ② 均分：5 / 5 → 50 / 50
   const half = computeVersionDeltaBar(5, 5);
   assert.equal(half.addedPct, 50);
   assert.equal(half.removedPct, 50);
 
-  // ③ 只增不删 / 只删不增
   assert.equal(computeVersionDeltaBar(7, 0).removedPct, 0);
   assert.equal(computeVersionDeltaBar(0, 7).addedPct, 0);
 
-  // ④ 无数据：0/0、NaN、Infinity 一律 hasData=false + 文案空串（卡面留空槽）
   for (const [a, r] of [[0, 0], [Number.NaN, 2], [Number.POSITIVE_INFINITY, 1]] as const) {
     const empty = computeVersionDeltaBar(a, r);
     assert.equal(empty.hasData, false, `非法/零增量 (${a}, ${r}) 不得伪造数据`);
@@ -176,7 +148,6 @@ test('时光机·版本增量条纯函数：比例几何逐字 + 无真实行数
     assert.equal(empty.removedPct, 0);
   }
 
-  // ⑤ 负数是脏数据：钳 0 后另一方向仍按真值呈现（不整条丢弃，也不编负比例）
   const dirty = computeVersionDeltaBar(-3, 5);
   assert.equal(dirty.added, 0);
   assert.equal(dirty.removed, 5);
@@ -186,9 +157,6 @@ test('时光机·版本增量条纯函数：比例几何逐字 + 无真实行数
 });
 
 test('时光机·版本增量口径单一：节点卡只认章节级 diff 统计，与右侧面板/检查器同源（禁两套行数同屏）', () => {
-  // 病根：节点卡曾用 history 事件 payload 的 added_lines（服务端整文件行级口径），
-  // 右侧面板/检查器用章节级 computeSectionDiff 统计 → 同屏两个互相矛盾的行数
-  // （卡 +4/-0 vs 面板 +8/-0）且未标注各自来源 → 命中「诚实边界」停机条件。
   const tsx = readSrc('components/DocumentTimeMachineView.tsx');
   assert.ok(
     !tsx.includes('buildVersionDeltaMap') && !/payload\.added_lines/.test(tsx) && !tsx.includes('toFiniteCount'),
@@ -204,19 +172,16 @@ test('时光机·版本增量口径单一：节点卡只认章节级 diff 统计
   );
 });
 
-// ---------- ③ 动效契约（reduced-motion 降级 + 只动 transform/opacity） ----------
 
 test('时光机·动效契约：新增动效类「声明 + 停帧」双登记，且只动 transform/opacity、只吃令牌时长', () => {
   const motionCss = readSrc('styles/motion.css');
   const reduceSection = motionCss.slice(motionCss.indexOf('@media (prefers-reduced-motion: reduce)'));
 
-  // ① 声明 + 降级双登记
   for (const cls of ['.glx-axis-follow', '.glx-machine-flow-pulse']) {
     assert.ok(motionCss.includes(cls), `motion.css 应声明 ${cls}`);
     assert.ok(reduceSection.includes(cls), `prefers-reduced-motion 应降级 ${cls}`);
   }
 
-  // ② 司辰跟随：transform 单属性过渡 + 令牌时长/缓动；禁布局属性与常驻 will-change
   const followStart = motionCss.indexOf('.dark-porthole .glx-axis-follow.glx-axis-follow {');
   assert.ok(followStart >= 0, 'motion.css 应声明司辰跟随类');
   const followBlock = motionCss.slice(followStart, motionCss.indexOf('}', followStart));
@@ -226,7 +191,6 @@ test('时光机·动效契约：新增动效类「声明 + 停帧」双登记，
   assert.ok(!/\d+ms/.test(followBlock), '跟随禁写死 ms 时长');
   assert.ok(!followBlock.includes('will-change'), '禁新增常驻 will-change');
 
-  // ③ 切版流光：keyframes 只走 transform + opacity
   const keyframes = motionCss.slice(
     motionCss.indexOf('@keyframes glx-machine-flow-pulse'),
     motionCss.indexOf('@keyframes glx-machine-flow-pulse') + 260
@@ -235,12 +199,10 @@ test('时光机·动效契约：新增动效类「声明 + 停帧」双登记，
   assert.ok(keyframes.includes('transform'), '流光关键帧只走 transform');
   assert.ok(!/stroke-dashoffset|width|height|top|left/.test(keyframes), '流光禁描边/布局动画（只限 transform/opacity）');
 
-  // ④ 流光是纯装饰层：reduce 下整层 display:none（终态＝光环不可见，司辰本体仍在）
   const pulseReduce = reduceSection.slice(reduceSection.indexOf('.glx-machine-flow-pulse'));
   assert.ok(pulseReduce.includes('display: none'), '流光装饰层在 reduce 下整层隐藏');
   assert.ok(pulseReduce.includes('animation: none'), '流光在 reduce 下停帧');
 
-  // ⑤ 全局兜底块二仍处停用（画布闸未签收，不得越闸启用）
   assert.ok(
     reduceSection.includes('/* * {\n    animation-duration: 0.01ms !important;'),
     '全局兜底块须保持注释态（画布闸未签收）',
@@ -250,30 +212,25 @@ test('时光机·动效契约：新增动效类「声明 + 停帧」双登记，
 test('时光机·动效接线：司辰跟随位移量来自纯函数、切版流光环随选中版本重播、Diff 面板走 --dur-1 淡变', () => {
   const tsx = readSrc('components/DocumentTimeMachineView.tsx');
 
-  // ① 司辰跟随：位移量由纯函数算好后写进 CSS 自定义属性（组件内不写坐标公式）
   assert.ok(tsx.includes('chronosFollowOffsetY(selY)'), '司辰跟随位移量走纯函数');
   assert.ok(tsx.includes("'--glx-follow-y'"), '跟随位移写入 CSS 自定义属性（transform 过渡载体）');
   assert.ok(tsx.includes('className="glx-axis-follow"'), '司辰挂跟随动效类');
 
-  // ② 切版流光：光环 key 随选中版本变化 → 每次切版重播（装饰层，reduce 下隐藏）
   assert.ok(tsx.includes('className="glx-machine-flow-pulse"'), '切版流光环在位');
   assert.ok(
     /glx-machine-flow-pulse"\s*\n\s*key=\{selectedId \?\? 'none'\}/.test(tsx),
     '流光环 key 随选中版本变化（切版即重播）',
   );
 
-  // ③ Diff 面板：内容层挂 .glx-fade-in（纯 opacity，--dur-1）且 key 随切版变化
   assert.ok(tsx.includes('className="glx-fade-in"'), '多模态 Diff 面板内容走淡变类');
   assert.ok(tsx.includes('key={paneSignature}'), 'Diff 面板淡变 key 随「选中版 + 面板态」变化');
   assert.ok(tsx.includes('data-machine-pane-fade'), 'Diff 面板淡变层带可测锚点');
 });
 
-// ---------- ④ 几何保绿（主干 path 逐字不变 + 引线落点 + 跟随上限） ----------
 
 test('时光机·几何保绿：主干 path 与 trunkEnd ≤ 640 上界零回归，引线自贝塞尔脊柱精确落笔', () => {
   const html = renderMachine();
 
-  // ① 主干 path 逐字不变（tl02 保绿：M 260 100 Q 252 200 260 {trunkEnd}）
   assert.ok(
     html.includes('d="M 260 100 Q 252 200 260 336"'),
     '主干 path 几何逐字不变（空链 trunkEnd=336）',
@@ -282,7 +239,6 @@ test('时光机·几何保绿：主干 path 与 trunkEnd ≤ 640 上界零回归
   assert.ok(html.includes('machine-trunk-halo'), '主干另有宽而淡的光晕层');
   assert.ok(html.includes('machine-trunk-axis'), '主干主轴带专属类名');
 
-  // ② 引线落点：贝塞尔中段被控制点拉向 252，硬接 x=260 会浮空 → 落点必须落在 [252, 260]
   const mid = timeMachineTrunkPointAtY(170, 336);
   assert.ok(mid.x < 260, '中段引线落点须落在脊柱曲线上（不得浮空在 x=260）');
   assert.ok(mid.x >= 252, '落点不得越过控制点 x=252');
@@ -290,7 +246,6 @@ test('时光机·几何保绿：主干 path 与 trunkEnd ≤ 640 上界零回归
   assert.equal(timeMachineTrunkPointAtY(999, 336).y, 336, '越界纵坐标被钳到 trunkEnd');
   assert.equal(timeMachineTrunkPointAtY(Number.NaN, 336).y, 100, '非法纵坐标回落主干上端');
 
-  // ③ 司辰跟随：阻尼 + 硬上限（不越左栏上游依据卡，不出视口）
   assert.equal(chronosFollowOffsetY(170), 0, '选中首版时司辰不位移');
   assert.equal(chronosFollowOffsetY(Number.NaN), 0, '非法纵坐标回落 0');
   assert.ok(chronosFollowOffsetY(600) <= CHRONOS_FOLLOW_MAX, '长链位移取硬上限');
@@ -306,32 +261,25 @@ test('时光机·几何保绿：主干 path 与 trunkEnd ≤ 640 上界零回归
 test('时光机·相对时间纯函数：与绝对戳同锚点（occurred_at ?? observed_at），只换叙述不改口径', () => {
   const now = Date.parse('2026-11-22T10:00:00');
 
-  // ① 今天 / 昨天（仅日期锚点按本地日历日解析，不走 UTC 零点）
   assert.equal(versionRelativeLabel('2026-11-22', now), '今天');
   assert.equal(versionRelativeLabel('2026-11-21', now), '昨天');
 
-  // ② N 天前（1 < N ≤ 30）
   assert.equal(versionRelativeLabel('2026-11-19', now), '3 天前');
 
-  // ③ 超过 30 天回落绝对戳（老版本不写假近感）；跨年补年份
   assert.equal(versionRelativeLabel('2026-10-01', now), '10-01');
   assert.equal(versionRelativeLabel('2025-11-01', now), '2025-11-01');
 
-  // ④ 非法锚点诚实回落空串（调用方回退绝对戳，绝不臆造）
   assert.equal(versionRelativeLabel('', now), '');
   assert.equal(versionRelativeLabel('not-a-date', now), '');
 
-  // ⑤ 带时刻锚点：分钟/小时档
   assert.equal(versionRelativeLabel('2026-11-22T09:58:00', now), '2分钟前');
   assert.equal(versionRelativeLabel('2026-11-22T08:00:00', now), '2小时前');
 });
 
-// ---------- ⑤ 主题切换的活值层联动（不造第二套口径） ----------
 
 test('时光机·主题活值层：分段钮激活态跟存活值翻转（同值短路，零重渲整树）', () => {
   const seen: CanvasTheme[] = [];
   const off = (() => {
-    // 订阅口在 store 内；此处只断言活值翻转与分段钮激活态一致
     return () => {};
   })();
   void off;
@@ -346,13 +294,8 @@ test('时光机·主题活值层：分段钮激活态跟存活值翻转（同值
   assert.deepEqual(seen, [before]);
 });
 
-// ---------- ⑥ 实机回归护栏：下钻时光机不得整树崩白屏 ----------
 
 test('时光机·实机回归：同任务包分组 <details> 的 onToggle 不得在 setState updater 内读 e.currentTarget', () => {
-  // 病根：React 在事件派发结束即把 currentTarget 置 null，而 setState 的 updater
-  // 可能延后到渲染期才执行——updater 内读 e.currentTarget.open 会抛 TypeError，
-  // 连带整棵树崩成白屏（实机复现：星图 → 来源面板 → 单文档时光机下钻）。
-  // 修法：派发内同步取 open 真值，updater 只消费布尔量。
   const tsx = readSrc('components/DocumentTimeMachineView.tsx');
   assert.ok(
     !/set\w+\(\(prev\)[^;]*e\.currentTarget/.test(tsx),
@@ -364,23 +307,16 @@ test('时光机·实机回归：同任务包分组 <details> 的 onToggle 不得
   );
 });
 
-// ---------- ⑦ 浮层遮挡避让（Diff 面板压住版本轴） ----------
 
 test('时光机·浮层避让：面板展开时卡面右缘让出遮挡带（角标/比例条/文字不被浮层硬切）', () => {
-  // 病根：DiffSidePane 以 absolute inset-y-0 right-0 叠在 .event-plot 上，
-  // 面板左缘落在 viewBox x≈302（画布右侧 62%），而版本卡右缘在 335 → 重叠 33 单位
-  // （卡面 22% 被压：「当前」角标 100% 不可见、「初始基线」约 41% 被遮、
-  // 卡内第二行文字被硬切无省略号兜底、底部比例条右端被切）。
   assert.equal(MACHINE_VIEW_W, 794, '画布 viewBox 宽常量');
   assert.equal(DIFF_PANE_VIEW_SHARE, 0.62, '面板占画布宽比例（与 DiffSidePane width:min(560px,62%) 同源）');
   assert.ok(Math.abs(DIFF_PANE_LEFT_EDGE - 301.72) < 0.01, `面板左缘 = 画布宽 × (1-62%)，实测 ${DIFF_PANE_LEFT_EDGE}`);
 
-  // ① 面板收起 → 零避让（卡面完整，不留空）
   assert.equal(machinePaneReserve(335, false), 0, '面板收起时不避让');
   assert.equal(machinePaneReserve(335, true), 37, '面板展开时版本卡右缘(335)让出 37 单位（含 3 单位呼吸）');
   assert.equal(machinePaneReserve(353, true), 55, 'hub 卡右缘(353)让出 55 单位');
 
-  // ② 完全在面板左侧的卡面（不越界）→ 不避让
   assert.equal(machinePaneReserve(200, true), 0, '未越面板左缘的卡面不避让');
   assert.equal(machinePaneReserve(Number.NaN, true), 0, '非法右缘回落 0');
   assert.ok(
@@ -388,8 +324,6 @@ test('时光机·浮层避让：面板展开时卡面右缘让出遮挡带（角
     '越界越深避让越宽（单调不减）',
   );
 
-  // ③ 接线：Diff 面板与右侧检查器合流为独立网格列（data-machine-unified-inspector），
-  //    不再悬浮压盖画布，故卡面避让传 false 保持完整宽（零截断），NODE_W/NODE_H 几何常量不变
   const tsx = readSrc('components/DocumentTimeMachineView.tsx');
   assert.ok(tsx.includes('data-machine-unified-inspector=""'), '版本对比与检查器合流为单一右侧栏');
   assert.ok(tsx.includes('machinePaneReserve(TRUNK_X + NODE_W / 2, false)'), '统一右栏不再覆盖画布，版本卡零收窄截断');
@@ -406,11 +340,9 @@ test('时光机·浮层避让：面板展开时卡面右缘让出遮挡带（角
   assert.ok(tsx.includes('const NODE_H = 56;'), 'NODE_H 几何常量一字未改');
 });
 
-// ---------- ⑧ 纸面档层级倒挂 / 收起把手 / 纸面光晕 ----------
 
 test('时光机·纸面档层级：chrome 大板走白卡浮于浅底（与星图纸面语言一致），夜航档不变', () => {
   const graphCss = readSrc('components/eventGraph.css');
-  // ① 浅档：工具条 / 检查器 / 缩放条 / 分页条 → --cv-card（纯白）而非更暗的 --cv-panel
   assert.ok(
     graphCss.includes(".dark-porthole[data-canvas-theme='xray-light'] .event-toolbar") &&
       graphCss.includes(".dark-porthole[data-canvas-theme='xray-light'] .event-panel"),
@@ -420,15 +352,12 @@ test('时光机·纸面档层级：chrome 大板走白卡浮于浅底（与星�
   const lightChromeBlock = graphCss.slice(lightChromeStart, graphCss.indexOf('}', lightChromeStart));
   assert.ok(lightChromeBlock.includes('background: var(--cv-card)'), '浅档 chrome 面走白卡（--cv-card）');
 
-  // ② Diff 面板底色写在 inline style（color-mix(--cv-panel 88%, transparent)）→
-  //    浅档局部重定义 --cv-panel 令牌，让同一段 inline style 解析为白卡玻璃
   assert.ok(
     graphCss.includes(".dark-porthole[data-canvas-theme='xray-light'] [data-machine-diff-pane]"),
     '浅档须为 Diff 面板局部重定义 --cv-panel（inline style 只吃令牌）',
   );
   assert.ok(graphCss.includes('--cv-panel: var(--cv-card);'), '面板令牌重定义指向白卡');
 
-  // ③ 夜航档不得被改（面板比近黑画布更亮＝玻璃浮层，读法正确）
   const darkPaneBlock = graphCss.slice(0, graphCss.indexOf('.dark-porthole[data-canvas-theme='));
   assert.ok(!darkPaneBlock.includes('--cv-panel: var(--cv-card)'), '夜航档保持 --cv-panel 原值');
 });
@@ -484,7 +413,6 @@ test('时光机·流光引线：新增动效类须「声明 + 停帧」双登记
     tsx.includes('key={`flow-${selectedNode.revisionId}-${key}`}'),
     '流光 key 须随选中版本变化（切版即重播）',
   );
-  // 同一 path 元素上：key 与流光类成对出现（避免只挂类不重播 / 只重播不挂类）
   const leadTags = tsx.match(/<path[^>]*glx-machine-lead-flow[^>]*>/g) ?? [];
   assert.ok(leadTags.length >= 2, '核心结论块与章节 Diff 卡的引线均挂流光');
   for (const tag of leadTags) {
@@ -492,17 +420,6 @@ test('时光机·流光引线：新增动效类须「声明 + 停帧」双登记
   }
 });
 
-/* ══════════════════════════════════════════════════════════════════════════
-   阅读器极简顶栏 / 琉璃阅读进度光条 / 文档迷你版本轴 / 专注纸面（Zen）
-   —— 契约测试。
-   锁死四条量化验收口径：
-    ① 顶栏减密：长相对路径与文件 ID 移入「标题悬浮信息卡 / ··· 菜单」，主行只留锚点；
-    ② 进度光条：scaleX 纯计算（钳位/非法值）+ 单一数据源（复用 handleMarkdownScroll 的 pct）
-       + 只动 transform（禁动画 width）+ 2px 高度 + 紧贴顶栏下沿 + 正文零动效；
-    ③ 迷你版本轴：修订链序（vN → … → v1，禁按日期排）+ 时间/变动概览 + 切版/比对/时光机入口；
-    ④ Zen 状态机：按钮恒切、快捷键按护栏让路；壳层据此收起/恢复左右侧栏。
-   动效契约：新增类「声明 + reduced-motion 停帧」双登记，只动 transform/opacity。
-   ══════════════════════════════════════════════════════════════════════════ */
 
 import {
   buildMiniVersionAxis,
@@ -516,7 +433,6 @@ import {
 import { ReaderView } from '../src/components/ReaderView';
 import type { DecisionAssertion, FileRecord, RelationEdge } from '../src/types/guanlan';
 
-/** 阅读器夹具：三版文档（修订链 v1 → v3），末版含章节级变更。 */
 function u05Revisions(): MiniVersionAxisRevision[] {
   return [
     {
@@ -590,7 +506,6 @@ function u05ReaderProps(file: FileRecord) {
   };
 }
 
-// ---------- ① 进度光条：scaleX 纯计算 + 单一数据源 + 只动 transform ----------
 
 test('阅读器·进度光条纯函数：百分比 → scaleX 换算（钳位 / 非法值 / 端点逐字）', () => {
   assert.equal(computeReadingProgressScaleX(0), 0, '起点恒 0');
@@ -612,7 +527,6 @@ test('阅读器·进度光条接线：数据源复用 handleMarkdownScroll 的�
   const controller = readSrc('components/reader/useReaderController.tsx');
   const readerView = readSrc('components/ReaderView.tsx');
 
-  // ① 单一数据源：pct 只算一次，光条与落盘共用它（禁另起第二套换算）
   const pctComputations = controller.match(
     /const pct = Math\.round\(\(el\.scrollTop \/ max\) \* 100\)/g
   ) ?? [];
@@ -626,19 +540,16 @@ test('阅读器·进度光条接线：数据源复用 handleMarkdownScroll 的�
     '光条换算走纯函数单一出口',
   );
 
-  // ② 光条只动 transform：DOM 写 transform，绝不写 width
   assert.ok(controller.includes('bar.style.transform = `scaleX(${scaleX})`'), '光条以 transform 直写');
   assert.ok(!/style\.width\s*=/.test(controller), '光条禁写 width（禁动画 width/触发重排）');
 
-  // ③ 2px 高度 + 紧贴顶栏下沿（挂在文件头之后、内容区之前）
   assert.ok(readerView.includes('h-[2px]'), '光条高度为 2px');
   const headerIdx = readerView.indexOf('<ReaderFileHeaderSection ctx={ctx} />');
   const progressIdx = readerView.indexOf('data-reader-progress=""');
-  const contentIdx = readerView.indexOf('{/* 3. Main Content Area by SubMode */}');
+  const contentIdx = readerView.indexOf('data-reader-content=""');
   assert.ok(headerIdx >= 0 && progressIdx > headerIdx, '光条紧贴阅读器顶栏下沿');
   assert.ok(contentIdx > progressIdx, '光条在正文内容区之前（不挤占正文首屏高度语义）');
 
-  // ④ 正文零动效红线：正文量宽容器与正文段落节点不得挂任何 glx-* 动效类
   const markdownSection = readSrc('components/reader/readerMarkdownSection.tsx');
   const measureLine = (markdownSection.split('\n').find((line) => line.includes('reader-measure')) ?? '');
   assert.ok(measureLine.length > 0, '正文量宽容器 .reader-measure 仍在位');
@@ -648,9 +559,6 @@ test('阅读器·进度光条接线：数据源复用 handleMarkdownScroll 的�
     'Zen/光条动效类不得下沉到正文量宽容器（ReaderView 只做 chrome 装配）',
   );
 
-  // ⑤ AA：光条本体走薰衣草令牌（图形 ≥3:1）；轨道常驻 --ink-faint
-  //（随 data-reader-dark 换档：浅 3.15 / 夜航 3.71，均 ≥3:1 图形门槛；
-  //  scrollTop=0 零宽时轨道仍可证明光条本体已渲染）
   assert.ok(
     readerView.includes('linear-gradient(90deg,var(--accent-iris),var(--accent-iris-deep))'),
     '光条走薰衣草令牌渐变（浅底 4.13/5.13、夜航底 4.53/8.67，均 ≥3:1 图形门槛）',
@@ -665,7 +573,6 @@ test('阅读器·进度光条接线：数据源复用 handleMarkdownScroll 的�
   );
 });
 
-// ---------- ② 迷你版本轴：修订链序 + 概览 + 入口 ----------
 
 test('阅读器·迷你版本轴纯函数：修订链序 vN → … → v1（禁按日期排）+ 当前/最新标记 + 变动概览', () => {
   const nodes = buildMiniVersionAxis(u05Revisions(), 'rev_u05_2', 'rev_u05_3');
@@ -685,12 +592,10 @@ test('阅读器·迷你版本轴纯函数：修订链序 vN → … → v1（禁
   assert.ok(nodes[0].observedLabel.length > 0, '每节点带采集时刻相对时间');
   assert.ok(!nodes[0].observedLabel.includes('T'), '时刻以相对口径呈现（不直出 ISO 串）');
 
-  // 空输入 / 非法输入诚实退化
   assert.deepEqual(buildMiniVersionAxis([], 'a', 'b'), []);
   assert.deepEqual(buildMiniVersionAxis(null, 'a', 'b'), []);
   assert.deepEqual(buildMiniVersionAxis(undefined, 'a', 'b'), []);
 
-  // 变动概览单一出口
   assert.equal(
     summarizeMiniVersionChange({
       revision_id: 'x',
@@ -734,7 +639,6 @@ test('阅读器·迷你版本轴渲染：玻璃微型修订链 + 切版/比对�
   assert.ok(html.includes('data-reader-open-time-machine'), '提供进入版本时光机入口');
   assert.ok(text.includes('进入版本时光机 →'), '时光机入口文案在位');
 
-  // 不可直达时光机的格式不提供该入口（不做跳过去发现没有时光机的假入口）
   const noMachine = renderToString(
     createElement(ReaderMiniVersionAxis, {
       nodes,
@@ -755,12 +659,10 @@ test('阅读器·迷你版本轴接线：版本胶囊可点开 + 切版/比对/�
   const controller = readSrc('components/reader/useReaderController.tsx');
   const stage = readSrc('components/app/AppLibraryStage.tsx');
 
-  // ① 版本胶囊由静态徽标改为可展开的按钮
   assert.ok(chrome.includes('data-reader-version-axis-trigger'), '版本演化胶囊是展开触发器');
   assert.ok(chrome.includes('aria-expanded={versionAxisOpen}'), '触发器暴露开合态');
   assert.ok(chrome.includes('<ReaderMiniVersionAxis'), '触发器挂载迷你版本轴');
 
-  // ② 切版 = 钉住该版本（不改未读基线）；比对 = 以当前版为基准进入历史快照对比
   assert.ok(controller.includes('onChangeRevision(revisionId);'), '切版走钉住版本（只读呈现）');
   assert.ok(controller.includes("onChangeSubMode('diff_versions');"), '一键切版比对进入历史快照对比');
   assert.ok(
@@ -768,13 +670,11 @@ test('阅读器·迷你版本轴接线：版本胶囊可点开 + 切版/比对/�
     '切版/比对不得改写阅读基线（last_read_revision_id）',
   );
 
-  // ③ 进入版本时光机 = 纯视图跳转（与「查看关联」同一路径范式）
   assert.ok(stage.includes('enterEventFrame(prev, activeFile'), '时光机跳转复用 enterEventFrame 下钻范式');
   assert.ok(stage.includes("setActiveTab('panorama');"), '时光机跳转切到全景 tab');
   assert.ok(stage.includes("setPanoramaMode('canvas');"), '时光机跳转切到星图画布');
 });
 
-// ---------- ③ 顶栏减密 ----------
 
 test('阅读器·顶栏减密：长相对路径与文件 ID 移出主行（进标题悬浮信息卡 / ··· 菜单）', () => {
   const chrome = readSrc('components/reader/readerChromeSections.tsx');
@@ -782,12 +682,10 @@ test('阅读器·顶栏减密：长相对路径与文件 ID 移出主行（进�
   const html = renderToString(createElement(ReaderView, u05ReaderProps(file)));
   const text = html.replace(/<!-- -->/g, '');
 
-  // ① 标题悬浮信息卡在位（承载完整路径 + 文件 ID）
   assert.ok(html.includes('data-reader-file-info'), '标题悬浮信息卡在位');
   assert.ok(text.includes('01-方案文档/u05-reader.md'), '完整相对路径进信息卡');
   assert.ok(html.includes('aria-label="查看文件信息（完整路径与文件 ID）"'), '信息卡具备可发现入口');
 
-  // ② 主行不再直出长路径（旧口径：hidden 2xl:inline 的整段路径）
   assert.ok(
     !chrome.includes('hidden 2xl:inline font-mono'),
     '主行不得再直出超长相对路径（顶栏减密）',
@@ -797,10 +695,8 @@ test('阅读器·顶栏减密：长相对路径与文件 ID 移出主行（进�
     '文件 ID 复制钮不得留在主行元信息位',
   );
 
-  // ③ ··· 菜单补文件 ID 条目（长 ID 有出口，不再占主行视线）
   assert.ok(chrome.includes('data-reader-file-id-entry'), '文件操作菜单补文件 ID 条目');
 
-  // ④ 四大视觉锚点仍在主行
   assert.ok(html.includes('data-reader-version-axis-trigger'), '版本演化胶囊在主行');
   assert.ok(text.includes('标为已读') || text.includes('当前版已读'), '标为已读在主行');
   assert.ok(html.includes('data-reader-zen-toggle'), '专注纸面入口在主行');
@@ -808,10 +704,8 @@ test('阅读器·顶栏减密：长相对路径与文件 ID 移出主行（进�
   assert.ok(text.includes('深色') || text.includes('浅色'), '昼夜切换在主行');
 });
 
-// ---------- ④ Zen 专注纸面 ----------
 
 test('阅读器·Zen 状态机纯函数：按钮恒切；快捷键在编辑面/浮层/非阅读态一律让路', () => {
-  // ① 顶栏按钮：恒可切（退出专注的唯一路径不被任何护栏堵死）
   const on = resolveZenToggle({
     zenMode: false,
     trigger: 'toolbar-button',
@@ -833,7 +727,6 @@ test('阅读器·Zen 状态机纯函数：按钮恒切；快捷键在编辑面/�
   assert.equal(off.applied, true, '按钮恒切：即使有浮层/编辑面也能退出专注');
   assert.equal(off.nextZenMode, false);
 
-  // ② 快捷键：读态无护栏 → 切
   const shortcut = resolveZenToggle({
     zenMode: false,
     trigger: 'shortcut',
@@ -844,7 +737,6 @@ test('阅读器·Zen 状态机纯函数：按钮恒切；快捷键在编辑面/�
   assert.equal(shortcut.applied, true);
   assert.equal(shortcut.nextZenMode, true);
 
-  // ③ 快捷键：编辑面让路（停机线：编辑态一切键让路）
   const editable = resolveZenToggle({
     zenMode: false,
     trigger: 'shortcut',
@@ -856,7 +748,6 @@ test('阅读器·Zen 状态机纯函数：按钮恒切；快捷键在编辑面/�
   assert.equal(editable.nextZenMode, false, '被拦下时状态不变');
   assert.equal(editable.reason, 'shortcut-ignored-editable');
 
-  // ④ 快捷键：浮层打开让路（浮层内键归浮层自己）
   const overlay = resolveZenToggle({
     zenMode: true,
     trigger: 'shortcut',
@@ -868,7 +759,6 @@ test('阅读器·Zen 状态机纯函数：按钮恒切；快捷键在编辑面/�
   assert.equal(overlay.nextZenMode, true, '被拦下时保持原态');
   assert.equal(overlay.reason, 'shortcut-ignored-overlay');
 
-  // ⑤ 快捷键：非阅读态让路（Zen 是阅读专注态）
   const diff = resolveZenToggle({
     zenMode: false,
     trigger: 'shortcut',
@@ -886,23 +776,19 @@ test('阅读器·Zen 接线：顶栏一键 + Z 快捷键 + 壳层收起左右侧
   const stage = readSrc('components/app/AppLibraryStage.tsx');
   const readerView = readSrc('components/ReaderView.tsx');
 
-  // ① 顶栏入口 + 快捷键
   assert.ok(chrome.includes("toggleZen('toolbar-button')"), '顶栏按钮走 Zen 状态机');
   assert.ok(chrome.includes('data-reader-zen-toggle'), 'Zen 按钮带可测锚点');
   assert.ok(controller.includes("event.key !== 'z'"), 'Z 快捷键接线');
   assert.ok(controller.includes("toggleZen('shortcut'"), '快捷键走同一状态机（禁第二套口径）');
 
-  // ② 阅读面标记（Zen 态可测）
   assert.ok(readerView.includes("data-reader-zen={zenMode ? 'true' : undefined}"), '阅读面暴露 Zen 态标记');
 
-  // ③ 壳层：进入 Zen 收起左栏 + 右栏；退出恢复进入前的左栏折叠态
   assert.ok(stage.includes('dirShell.setSidebarCollapsed(true);'), '进入 Zen 收起左侧目录栏');
   assert.ok(stage.includes('setLibraryInspectorOpen(false);'), '进入 Zen 收起右侧溯源检查器');
   assert.ok(stage.includes('dirShell.setSidebarCollapsed(restore);'), '退出 Zen 恢复左栏折叠态');
   assert.ok(stage.includes('onZenModeChange={handleZenModeChange}'), 'App 层接住 Zen 状态变化');
 });
 
-// ---------- ⑤ 动效契约（reduced-motion 降级 + 只动 transform/opacity） ----------
 
 test('阅读器·动效契约：三个新增类「声明 + 停帧」双登记，且只动 transform/opacity、只吃令牌时长', () => {
   const motionCss = readSrc('styles/motion.css');
@@ -913,7 +799,6 @@ test('阅读器·动效契约：三个新增类「声明 + 停帧」双登记，
     assert.ok(reduceSection.includes(cls), `prefers-reduced-motion 应降级 ${cls}`);
   }
 
-  // ① 光条：只过渡 transform（禁 width/height/top/left 布局属性）
   const progressStart = motionCss.indexOf('.glx-reader-progress {');
   assert.ok(progressStart >= 0, 'motion.css 应声明 .glx-reader-progress');
   const progressBlock = motionCss.slice(progressStart, motionCss.indexOf('}', progressStart));
@@ -927,7 +812,6 @@ test('阅读器·动效契约：三个新增类「声明 + 停帧」双登记，
   assert.ok(!/\d+ms/.test(progressBlock), '光条禁写死 ms 时长');
   assert.ok(!progressBlock.includes('will-change'), '禁新增常驻 will-change');
 
-  // ② 外框柔化：只动 color/background-color（非布局属性）
   const frameStart = motionCss.indexOf('.glx-reader-frame {');
   const frameBlock = motionCss.slice(frameStart, motionCss.indexOf('}', frameStart));
   assert.ok(frameBlock.includes('background-color') && frameBlock.includes('color'), '外框过渡走色彩属性');
@@ -935,7 +819,6 @@ test('阅读器·动效契约：三个新增类「声明 + 停帧」双登记，
   assert.ok(!/\b(width|height|top|left)\b/.test(frameTransition), '外框禁过渡布局属性');
   assert.ok(frameBlock.includes('var(--dur-3)') && frameBlock.includes('var(--ease-fade)'), '外框时长/缓动只吃令牌');
 
-  // ③ Zen 顶栏降噪：只动 opacity
   const zenStart = motionCss.indexOf('.glx-zen-chrome {');
   const zenBlock = motionCss.slice(zenStart, motionCss.indexOf('}', zenStart));
   assert.ok(zenBlock.includes('opacity'), 'Zen 降噪只动 opacity');
@@ -943,7 +826,6 @@ test('阅读器·动效契约：三个新增类「声明 + 停帧」双登记，
   assert.ok(!/\b(width|height|top|left)\b/.test(zenTransition), 'Zen 降噪禁过渡布局属性');
   assert.ok(zenBlock.includes('var(--dur-3)') && zenBlock.includes('var(--ease-fade)'), 'Zen 降噪时长/缓动只吃令牌');
 
-  // ④ 全局兜底块二仍处停用（画布闸未签收，不得越闸启用）
   assert.ok(
     reduceSection.includes('/* * {\n    animation-duration: 0.01ms !important;'),
     '全局兜底块须保持注释态（画布闸未签收）',
@@ -962,25 +844,20 @@ test('阅读器·阅读器首屏与既有护栏零回归：冷启动 SSR 仍 < 3
 });
 
 
-// ---------- ⑥ 实机走查修复（第二批） ----------
 
 test('阅读器·走查修复：迷你版本轴弹层锚 header 底沿展开（避让 Row2 查看模式条）+ outside-click 收口', () => {
   const chrome = readSrc('components/reader/readerChromeSections.tsx');
   const controller = readSrc('components/reader/useReaderController.tsx');
 
-  // ① 弹层不再锚版本胶囊（旧 left-0 top-full 会盖住正下方的查看模式分段条），
-  //    改锚 header 根节点底沿（top-full + left-5）——只覆盖正文纸面（非交互区）
   const axis = readSrc('components/reader/readerChromeSections.tsx');
   const axisStart = axis.indexOf('data-reader-version-axis=""');
   const axisBlock = axis.slice(axisStart, axis.indexOf('>', axisStart));
   assert.ok(axisBlock.includes('top-full') && axisBlock.includes('left-5'), '弹层须锚 header 底沿向下展开');
-  // 结构锁：header 内的条件渲染块位于 Row2（Stepper）之后，即挂在 header 根节点末尾
   const row2Idx = chrome.indexOf('所属专项 + 五阶段 Stepper 收拢为紧凑下拉胶囊，按需展开五阶段跳转');
   const mountIdx = chrome.indexOf('{versionAxisOpen && (', row2Idx);
   assert.ok(mountIdx > row2Idx, '弹层挂载点必须位于 Row2 之后（header 根节点内）');
   assert.ok(!/relative">\s*{versionAxisOpen/.test(chrome), '弹层不得再嵌回版本胶囊的 relative 包裹层');
 
-  // ② outside-click 收口（与 Esc 同 effect；触发器与弹层自身命中不关）
   assert.ok(
     controller.includes("document.addEventListener('mousedown', onDown)") &&
       controller.includes("target?.closest('[data-reader-version-axis]')"),
@@ -990,9 +867,6 @@ test('阅读器·走查修复：迷你版本轴弹层锚 header 底沿展开（�
 
 test('阅读器·走查修复：三处玻璃浮层近不透明换底（封堵正文笔画透印）+ 双态可读', () => {
   const chrome = readSrc('components/reader/readerChromeSections.tsx');
-  // 白玻璃 .glass-pop 原 0.95 透率实测透印（复合亮度 247/255 ≈1.05:1）；
-  // 0.985 → 复合亮度 252.6/255（Δ2.4 级），1× 不可辨；夜航档同值
-  //（H1 亮笔画 243 穿透 1.5% → 复合 Δ≈3 级，同样不可辨）
   assert.equal(
     (chrome.match(/rgba\(255, 254, 250, 0\.985\)/g) ?? []).length,
     3,
@@ -1010,8 +884,6 @@ test('阅读器·走查修复：三处玻璃浮层近不透明换底（封堵正
 test('阅读器·走查修复：主行单行化（<2xl 大纲/昼夜收为图标钮，aria-label 提供可读名）+ 返回横幅文案去工程语感', () => {
   const chrome = readSrc('components/reader/readerChromeSections.tsx');
 
-  // ① 1440 主配置（目录栏展开）：大纲 + 昼夜合计省 ~104px，四大锚点同回 Row1 一行
-  //（昼夜钮在源码里是浅/深两分支各一枚 span，故源码 3 处、运行时同帧最多 2 处）
   assert.equal(
     (chrome.match(/max-2xl:hidden/g) ?? []).length,
     3,
@@ -1026,24 +898,10 @@ test('阅读器·走查修复：主行单行化（<2xl 大纲/昼夜收为图标
     '昼夜图标钮保留可读名',
   );
 
-  // ② 返回横幅右侧常驻文案去工程态（旧句已清零、新句在位）
   assert.ok(!chrome.includes('已保留来源段落与滚动筛选状态'), '旧工程语感文案须清零');
   assert.ok(chrome.includes('阅读位置与跳转来源已保留'), '新文案在位');
 });
 
-/* ══════════════════════════════════════════════════════════════════════════
-   右侧溯源检查器「时光轨迹卡」与文件历史抽屉重构 —— 契约测试。
-   锁死量化验收口径：
-    ① 时光轨迹卡纯函数映射三边界：多版本（最近 4 节点 + 诚实收纳计数）/
-       单版本（唯一基线，不渲染假差异入口）/ 已淘汰快照（仅元数据，diff 全禁）；
-    ② 三卡结构 SSR：时光轨迹 / 双向引用（分组折叠 + 悬停摘要气泡）/ 决策与归属
-       （待拍板-已定案-候选三桶 + 专项上下游）；
-    ③ 三口径时间语义不合并（observed_at / source_time / commit_time）+ 只读边界
-       （跳时光机复用 onViewRelationsGraph 视图跳转；全组件无 last_read_revision_id 写点）；
-    ④ 文件历史抽屉：glx-t-panel 弹簧抽屉双轨 + 两段式入场（无 glx-drawer-in 叠加）+
-       reduced-motion 降级沿用 motion.css 既有登记 + 冗余技术字段精简（size KB 收纳）
-       + 「时间轴序 ≠ 修订链序」常显文案。
-   ══════════════════════════════════════════════════════════════════════════ */
 
 import {
   buildTimeTrail,
@@ -1055,7 +913,6 @@ import {
 } from '../src/components/RightInspector';
 import { FileTimelineDrawer } from '../src/components/FileTimelineDrawer';
 
-/** 检查器夹具：N 个版本的修订链（chain 自 v1 → vN），可指定第几版起快照淘汰。 */
 function u06Revisions(n: number, opts?: { evictFromVersion?: number }): TimeTrailRevision[] {
   const evictFrom = opts?.evictFromVersion ?? Number.POSITIVE_INFINITY;
   return Array.from({ length: n }, (_, i) => {
@@ -1099,7 +956,6 @@ function u06InspectorFile(overrides?: Partial<FileRecord>): FileRecord {
   } as unknown as FileRecord;
 }
 
-/** 检查器夹具：同包第三份文档（阅读序在选中文档之后，供「下游」按钮落位）。 */
 function u06NextFile(): FileRecord {
   return {
     file_id: 'f_u06_next',
@@ -1228,7 +1084,6 @@ function u06InspectorProps(file: FileRecord) {
   };
 }
 
-// ---------- ① 时光轨迹卡纯函数：三边界映射 ----------
 
 test('检查器·时光轨迹纯函数·多版本边界：链序 vN→v1、最近 4 节点、诚实收纳计数（零丢版零造数）', () => {
   const model: TimeTrailModel = buildTimeTrail(
@@ -1249,13 +1104,11 @@ test('检查器·时光轨迹纯函数·多版本边界：链序 vN→v1、最�
   assert.equal(model.hiddenCount, 2, '更早版本诚实收纳为计数');
   assert.equal(model.headline, '共 6 版 · 展示最近 4 版');
 
-  // 当前 / 最新标记只落在一处
   assert.equal(model.nodes.filter((n) => n.isCurrent).length, 1);
   assert.equal(model.nodes.filter((n) => n.isLatest).length, 1);
   assert.equal(model.nodes[0].isCurrent, true);
   assert.equal(model.nodes[0].isLatest, true);
 
-  // 章节级变更逐字透传（零造数），可展开差异只看真实数据
   assert.equal(model.nodes[0].changedCount, 3);
   assert.deepEqual(model.nodes[0].changedSections, ['背景', '方案', '影响与等待范围']);
   assert.equal(model.nodes[0].diffAvailable, true);
@@ -1263,13 +1116,11 @@ test('检查器·时光轨迹纯函数·多版本边界：链序 vN→v1、最�
   assert.equal(model.nodes[1].diffAvailable, false, '无变更记录的节点不渲染假差异入口');
   assert.equal(model.nodes[1].kind, 'unchanged');
 
-  // 恰好 4 版时不产生收纳行（headline 不带「展示最近」）
   const exact = buildTimeTrail(u06Revisions(4), 'rev_u06_4', 'rev_u06_4');
   assert.equal(exact.boundary, 'multi');
   assert.equal(exact.hiddenCount, 0);
   assert.equal(exact.headline, '共 4 版');
 
-  // observed 相对时间口径：不直出 ISO 串（occurred_at 口径绝不混入本卡）
   assert.ok(model.nodes[0].observedLabel.length > 0);
   assert.ok(!model.nodes[0].observedLabel.includes('T'));
 });
@@ -1292,7 +1143,6 @@ test('检查器·时光轨迹纯函数·单版本与空链边界：唯一基线�
     assert.equal(empty.headline, '暂无版本记录');
   }
 
-  // 缺 revision_id 的脏数据按不可用剔除，不参与计数
   const dirty = buildTimeTrail(
     [{ revision_id: '', versionNumber: 1, observed_at: '' }] as TimeTrailRevision[],
     'a',
@@ -1319,7 +1169,6 @@ test('检查器·时光轨迹纯函数·已淘汰快照边界：仅保留元数�
     '变动概览与迷你版本轴同词（快照已淘汰，绝不冒充可读旧版）',
   );
 
-  // 混合链：部分淘汰 → 仍是 multi 边界，但被淘汰的节点自身禁差异
   const mixed = buildTimeTrail(
     u06Revisions(6, { evictFromVersion: 6 }),
     'rev_u06_6',
@@ -1336,7 +1185,6 @@ test('检查器·时光轨迹纯函数·已淘汰快照边界：仅保留元数�
   );
 });
 
-// ---------- ② 三卡结构 SSR ----------
 
 test('检查器·SSR·时光轨迹卡：链序锚点 + 当前版差异默认展开 + 收纳行 + 时光机入口（md 可跳 / pdf 无假入口）', () => {
   const html = renderToString(
@@ -1360,7 +1208,6 @@ test('检查器·SSR·时光轨迹卡：链序锚点 + 当前版差异默认展�
   assert.ok(html.includes('data-unread-status'), '未读三态标签在轨迹卡头（未读状态消费不丢）');
   assert.ok(text.includes('未读新件（尚未建立阅读基线）'), '无基线时未读文案如实呈现');
 
-  // pdf：不渲染时光机入口（canOpenTimeMachine 单一口径——不做跳过去发现没有的假入口）
   const pdfHtml = renderToString(
     createElement(
       RightInspector,
@@ -1393,7 +1240,6 @@ test('检查器·SSR·双向引用卡：正/反向分组折叠 + 关系胶囊行
     '悬停气泡预览目标摘要（title 属性承载，绝不整段倾倒）',
   );
 
-  // 悬停预览纯函数：长摘要截断 80 字带省略号；无摘要如实空串；决策对端走「决策问题：」
   const long = '长'.repeat(120);
   const filesLong = [
     u06PeerFile(),
@@ -1433,18 +1279,15 @@ test('检查器·SSR·决策与归属卡：待拍板/已定案/候选三桶（SS
   assert.ok(!text.includes('>上游：') && !text.includes('>下游：'), '按钮面文本不重复堆方向词');
 });
 
-// ---------- ③ 三口径时间语义与只读边界（源码契约） ----------
 
 test('检查器·时间语义·三口径绝不合并一行 + 只读边界零基线写点', () => {
   const inspectorSrc = readSrc('components/RightInspector.tsx');
 
-  // ① 三口径各自独立行（检查器 ⓘ 明细），绝无合并的「时间」单行标签
   assert.ok(inspectorSrc.includes('检测到更新 (observed_at)'), 'observed_at 口径独立行');
   assert.ok(inspectorSrc.includes('文档声称日期 (source_time)'), 'source_time 口径独立行');
   assert.ok(inspectorSrc.includes('Git 提交 (commit_time)'), 'commit_time 口径独立行');
   assert.ok(!/>时间<\/span>/.test(inspectorSrc), '不出现把三口径合并的「时间」单行标签');
 
-  // ② 只读边界：检查器全文件无未读基线写点；轨迹跳转只做视图跳转
   assert.ok(
     !inspectorSrc.includes('last_read_revision_id'),
     '时光轨迹卡与检查器不得顺手改动未读基线（last_read_revision_id 零出现）',
@@ -1462,7 +1305,6 @@ test('检查器·时间语义·三口径绝不合并一行 + 只读边界零基�
     '节点「在阅读器打开」＝把阅读器钉到该版本（属读不属写）',
   );
 
-  // ③ 抽屉口径：时间轴序 ≠ 修订链序，常显文案明示；onOpenRevision 仍是钉版只读
   const drawerSrc = readSrc('components/FileTimelineDrawer.tsx');
   assert.ok(
     drawerSrc.includes('内容演进请看版本时光机（按修订链）'),
@@ -1475,21 +1317,18 @@ test('检查器·时间语义·三口径绝不合并一行 + 只读边界零基�
   );
 });
 
-// ---------- ④ 文件历史抽屉：glx-t-panel 弹簧抽屉与动效契约 ----------
 
 test('检查器·抽屉动效·glx-t-panel 双轨 + 两段式入场（现役 glx-drawer-in 零叠加）', () => {
   const drawerSrc = readSrc('components/FileTimelineDrawer.tsx');
   const motionCss = readSrc('styles/motion.css');
   const reduceSection = motionCss.slice(motionCss.indexOf('@media (prefers-reduced-motion: reduce)'));
 
-  // ① 面板挂 glx-t-panel（transform→spring、opacity→fade 双轨），不再叠挂 keyframes 类
   assert.ok(drawerSrc.includes('className="glx-t-panel'), '抽屉面板统一挂 glx-t-panel 弹簧双轨');
   assert.ok(
     !/className="[^"]*glx-drawer-in/.test(drawerSrc),
     'glx-drawer-in（一次性 keyframes，动的同是 transform+opacity）不得与 glx-t-panel 叠加成两套入场',
   );
 
-  // ② 两段式入场：首帧偏移态 → rAF 翻转终态触发过渡（只动 transform/opacity）
   assert.ok(
     drawerSrc.includes('window.requestAnimationFrame(() => setEntered(true))'),
     '入场第二帧翻转终态（transition 需要状态变化触发）',
@@ -1501,7 +1340,6 @@ test('检查器·抽屉动效·glx-t-panel 双轨 + 两段式入场（现役 glx
   assert.ok(drawerSrc.includes('opacity: entered ? 1 : 0'), '入场双轨含 opacity');
   assert.ok(!/style\.width\s*=/.test(drawerSrc), '抽屉禁写 width（禁布局动画）');
 
-  // ③ reduce 降级沿用既有登记：glx-t-panel / glx-backdrop-in 都在 motion.css 声明 + reduce 块覆盖
   for (const cls of ['.glx-t-panel', '.glx-backdrop-in']) {
     assert.ok(motionCss.includes(cls), `motion.css 应声明 ${cls}`);
     assert.ok(reduceSection.includes(cls), `prefers-reduced-motion 应降级 ${cls}`);
@@ -1510,7 +1348,6 @@ test('检查器·抽屉动效·glx-t-panel 双轨 + 两段式入场（现役 glx
   const panelReduceBlock = reduceSection.slice(panelReduceStart, reduceSection.indexOf('}', panelReduceStart));
   assert.ok(panelReduceBlock.includes('transition: none'), 'glx-t-panel 在 reduce 下撤过渡（瞬时落位、终态可见）');
 
-  // ④ 无新增同义类：motion.css 抽屉段仍是「统一挂 glx-t-panel、不另立同义类」纪律
   assert.ok(
     motionCss.includes('统一挂 .glx-t-panel 双轨，不另立同义类、不新增 keyframes'),
     '抽屉动效归口纪律未被破坏',
@@ -1547,19 +1384,16 @@ test('检查器·抽屉 SSR·关闭零 DOM + 开启首帧偏移态可见（弹�
 test('检查器·抽屉精简·冗余技术字段收纳 + 竖轴节点锚点在位', () => {
   const drawerSrc = readSrc('components/FileTimelineDrawer.tsx');
 
-  // ① size KB 不再逐节点平铺卡面头行——只保留「版本徽标 title + 正文预览头」两处收纳出口
   const sizeRefs = drawerSrc.match(/rev\.size_bytes \/ 1024/g) ?? [];
   assert.equal(sizeRefs.length, 2, `size KB 只允许徽标 title 与预览头两处（实测 ${sizeRefs.length} 处）`);
   assert.ok(drawerSrc.includes('title={`版本 v${rev.seq} ·'), '版本徽标 hover 承载 size 元数据');
   assert.ok(drawerSrc.includes('data-timeline-preview-meta'), '正文预览头补版本元数据行');
 
-  // ② 视觉竖轴节点：脊柱 + 节点 + 类型锚点（测试与走查定位）
   assert.ok(drawerSrc.includes('data-timeline-nodes'), '竖轴容器锚点');
   assert.ok(drawerSrc.includes('data-timeline-spine'), '竖轴脊柱锚点');
   assert.ok(drawerSrc.includes('data-timeline-node='), '节点行锚点');
   assert.ok(drawerSrc.includes('data-timeline-node-kind='), '节点类型锚点（版本/事件）');
 
-  // ③ 诚实语义保留：时间依据与精度标注未被精简掉（绝不为减字丢口径）
   assert.ok(drawerSrc.includes('timeBasisLabel(rev.occurred_source)'), 'occurred 依据标注在位');
   assert.ok(drawerSrc.includes("'仅日期' : '含时刻'"), 'occurred 精度标注在位');
   assert.ok(

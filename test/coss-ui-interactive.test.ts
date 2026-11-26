@@ -1,12 +1,3 @@
-/**
- * coss.com/ui 高阶交互原语层（Base UI）+ ReadingIsland 非遮挡 Sheet(inset) 契约测试
- *
- * 覆盖：
- * 1. ScrollArea / SegmentedControl / Tabs / Popover / PreviewCard / Tooltip / Menu /
- *    Dialog / AlertDialog / Sheet(inset) / Command(CommandPanel) / Toast / InputGroup / Switch SSR 与 data-slot 契约；
- * 2. 所有新增交互原语声明 motion-reduce:transition-none / motion-reduce:animate-none；
- * 3. ReadingIsland 彻底移除右缘 fixed 压盖（零 fixed right-0 top-1/2）、默认顶栏紧凑微胶囊 + Sheet(inset) 抽屉 + 中文三项总览。
- */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';

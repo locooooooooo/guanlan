@@ -133,7 +133,6 @@ test('buildVersionChain：主序 seq 降序（上新下旧）、prev 沿修订�
 });
 
 test('逆序 fixture：occurred 日与 seq 相反时链仍为 v6→…→v1，prev 沿修订链、仅 v1 为基线', () => {
-  // occurred 日随 seq 递减（材料日期"逆序"），模拟文档自述日期早于晚收录的版本
   const reversed = Array.from({ length: 6 }, (_, i) => {
     const seq = i + 1;
     const day = String(7 - seq).padStart(2, '0');
@@ -157,7 +156,6 @@ test('逆序 fixture：occurred 日与 seq 相反时链仍为 v6→…→v1，pr
   assert.deepEqual(chain.map((node) => node.isBaseline), [false, false, false, false, false, true]);
   assert.equal(detectDateDisorder(chain), true, '上方日期早于下方日期 → 口径矛盾');
 
-  // 对照：seq 与 occurred 同序 → 不报矛盾
   const ordered = Array.from({ length: 6 }, (_, i) => {
     const seq = i + 1;
     return revision({
@@ -207,7 +205,6 @@ test('listBaselineSections：文档头部与顶层章节均入清单并带行范
     [['文档头部', 1, 2], ['甲', 3, 4], ['乙', 5, 6]]);
 });
 
-// ---------- 时间口径统一 ----------
 
 test('timeFormat.formatLocalStamp：含时刻按本地时区输出 MM-DD HH:mm，纯日期取 MM-DD 且无尾空格', () => {
   assert.equal(formatLocalStamp('2026-11-09T01:30:00.000Z', 'Asia/Shanghai'), '11-09 09:30');
@@ -275,14 +272,12 @@ test('eventCardStamp：occurred_precision=day 只输出日期，并标记「仅�
 
 test('离线兜底：日期筛选随 eventOrder 单口径（occurred→发生日、observed→观察日）', () => {
   const filter = '2026-11-02';
-  // 观察在 11-02、材料记载 11-05：occurred 口径必须按 11-05 归属，不能被观察日“捞回”
   const crossed = {
     observed_at: '2026-11-02T10:00:00+08:00',
     source_time: '2026-11-05',
     occurred_precision: 'day',
     occurred_source: 'document_self',
   };
-  // 观察在 11-05、材料记载 11-02：observed 口径必须按 11-05 归属
   const mirrored = {
     observed_at: '2026-11-05T10:00:00+08:00',
     source_time: '2026-11-02',
@@ -307,7 +302,6 @@ test('离线兜底：日期筛选随 eventOrder 单口径（occurred→发生日
   assert.notEqual(eventFilterDay(mirrored, 'observed'), filter, 'observed=11-05 不得命中 11-02');
 });
 
-// occurred 口径下事件没有 occurred_at（日期待考）时不归属任何具体日，避免被采集日“补位”
 test('离线兜底：occurred 口径下日期待考事件不落入任何具体日筛选', () => {
   const undated = { observed_at: '2026-11-02T10:00:00+08:00' };
   assert.equal(eventFilterDay(undated, 'occurred'), null);

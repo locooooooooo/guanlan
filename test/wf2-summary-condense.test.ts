@@ -1,13 +1,3 @@
-/**
- * 信息降噪 · 摘要口径单测。
- *
- * 守住三件事（DoD2）：
- *  ① 摘要不得是文件属性串——不含 `9.1 KB`、不含 `01-方案文档/…` 路径、不含 `vN · 日期 · 元数据`；
- *  ② 有正文时取正文首段，去掉 markdown 标记，压成一行 ≤80 字，超出以「…」收口；
- *  ③ 拿不到正文时返回空串（由调用方显式占位「暂无正文摘要」），绝不拿文件属性冒充结论。
- *
- * 以及看板「5 阶段聚合胶囊」的唯一数据源 stageCountsOf。
- */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
@@ -21,7 +11,6 @@ import {
 import type { PackageDoc, StageRole } from '../src/utils/taskPackages';
 import type { FileRecord, Revision } from '../src/types/guanlan';
 
-// ---------- fixtures ----------
 
 function revision(
   over: Partial<Revision> & Pick<Revision, 'revision_id' | 'versionNumber' | 'observed_at'>
@@ -57,29 +46,24 @@ function doc(stage: StageRole, fileId: string): PackageDoc {
   return { fileId, title: `${fileId}.md`, format: 'md', stage, conclusion: '' };
 }
 
-/** 服务端 summaryNote 的真实拼装结果（server/project.ts:141-169），逐字。 */
 const METADATA_SUMMARY =
   'v2 · 2026-11-12 13:03:13（文件修改时间） · 9.1 KB · 01-方案文档/README.md';
 
-/** 三无断言：不含 KB 体量 / 不含 `/` 路径分隔 / 不是 `vN · 日期 · 元数据` 串。 */
 function assertNoFileNoise(summary: string) {
   assert.ok(!/\d+(?:\.\d+)?\s?(?:KB|MB|GB)/i.test(summary), `摘要含 KB 体量：${summary}`);
   assert.ok(!summary.includes('/'), `摘要含路径分隔符：${summary}`);
   assert.ok(!/^v\d+\s*·/.test(summary), `摘要是 vN · 日期 · 元数据串：${summary}`);
 }
 
-// ---------- isFileMetadataText ----------
 
 test('isFileMetadataText：服务端 summaryNote / PDF 未索引占位是文件属性，不是结论', () => {
   assert.equal(isFileMetadataText(METADATA_SUMMARY), true);
   assert.equal(isFileMetadataText('v1 · 2026-11-04（原文记载） · 4.5 KB · 01-方案文档/…'), true);
   assert.equal(isFileMetadataText('正文尚未索引，当前仅文件名与元数据可检索（阅读器可打开原文件预览）'), true);
-  // 正文不受影响
   assert.equal(isFileMetadataText('本次验收通过，等待复验'), false);
   assert.equal(isFileMetadataText(''), false);
 });
 
-// ---------- condenseSummary ----------
 
 test('condenseSummary：元数据串整体丢弃，返回空串（不截断成半截路径）', () => {
   assert.equal(condenseSummary(METADATA_SUMMARY), '');
@@ -110,16 +94,14 @@ test('condenseSummary：正文里的体量数字被剥离（KB 不算摘要内�
 });
 
 test('condenseSummary：超过 80 字截断并以「…」收口', () => {
-  const long = '验收'.repeat(120); // 240 字
+  const long = '验收'.repeat(120);
   const out = condenseSummary(long);
   assert.equal(out.length, SUMMARY_MAX_CHARS + 1, '应为 80 字 + 省略号');
   assert.ok(out.endsWith('…'), `缺少省略号：${out}`);
 });
 
-// ---------- extractCoreSummary ----------
 
 test('extractCoreSummary：脏 summaryNote 不得冒充结论（DoD2 三无断言）', () => {
-  // md 但正文未内联（/scan 的常态）→ 只剩 summaryNote，必须判为噪音返回空串
   const noisy = file({
     file_id: 'f-noisy',
     relative_path: '01-方案文档/README.md',
@@ -179,7 +161,6 @@ test('extractCoreSummary：PDF 未索引占位句 → 空串（状态句不是�
   assert.equal(extractCoreSummary(pdf), '');
 });
 
-// ---------- stageCountsOf ----------
 
 test('stageCountsOf：五阶段计数（蓝图 1 → 计划 1 → 决策 1 → 执行 8 → 交付 2）', () => {
   const docs = [

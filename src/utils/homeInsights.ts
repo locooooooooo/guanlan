@@ -1,20 +1,3 @@
-/**
- * 首页可视化驾驶舱纯函数模型（零 React / CSS 依赖，可直进 node:test 单测）。
- *
- * 所有图表数字与几何全部从工作区真实事实派生（零造数、零估算外推）：
- * 1. 事件演进构成（PulseComposition）：把 eventDays 的真实 by_kind 拆为新增纳入 / 决策拍板 /
- *    内容演进三层，与 computeTrunkAccumulation 与 buildChronosTodaySummary 保持同源分类；
- *    缺失 by_kind 时诚实标记 hasKindBreakdown = false，绝不捏造比例；
- * 2. 阅读覆盖环（ReadingCoverageModel）：复用 guanlanEngine.hasUnreadChanges 三态 SSOT，
- *    严格守恒 read + updated + unread === files.length，并产出 SVG 圆环弧段几何；
- * 3. 拍板态势条（DecisionGaugeModel）：复用 stateProjection 未决口径，服务端全库总数高于
- *    当前已加载样本时单独留出 unloadedUnresolved，绝不拿样本外推全库分布；
- * 4. 五阶段推进流（StageFlowModel）：按 taskPackages.STAGE_SLOT_ORDER 统计真实专项与文档分布；
- * 5. 格式构成图谱（FormatAtlasModel）：按 formatMeta.formatUiMeta 聚合，主视图收敛在 3–5 项内，
- *    其余低频格式收拢至「其它格式」并保留明细供悬浮提示展示；
- * 6. 首页 SVG 封面预水合候选（pickHomeCoverSvgCandidates）：有界抽取每包首份未加载 SVG，
- *    让专项橱窗与专题卡打开瞬间就能展示真实架构图，而非退回空线条。
- */
 
 import type { DecisionAssertion, FileRecord, ReadingState } from '../types/guanlan';
 import type { EventDayGroup, EventDaysResult } from '../services/apiTypes';
@@ -39,7 +22,6 @@ export interface PulseTrendBarInput {
   jumpable: boolean;
 }
 
-/** 与 buildChronosTodaySummary / computeTrunkAccumulation 同源的「新增/首次纳入」事件 kind。 */
 const PULSE_ADDED_KINDS = ['appeared', 'discovered', 'workspace_baseline'] as const;
 
 export const PULSE_CURVE_VIEWBOX_W = 480;
@@ -52,15 +34,10 @@ export interface PulseDayPoint {
   added: number;
   decision: number;
   evolved: number;
-  /** 该桶是否携带真实的 by_kind 明细；false 时渲染单色柱，不虚构拆分 */
   hasKindBreakdown: boolean;
-  /** 桶内独立决策数（含 decision_total 提示） */
   decisionTotal: number;
-  /** 桶内首条真实事件标题/文件名（悬浮提示用，无则 null） */
   sampleHeadline: string | null;
-  /** 窗口内从左至右累计事件数 */
   cumulative: number;
-  /** 累计曲线 SVG 坐标 */
   curveX: number;
   curveY: number;
 }
@@ -76,7 +53,6 @@ export interface PulseCompositionModel {
   avgPerActive: number;
   peakCount: number;
   peakDate: string | null;
-  /** 日均参考线距底部的百分比（0–100，用于柱图横向虚线定位） */
   avgLineBottomPct: number;
   cumulativePolyline: string;
   cumulativeArea: string;
@@ -219,7 +195,6 @@ export interface ReadingCoverageSlice {
   count: number;
   pct: number;
   color: string;
-  /** SVG 圆环弧长与起点偏移（半径 = READING_RING_RADIUS） */
   dashArray: string;
   dashOffset: number;
 }
@@ -322,7 +297,6 @@ export interface DecisionGaugeModel {
   conflictCount: number;
   pendingCount: number;
   resolvedCount: number;
-  /** 服务端全库未决总数中尚未水合明细的差额（诚实留白，绝不拿样本外推比例） */
   unloadedUnresolved: number;
   topUrgentDecisionId: string | null;
 }
@@ -374,7 +348,6 @@ export interface StageFlowNode {
   packageCount: number;
   docCount: number;
   eventCount: number;
-  /** 相对最重阶段的长度百分比（用于水平流条比例） */
   barWidthPct: number;
   topPackages: Array<{ id: string; name: string; docCount: number; leadFileId: string | null }>;
 }
@@ -477,7 +450,6 @@ export interface FormatAtlasEntry {
   unreadCount: number;
   sharePct: number;
   color: string;
-  /** 合并进「其它格式」时记录真实细项，悬浮提示可读 */
   collapsedDetails?: Array<{ label: string; count: number }>;
 }
 
@@ -586,7 +558,6 @@ export function pickHomeCoverSvgCandidates(
         file.revisions[file.revisions.length - 1];
       if (!rev?.revision_id) continue;
       seen.add(doc.fileId);
-      // 已经有正文时仍记为本包已就绪（不再多拉第二份 SVG），但无需入请求队列
       if (rev.svgSource === undefined) {
         out.push({ fileId: file.file_id, revisionId: rev.revision_id });
       }

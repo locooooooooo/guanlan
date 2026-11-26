@@ -45,7 +45,6 @@ export interface ContextCapsuleModalProps {
   isOpen: boolean;
   preset: CapsuleTargetPreset | null;
   onClose: () => void;
-  /** 若胶囊中的文件也在本机工作区中且未附带快照，可直接打开本机文档 */
   onOpenLocalDoc?: (fileId: string) => void;
 }
 
@@ -93,7 +92,6 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportReceipt, setExportReceipt] = useState<CapsuleExportResponse | null>(null);
 
-  // 另一台观澜秒开 / 校验状态
   const [inspectPath, setInspectPath] = useState('');
   const [inspectLoading, setInspectLoading] = useState(false);
   const [inspectError, setInspectError] = useState<string | null>(null);
@@ -103,7 +101,6 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
 
   const previewSeqRef = useRef(0);
 
-  // 每次打开按 preset 重置状态
   useEffect(() => {
     if (!isOpen) return;
     setTab(preset?.mode === 'inspect' ? 'inspect' : 'export');
@@ -122,7 +119,6 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
     setEvidenceReader(null);
   }, [isOpen, preset]);
 
-  // ESC 关闭
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -156,7 +152,6 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
     ]
   );
 
-  // 阶段一：参数变更自动重算预览并撤销旧确认态
   const runPreview = useCallback(async () => {
     const seq = ++previewSeqRef.current;
     setPreviewLoading(true);
@@ -321,15 +316,12 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
       className="glx-backdrop-in fixed inset-0 z-50 flex items-center justify-center bg-[color:var(--ink-anchor)]/40 dark:bg-black/62 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
-      {/* 与轻预览 / 命令面板统一琉璃浮层配方 + coss 嵌套景深栈（--nested-dialogs），明暗双态自适应。
-          门禁锚点（data-capsule-mode/confirm/submit、confirmed_preview: true）保持不变。 */}
       <div
         data-dialog-nested-stack=""
         style={{ '--nested-dialogs': 0 } as React.CSSProperties}
         className="glass-pop glx-popover-in flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-[var(--r-card)] border border-[color:var(--glass-hairline)] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 顶栏 */}
         <div className="flex items-center justify-between gap-3 border-b border-border/80 bg-card/80 px-5 py-3.5">
           <div className="flex items-center gap-2.5">
             <Package className="h-4.5 w-4.5 text-[color:var(--accent-iris)]" />
@@ -382,10 +374,8 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
           </div>
         </div>
 
-        {/* 内容区 */}
         {tab === 'export' ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4 space-y-4">
-            {/* 目标范围与选项 */}
             <div className="grid grid-cols-1 gap-3 rounded-xl border border-border/80 bg-muted/35 p-3.5 md:grid-cols-2">
               <div className="space-y-2">
                 <div className="text-[12px] font-medium text-foreground">
@@ -458,7 +448,6 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
               </div>
             </div>
 
-            {/* 预览统计卡 */}
             {previewLoading ? (
               <div className="flex items-center gap-2 rounded-xl border border-black/8 p-4 text-[13px] text-[color:var(--ink-soft)]">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -510,7 +499,6 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                   </div>
                 </div>
 
-                {/* 敏感告警条 */}
                 {preview.sensitive_warnings.length > 0 && (
                   <div className="rounded-xl border border-amber-300 bg-amber-50/90 px-3.5 py-2.5 text-[12px] text-amber-900">
                     <div className="flex items-center gap-1.5 font-medium">
@@ -525,7 +513,6 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                   </div>
                 )}
 
-                {/* 目录快捷开关 */}
                 {preview.dirs.length > 1 && (
                   <div className="flex flex-wrap items-center gap-1.5 text-[11.5px]">
                     <span className="text-[color:var(--ink-soft)]">按目录排除：</span>
@@ -549,7 +536,6 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                   </div>
                 )}
 
-                {/* 候选文件清单 */}
                 <div className="overflow-hidden rounded-xl border border-black/10">
                   <div className="flex items-center justify-between border-b border-black/8 bg-black/[0.02] px-3 py-2 text-[11.5px] text-[color:var(--ink-soft)]">
                     <span>预览打包清单（可逐项勾选调整，敏感目录默认取消勾选）</span>
@@ -605,7 +591,6 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                   </div>
                 </div>
 
-                {/* 输出目录与强制确认门禁 */}
                 <div className="space-y-2.5 rounded-xl border border-black/10 bg-black/[0.015] p-3.5">
                   <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
                     <label
@@ -639,7 +624,6 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
               </>
             ) : null}
 
-            {/* 导出错误或成功回执 */}
             {exportError && (
               <div className="rounded-xl border border-red-300 bg-red-50 px-3.5 py-2.5 text-[12.5px] text-red-700">
                 {exportError}
@@ -681,7 +665,6 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
             )}
           </div>
         ) : (
-          /* 另一台观澜秒开 / 校验标签页 */
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4 space-y-4">
             <div className="flex flex-col gap-2 sm:flex-row">
               <input
@@ -714,7 +697,6 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
 
             {inspectData && (
               <div className="space-y-3">
-                {/* 完整性与胶囊摘要 */}
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-black/10 bg-black/[0.02] px-4 py-3">
                   <div>
                     <div className="text-[14px] font-semibold text-[color:var(--ink-strong)]">
@@ -761,7 +743,6 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                   </div>
                 )}
 
-                {/* 子视图切换 */}
                 <div className="flex items-center gap-1.5 border-b border-black/8 pb-2 text-[12px]">
                   <button
                     type="button"
@@ -801,7 +782,6 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                   </button>
                 </div>
 
-                {/* 视图内容 */}
                 {inspectSection === 'timeline' && (
                   <div className="max-h-64 divide-y divide-black/6 overflow-y-auto rounded-xl border border-black/10">
                     {inspectData.manifest.events.length === 0 ? (
@@ -926,7 +906,6 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                   </div>
                 )}
 
-                {/* 证据跳转内联定位器 */}
                 {evidenceReader && (
                   <div className="rounded-xl border border-[color:var(--accent-iris)]/35 bg-black/[0.02] p-3">
                     <div className="flex items-center justify-between gap-2 pb-2 text-[12px]">
@@ -984,7 +963,6 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
           </div>
         )}
 
-        {/* 底部操作条（仅打包页显示） */}
         {tab === 'export' && (
           <div className="flex items-center justify-between gap-3 border-t border-black/8 px-5 py-3">
             <button

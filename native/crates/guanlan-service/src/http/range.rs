@@ -9,11 +9,8 @@
 /// Range 解析结果
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RangeOutcome {
-    /// 无 Range / 多区间 / 语法不可解析 → 按全量 200 返回（回退行为明确）
     Full,
-    /// 单区间（闭区间，含边界）
     Partial { start: u64, end: u64 },
-    /// 可解析但不可满足 → 416
     Unsatisfiable,
 }
 
@@ -33,7 +30,7 @@ pub fn parse_range(header_value: Option<&str>, len: u64) -> RangeOutcome {
         return RangeOutcome::Full; // 非 bytes 单位：忽略 Range（RFC 7233 允许）
     };
     if spec.contains(',') {
-        return RangeOutcome::Full; // 多区间：明确回退全量
+        return RangeOutcome::Full;
     }
     let Some((start_s, end_s)) = spec.split_once('-') else {
         return RangeOutcome::Full;
@@ -42,7 +39,6 @@ pub fn parse_range(header_value: Option<&str>, len: u64) -> RangeOutcome {
     let end_s = end_s.trim();
 
     if start_s.is_empty() {
-        // 后缀形式 bytes=-N：末 N 字节
         let Ok(suffix) = end_s.parse::<u64>() else {
             return RangeOutcome::Full;
         };
@@ -67,7 +63,6 @@ pub fn parse_range(header_value: Option<&str>, len: u64) -> RangeOutcome {
     } else {
         match end_s.parse::<u64>() {
             Ok(v) if v >= start => v.min(len - 1),
-            // end < start 或不可解析：按 RFC 视为不可满足
             _ => return RangeOutcome::Unsatisfiable,
         }
     };
@@ -96,13 +91,12 @@ pub fn if_none_match_hits(header_value: Option<&str>, etag: &str) -> bool {
 /// 支持 ETag 形式；HTTP-date 形式一律视为不匹配（我们不发布 Last-Modified）。
 pub fn if_range_matches(header_value: Option<&str>, etag: &str) -> bool {
     match header_value {
-        None => true, // 没有 If-Range：Range 照常生效
+        None => true,
         Some(raw) => {
             let raw = raw.trim();
             if raw.is_empty() {
                 return true;
             }
-            // HTTP-date（含字母星期/月份缩写或冒号）: 无 Last-Modified 可比 → 不匹配
             if raw.contains(':') || raw.contains("GMT") {
                 return false;
             }
@@ -139,7 +133,6 @@ mod tests {
                 end: 999
             }
         );
-        // end 超界按 len-1 截断
         assert_eq!(
             parse_range(Some("bytes=900-5000"), 1000),
             RangeOutcome::Partial {

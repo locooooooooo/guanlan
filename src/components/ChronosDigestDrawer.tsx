@@ -1,9 +1,3 @@
-/**
- * 「司辰手记」沉淀简报抽屉（coss Sheet inset + Tabs 切 今日 / 近 7 日 + 可溯源 Markdown 一键复制）。
- *
- * 全部条目源自真实 SQL 事件、版本链、决策断言与已排空 L4A 摘要（chronosDigest 纯函数引擎，零造数）；
- * 每条文档/决策均可一键点击直达原文溯源，支持一键复制标准 Markdown 日报/周报并经 AnchoredToast 反馈。
- */
 
 import React, { useMemo, useState } from 'react';
 import {
@@ -48,9 +42,7 @@ export interface ChronosDigestDrawerProps {
   decisions: DecisionAssertion[];
   onOpenDocument: (fileId: string, revisionId?: string) => void;
   onOpenDecision: (decisionId: string) => void;
-  /** 可选默认窗口档（测试可指定） */
   initialRange?: ChronosDigestRange;
-  /** 可选锚定日期 YYYY-MM-DD（测试可确定性锁定） */
   anchorDate?: string;
 }
 
@@ -116,13 +108,11 @@ export const ChronosDigestDrawer: React.FC<ChronosDigestDrawerProps> = ({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* coss Sheet (variant="inset") 悬浮抽屉材质 */}
       <div
         data-sheet-variant="inset"
         className="glx-drawer-in flex h-full w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border/85 bg-popover/95 text-foreground backdrop-blur-2xl"
         style={{ boxShadow: 'var(--glass-shadow-pop)' }}
       >
-        {/* 顶栏 */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/80 bg-card/85 px-6 py-4 backdrop-blur-md">
           <div className="flex items-center gap-2.5 min-w-0">
             <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-[color:color-mix(in_srgb,var(--accent-iris)_14%,transparent)] text-[color:var(--accent-iris-deep)]">
@@ -167,10 +157,8 @@ export const ChronosDigestDrawer: React.FC<ChronosDigestDrawerProps> = ({
           </div>
         </div>
 
-        {/* 正文滚动区 */}
         <ScrollArea scrollFade className="flex-1 min-h-0">
           <div className="space-y-4 p-6">
-            {/* 四项实数 KPI 摘要条 */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 font-mono tabular-nums">
               <div className="rounded-xl border border-border/75 bg-card/85 px-3 py-2.5">
                 <div className="font-sans text-[11px] text-muted-foreground">新增文档</div>
@@ -216,7 +204,6 @@ export const ChronosDigestDrawer: React.FC<ChronosDigestDrawerProps> = ({
               </Empty>
             ) : (
               <>
-                {/* 最活跃专项 Top 3 */}
                 {digest.topPackages.length > 0 && (
                   <Frame className="border border-border/75" data-digest-top-packages="">
                     <div className="flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-semibold text-foreground">
@@ -246,7 +233,6 @@ export const ChronosDigestDrawer: React.FC<ChronosDigestDrawerProps> = ({
                   </Frame>
                 )}
 
-                {/* 新增文档 */}
                 {digest.addedDocs.length > 0 && (
                   <Frame className="border border-border/75" data-digest-added-docs="">
                     <div className="flex items-center justify-between gap-2 px-3.5 py-2 text-[12px] font-semibold text-foreground">
@@ -297,7 +283,6 @@ export const ChronosDigestDrawer: React.FC<ChronosDigestDrawerProps> = ({
                   </Frame>
                 )}
 
-                {/* 演进文档 */}
                 {digest.evolvedDocs.length > 0 && (
                   <Frame className="border border-border/75" data-digest-evolved-docs="">
                     <div className="flex items-center justify-between gap-2 px-3.5 py-2 text-[12px] font-semibold text-foreground">
@@ -348,7 +333,6 @@ export const ChronosDigestDrawer: React.FC<ChronosDigestDrawerProps> = ({
                   </Frame>
                 )}
 
-                {/* 决策进展 */}
                 {(digest.resolvedDecisions.length > 0 || digest.pendingDecisions.length > 0) && (
                   <Frame className="border border-border/75" data-digest-decisions="">
                     <div className="flex items-center justify-between gap-2 px-3.5 py-2 text-[12px] font-semibold text-foreground">
@@ -414,7 +398,6 @@ export const ChronosDigestDrawer: React.FC<ChronosDigestDrawerProps> = ({
                   </Frame>
                 )}
 
-                {/* 可折叠 Markdown 源码核览 */}
                 <details className="rounded-xl border border-border/75 bg-muted/35 p-3">
                   <summary className="cursor-pointer select-none text-[11.5px] font-medium text-muted-foreground hover:text-foreground">
                     展开标准 Markdown 源码预览（带 guanlan:// 原文溯源链接）
@@ -431,7 +414,6 @@ export const ChronosDigestDrawer: React.FC<ChronosDigestDrawerProps> = ({
           </div>
         </ScrollArea>
 
-        {/* 底栏一键复制按钮 */}
         <div className="flex items-center justify-between gap-3 border-t border-border/80 bg-card/85 px-6 py-3.5 backdrop-blur-xl">
           <span className="text-[11px] text-muted-foreground">
             每条沉淀记录均附原文溯源路径 · 零造数本地直出

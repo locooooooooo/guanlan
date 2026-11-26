@@ -56,15 +56,10 @@ pub struct SseNotice {
 /// 任务类型（payload 内聚在变体里）
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobKind {
-    /// 整库核验：全量扫描并与持久库对账
     VerifyAll,
-    /// 增量对账：只核对给定相对路径（watcher 防抖后提交；≤2000 条）
     ChangedPaths(Vec<String>),
-    /// L4A 后台沉淀：出队 summary_jobs ≤3/轮 + 交错让位
     L4ASummary,
-    /// 专项目录登记：幂等覆盖 meta.initiative_dirs
     SetInitiativeDirs(Vec<String>),
-    /// 决策拍板回写（内部 kind，由 resolve 端点投递）
     DecisionWriteback {
         statement_id: String,
         decision: String,
@@ -74,13 +69,11 @@ pub enum JobKind {
         effective_date: Option<String>,
         note: Option<String>,
     },
-    /// 版本 diff（内部 kind；大计算异步入队）
     Diff {
         file_id: String,
         baseline_revision_id: String,
         target_revision_id: String,
     },
-    /// Agent 修订草案（内部 kind；CAS 初判 + 独立草案分支 `v(N+1)-agent-draft`）
     ProposeRevision {
         file_id: String,
         base_revision_id: String,
@@ -89,32 +82,31 @@ pub enum JobKind {
         input_context_hashes: Vec<String>,
         receipt_summary: Option<String>,
     },
-    /// 采纳草案（内部 kind）
-    AdoptDraft { draft_id: String },
-    /// 草案驳回/退回重做（内部 kind）
+    AdoptDraft {
+        draft_id: String,
+    },
     DismissDraft {
         draft_id: String,
         reason: Option<String>,
     },
-    /// 候选事项采纳（内部 kind；建正式 initiative + 归属固化）
-    AdoptCandidate { candidate_id: String },
-    /// 候选整簇否决（内部 kind；置 dismissed + 簇键排除）
-    DismissCandidate { candidate_id: String },
-    /// 候选单成员剔除（内部 kind；簇键排除 + 成员收缩，<2 则 dismissed）
+    AdoptCandidate {
+        candidate_id: String,
+    },
+    DismissCandidate {
+        candidate_id: String,
+    },
     ExcludeCandidateMember {
         candidate_id: String,
         file_id: String,
     },
-    /// 专项归档（内部 kind）
     ArchiveInitiative {
         initiative_id: String,
         note: Option<String>,
     },
-    /// 专项重开（内部 kind）
-    ReopenInitiative { initiative_id: String },
-    /// 派生检索索引一键重建（内部 kind；可随时丢弃重建，损坏自愈）
+    ReopenInitiative {
+        initiative_id: String,
+    },
     RebuildSearchIndex,
-    /// 批阅看板失联/孤儿节点人工修复（内部 kind；严禁跳过审阅直接完结）
     RepairOrphan {
         initiative_id: String,
         node_id: Option<String>,
@@ -169,7 +161,6 @@ impl JobKind {
         )
     }
 
-    /// 合并键：同类 active 任务间可合并的 kind 返回 Some(tag)
     fn merge_tag(&self) -> Option<&'static str> {
         match self {
             JobKind::VerifyAll => Some("verify_all"),
@@ -383,8 +374,6 @@ pub struct IndexJob {
     /// 已取消标记（四态模型下的取消口径：终态 failed + error=已取消；
     /// 活跃期 wire state 报 cancelled，见 `to_response`）
     pub cancelled: bool,
-    /// 协作式取消原子标志：由 `cancel()` 与 `signal_shutdown()` 共同置位，
-    /// 传进 `ReconcileOptions::cancel` 让长耗时采集/流式哈希在毫秒级安全中止。
     cancel_flag: Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -410,8 +399,6 @@ impl IndexJob {
 
     /// 转 wire 响应
     pub fn to_response(&self) -> IndexJobStatusResponse {
-        // 取消口径：活跃期被取消 → wire state 报 cancelled（任务
-        // 不再会执行）；已到终态的取消任务按其终态呈现（error 说明取消原因）
         let state = if self.cancelled && self.state.is_active() {
             "cancelled".to_owned()
         } else {
@@ -459,7 +446,6 @@ pub enum BatchFileOpCommand {
     Trash(BatchTrashFilesInput),
 }
 
-/// 写线程收到的命令（Run + CheckpointCommit + FileOp/FolderOp/CreateDoc/BatchFileOp 等）
 enum JobCommand {
     Run {
         job_id: String,
@@ -486,18 +472,15 @@ enum JobCommand {
         op: Box<BatchFileOpCommand>,
         reply: Sender<Result<BatchFileMutationResponse, GuanlanError>>,
     },
-    /// 更新工作区三档快照配额阈值（写 meta 表）
     UpdateStoragePolicy {
         text_max_mib: u64,
         binary_max_mib: u64,
         reply: Sender<Result<UpdateStoragePolicyResponse, GuanlanError>>,
     },
-    /// 存储瘦身 GC（严格保护决定/因果边证据快照，仅在唯一写线程执行）
     StorageGc {
         request: guanlan_core::storage::maintenance::StorageGcRequest,
         reply: Sender<Result<guanlan_core::storage::maintenance::StorageGcResponse, GuanlanError>>,
     },
-    /// 存量工作区批量确立已读基线 / 撤销还原（仅在唯一写线程单事务执行）
     BatchReadingState {
         request: guanlan_core::dto::ReadingStateBatchRequest,
         reply: Sender<Result<guanlan_core::dto::ReadingStateBatchResponse, GuanlanError>>,
@@ -510,7 +493,6 @@ enum JobCommand {
 pub struct IndexJobManager {
     sender: Sender<JobCommand>,
     jobs: Arc<Mutex<HashMap<String, IndexJob>>>,
-    /// 单执行槽（一次只有一个 job 在跑）+ 待执行队列（跨 kind 入队串行执行）
     running: Arc<Mutex<Option<String>>>,
     queued: Arc<Mutex<Vec<String>>>,
     shutting_down: Arc<std::sync::atomic::AtomicBool>,
@@ -662,10 +644,6 @@ impl IndexJobManager {
         let mut queued = self.queued.lock().expect("队列锁");
 
         if let Some(tag) = kind.merge_tag() {
-            // 同类 active 任务合并：先看执行槽，再看队列头。
-            // 关键：ChangedPaths 若已经在 Running，run_job 已克隆旧路径切片开始核验，
-            // 若强行并入 Running 任务而不新建 Queued 项，正在发生的二次保存会被静默丢弃；
-            // 因此 ChangedPaths 只允许并入尚在 Queued、且总路径数不超 2000 上限的待执行任务。
             let mut candidates: Vec<String> = Vec::new();
             if !matches!(kind, JobKind::ChangedPaths(_)) {
                 if let Some(job_id) = running.as_ref() {
@@ -683,7 +661,6 @@ impl IndexJobManager {
                 if matches!(kind, JobKind::ChangedPaths(_)) && job.state != JobState::Queued {
                     continue;
                 }
-                // 合并语义（仅在同类 active 任务间生效）
                 match &mut job.kind {
                     JobKind::ChangedPaths(existing) => {
                         if let JobKind::ChangedPaths(incoming) = &kind {
@@ -700,7 +677,6 @@ impl IndexJobManager {
                         }
                     }
                     JobKind::SetInitiativeDirs(existing) => {
-                        // 幂等覆盖
                         if let JobKind::SetInitiativeDirs(incoming) = &kind {
                             *existing = incoming.clone();
                         }
@@ -718,7 +694,6 @@ impl IndexJobManager {
         if running.is_none() {
             *running = Some(job_id.clone());
         }
-        // 通道断开只意味着写线程已退出：任务会永远停在 queued，属于服务异常
         if self
             .sender
             .send(JobCommand::Run {
@@ -920,11 +895,9 @@ impl IndexJobManager {
             job.error = Some("任务已取消（排队期立即生效）".to_owned());
             return Ok("cancelled".to_owned());
         }
-        // running：协作式——写线程阶段间隙检查 cancelled 标记后落终态
         Ok("cancelling".to_owned())
     }
 
-    /// 写线程内部：把取消落到终态（running 协作式取消的阶段间隙路径）
     fn finalize_cancellation(jobs: &Arc<Mutex<HashMap<String, IndexJob>>>, job_id: &str) {
         let mut guard = jobs.lock().expect("任务表锁");
         if let Some(job) = guard.get_mut(job_id) {
@@ -947,7 +920,6 @@ impl IndexJobManager {
         let mut recovered = 0;
         for row in rows {
             let Some(kind) = JobKind::from_request_json(&row.request_json) else {
-                // 无法重建的任务：标失败（孤儿闭合）
                 let _ = writer.upsert_job_run(&guanlan_core::storage::JobRunRow {
                     job_id: row.job_id.clone(),
                     workspace_id: workspace_id.to_owned(),
@@ -969,11 +941,8 @@ impl IndexJobManager {
     }
 }
 
-/// 写线程主循环
 #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
-/// L4A 空闲自动排空让位等待间隔（队列空闲 40ms 后处理 1 小批 ≤3 篇，任何交互写命令立抢占）
 const L4A_IDLE_DRAIN_MS: u64 = 40;
-/// 单条摘要任务最大重试次数（超限标 failed，根治缺失快照/频繁改写拖死 0% 队列）
 const L4A_MAX_ATTEMPTS: i64 = 3;
 
 fn has_pending_l4a(writer: &mut Writer) -> bool {
@@ -1032,8 +1001,6 @@ fn writer_loop(
         if shutting_down.load(std::sync::atomic::Ordering::Acquire) {
             break;
         }
-        // 优先服务显式写命令（拍板/文件操作/扫描永不被 L4A 饿死）；无命令且 L4A 有积压时
-        // 经 40ms 轻让位窗口逐批（≤3 篇）自动排空；排空后退回阻塞 recv()，闲置 CPU 0%。
         let command = match receiver.try_recv() {
             Ok(cmd) => Some(cmd),
             Err(mpsc::TryRecvError::Disconnected) => break,
@@ -1097,7 +1064,6 @@ fn writer_loop(
                     )));
                     continue;
                 }
-                // 同事务受理（校验→插行→事件→推进→recompute→回传）
                 let outcome = writer.transaction(|writer| {
                     guanlan_core::index::state_engine::commit_checkpoint(writer, &payload)
                 });
@@ -1267,7 +1233,6 @@ fn writer_loop(
     }
 }
 
-/// 执行一个任务（kind 分派；阶段间隙检查取消标记——协作式取消）
 #[allow(clippy::too_many_lines)]
 fn run_job(
     writer: &mut Writer,
@@ -1278,7 +1243,6 @@ fn run_job(
     notices: &Option<Sender<SseNotice>>,
     job_id: &str,
 ) {
-    // 取消标记已置位（排队期取消）或已进入停机：直接落终态
     let (kind, cancel_flag) = {
         let mut guard = jobs.lock().expect("任务表锁");
         let Some(job) = guard.get_mut(job_id) else {
@@ -1302,7 +1266,6 @@ fn run_job(
         job.phase = "running".to_owned();
     });
 
-    // 阶段间隙 1：执行前取消/停机检查
     if shutting_down.load(std::sync::atomic::Ordering::Acquire) {
         cancel_flag.store(true, std::sync::atomic::Ordering::Release);
     }
@@ -1313,7 +1276,6 @@ fn run_job(
     }
 
     let outcome = execute_job(writer, &kind, Arc::clone(&cancel_flag));
-    // 阶段间隙 2：执行后取消检查（协作式——执行已完成的不再回滚，如实按结果落态）
     if outcome.is_ok() && is_cancelled(jobs, job_id) {
         IndexJobManager::finalize_cancellation(jobs, job_id);
     }
@@ -1370,7 +1332,6 @@ fn run_job(
     finish_slot(running, queued, job_id);
 }
 
-/// 执行槽推进：当前任务完成 → 队列头补位（串行执行）
 fn finish_slot(
     running: &Arc<Mutex<Option<String>>>,
     queued: &Arc<Mutex<Vec<String>>>,
@@ -1381,7 +1342,6 @@ fn finish_slot(
     if running.as_deref() == Some(job_id) {
         *running = None;
     }
-    // 队列头已在 submit 时发送 Run：此处仅清残留
     queued.retain(|id| id != job_id);
 }
 
@@ -1393,9 +1353,6 @@ fn is_cancelled(jobs: &Arc<Mutex<HashMap<String, IndexJob>>>, job_id: &str) -> b
         .unwrap_or(false)
 }
 
-/// 候选事项重扫编织：库内收集 → 多信号纯函数聚类 → 排除表过滤 → 落库。
-/// 在 VerifyAll / ChangedPaths 对账完成后调用；幂等（同簇键同 id），排除表保证
-/// "误聚项剔除后重扫不反弹"。
 fn reweave_candidate_clusters(
     writer: &mut Writer,
     workspace_id: &str,
@@ -1454,8 +1411,6 @@ fn reweave_candidate_clusters(
     Ok(rows.len())
 }
 
-/// 候选采纳：建/并入正式 initiative → 候选置 adopted → 事件 → 收尾重算
-/// （成员归属经 `adopted_candidate_map` 在状态机固化，路径规则让位）
 fn execute_candidate_adopt(
     writer: &mut Writer,
     candidate_id: &str,
@@ -1475,7 +1430,6 @@ fn execute_candidate_adopt(
     let now = guanlan_core::index::clock::now_iso();
     let initiative_id = initiative_id_of(&candidate.row.title);
 
-    // 采纳 = 建正式事项（同名 root_dir 已存在则并入，不篡改其既有状态）
     let existing = writer.find_initiative_by_root_dir(&workspace_id, &candidate.row.title)?;
     let (created_at, current_stage, state, artifact_count) = match &existing {
         Some(row) => (
@@ -1531,7 +1485,6 @@ fn execute_candidate_adopt(
         Ok(())
     })?;
 
-    // 收尾状态机重算：adopted 映射在此轮固化成员归属
     let outcome = guanlan_core::index::state_engine::state_machine_recompute(
         writer,
         &workspace_id,
@@ -1548,7 +1501,6 @@ fn execute_candidate_adopt(
     }))
 }
 
-/// 候选整簇否决：置 dismissed + 簇内两两信号对排除（重扫不反弹）
 fn execute_candidate_dismiss(
     writer: &mut Writer,
     candidate_id: &str,
@@ -1564,7 +1516,6 @@ fn execute_candidate_dismiss(
         .iter()
         .map(|m| m.file_id.clone())
         .collect();
-    // 两两规范化对（≤24 成员 → ≤276 行，一次性写入）
     let mut pairs: Vec<(String, String)> = Vec::new();
     for i in 0..member_ids.len() {
         for j in (i + 1)..member_ids.len() {
@@ -1610,7 +1561,6 @@ fn execute_candidate_dismiss(
     }))
 }
 
-/// 候选单成员剔除：与簇内其余成员两两排除 + 成员收缩（不足 2 人则簇失效）
 fn execute_candidate_exclude(
     writer: &mut Writer,
     candidate_id: &str,
@@ -1640,7 +1590,6 @@ fn execute_candidate_exclude(
     let remaining = others.len();
     let dissolved = remaining < 2;
     if dissolved {
-        // 簇失效：剩余成员两两也排除，重扫不再生成
         for i in 0..others.len() {
             for j in (i + 1)..others.len() {
                 pairs.push((others[i].clone(), others[j].clone()));
@@ -1704,7 +1653,6 @@ fn execute_candidate_exclude(
     }))
 }
 
-/// 各 kind 的执行体：返回 (统计报告, 结果分支, SSE kinds)
 #[allow(clippy::type_complexity, clippy::too_many_lines)]
 fn execute_job(
     writer: &mut Writer,
@@ -1724,7 +1672,6 @@ fn execute_job(
             options.cancel = Some(Arc::clone(&cancel_flag));
             let report = reconcile(writer, &options)?;
             enqueue_l4a(writer, &report.changed_file_ids)?;
-            // 事务已提交完成后若收到停机/取消信号，跳过可重算的候选聚类编织以尽快退出
             let clusters = if cancel_flag.load(std::sync::atomic::Ordering::Acquire) {
                 0
             } else {
@@ -1790,7 +1737,6 @@ fn execute_job(
                 ));
             }
             writer.set_initiative_dirs(dirs)?;
-            // 登记后立即重算（新识别规则生效；幂等重算无迁移则零事件）
             let mut options = ReconcileOptions::from_env();
             options.cancel = Some(cancel_flag);
             let report = reconcile(writer, &options)?;
@@ -1820,8 +1766,6 @@ fn execute_job(
                 note: note.clone(),
             };
             let outcome = apply_decision_writeback(writer, &input)?;
-            // CAS 失败同样是 completed（『处理拍板请求』已成功），
-            // error/failed_items 恒空
             let result = serde_json::json!({
                 "writeback": {
                     "cas_ok": outcome.cas_ok,
@@ -1876,8 +1820,6 @@ fn execute_job(
         }
         JobKind::AdoptDraft { draft_id } => {
             let result = execute_adopt(writer, draft_id)?;
-            // proposal=草案状态变化；state=落版状态机重算；task=采纳后自动检查点
-            // 可能推进执行槽（checkpoint_committed / task_node_moved 消费方）
             let mut kinds = vec!["proposal".to_owned()];
             kinds.push("state".to_owned());
             kinds.push("task".to_owned());
@@ -1907,7 +1849,6 @@ fn execute_job(
             ))
         }
         JobKind::RebuildSearchIndex => {
-            // 派生检索索引一键重建（可随时丢弃重建；派生变化不推代际）
             let ws_id = writer.workspace()?.workspace_id;
             let outcome = guanlan_core::index::search_index::rebuild_all(writer, &ws_id)?;
             let result = serde_json::json!({
@@ -1951,7 +1892,6 @@ fn execute_job(
     }
 }
 
-/// ReconcileReport → IndexJobReport（wire 统计摘要）
 fn to_index_job_report(report: &guanlan_core::index::ReconcileReport) -> IndexJobReport {
     IndexJobReport {
         scanned: report.scanned as u64,
@@ -1976,7 +1916,6 @@ fn to_index_job_report(report: &guanlan_core::index::ReconcileReport) -> IndexJo
     }
 }
 
-/// SSE kinds：报告里的状态机迁移事件种类 → state/task
 fn sse_kinds_from_report(report: &guanlan_core::index::ReconcileReport) -> Vec<String> {
     let mut kinds: Vec<String> = Vec::new();
     for kind in &report.state_event_kinds {
@@ -1989,7 +1928,6 @@ fn sse_kinds_from_report(report: &guanlan_core::index::ReconcileReport) -> Vec<S
     kinds
 }
 
-/// L4A 入队：本轮出现新版本的 md 文件 → summary_jobs 幂等登记（契约 §3.4）
 fn enqueue_l4a(writer: &mut Writer, file_ids: &[String]) -> Result<(), GuanlanError> {
     let workspace_id = writer.workspace()?.workspace_id;
     let now = guanlan_core::index::clock::now_iso();
@@ -2022,8 +1960,6 @@ fn enqueue_l4a(writer: &mut Writer, file_ids: &[String]) -> Result<(), GuanlanEr
     })
 }
 
-/// L4A 批处理：出队 ≤3/轮 + 交错让位（单写线程内限批 ≤3，吞吐受限但正确性优先）；
-/// 确定性本地摘要（generated_by='local_deterministic'）
 fn process_l4a_batch(writer: &mut Writer) -> Result<serde_json::Value, GuanlanError> {
     let workspace_id = writer.workspace()?.workspace_id;
     let pending_rows = writer.list_pending_summary_jobs(&workspace_id, 3)?;
@@ -2031,12 +1967,9 @@ fn process_l4a_batch(writer: &mut Writer) -> Result<serde_json::Value, GuanlanEr
     let mut failed: Vec<String> = Vec::new();
     let now = guanlan_core::index::clock::now_iso();
     for row in pending_rows {
-        // 交错让位：每条之间检查剩余任务（让后续命令插队由 mpsc 天然保证——
-        // 本函数只处理 ≤3 条即返回）
         let next_attempts = row.attempts + 1;
         let revision = writer.latest_revision(&row.file_id)?;
         let Some(revision) = revision else {
-            // 文件已无有效版本：标 failed 退出排队，避免死循环卡住队列
             writer.upsert_summary_job(&guanlan_core::storage::SummaryJobRow {
                 job_id: row.job_id.clone(),
                 workspace_id: workspace_id.clone(),
@@ -2053,7 +1986,6 @@ fn process_l4a_batch(writer: &mut Writer) -> Result<serde_json::Value, GuanlanEr
             continue;
         };
         if revision.content_hash != row.content_hash {
-            // 内容又变了：更新哈希重新排队（超重试上限标 failed 防死循环）
             let next_state = if next_attempts >= L4A_MAX_ATTEMPTS {
                 failed.push(row.file_id.clone());
                 "failed"
@@ -2075,7 +2007,6 @@ fn process_l4a_batch(writer: &mut Writer) -> Result<serde_json::Value, GuanlanEr
             continue;
         }
         let Some(bytes) = writer.read_snapshot(&revision.content_hash) else {
-            // 快照缺失或配额淘汰（metadata_only）：标 failed 退出排队，绝不无限滞留 queued
             writer.upsert_summary_job(&guanlan_core::storage::SummaryJobRow {
                 job_id: row.job_id.clone(),
                 workspace_id: workspace_id.clone(),
@@ -2115,7 +2046,6 @@ fn process_l4a_batch(writer: &mut Writer) -> Result<serde_json::Value, GuanlanEr
     }))
 }
 
-/// diff 执行体：两版快照（8MiB 上限）→ LCS → 语义摘要卡
 fn execute_diff(
     writer: &mut Writer,
     file_id: &str,
@@ -2164,7 +2094,6 @@ fn execute_diff(
         &baseline_statements,
         &target_statements,
     );
-    // checkpoint_id：该文件所属专项最近一次 SUCCESS（版本生成溯源）
     let checkpoint_id = writer
         .get_artifact_state(file_id)?
         .and_then(|artifact| artifact.initiative_id)
@@ -2180,7 +2109,6 @@ fn execute_diff(
         })
         .flatten();
     let _ = (baseline_row, target_row);
-    // 分块：sections 超 20 块 → next_cursor（offset 游标）
     const SECTION_PAGE: usize = 20;
     let (page, next_cursor) = if result.sections.len() > SECTION_PAGE {
         (
@@ -2222,9 +2150,6 @@ fn execute_diff(
     }))
 }
 
-/// Agent 草案受理：CAS 初判 + 独立草案分支 `v(N+1)-agent-draft`
-/// 落库 + proposal_raised 事件，**绝不直接写入工作区磁盘原稿**。
-/// conflict=true（cas_ok=false）= agent-draft 冲突分支，revision_drafts.conflict=1。
 fn execute_propose(
     writer: &mut Writer,
     file_id: &str,
@@ -2238,7 +2163,6 @@ fn execute_propose(
         draft_version_label, evaluate_proposal_cas, normalize_context_hashes,
         normalize_receipt_summary, serialize_context_hashes,
     };
-    // archived 主体守卫
     guanlan_core::index::writeback::ensure_not_archived(writer, file_id)?;
     let workspace = writer.workspace()?;
     let file = writer
@@ -2261,7 +2185,6 @@ fn execute_propose(
     let context_hashes_json = serialize_context_hashes(&context_hashes);
     let receipt_summary = normalize_receipt_summary(raw_receipt_summary);
 
-    // 受理初判预览（权威结果在本 job report.proposal；绝不触碰工作区原稿，且强制校验路径沙箱边界）
     let disk_hash = match guanlan_core::storage::sandbox::resolve_workspace_file_in_jail(
         &workspace.root_path,
         &file.current_path,
@@ -2396,12 +2319,6 @@ fn execute_propose(
     }))
 }
 
-/// 采纳草案：
-/// 1. 严格 CAS（磁盘哈希 == 草案基准哈希；偏离即标 `conflict=1` 并中止，绝不覆盖人工编辑）；
-/// 2. 写盘前把磁盘原稿字节留档至 `blobs/`（受控备份护栏，随时可无损回滚）；
-/// 3. 草案内容原子写入工作区 → 单路径对账推进正式版本号（`v(N+1)`）与状态机重算；
-/// 4. 按 `input_context_hashes`（及基准版兜底）在 `edges` 写入 `derived_from_context` 因果边；
-/// 5. 标记 `draft.status = adopted` 并提交执行槽自动检查点。
 fn execute_adopt(writer: &mut Writer, draft_id: &str) -> Result<serde_json::Value, GuanlanError> {
     use guanlan_core::application::proposals::{
         build_derived_context_edges, evaluate_proposal_cas, parse_context_hashes_json,
@@ -2423,7 +2340,6 @@ fn execute_adopt(writer: &mut Writer, draft_id: &str) -> Result<serde_json::Valu
     let file = writer
         .get_file(&draft.file_id)?
         .ok_or_else(|| GuanlanError::NotFound(format!("未找到文件 {}", draft.file_id)))?;
-    // archived 主体守卫 + 路径沙箱越界守卫（严禁写入授权工作区外部）
     guanlan_core::index::writeback::ensure_not_archived(writer, &draft.file_id)?;
     let disk_path = guanlan_core::storage::sandbox::resolve_workspace_file_in_jail(
         &workspace.root_path,
@@ -2441,7 +2357,6 @@ fn execute_adopt(writer: &mut Writer, draft_id: &str) -> Result<serde_json::Valu
             expected_content_hash,
             disk_content_hash,
         } => {
-            // CAS 冲突：绝不触碰磁盘，实时把草案标为 conflict=1 以便 UI 醒目提示
             if draft.conflict == 0 {
                 let _ = mark_draft_conflict(writer, draft_id);
             }
@@ -2459,7 +2374,6 @@ fn execute_adopt(writer: &mut Writer, draft_id: &str) -> Result<serde_json::Valu
             }));
         }
         ProposalCasVerdict::NoOp => {
-            // 草案内容与磁盘一致：仅关闭草案，不造空版本
             mark_draft(writer, draft_id, "adopted", None)?;
             return Ok(serde_json::json!({
                 "adopt": {
@@ -2474,7 +2388,6 @@ fn execute_adopt(writer: &mut Writer, draft_id: &str) -> Result<serde_json::Valu
         ProposalCasVerdict::Clean => {}
     }
 
-    // 写盘前受控备份护栏：确保覆盖前磁盘原稿字节已落入私有 blobs/（供瞬间回滚）
     if let Some(orig_bytes) = disk_bytes.as_deref() {
         if !disk_hash.is_empty() {
             let _ = writer.write_snapshot_bytes(orig_bytes, &disk_hash);
@@ -2493,7 +2406,6 @@ fn execute_adopt(writer: &mut Writer, draft_id: &str) -> Result<serde_json::Valu
         .filter(|row| row.content_hash == proposed_hash)
         .map(|row| row.revision_id);
 
-    // 采纳后将输入上下文哈希清单解析为 `edges(kind = 'derived_from_context')` 因果边
     let context_hashes = parse_context_hashes_json(&draft.input_context_hashes_json);
     let mut derived_edges_written: usize = 0;
     if let Some(new_rev_id) = new_revision_id.as_deref() {
@@ -2509,7 +2421,6 @@ fn execute_adopt(writer: &mut Writer, draft_id: &str) -> Result<serde_json::Valu
                 });
             }
         }
-        // 至少保留一条指向基准版的因果锚点（即使未显式传其他上游上下文哈希）
         targets.push(DerivedContextTarget {
             file_id: draft.file_id.clone(),
             revision_id: draft.base_revision_id.clone(),
@@ -2575,9 +2486,6 @@ fn execute_adopt(writer: &mut Writer, draft_id: &str) -> Result<serde_json::Valu
     }
 
     mark_draft(writer, draft_id, "adopted", None)?;
-    // 采纳落版后同写线程顺序自动提交执行槽 SUCCESS checkpoint（同轮询窗口内可见），
-    // 以满足外部 Agent 经 MCP 回写后快速生成新版本 Checkpoint 与 Diff 提示的要求。
-    // checkpoint 为采纳的副作用产物：提交失败不回滚采纳结果，错误如实落报告。
     let checkpoint_context_hash = context_hashes
         .first()
         .map(String::as_str)
@@ -2601,10 +2509,6 @@ fn execute_adopt(writer: &mut Writer, draft_id: &str) -> Result<serde_json::Valu
     }))
 }
 
-/// 采纳后自动检查点：文件属专项目录时按 (initiative, 执行槽) 提交 SUCCESS
-/// checkpoint（基准哈希为 input_context_hash，落版 id 为 output_revision_id；
-/// node_id 缺省由服务端按 (initiative_id, stage) 反查槽位推进）。非专项目录文件 → null
-/// （诚实缺省）；提交失败 → {error}（受理侧 404/400 文案透传，不静默）。
 fn auto_checkpoint_after_adopt(
     writer: &mut Writer,
     workspace_id: &str,
@@ -2630,8 +2534,6 @@ fn auto_checkpoint_after_adopt(
         note: Some("采纳修订草案自动落检查点".to_owned()),
         created_at: guanlan_core::index::clock::now_iso(),
     };
-    // commit_checkpoint 要求同事务受理。adopt 主流程不在事务内，
-    // 这里自开一事务——失败只影响 checkpoint 产物本身，不回滚已落版结果。
     match writer.transaction(|tx| guanlan_core::index::state_engine::commit_checkpoint(tx, &input))
     {
         Ok(outcome) => serde_json::json!({
@@ -2642,7 +2544,6 @@ fn auto_checkpoint_after_adopt(
     }
 }
 
-/// 草案退回重做（绝不触碰磁盘原稿，记录退回理由并写 `proposal_dismissed` 审计事件）
 fn execute_dismiss(
     writer: &mut Writer,
     draft_id: &str,
@@ -2771,14 +2672,11 @@ fn mark_draft_conflict(writer: &mut Writer, draft_id: &str) -> Result<(), Guanla
     Ok(())
 }
 
-/// 工作区文件原子写入（writeback 同款管线；service 侧复用入口）
 fn write_workspace_file(
     target: &std::path::Path,
     content: &[u8],
     expected_hash: &str,
 ) -> Result<(), GuanlanError> {
-    // 复用 core 回写模块的原名写入管线：经 pub 入口不可达（模块内私有），
-    // 这里以内联等价实现（临时文件→重读校验→同卷改名）
     use std::io::Read;
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -2807,8 +2705,6 @@ fn write_workspace_file(
     })
 }
 
-/// 专项归档：显式写 archived + 事件 + recompute；
-/// 非 Delivered 态 report.warn='当前非已交付态'
 fn execute_archive(
     writer: &mut Writer,
     initiative_id: &str,
@@ -2824,13 +2720,11 @@ fn execute_archive(
     let workspace_id = workspace.workspace_id.clone();
     let mut artifact_ids: Vec<String> = Vec::new();
     writer.transaction(|writer| {
-        // 显式写（user_accepted 唯一来源=archive 写线程置位）
         writer.upsert_initiative(&guanlan_core::storage::InitiativeRow {
             state: "archived".to_owned(),
             updated_at: now.clone(),
             ..initiative.clone()
         })?;
-        // 其 artifacts → archived（下一轮 recompute 从持久 archived 出发保持终态）
         for state_row in writer.list_artifact_states(&workspace_id)? {
             if state_row.initiative_id.as_deref() == Some(initiative_id) {
                 artifact_ids.push(state_row.file_id.clone());
@@ -2880,7 +2774,6 @@ fn execute_archive(
         })?;
         Ok(())
     })?;
-    // recompute：从持久 archived 出发幂等保持（无新迁移事件）
     let workspace_id = writer.workspace()?.workspace_id;
     state_machine_recompute(writer, &workspace_id, &recompute_at, &[])?;
     let mut result = serde_json::json!({
@@ -2896,8 +2789,6 @@ fn execute_archive(
     Ok(result)
 }
 
-/// 专项重开：archived → 显式回退 draft（按 StateSignals 的重算由
-/// recompute 完成）+ initiative_reopened 事件
 fn execute_reopen(
     writer: &mut Writer,
     initiative_id: &str,
@@ -2970,7 +2861,6 @@ fn execute_reopen(
     }))
 }
 
-/// job_runs 持久化（状态迁移 UPSERT；失败静默——持久化不得阻断任务语义）
 fn persist_job_run(
     writer: &mut Writer,
     jobs: &Arc<Mutex<HashMap<String, IndexJob>>>,
@@ -3008,7 +2898,6 @@ fn persist_job_run(
     });
 }
 
-/// SSE 桥回传
 fn publish_notice(
     notices: &Option<Sender<SseNotice>>,
     jobs: &Arc<Mutex<HashMap<String, IndexJob>>>,
@@ -3041,7 +2930,6 @@ fn publish_notice(
     let _ = sender.send(notice);
 }
 
-/// 更新任务状态
 fn update(
     jobs: &Arc<Mutex<HashMap<String, IndexJob>>>,
     job_id: &str,
@@ -3053,7 +2941,6 @@ fn update(
     }
 }
 
-/// 任务 id（进程号 + 纳秒时钟 + 计数器）
 fn new_job_id() -> String {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -3082,7 +2969,6 @@ mod tests {
             JobKind::parse("set_initiative_dirs"),
             Some(JobKind::SetInitiativeDirs(Vec::new()))
         );
-        // 内部 kind 直提 400（parse 返回 None）
         assert_eq!(JobKind::parse("decision_writeback"), None);
         assert_eq!(JobKind::parse("propose_revision"), None);
         assert_eq!(JobKind::parse("adopt_draft"), None);
@@ -3165,7 +3051,6 @@ mod tests {
 
     #[test]
     fn merge_tags_only_for_verified_kinds() {
-        // 跨 kind 永不合并——只有三类可合并
         assert!(JobKind::VerifyAll.merge_tag().is_some());
         assert!(JobKind::ChangedPaths(vec![]).merge_tag().is_some());
         assert!(JobKind::SetInitiativeDirs(vec![]).merge_tag().is_some());
@@ -3212,7 +3097,6 @@ mod tests {
             writer_thread: Arc::new(Mutex::new(None)),
         };
 
-        // 第 1 批入队后立即进入 Running（模拟 run_job 已克隆旧路径开始对账）
         let (id1, merged1, _) = mgr.submit_kind(JobKind::ChangedPaths(vec!["a.md".to_owned()]));
         assert!(!merged1);
         {
@@ -3221,12 +3105,10 @@ mod tests {
             job.state = JobState::Running;
         }
 
-        // Running 期间新保存到达 → 必须新排 Queued 后续任务，绝不往已运行的 id1 里合并
         let (id2, merged2, _) = mgr.submit_kind(JobKind::ChangedPaths(vec!["a.md".to_owned()]));
         assert!(!merged2);
         assert_ne!(id1, id2);
 
-        // 在第 2 批还处于 Queued 时，第 3 批到达 → 合并去重到 id2
         let (id3, merged3, _) = mgr.submit_kind(JobKind::ChangedPaths(vec![
             "a.md".to_owned(),
             "b.md".to_owned(),
@@ -3260,7 +3142,6 @@ mod tests {
         let ws = base.0.join("ws");
         let data = base.0.join("data");
         std::fs::create_dir_all(&ws).expect("建工作区");
-        // 写入 6 × 16 MiB = 96 MiB 大文件（模拟含大视频的工作区：debug 下完整 SHA-256 需数秒）
         let chunk = vec![0xA5u8; 1024 * 1024];
         for i in 0..6 {
             let mut f =
@@ -3274,7 +3155,6 @@ mod tests {
         let mgr = IndexJobManager::start(writer);
         let (job_id, _, _) = mgr.submit_kind(JobKind::VerifyAll);
 
-        // 等待写线程进入 Running 态（已开始采集与流式哈希）
         let wait_start = std::time::Instant::now();
         while wait_start.elapsed() < std::time::Duration::from_secs(3) {
             if mgr

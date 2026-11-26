@@ -1,32 +1,4 @@
 #!/usr/bin/env node
-/**
- * 生成 THIRD_PARTY_NOTICES：随观澜 Windows 桌面版分发的第三方组件的许可索引。
- *
- * 用法（在仓库根目录执行；需要先 npm ci，并找得到 cargo）：
- *   npm run notices                                   重新生成 THIRD_PARTY_NOTICES
- *   node scripts/gen-third-party-notices.mjs --check  只核对；它与重新生成的结果不同时以 1 退出
- *
- * 两边各取什么，为什么：
- * - 前端以生产构建为准：在内存里跑一遍 `npm run build` 所用的构建（不写 dist/），模块出现在 JS 产物里
- *   的 npm 包都列入，由包里的文件原样发出的资源（字体、图片）也算。应用代码按名字导入、自己却没有
- *   代码进产物的包也列并注明（入口包只做转发时就是这样，例如 d3 只转出各个 d3-* 包）。不按
- *   package-lock.json 的 dev 标记取：那个标记只区分「是不是只被开发依赖引用」，打包器与各个平台的
- *   原生二进制包都算非 dev，按它取会列出许多并不进发行包的包。
- * - Tailwind 生成的样式表不是模块图里的节点，却把 tailwindcss 包里的 preflight 与主题变量整段带进了
- *   dist 的 CSS，所以构建里挂着 @tailwindcss/vite 插件时单独列一行并注明。
- * - Rust 取 cargo tree 在 x86_64-pc-windows-msvc 目标上、沿普通依赖与构建依赖数出来的 crate：不含
- *   只在测试里用的开发依赖，也不含本仓库自己的 crate。其中有一部分只在构建时参与、不进发行包，
- *   一并列出，宁多勿漏。许可取 cargo metadata 的 license 字段。
- *
- * 任何一项取不到（锁文件里没有这个包、包没有声明许可、打包器没有给出模块清单）都报错停下，
- * 不拿空值或猜的许可生成文件：一份不准确的许可声明比没有声明更误导。
- *
- * 文件末尾记着两份锁文件与两张表各自的 SHA-256。test/third-party-notices.test.ts 随 npm test 核对
- * 它们：锁文件的变了说明依赖变了，表的变了说明有人手工改过。所以依赖有变化后要重新生成，并与
- * 锁文件一起提交。
- *
- * 中间的纯函数与格式化导出给 test/third-party-notices.test.ts；被导入时不执行生成。
- */
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -37,18 +9,14 @@ import { findCargo, isKnownBuildFlake } from './gate.mjs';
 
 const SCRIPT = fileURLToPath(import.meta.url);
 const REPO = path.resolve(path.dirname(SCRIPT), '..');
-/** 发行包只有 Windows x64，清单也只按这个目标取。 */
 const TARGET = 'x86_64-pc-windows-msvc';
 const OUTPUT = 'THIRD_PARTY_NOTICES';
-/** 锁文件：相对仓库根的路径，以及在「来源」一节里显示的名字。 */
 const LOCKFILES = [
   { file: 'package-lock.json', label: 'package-lock.json' },
   { file: path.join('native', 'Cargo.lock'), label: 'native/Cargo.lock' },
 ];
 const NAME_WIDTH = 34;
-/** 带构建元数据的版本号（如 1.2.1+spec-1.1.0）有 16 个字符，列宽要容得下它。 */
 const VERSION_WIDTH = 18;
-/** SQLite 的源码不在许可一栏里，要单独说明的那一句。 */
 const SQLITE_CRATE = 'libsqlite3-sys';
 const SQLITE_NOTE = 'rusqlite 启用了 bundled 特性';
 const TAILWIND_NOTE = '样式表 dist/assets/*.css 由它生成';
@@ -63,7 +31,6 @@ const USAGE = `生成 THIRD_PARTY_NOTICES（第三方组件的许可索引）
 需要先 npm ci，并找得到 cargo（PATH 上没有时去 $CARGO_HOME/bin 与 ~/.cargo/bin 找）。
 `;
 
-// ---------- 可被测试的纯函数 ----------
 
 /**
  * 一条 `cargo tree --prefix none` 的输出是 `名字 v版本`，后面可能跟着 (proc-macro)、去重标记 (*)，
@@ -84,11 +51,9 @@ export function parseCargoTreeLine(line) {
  * @param {string} repo 仓库根目录
  */
 export function packageOfModuleId(id, repo) {
-  // 以 \0 开头的是插件生成的虚拟模块，不对应包里的文件
   if (id.includes('\0')) return null;
   const file = id.replace(/\\/g, '/').replace(/[?#].*$/, '');
   const base = repo.replace(/\\/g, '/').replace(/\/$/, '');
-  // Windows 的路径不分大小写，打包器报回来的盘符大小写未必与本进程一致
   const fold = (text) => (process.platform === 'win32' ? text.toLowerCase() : text);
   const start = fold(file).startsWith(`${fold(base)}/`) ? base.length + 1 : 0;
   const first = file.indexOf('node_modules/', start);
@@ -120,13 +85,6 @@ export function fingerprint(content) {
 const byNameAndVersion = (a, b) =>
   a.name < b.name ? -1 : a.name > b.name ? 1 : a.version < b.version ? -1 : a.version > b.version ? 1 : 0;
 
-/**
- * 锁文件里的一个条目写成一行。条目不存在或许可缺失都报错：这时需要人去查清，而不是写一个空值。
- * @param {{ packages?: Record<string, { version?: string, license?: string }> }} lock
- * @param {string} key
- * @param {string} [note]
- * @returns {NoticeRow}
- */
 function rowFromLock(lock, key, note) {
   const entry = lock.packages?.[key];
   if (!entry) {
@@ -162,12 +120,9 @@ export function npmRowsFromLock(lock, moduleIds, assetNames, pluginNames, repo, 
     if (key) keys.add(key);
   }
   const rows = [...keys].map((key) => rowFromLock(lock, key));
-  // 样式表不是模块图里的节点，所以不能靠模块 id 发现它
   if (pluginNames.some((name) => name.startsWith('@tailwindcss/vite'))) {
     rows.push(rowFromLock(lock, 'node_modules/tailwindcss', TAILWIND_NOTE));
   }
-  // 应用代码按名字导入的包也要有：入口包自己可能一行代码都不进产物（d3 只转出各个 d3-* 包），
-  // 读清单的人却是对着 package.json 的依赖逐个找的。已经有代码在产物里的不重复列。
   for (const id of directImports) {
     const key = packageOfModuleId(id, repo);
     if (key && !keys.has(key)) {
@@ -206,7 +161,6 @@ export function rustRowsFrom(tree, metadata) {
   return { rows: [...rows.values()].sort(byNameAndVersion), bundledSqlite };
 }
 
-/** 终端里的显示宽度下把文字补到指定宽度：中日韩字符占两格，按字符数补空格会和下面的行错开。 */
 function displayPad(text, width) {
   const shown = [...text].reduce((sum, char) => sum + (char.codePointAt(0) >= 0x1100 ? 2 : 1), 0);
   return text + ' '.repeat(Math.max(0, width - shown));
@@ -226,10 +180,6 @@ export function rowsDigest(rows) {
   return createHash('sha256').update(lines.join('\n'), 'utf8').digest('hex');
 }
 
-/**
- * 一行一个组件。名字与版本按固定宽度对齐，超宽的不截断，只是后面少几个空格。
- * @param {NoticeRow[]} rows
- */
 function formatRows(rows) {
   return rows
     .map(
@@ -331,7 +281,6 @@ export function parseNotices(text) {
   let current = '';
   let inRows = false;
   for (const line of text.replace(/\r\n/g, '\n').split('\n')) {
-    // 「来源」一节里以「一、」「二、」开头的摘要行不是新的一节，所以先判它
     if (current === 'source') {
       const match = /^(.+?) +sha256:([0-9a-f]{64})$/.exec(line);
       if (match) hashes[match[1]] = match[2];
@@ -344,7 +293,6 @@ export function parseNotices(text) {
     } else if (/^来源$/.test(line)) {
       current = 'source';
     } else if (current !== '' && /^-/.test(line)) {
-      // 列名下面那条横线：从它往后、到下一节之前，每一行都是一个组件
       inRows = true;
     } else if (current !== '' && inRows && line.trim() !== '') {
       const match = /^(\S+) +(\S+) +(.*?)(?:   （(.+)）)?$/.exec(line);
@@ -368,9 +316,7 @@ export function parseNotices(text) {
   };
 }
 
-// ---------- 主流程 ----------
 
-/** 在内存里跑一遍生产构建，收集模块 id、资源的原名与插件名。不写 dist/。 */
 async function collectFromBuild(repo) {
   const viteEntry = path.join(repo, 'node_modules', 'vite', 'dist', 'node', 'index.js');
   if (!fs.existsSync(viteEntry)) {
@@ -386,14 +332,12 @@ async function collectFromBuild(repo) {
   const collector = {
     name: 'guanlan-third-party-notices',
     apply: 'build',
-    /** @param {{ plugins: Array<{ name: string }> }} config */
     configResolved(config) {
       state.pluginNames = config.plugins.map((plugin) => plugin.name);
     },
     generateBundle(_options, bundle) {
       for (const output of Object.values(bundle)) {
         if (output.type === 'chunk') {
-          // 读不到模块清单就是读不到，不拿一份没有包的清单继续
           if (!output.modules) throw new Error('打包器没有给出 chunk 的模块清单，无法确定哪些包进了产物。');
           state.chunks += 1;
           for (const id of Object.keys(output.modules)) moduleIds.add(id);
@@ -403,8 +347,6 @@ async function collectFromBuild(repo) {
           }
         }
       }
-      // 应用自己的模块（不在 node_modules 里）导入了谁。没有进产物的应用文件不算：src/ 下有
-      // 旧 Node 管线的源码，它们不参与浏览器构建。
       for (const id of moduleIds) {
         if (packageOfModuleId(id, repo) !== null) continue;
         for (const dependency of this.getModuleInfo(id)?.importedIds ?? []) directImports.add(dependency);
@@ -422,7 +364,6 @@ async function collectFromBuild(repo) {
   try {
     await vite.build(options);
   } catch (error) {
-    // 与 npm run gate 相同的已知偶发失败：@tailwindcss/oxide 冷启动 panic，重试一次
     if (!isKnownBuildFlake(String(error instanceof Error ? error.stack : error))) throw error;
     await vite.build(options);
   }
@@ -435,7 +376,6 @@ async function collectFromBuild(repo) {
   };
 }
 
-/** 取 cargo tree 与 cargo metadata 的输出。cargo 在 native/ 下执行，才会用上 rust-toolchain.toml 锁定的工具链。 */
 function cargoInputs(cargoFile, cwd) {
   const env = { ...process.env, PATH: `${path.dirname(cargoFile)}${path.delimiter}${process.env.PATH ?? ''}` };
   const run = (args) => {
@@ -498,7 +438,6 @@ async function main() {
   console.log(`已生成 ${OUTPUT}：前端 ${npm} 个包，Rust ${rust} 个 crate。`);
 }
 
-// 只有被直接执行时才生成；被测试文件导入时不跑。
 const invokedDirectly =
   process.argv[1] !== undefined &&
   fs.existsSync(process.argv[1]) &&

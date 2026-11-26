@@ -1,12 +1,3 @@
-/**
- * v1.2.3 发行一致性、构建身份透出与跨视图终态回归护栏单测集。
- *
- * 锁定以下核心发布契约：
- *  - package.json / native/Cargo.toml / tauri.conf.json 三端版本号完全一致（1.2.3）；
- *  - 编译期 git-sha 与构建时间戳在「设置 → 关于观澜」清晰透出，零 v1.2-dev 残留；
- *  - Tauri 正式安装包配置（NSIS + MSI + 右键菜单钩子 + externalBin CLI sidecar）完备；
- *  - 明暗语义令牌对称、5,500 份域过滤守恒、日历零碰撞、左栏虚拟切片与全站快捷键和弦护栏。
- */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -98,7 +89,6 @@ function keyInput(
   };
 }
 
-// ===== 1. 三端版本号与桌面打包配置一致性 =====
 
 test('package.json 版本号已升级至 1.2.3', () => {
   const pkg = JSON.parse(
@@ -156,7 +146,6 @@ test('tauri.release.conf.json 与 windows-context-menu.nsh 资产齐备', () => 
   assert.ok(relConf.bundle.externalBin.includes('binaries/guanlan'));
 });
 
-// ===== 2. 构建身份格式化与「设置 → 关于观澜」SSR 验收 =====
 
 test('APP_BUILD_INFO 与 formatBuildTimestamp / formatBuildFingerprint 口径稳定', () => {
   assert.equal(APP_BUILD_INFO.version, '1.2.3');
@@ -189,7 +178,6 @@ test('WorkspaceSettingsModal「关于观澜」清晰透出 v1.2.3 / git-sha / �
   assert.equal(html.includes('v1.2-dev'), false, '正式版不得残留 v1.2-dev');
 });
 
-// ===== 3. 明暗语义令牌与主题循环 =====
 
 test('全局主题三态循环（light → dark → system → light）与 system 映射', () => {
   assert.equal(nextAppThemeMode('light'), 'dark');
@@ -213,7 +201,6 @@ test('coss 明暗语义令牌表（index.css）具备成对 :root 与 .dark 完�
   }
 });
 
-// ===== 4. 左栏同前缀中段省略与目录静默隔离 =====
 
 test('formatMiddleEllipsisName：超长同前缀文件名保留后缀差异词', () => {
   const out = formatMiddleEllipsisName('2D与3D绘制预览优化方案-最终评审版-v2.svg', 12, 20);
@@ -235,7 +222,6 @@ test('isFolderMuted：精确匹配目标目录与所有嵌套子目录且不误�
   assert.equal(isFolderMuted('01-方案文档', muted), false);
 });
 
-// ===== 5. 5,500 份资产域分类守恒与日历零碰撞矩阵 =====
 
 test('5,500 份混合资产域分类守恒（business + code === total，耗时 < 120ms）', () => {
   const files: FileRecord[] = [];
@@ -290,7 +276,6 @@ test('resolveCalendarSlotMode：近 7 天宽列（≥58px）或孤立槽保留 p
   assert.equal(resolveCalendarSlotMode(30, 12, false), 'pills_with_chip');
 });
 
-// ===== 6. 司辰回放与手记边界 =====
 
 test('stepChronosReplayIndex 双向边界钳位与按周跨月跳跃', () => {
   const crossMonth = ['2026-10-28', '2026-10-31', '2026-11-02', '2026-11-05', '2026-11-12'];
@@ -315,7 +300,6 @@ test('buildChronosDigest 在未知日期锚点与全空事件下零崩溃、零�
   assert.ok(digest.markdown.includes('2026-11-17') && digest.markdown.includes('2026-11-23'));
 });
 
-// ===== 7. 全站键盘流与 5,500 份切片边界 =====
 
 test('快捷键修饰键隔离（Ctrl/Meta/Alt + 1/2/3/[/] 不误触发导航）', () => {
   const ctx = { editableTarget: false, overlayOpen: false };

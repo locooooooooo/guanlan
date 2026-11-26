@@ -6,7 +6,6 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// 独立开源仓根目录即本仓根（历史 monorepo 布局下曾是 guanlan/ 的父目录）
 const repoRoot = resolve(__dirname, '..');
 const guanlanDir = repoRoot;
 

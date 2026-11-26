@@ -34,14 +34,12 @@ describe('PDF 页码证据锚点解析纯函数', () => {
     });
     assert.deepEqual(parsePdfLinkHref('spec.pdf#p.2')?.anchor, { kind: 'pdf_page', page: 2 });
 
-    // 非法页码 / 非 PDF / 无 fragment / view=FitH 无页码 → 只有路径无锚点
     assert.equal(parsePdfLinkHref('spec.pdf#page=0').anchor, undefined);
     assert.equal(parsePdfLinkHref('spec.pdf#page=abc').anchor, undefined);
     assert.equal(parsePdfLinkHref('README.md#page=2').anchor, undefined);
     assert.equal(parsePdfLinkHref('spec.pdf').anchor, undefined);
     assert.equal(parsePdfLinkHref('spec.pdf#view=FitH').anchor, undefined);
 
-    // 标签带 heading 时完整展示
     assert.equal(
       formatPdfAnchorLabel({ kind: 'pdf_page', page: 2, heading: '第三章 冻结窗口' }),
       '第 2 页 · 第三章 冻结窗口'
@@ -209,8 +207,6 @@ describe('独立组件架构与端到端页码直达接线检查', () => {
     );
     assert.ok(inspectorSrc.includes('pickPrimaryPdfEvidence'), '检查器关联决定卡支持直达 PDF 页码证据');
 
-    // 拆层后画布叙事抽屉数据装配在 graph/useGraphCanvasController.tsx——
-    // 断言读取装配层+控制器联合文本（语义不变，路径跟随拆分）
     const graphSrc = [
       'components/GraphCanvasView.tsx',
       'components/graph/useGraphCanvasController.tsx',
@@ -220,7 +216,6 @@ describe('独立组件架构与端到端页码直达接线检查', () => {
       .join('\n');
     assert.ok(graphSrc.includes('pickPrimaryPdfEvidence'), '画布叙事抽屉支持直达 PDF 页码证据');
 
-    // 拆层后阅读器 = 装配层 + 行为控制器 + SVG/PDF 插件层——联合文本断言（边界语义不变）
     const readerSrc = [
       'components/ReaderView.tsx',
       'components/reader/useReaderController.tsx',
@@ -237,7 +232,6 @@ describe('独立组件架构与端到端页码直达接线检查', () => {
       'ReaderView 仅透传 pdfAnchor 并复用独立 PdfReaderView'
     );
 
-    // 拆层后 App 实现 = 装配层 + 单一 Store + 分节组件——联合文本断言（语义不变）
     const appSrc = ['App.tsx', 'stores/useWorkspaceStore.tsx', 'components/app/AppLibraryStage.tsx']
       .map((p) => fs.readFileSync(path.join(SRC_ROOT, p), 'utf8'))
       .join(String.fromCharCode(10))

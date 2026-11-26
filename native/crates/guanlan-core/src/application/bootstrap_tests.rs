@@ -12,7 +12,7 @@ fn setup_workspace(tag: &str) -> (FixtureDb, String, ReadonlyStore) {
     let fixture = FixtureDb::new(tag);
     let root = fixture.root();
     let ws_id = fixture.workspace(&root, 7, Some("2026-06-01T12:34:56.000Z"));
-    fixture.blob(H1, 3 * 1024 * 1024, 1); // 3 MiB（quota 断言用）
+    fixture.blob(H1, 3 * 1024 * 1024, 1);
     fixture.write_blob_file(H1, b"# body text");
     fixture.file(&ws_id, "f_a", "docs/a.md", "md", "方案", "active", None);
     let ra = fixture.revision(
@@ -105,8 +105,6 @@ fn setup_workspace(tag: &str) -> (FixtureDb, String, ReadonlyStore) {
     (fixture, ws_id, store)
 }
 
-/// bootstrap 短读事务合成（契约 §1.1）：配置、统计、首批文件摘要、首批事件、
-/// 决定首批、任务状态占位；不含正文/完整版本链/全量关系/历史 SVG 原文
 #[test]
 fn bootstrap_composes_single_snapshot() {
     let (fixture, ws_id, store) = setup_workspace("boot-compose");
@@ -127,7 +125,6 @@ fn bootstrap_composes_single_snapshot() {
     );
     assert!(boot.baseline, "workspace_baseline 事件存在 → baseline true");
 
-    // 统计口径（契约 §1.4）：files 按 ws 过滤（含 missing）；revisions/blobs 全表
     assert_eq!(boot.counts.files, 4);
     assert_eq!(boot.counts.revisions, 1);
     assert_eq!(boot.counts.events, 2);
@@ -135,27 +132,19 @@ fn bootstrap_composes_single_snapshot() {
     assert_eq!(boot.counts.statements, 1);
     assert_eq!(boot.counts.edges, 2);
 
-    // files_total = active 总数（不含 missing，契约 §1.1）
     assert_eq!(boot.files_total, 3);
-    // 首批文件摘要按 files_page_size 截断
     assert_eq!(boot.files.items.len(), 2);
     assert!(boot.files.has_more);
     assert_eq!(boot.files.total_matched, 3);
-    // 首页事件按 events_limit 截断
     assert_eq!(boot.events.items.len(), 1);
-    // 决定首批（默认 limit 100 → 全量 1 个）
     assert_eq!(boot.decisions.len(), 1);
     assert_eq!(boot.decisions[0].code, "Q1");
-    // 关系总数：过滤 unresolved 后的计数
     assert_eq!(boot.relations_total, 1);
-    // 任务状态占位
     assert!(boot.index_jobs.is_empty());
 
-    // time_range（camelCase 键保留现状）
     assert_eq!(boot.time_range.occurred_min.as_deref(), Some("2026-06-01"));
     assert_eq!(boot.time_range.undated_count, 0);
 
-    // config 投影（project.ts:274-310）
     let config = &boot.config;
     assert_eq!(config.root_path, fixture.root());
     assert_eq!(
@@ -181,10 +170,7 @@ fn bootstrap_composes_single_snapshot() {
     assert_eq!(config.quota.protected_snapshots_count, 1);
     assert_eq!(config.runtime_status.index_generation, 7);
 
-    // 硬约束（契约 §1.1）：响应任何位置不出现 revisions[] / svgSource / markdownContent
     let json = serde_json::to_value(&boot).expect("序列化");
-    // 禁正文/SVG 原文键；counts.revisions 是数量字段（契约 §1.1/§1.4 显式包含），
-    // 被禁止的是「revisions[] 版本链数组」本身
     assert_eq!(
         collect_forbidden_keys(&json, &["svgSource", "markdownContent"]),
         Vec::<String>::new(),
@@ -204,7 +190,6 @@ fn bootstrap_composes_single_snapshot() {
         "counts.revisions 数量口径（全表计数，契约 §1.4）"
     );
 
-    // 与独立端点同口径：files 首批 / decisions 首批一致
     let files_alone = crate::query::list_files(&store, &FileListQuery::default()).expect("files");
     assert_eq!(files_alone.total_matched, 3);
     let decisions_alone =
@@ -213,8 +198,6 @@ fn bootstrap_composes_single_snapshot() {
     cleanup_dir(&fixture.dir);
 }
 
-/// 空工作区 bootstrap（契约 §1.1「空工作区按尚未覆盖渲染而非报错」）：
-/// 各计数为 0、baseline false、enumSnapshot.date 回退当日 UTC 日期
 #[test]
 fn bootstrap_on_empty_workspace() {
     let fixture = FixtureDb::new("boot-empty");
@@ -230,7 +213,6 @@ fn bootstrap_on_empty_workspace() {
     assert_eq!(boot.relations_total, 0);
     assert!(boot.time_range.occurred_min.is_none());
     assert_eq!(boot.time_range.undated_count, 0);
-    // last_scan_at 缺失 → enumSnapshot.date 回退当前 UTC 日期（project.ts:282）
     assert_eq!(boot.config.enum_snapshot.date.len(), 10);
     assert_eq!(
         boot.config.enum_snapshot.date.as_bytes().get(4),
@@ -239,7 +221,6 @@ fn bootstrap_on_empty_workspace() {
     cleanup_dir(&fixture.dir);
 }
 
-/// status（契约 §1.2）：实例信息、api_version、schema_version=2、覆盖计数
 #[test]
 fn status_reports_instance_and_coverage() {
     let (fixture, ws_id, store) = setup_workspace("boot-status");
@@ -259,13 +240,11 @@ fn status_reports_instance_and_coverage() {
         "core 层只读查询返回空 active_jobs"
     );
     assert_eq!(st.counts.events, 2);
-    // 进程内 instance_id 稳定
     let st2 = status(&store).expect("二次 status");
     assert_eq!(st.instance_id, st2.instance_id, "同进程 instance_id 不变");
     cleanup_dir(&fixture.dir);
 }
 
-/// storage_stats 诚实汇总本地磁盘占用、仅元数据版本计数与格式族分布
 #[test]
 fn storage_stats_reports_disk_usage_and_format_breakdown() {
     let (fixture, ws_id, _store) = setup_workspace("boot-storage-stats");

@@ -11,8 +11,6 @@ use serde_json::{json, Value};
 
 use super::*;
 
-// ---------- mock 后端（记录请求 + 按序回放响应） ----------
-
 type Responder = Box<dyn Fn(&McpHttpRequest) -> Result<McpHttpResponse, String> + Send + Sync>;
 
 struct MockBackend {
@@ -78,8 +76,6 @@ fn is_error_result(response: &Value) -> bool {
         .and_then(Value::as_bool)
         .unwrap_or(false)
 }
-
-// ---------- 协议面 ----------
 
 #[test]
 fn initialize_echoes_client_protocol_version() {
@@ -183,8 +179,6 @@ fn non_object_message_is_invalid_request() {
     assert_eq!(response["error"]["code"], -32600);
 }
 
-// ---------- 六工具转发 ----------
-
 #[test]
 fn commit_checkpoint_forwards_payload_and_returns_201_body() {
     let backend = MockBackend::new(|req| {
@@ -248,8 +242,6 @@ fn commit_checkpoint_missing_required_field_is_error_result() {
 
 #[test]
 fn propose_revision_resolves_path_posts_then_polls_job() {
-    // 第 1 调用：files?q= 精确匹配；第 2 调用：POST revision-proposals；
-    // 第 3.. 调用：job 轮询（先 running 后 completed）
     let backend = MockBackend::new(|req| {
         if req.path.starts_with("/api/v1/files?") {
             assert!(req.path.contains("q="), "路径查询须编码进 q 参数");
@@ -267,7 +259,6 @@ fn propose_revision_resolves_path_posts_then_polls_job() {
         if req.path == "/api/v1/revision-proposals" {
             assert_eq!(req.method, "POST");
             let body = req.body.as_ref().unwrap();
-            // 精确匹配命中的文件与当前版基准
             assert_eq!(body["file_id"], "f_bom");
             assert_eq!(body["base_revision_id"], "rev_2");
             assert_eq!(body["content"], "修订后正文");
@@ -446,7 +437,6 @@ fn read_artifact_http_4xx_surfaces_envelope_as_error() {
         ),
         &backend,
     );
-    // resolve_file 先查 files（无匹配即报错），这里 items 为空 → 错误落在文件定位
     let response = response.expect("应有响应");
     assert!(is_error_result(&response));
     let text = content_text(&response);
@@ -455,8 +445,6 @@ fn read_artifact_http_4xx_surfaces_envelope_as_error() {
         "错误文案含定位失败：{text}"
     );
 }
-
-// ---------- 端点解析（不猜端口） ----------
 
 #[test]
 fn endpoint_flag_wins_over_env() {
@@ -723,7 +711,6 @@ fn e05_mcp_blocks_all_path_escape_and_secret_paths_before_http() {
         );
     }
 
-    // URL 段注入（revision_id / statement_id 夹带 ../）同样在发 HTTP 前拦截
     let rev_escape = handle_message(
         &request(
             "tools/call",
@@ -799,7 +786,7 @@ fn e05_mcp_search_workspace_forwards_and_strips_secret_paths() {
 
 #[test]
 fn e05_mcp_read_artifact_truncates_oversized_413_raw_response_within_budget() {
-    let big_payload = "观澜大包截断压测文本-".repeat(15_000); // > 400 KiB
+    let big_payload = "观澜大包截断压测文本-".repeat(15_000);
     let big_for_closure = big_payload.clone();
     let backend = MockBackend::new(move |req| {
         if req.path.starts_with("/api/v1/files?q=") {
@@ -878,9 +865,6 @@ fn endpoint_missing_or_https_or_bad_port_fails() {
     .is_err());
 }
 
-// ---------- 手写 HTTP 客户端端到端（真实本地 TCP 服务） ----------
-
-/// 起一个极小 HTTP 服务线程：读请求头 + Content-Length 体，回 canned 响应后关闭。
 fn spawn_canned_server(
     response: &'static [u8],
     request_log: std::sync::Arc<Mutex<Vec<String>>>,
@@ -892,7 +876,6 @@ fn spawn_canned_server(
         let (mut stream, _) = listener.accept().expect("accept");
         let mut buf = Vec::new();
         let mut chunk = [0u8; 1024];
-        // 读到头结束
         loop {
             let n = std::io::Read::read(&mut stream, &mut chunk).expect("读请求");
             if n == 0 {
@@ -903,7 +886,6 @@ fn spawn_canned_server(
                 break;
             }
         }
-        // 按 Content-Length 补读请求体
         let head = String::from_utf8_lossy(&buf).into_owned();
         let length = head
             .split("\r\n")
@@ -1007,8 +989,6 @@ fn http_client_non_json_response_lands_in_raw_text() {
     assert_eq!(response.body, Value::Null, "非 JSON → body 落 Null");
     assert_eq!(response.raw_text, "hello");
 }
-
-// ---------- urlencode ----------
 
 #[test]
 fn urlencode_keeps_path_chars_and_escapes_cjk_space() {

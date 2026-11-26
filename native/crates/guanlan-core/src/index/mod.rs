@@ -137,7 +137,6 @@ impl ReconcileOptions {
     }
 }
 
-/// 读环境变量里的非负整数
 fn read_env_usize(key: &str) -> Option<usize> {
     std::env::var(key)
         .ok()
@@ -232,7 +231,6 @@ impl FormatCounts {
     }
 }
 
-/// 本轮待写入的新版本
 #[derive(Debug, Clone)]
 struct PendingRevision {
     file: CollectedFile,
@@ -244,24 +242,18 @@ struct PendingRevision {
     revision: RevisionRow,
 }
 
-/// 内容未变、只需更新采集状态的文件
 #[derive(Debug, Clone)]
 struct UnchangedUpdate {
     file_id: String,
     rel_path: String,
     mtime_ms: f64,
     revision_id: String,
-    /// 此前是 missing / trashed 或本轮按同哈希认领 → 需要恢复事件
     recovered: bool,
-    /// 此前是否处于已移入回收站态
     was_trashed: bool,
-    /// 此前路径（恢复事件标题与路径迁移判断用）
     previous_path: String,
     evidence: String,
 }
 
-/// 检查被别名或预测 ID 命中的既有文件是否允许按路径认领，
-/// 避免「把 A 移到 B 后又在 A 建新文件」或「把 B 移入回收站后在曾用路径 A 建无关新文件」时错误劫持或碰撞主键。
 fn can_claim_file_identity(root: &Path, row: &FileRow, incoming_rel: &str) -> bool {
     let current_norm = normalize_rel_path(&row.current_path);
     let same_path = current_norm == incoming_rel
@@ -278,8 +270,6 @@ fn can_claim_file_identity(root: &Path, row: &FileRow, incoming_rel: &str) -> bo
     true
 }
 
-/// 为新文件分配不冲突的 `file_id`（优先保持与 TS 同源的 `stable_file_id`；
-/// 仅当该 ID 已被迁移至其他路径的旧文件占用时追加确定性后缀避免主键冲突）。
 fn allocate_new_file_id(
     writer: &Writer,
     root_key: &str,
@@ -309,11 +299,6 @@ fn check_cancelled(options: &ReconcileOptions, stage: &str) -> Result<(), Guanla
     Ok(())
 }
 
-/// 本轮已见文件集合：路径与 `file_id` 各建一张哈希表。
-///
-/// 缺失检测要回答「这条已入库记录是否仍在本轮采集范围里」，判定次数等于已入库
-/// 文件数；用 `Vec::contains` 做线性扫描时，5 万文件一轮就是数十亿次字符串比较。
-/// 这段判定跑在写事务里，会把唯一写线程和排队中的交互写命令一起堵住。
 pub(crate) struct SeenFiles {
     paths: HashSet<String>,
     ids: HashSet<String>,
@@ -381,7 +366,6 @@ pub fn reconcile_paths(
     reconcile_collected(writer, options, workspace, collected, started)
 }
 
-/// 对账主流程（采集结果注入式：整库扫描与定向路径共用同一条流水线）
 #[allow(clippy::too_many_lines)]
 fn reconcile_collected(
     writer: &mut Writer,
@@ -409,11 +393,9 @@ fn reconcile_collected(
         report.by_format.add(&file.format);
     }
 
-    // ---------- 第一遍：识别文件身份并规划新版本 ----------
     let mut pending: Vec<PendingRevision> = Vec::new();
     let mut unchanged: Vec<UnchangedUpdate> = Vec::new();
     let workspace_root = Path::new(&workspace.root_path);
-    // 身份恢复候选由 SQL 侧过滤（missing/trashed 通常极少），不再全表 FileRow 反序列化
     let mut missing_candidates: Vec<FileRow> = writer.list_recovery_candidates(&workspace_id)?;
 
     for file in &collected.files {
@@ -431,7 +413,6 @@ fn reconcile_collected(
         let mut evidence = "exact_path";
 
         if file_row.is_none() {
-            // 同 ID 但状态缺失/已移入回收站后重现：恢复；路径也可能只是大小写差异
             let predicted_id = stable_file_id(&workspace.root_key, &rel_path);
             if let Some(predicted) = writer.get_file(&predicted_id)? {
                 if can_claim_file_identity(workspace_root, &predicted, &rel_path) {
@@ -442,11 +423,6 @@ fn reconcile_collected(
         }
 
         if file_row.is_none() && file.stable {
-            // 改名/移动证据不足：仅当工作区里恰好有一个缺失/回收站文件与本文件同哈希时才
-            // 考虑关联，否则保留「新增」与「缺失」两个独立事实。
-            // 关联后立刻从候选池移除：同轮若有第二个同哈希新文件，让它按「新增」处理。
-            // 否则两个计划会各自算出相同 seq 与 revision_id，事务内第二次插入撞
-            // UNIQUE(file_id, seq) 回滚整轮对账。
             let mut matched: Option<usize> = None;
             let mut hits = 0usize;
             for (index, candidate) in missing_candidates.iter().enumerate() {
@@ -471,7 +447,6 @@ fn reconcile_collected(
         }
 
         if !file.stable {
-            // 不稳定读取：本轮不落版本、不认领，只报告
             report.unstable_reads += 1;
             continue;
         }
@@ -484,7 +459,6 @@ fn reconcile_collected(
 
         if let Some(latest) = latest.clone() {
             if latest.content_hash == file.sha256 {
-                // 内容未变：仅更新采集状态。mtime 单独保存，绝不新增版本或事件
                 let row = file_row.as_ref().expect("有最新版本必有文件行");
                 let was_trashed = row.status == "trashed";
                 let recovered = row.status != "active" || recovered_missing;
@@ -511,10 +485,7 @@ fn reconcile_collected(
             }
         }
 
-        // 需要新版本
         let seq = latest.as_ref().map(|row| row.seq).unwrap_or(0) + 1;
-        // 三档存储策略：档位在采集时刻判定并落进 `snapshot_available`，
-        // 之后不再重算——历史版本的档位永远稳定。
         let tier = effective_policy.tier_for(file.format.class(), file.size_bytes);
         let snapshot_available = if tier.stores_bytes() { 1 } else { 0 };
         pending.push(PendingRevision {
@@ -551,14 +522,9 @@ fn reconcile_collected(
         }
     }
 
-    // ---------- 第二遍：写快照（事务外 IO） ----------
-    // 源文件若在采集之后被改写，落盘内容与采集时的哈希不符：此时不落版本，
-    // 按「读取不稳定」记录，等下一轮对账恢复（TS 因整批驻留内存不会出现此情形）。
     let mut unstable_during_write: Vec<String> = Vec::new();
     for plan in &mut pending {
         check_cancelled(options, "写入快照")?;
-        // 只记元数据的档位（音视频 / 未知二进制 / 超阈值文件）**不复制字节**。
-        // 这里连源文件都不再读第二遍——采集阶段已经算过流式哈希。
         if plan.revision.snapshot_available == 0 {
             report.metadata_only_revisions += 1;
         } else {
@@ -574,10 +540,6 @@ fn reconcile_collected(
             }
         }
 
-        // 版本发生时间：
-        // - 首次捕获（v1）：优先材料自述日期（回答「材料声称何时产生」）
-        // - 后续修改（v2+）：用文件修改时间（回答「这次改动何时发生」），
-        //   文档自述日期通常停留在初稿，不能拿来当修改时间
         let mtime_iso = clock::iso_from_epoch_millis(plan.file.mtime_ms.trunc() as i64);
         if plan.revision.seq > 1 {
             plan.revision.occurred_at = Some(mtime_iso);
@@ -608,7 +570,6 @@ fn reconcile_collected(
         }
     }
 
-    // 落盘时发现源文件被改写的那些：本轮不落版本，退回「读取不稳定」口径
     if !unstable_during_write.is_empty() {
         report.unstable_reads += unstable_during_write.len();
         let dropped_new_files = pending
@@ -624,11 +585,7 @@ fn reconcile_collected(
         });
     }
 
-    // ---------- 事务提交：文件、版本、事件、证据一起落库 ----------
-    // 进入写事务前的最后一道取消检查；一旦开始写事务便不再中断，保证数据库事实完整。
     check_cancelled(options, "事务提交前")?;
-    // 路径索引：已入库文件 + 本轮待写入文件，保证引用能解析到已有路径
-    // （使用两列轻查询，避免大工作区整表 FileRow 反序列化）
     let mut path_index: HashMap<String, String> = HashMap::new();
     for (current_path, file_id) in writer.all_path_ids(&workspace_id)? {
         path_index.insert(normalize_rel_path(&current_path), file_id);
@@ -640,8 +597,6 @@ fn reconcile_collected(
         );
     }
 
-    // 缺失检测只在范围完整遍历时才有意义：`missing_files` 惰性化，
-    // 定向增量对账（collected_complete=false）不再白付一次全库查询。
     let collected_complete = collected.complete;
     let missing_files = if collected_complete {
         Some(writer.list_files(&workspace_id, false)?)
@@ -659,11 +614,9 @@ fn reconcile_collected(
     let mut new_statements: Vec<StatementRow> = Vec::new();
     let mut derived_statements = 0usize;
     let mut derived_edges = 0usize;
-    // 派生段全文已在内存，checklist 同步计数随派生收集，避免二次读 blob
     let mut derived_checklists: Vec<DerivedChecklist> = Vec::new();
 
     writer.transaction(|writer| {
-        // ① 未变文件：批量更新采集状态（替代 TS 的逐文件事务）
         for update in &unchanged {
             writer.touch_file(
                 &update.file_id,
@@ -767,7 +720,6 @@ fn reconcile_collected(
             }
         }
 
-        // ② 本轮新版本：文件行、别名、快照登记、版本行、事件
         for plan in &pending {
             let rel_path = normalize_rel_path(&plan.file.relative_path);
             let title = title_from_path(&rel_path);
@@ -843,8 +795,6 @@ fn reconcile_collected(
                 "exact_path",
             )?;
 
-            // 只记元数据的版本不登记 blob（磁盘上没有这份字节），
-            // `insert_revision` 对 `snapshot_available = 0` 也不要求 blob 行。
             if plan.revision.snapshot_available != 0 {
                 writer.register_blob_ref(&plan.revision.content_hash, plan.revision.size_bytes)?;
             }
@@ -863,9 +813,6 @@ fn reconcile_collected(
                 "modified"
             };
 
-            // 基线扫描的分工：
-            // - 正文有可核验自述日期的材料：按「文档自述日期」各自入轴
-            // - 没有日期依据的材料：不逐条刷屏，统一由基线卡覆盖
             let dated_by_self = plan.revision.occurred_source.as_deref() == Some("document_self");
             let skip_baseline_per_file_event =
                 initial_baseline && plan.is_new_file && !dated_by_self;
@@ -992,13 +939,11 @@ fn reconcile_collected(
             if !plan.is_new_file {
                 report.content_changed += 1;
             }
-            // L4A 后台沉淀队列的入队依据（契约 §3.4）：md 文件出现新版本即入队
             if plan.file.format.is_markdown() {
                 report.changed_file_ids.push(plan.file_id.clone());
             }
         }
 
-        // ③ 缺失检测：只在范围完整遍历时判定（missing_files 已随 collected_complete 惰性化）
         if let Some(missing_files) = &missing_files {
             for row in missing_files {
                 let current_path = normalize_rel_path(&row.current_path);
@@ -1041,7 +986,6 @@ fn reconcile_collected(
         Ok(())
     })?;
 
-    // ---------- 基线卡 ----------
     let dated_self_count = pending
         .iter()
         .filter(|plan| {
@@ -1050,8 +994,6 @@ fn reconcile_collected(
         .count();
     writer.transaction(|writer| {
         if initial_baseline {
-            // 全文件类型采集下格式不再限于三种：基线卡按格式汇总，
-            // 既有 md/svg/pdf 三个数字逐字保留，其余格式按 token 追加。
             let mut detail = format!(
                 "{} 份 MD、{} 份 SVG、{} 份 PDF。",
                 report.by_format.md, report.by_format.svg, report.by_format.pdf
@@ -1117,7 +1059,6 @@ fn reconcile_collected(
         Ok(())
     })?;
 
-    // ---------- 读取问题（目录不可访问） ----------
     let hour_stamp = clock::hour_stamp(&observed_at);
     let read_errors = collected.read_errors.clone();
     writer.transaction(|writer| {
@@ -1153,9 +1094,6 @@ fn reconcile_collected(
         Ok(())
     })?;
 
-    // ---------- 派生索引：陈述与关系（按新版本粒度） ----------
-    // 单条 GROUP BY 取「文件 → 最新版本」，替代逐文件 latest_revision 的 N+1
-    // 查询（大工作区上可将耗时从秒级降到毫秒级）
     let mut target_revision_index: HashMap<String, String> = HashMap::new();
     for (file_id, revision_id) in writer.latest_revision_ids()? {
         target_revision_index.insert(file_id, revision_id);
@@ -1167,15 +1105,12 @@ fn reconcile_collected(
         .filter(|file| !file.stable)
         .map(|file| normalize_rel_path(&file.relative_path))
         .collect();
-    // 落盘阶段才发现被改写的：同样按不稳定读取记录
     for path in &unstable_during_write {
         if !unstable_paths.contains(path) {
             unstable_paths.push(path.clone());
         }
     }
 
-    // 在写事务外先完成 Office（.docx / .xlsx）L2 解压解析或按 content_hash 复用缓存，
-    // 绝不把 ZIP/XML 解压计算塞进 SQLite 写锁持有期。
     let mut office_parsed: HashMap<String, office::OfficeExtractRecord> = HashMap::new();
     let mut office_newly_cached: HashMap<String, office::OfficeExtractRecord> = HashMap::new();
     for plan in &pending {
@@ -1214,8 +1149,6 @@ fn reconcile_collected(
         office_parsed.insert(hash.clone(), record);
     }
 
-    // 在写事务外先完成 PDF 逐页正文提取或按 content_hash 复用缓存，
-    // 绝不把流解压/页面解析塞进 SQLite 写锁持有期。
     let mut pdf_parsed: HashMap<String, pdf::PdfExtractRecord> = HashMap::new();
     let mut pdf_newly_cached: HashMap<String, pdf::PdfExtractRecord> = HashMap::new();
     for plan in &pending {
@@ -1353,7 +1286,6 @@ fn reconcile_collected(
             }
         }
 
-        // 读取不稳定：单独记录，不落版本
         for path in &unstable_paths {
             let event = NewEvent {
                 event_id: format!("evt_unstable_{}_{hour_stamp}", stable_short(path)),
@@ -1378,7 +1310,6 @@ fn reconcile_collected(
             }
         }
 
-        // 决策入轴：只有明确的状态转换才新增事件，同状态复述只补来源证据
         report.decision_events_inserted +=
             record_decision_events(writer, &workspace_id, &new_statements, &observed_at)?;
         Ok(())
@@ -1386,7 +1317,6 @@ fn reconcile_collected(
     report.statements_upserted += derived_statements;
     report.edges_upserted += derived_edges;
 
-    // ---------- 规则升级：重建派生索引 ----------
     let rebuilt =
         rebuild_derived_if_needed(writer, &workspace_id, &workspace.root_path, &observed_at)?;
     if rebuilt.rebuilt {
@@ -1395,14 +1325,9 @@ fn reconcile_collected(
         report.derived_rebuilt = true;
     }
 
-    // ---------- 旧资料回填：已入库版本若正文明确记载日期，补一条入轴事件 ----------
     report.backfilled_doc_date_events =
         backfill_document_self_events(writer, &workspace_id, &mut report)?;
 
-    // ---------- 状态机重算（SSOT 三层执行器） ----------
-    // 位置：代际判定**之前**——迁移事件计入 events_inserted，由既有
-    // 「有变化才 bump」口径统一推进；首轮建行静默（不发事件、不 bump），
-    // 节点/文档状态为声明式跨轮持久态，每轮幂等重算。
     let state_outcome =
         state_machine_recompute(writer, &workspace_id, &observed_at, &derived_checklists)?;
     report.events_inserted += state_outcome.events_inserted;
@@ -1422,15 +1347,10 @@ fn reconcile_collected(
         kinds
     };
 
-    // ---------- 派生检索索引同步（可随时丢弃重建）----------
-    // 位置：状态机重算后、代际判定前——索引行反映本轮落库后的完整库态；
-    // 规则版本不符或标记缺失时自动全量重建（损坏自愈）。派生索引变化不进
-    // `changed` 代际门（代际只属事实层），避免纯派生回填推动 SSE 通知。
     let search_outcome = search_index::sync_after_reconcile(writer, &workspace_id)?;
     report.search_docs_synced = search_outcome.docs_synced;
     report.search_index_rebuilt = search_outcome.rebuilt;
 
-    // 索引代只在校验到变化时推进：重复扫描不应让「代」无意义地增长
     let changed = report.new_revisions > 0
         || report.events_inserted > 0
         || report.derived_rebuilt
@@ -1445,7 +1365,6 @@ fn reconcile_collected(
     Ok(report)
 }
 
-/// 变更摘要
 #[derive(Debug, Default, Clone)]
 struct ChangeSummary {
     changed_sections: Vec<String>,
@@ -1453,13 +1372,11 @@ struct ChangeSummary {
     removed: usize,
 }
 
-/// 变更摘要（章节增减与行数）
 fn summarize_change(
     prev_text: Option<&str>,
     new_text: Option<&str>,
     format: &str,
 ) -> ChangeSummary {
-    // TS 用 falsy 判定：空串与 null 同义
     let prev_text = match prev_text {
         Some(text) if !text.is_empty() => text,
         _ => {
@@ -1540,12 +1457,10 @@ fn summarize_change(
     }
 }
 
-/// 毫秒浮点的 JSON 数字表示（与 JS 数字序列化一致：整数不写 `.0`）
 fn format_millis(value: f64) -> String {
     format!("{value}")
 }
 
-/// 状态 → 界面用词与事件种类
 fn decision_action_for(status: &str) -> (&'static str, &'static str, &'static str) {
     match status {
         "已确认" => ("decision_changed", "来源记载已确认", "confirmed"),
@@ -1557,14 +1472,12 @@ fn decision_action_for(status: &str) -> (&'static str, &'static str, &'static st
     }
 }
 
-/// 决策事件写入：只有状态发生转换时新增事件；新版本复述同一状态不重复记
 fn record_decision_events(
     writer: &Writer,
     workspace_id: &str,
     statements: &[StatementRow],
     observed_at: &str,
 ) -> Result<usize, GuanlanError> {
-    // 每个业务决定取「最新来源陈述」判定当前口径
     let mut latest_by_decision: Vec<(String, StatementRow)> = Vec::new();
     for statement in statements {
         let Some(decision_id) = statement.decision_id.clone() else {
@@ -1603,7 +1516,6 @@ fn record_decision_events(
                         .map(str::to_owned)
                 })
         });
-        // 同状态复述：证据已写入 statements，不再新增决策事件
         if last_status.as_deref() == Some(statement.status.as_str()) {
             continue;
         }
@@ -1661,7 +1573,6 @@ fn record_decision_events(
     Ok(inserted)
 }
 
-/// 抽取规则版本变化时，按「文件版本」粒度重建陈述与引用
 fn rebuild_derived_if_needed(
     writer: &mut Writer,
     workspace_id: &str,
@@ -1672,8 +1583,6 @@ fn rebuild_derived_if_needed(
         return Ok(RebuildOutcome::default());
     }
 
-    // 与 reconcile 主流程同口径：批量轻查询替代逐文件 N+1
-    // （重派生事务本身仍需全量 FileRow 走 format 过滤，保留 list_files）
     let files = writer.list_files(workspace_id, true)?;
     let mut path_index: HashMap<String, String> = HashMap::new();
     for (current_path, file_id) in writer.all_path_ids(workspace_id)? {
@@ -1751,7 +1660,6 @@ fn rebuild_derived_if_needed(
     })
 }
 
-/// 重建结果
 #[derive(Debug, Default, Clone)]
 struct RebuildOutcome {
     rebuilt: bool,
@@ -1759,7 +1667,6 @@ struct RebuildOutcome {
     edges: usize,
 }
 
-/// 为已入库、带正文自述日期且尚无入轴事件的版本补事件（幂等）
 fn backfill_document_self_events(
     writer: &mut Writer,
     workspace_id: &str,

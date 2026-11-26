@@ -23,7 +23,6 @@ use crate::index::office::{detect_inline_decision_marker, truncate_utf8_chars};
 use crate::index::writer::EXTRACT_RULE_VERSION;
 use crate::storage::StatementRow;
 
-/// 诊断开关（仅在排查畸形 PDF 时置 GUANLAN_PDF_TRACE=1；默认零输出零开销）
 fn pdf_trace_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("GUANLAN_PDF_TRACE").is_some())
@@ -39,29 +38,16 @@ macro_rules! pdf_trace {
 
 /// 只读/索引期 PDF 解析体量上限（50 MiB，与 L2 PDF 快照上限对齐）
 pub const MAX_PDF_PARSE_BYTES: usize = 50 * 1024 * 1024;
-/// 单个 PDF 最多解析的页数（防畸形超深页树撑爆内存）
 const MAX_PDF_PAGES: usize = 2000;
-/// 单个压缩流解压上限（16 MiB，防压缩炸弹）
 const MAX_STREAM_DECODE_BYTES: usize = 16 * 1024 * 1024;
-/// 单页保留提取文本上限（64 KiB）
 const MAX_PAGE_TEXT_BYTES: usize = 64 * 1024;
-/// 单页提取过程中的文本累计硬上限（256 KiB）：超过即停止追加/解释。
-/// 仅在最终对外时才截到 64 KiB——若等到解释结束再截，畸形或指数展开的
-/// PDF（Form XObject 扇形递归、异常字符流）会在累计阶段把内存打爆。
 const MAX_PAGE_TEXT_ACCUM: usize = 256 * 1024;
-/// 单页内容流总处理预算（含 Form XObject 递归展开的已解码字节数）
 const MAX_PAGE_INTERPRET_BYTES: usize = 8 * 1024 * 1024;
-/// 单页 Form XObject 解释次数上限（指数扇形展开防护：深度 8 × 大分支仍会爆炸）
 const MAX_FORM_INVOCATIONS: usize = 256;
-/// 单页内容流词法 token 上限（防畸形流词法死循环/无界增长）
 const MAX_CONTENT_TOKENS: usize = 1_000_000;
-/// 单个 ToUnicode CMap 词法 token 上限（畸形 CMap 防护）
 const MAX_CMAP_TOKENS: usize = 1_000_000;
-/// 全文拼接索引文本上限（512 KiB）
 const MAX_PLAIN_TEXT_BYTES: usize = 512 * 1024;
-/// 页树最大递归深度
 const MAX_PAGE_TREE_DEPTH: usize = 64;
-/// Form XObject 最大递归嵌套深度
 const MAX_FORM_DEPTH: usize = 8;
 
 /// PDF 页码证据锚点（由 Markdown `#page=N` 链接或 PDF 内嵌 `[P0/P1/P2]` 标记派生）
@@ -329,10 +315,6 @@ pub fn derive_pdf_statements(
     out
 }
 
-// ============================================================
-// PDF 底层语法分析、XRef/ObjStm 索引、页树遍历与字库 CMap 解析
-// ============================================================
-
 #[derive(Debug)]
 enum PdfOpenErr {
     Encrypted,
@@ -342,13 +324,11 @@ enum PdfOpenErr {
 #[derive(Debug, Clone)]
 enum PdfObj {
     Null,
-    /// 布尔字面量仅为完整对象语法支持（如 /NeedAppearances true），文本抽取不消费
     #[allow(dead_code)]
     Bool(bool),
     Int(i64),
     Real(f64),
     Name(String),
-    /// 字符串字面量仅为完整对象语法支持（正文文本走内容流操作数直解），暂不消费
     #[allow(dead_code)]
     Str(Vec<u8>),
     Array(Vec<PdfObj>),
@@ -398,8 +378,6 @@ impl PdfObj {
 #[derive(Debug, Clone, Copy)]
 enum ObjLoc {
     Offset(usize),
-    /// `index` 记录对象在 objstm 内的序号（xref 流解析时落位）；读取经 objstm 缓存按
-    /// obj_num 命中，序号本身暂不消费
     Compressed {
         objstm: u32,
         #[allow(dead_code)]
@@ -497,7 +475,6 @@ impl<'a> PdfDoc<'a> {
                     if self.root_ref.is_none() {
                         self.root_ref = trailer.get("Root").and_then(|o| o.as_ref());
                     }
-                    // 混合 xref PDF 还会通过 /XRefStm 附带压缩对象流索引
                     if let Some(xref_stm_off) = trailer
                         .get("XRefStm")
                         .and_then(|o| o.as_int())
@@ -529,7 +506,7 @@ impl<'a> PdfDoc<'a> {
     }
 
     fn parse_classic_xref(&mut self, start: usize) -> Option<BTreeMap<String, PdfObj>> {
-        let mut pos = start + 4; // skip "xref"
+        let mut pos = start + 4;
         loop {
             pos = skip_ws(self.bytes, pos);
             if pos >= self.bytes.len() {
@@ -661,7 +638,6 @@ impl<'a> PdfDoc<'a> {
             if let Some((obj_num, _, obj_off)) = find_next_obj_header(self.bytes, pos) {
                 self.locs.entry(obj_num).or_insert(ObjLoc::Offset(obj_off));
                 pos = obj_off + 6;
-                // 仅当同一对象体内在 endobj 之前存在 stream 时跳过流主体，避免跳过相邻无流对象
                 let window = &self.bytes[pos..len.min(pos + 4096)];
                 let endobj_rel = find_subslice(window, b"endobj");
                 if let Some(stream_rel) = find_subslice(window, b"stream") {
@@ -676,7 +652,6 @@ impl<'a> PdfDoc<'a> {
                 break;
             }
         }
-        // 查找最后的 trailer dict
         if let Some(tr_pos) = rfind_subslice(self.bytes, b"trailer") {
             let val_pos = skip_ws(self.bytes, tr_pos + 7);
             if let Some((obj, _)) = parse_value(self.bytes, val_pos, None) {
@@ -691,7 +666,6 @@ impl<'a> PdfDoc<'a> {
                 }
             }
         }
-        // 兜底找含 /Type /Catalog 的对象
         if self.root_ref.is_none() {
             let keys: Vec<u32> = self.locs.keys().copied().collect();
             for obj_num in keys {
@@ -1171,7 +1145,6 @@ impl<'a> PdfDoc<'a> {
         if depth > MAX_FORM_DEPTH || ctx.work_budget == 0 {
             return;
         }
-        // 预算按已解码内容流字节扣减：指数递归/压缩炸弹在此处封顶
         ctx.work_budget = ctx.work_budget.saturating_sub(stream_bytes.len());
         pdf_trace!(
             "interp begin depth={depth} bytes={} budget={}",
@@ -1189,7 +1162,6 @@ impl<'a> PdfDoc<'a> {
 
         let mut i = 0usize;
         while i < tokens.len() {
-            // 文本累计已达硬上限：停止解释（内存封顶；后续图像计数不再重要）
             if ctx.out.len() >= MAX_PAGE_TEXT_ACCUM {
                 break;
             }
@@ -1332,8 +1304,6 @@ impl<'a> PdfDoc<'a> {
                                             Some("Image") => {
                                                 ctx.image_count += 1;
                                             }
-                                            // 扇出与预算封顶：Form 递归深度已限 8，
-                                            // 但大分支指数展开仍需总次数/字节预算兜底
                                             Some("Form")
                                                 if ctx.form_invocations < MAX_FORM_INVOCATIONS
                                                     && ctx.work_budget > 0 =>
@@ -1385,9 +1355,7 @@ struct PageExtractCtx {
     out: String,
     image_count: u64,
     unmapped_glyph_ops: u64,
-    /// 剩余内容流处理预算（解释入口按已解码字节扣减）
     work_budget: usize,
-    /// 已解释的 Form XObject 次数（递归扇出防护）
     form_invocations: usize,
 }
 
@@ -1404,7 +1372,6 @@ impl Default for PageExtractCtx {
 }
 
 impl PageExtractCtx {
-    /// 追加提取文本：硬上限 [`MAX_PAGE_TEXT_ACCUM`]，超限部分直接丢弃。
     fn push_text(&mut self, text: &str) {
         let remaining = MAX_PAGE_TEXT_ACCUM.saturating_sub(self.out.len());
         if remaining == 0 {
@@ -1470,7 +1437,6 @@ fn emit_decoded_bytes(bytes: &[u8], font: Option<&FontDecoder>, ctx: &mut PageEx
     }
 
     if font.is_cid || font.is_type3 {
-        // 没有 ToUnicode 的 CID / Type3 字体字节不是 Unicode（不可当作 ASCII/扫描件）
         ctx.unmapped_glyph_ops += 1;
         return;
     }
@@ -1535,10 +1501,6 @@ impl FontDecoder {
         out
     }
 }
-
-// ============================================================
-// ToUnicode CMap 解析
-// ============================================================
 
 struct ParsedCMap {
     map: HashMap<(u8, u32), String>,
@@ -1674,8 +1636,6 @@ fn tokenize_cmap(bytes: &[u8]) -> Vec<String> {
             out.push(String::from_utf8_lossy(&bytes[start..i]).into_owned());
             continue;
         }
-        // 游离的 '>'（如 CMap 流里误写/截断的 >>）：必须前进，
-        // 否则下面的通用分支会原地推入空 token 直到内存耗尽。
         if b == b'>' {
             i += 1;
             continue;
@@ -1693,7 +1653,6 @@ fn tokenize_cmap(bytes: &[u8]) -> Vec<String> {
             i += 1;
         }
         if i == start {
-            // 防御：任何未预期的分隔符也必须前进，绝不允许原地空转
             i += 1;
             continue;
         }
@@ -1740,10 +1699,6 @@ fn decode_utf16_be(bytes: &[u8]) -> String {
     }
     String::from_utf16_lossy(&units)
 }
-
-// ============================================================
-// 流解压与 PNG/TIFF Predictor 还原
-// ============================================================
 
 fn decode_stream_bytes(dict: &BTreeMap<String, PdfObj>, raw: &[u8]) -> Result<Vec<u8>, String> {
     let filters: Vec<String> = match dict.get("Filter") {
@@ -1950,10 +1905,6 @@ fn ascii85_decode(input: &[u8]) -> Vec<u8> {
     out
 }
 
-// ============================================================
-// PDF 值语法分析与 Content Stream 词法分析
-// ============================================================
-
 fn parse_value(bytes: &[u8], pos: usize, _depth_marker: Option<usize>) -> Option<(PdfObj, usize)> {
     parse_value_depth(bytes, pos, 0)
 }
@@ -2047,7 +1998,6 @@ fn parse_value_depth(bytes: &[u8], mut pos: usize, depth: usize) -> Option<(PdfO
     }
     let word = std::str::from_utf8(&bytes[start..pos]).ok()?;
     if let Ok(n) = word.parse::<i64>() {
-        // 向前探测是否为 `n g R` 间接引用
         let p1 = skip_ws(bytes, pos);
         if n >= 0 {
             if let Some((gen_num, p2)) = parse_uint_token(bytes, p1) {
@@ -2108,7 +2058,6 @@ fn tokenize_content_stream(bytes: &[u8]) -> Vec<ContentTok> {
             pos = next;
         } else if b == b'<' {
             if bytes.get(pos + 1) == Some(&b'<') {
-                // 跳过内嵌字典 <<...>>
                 let (_, next) = parse_value_depth(bytes, pos, 0).unwrap_or((PdfObj::Null, pos + 2));
                 pos = next.max(pos + 2);
             } else {
@@ -2133,7 +2082,6 @@ fn tokenize_content_stream(bytes: &[u8]) -> Vec<ContentTok> {
             }
             let word = String::from_utf8_lossy(&bytes[start..pos]).into_owned();
             if word == "BI" {
-                // 内联图像 BI ... ID <raw> EI
                 if let Some(id_rel) = find_subslice(&bytes[pos..], b"ID") {
                     let mut p = pos + id_rel + 2;
                     if p < bytes.len() && bytes[p].is_ascii_whitespace() {
@@ -2146,9 +2094,6 @@ fn tokenize_content_stream(bytes: &[u8]) -> Vec<ContentTok> {
                     }
                 }
                 out.push(ContentTok::Op("INLINE_IMAGE".to_owned()));
-                // 找不到 EI 边界：内联图像原始字节可能含任意数据，直接终止本流解析。
-                // 绝不能原地 continue——位置不前进会在畸形 CAD/打印 PDF 上无限堆 token
-                // （实测把进程内存推到数十 GB 后以 96 GiB 分配失败崩溃）。
                 pos = bytes.len();
                 continue;
             }
@@ -2163,7 +2108,7 @@ fn tokenize_content_stream(bytes: &[u8]) -> Vec<ContentTok> {
 }
 
 fn parse_content_array(bytes: &[u8], mut pos: usize) -> (Vec<ContentTok>, usize) {
-    pos += 1; // skip '['
+    pos += 1;
     let mut items = Vec::new();
     while pos < bytes.len() {
         pos = skip_ws(bytes, pos);
@@ -2220,7 +2165,7 @@ fn find_inline_image_end(bytes: &[u8]) -> Option<usize> {
 }
 
 fn parse_literal_string(bytes: &[u8], mut pos: usize) -> (Vec<u8>, usize) {
-    pos += 1; // skip '('
+    pos += 1;
     let mut out = Vec::new();
     let mut depth = 1usize;
     while pos < bytes.len() {
@@ -2280,7 +2225,7 @@ fn parse_literal_string(bytes: &[u8], mut pos: usize) -> (Vec<u8>, usize) {
 }
 
 fn parse_hex_string(bytes: &[u8], mut pos: usize) -> (Vec<u8>, usize) {
-    pos += 1; // skip '<'
+    pos += 1;
     let mut hex = Vec::new();
     while pos < bytes.len() {
         let b = bytes[pos];
@@ -2305,7 +2250,7 @@ fn parse_hex_string(bytes: &[u8], mut pos: usize) -> (Vec<u8>, usize) {
 }
 
 fn parse_name_token(bytes: &[u8], mut pos: usize) -> (String, usize) {
-    pos += 1; // skip '/'
+    pos += 1;
     let mut raw = Vec::new();
     while pos < bytes.len() && !is_pdf_delim_or_ws(Some(bytes[pos])) {
         if bytes[pos] == b'#' && pos + 2 < bytes.len() {
@@ -2320,10 +2265,6 @@ fn parse_name_token(bytes: &[u8], mut pos: usize) -> (String, usize) {
     }
     (String::from_utf8_lossy(&raw).into_owned(), pos)
 }
-
-// ============================================================
-// 扫描、位运算与编码映射辅助函数
-// ============================================================
 
 fn find_pdf_header(bytes: &[u8]) -> Option<usize> {
     let limit = bytes.len().min(1024);
@@ -2641,11 +2582,8 @@ pub(crate) mod tests {
 
     pub(crate) fn build_test_pdf(pages_bodies: &[&[u8]], compressed: bool) -> Vec<u8> {
         let mut objects: Vec<Vec<u8>> = Vec::new();
-        // 1: Catalog
         objects.push(b"<< /Type /Catalog /Pages 2 0 R >>".to_vec());
-        // 2: Pages (placeholder, filled below)
         objects.push(Vec::new());
-        // 3: Font
         objects.push(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_vec());
 
         let mut kid_refs = Vec::new();
@@ -2715,7 +2653,6 @@ pub(crate) mod tests {
         let mut bodies: Vec<Vec<u8>> = Vec::new();
         for p in 1..=16 {
             if p == 2 {
-                // 第 2 页为空白页，绝不能让后续页码偏移！
                 bodies.push(Vec::new());
             } else if p == 14 {
                 bodies.push(
@@ -2753,7 +2690,6 @@ endbfchar
 <0010> <0011> <8BD56587>
 endbfrange
 endcmap"#;
-        // 单独测 CMap 2 字节映射 + TJ 负字距空格
         let mut objects: Vec<Vec<u8>> = vec![
             b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
             b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
@@ -2846,7 +2782,6 @@ endcmap"#;
 
     #[test]
     fn pdf15_xref_stream_and_objstm_with_png_predictor_work() {
-        // 构造带 /ObjStm (obj 3 = Page) + /Type /XRef (/Filter /FlateDecode + /Predictor 12) 的 PDF 1.5
         let obj1 = b"<< /Type /Catalog /Pages 2 0 R >>";
         let obj2 = b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>";
         let objstm_header = b"3 0 ";
@@ -2897,12 +2832,11 @@ endcmap"#;
         pdf.extend_from_slice(b"\nendstream\nendobj\n");
 
         let xref_off = pdf.len();
-        // entries 0..=7: W=[1, 4, 2] -> 7 bytes per row; add PNG filter byte 0 (None)
         let rows: [(u8, u32, u16); 8] = [
             (0, 0, 65535),
             (1, off1 as u32, 0),
             (1, off2 as u32, 0),
-            (2, 6, 0), // obj 3 compressed in objstm 6 at index 0
+            (2, 6, 0),
             (1, off4 as u32, 0),
             (1, off5 as u32, 0),
             (1, off6 as u32, 0),
@@ -2910,7 +2844,7 @@ endcmap"#;
         ];
         let mut raw_xref = Vec::new();
         for (t, f1, f2) in rows {
-            raw_xref.push(0); // PNG None filter
+            raw_xref.push(0);
             raw_xref.push(t);
             raw_xref.extend_from_slice(&f1.to_be_bytes());
             raw_xref.extend_from_slice(&f2.to_be_bytes());
@@ -2935,8 +2869,6 @@ endcmap"#;
 
     #[test]
     fn stray_gt_in_cmap_terminates_tokenization() {
-        // 回归：CAD 打印 PDF 的 ToUnicode CMap 含游离 '>'，旧词法器在原地
-        // 无限推入空 String（24 B/条），单次列表请求即可把内存推到 96 GiB。
         let mut cmap = b"begincmap /CIDSystemInfo << /Registry (Adobe) >> 1 begincodespacerange <0000> <FFFF> endcodespacerange endcmap".to_vec();
         cmap.extend_from_slice(b"> >>>> trailing");
         let toks = tokenize_cmap(&cmap);
@@ -2950,8 +2882,6 @@ endcmap"#;
 
     #[test]
     fn inline_image_without_ei_terminates_tokenization() {
-        // 回归：畸形内联图像（有 ID 无 EI）曾让词法器原地 continue 无限堆 token，
-        // 单次文件列表请求即可把内存推到数十 GB。
         let mut body =
             b"BT /F1 12 Tf 72 720 Td (Before) Tj ET BI /W 4 /H 4 /BPC 8 /CS /G ID ".to_vec();
         body.extend_from_slice(&[0u8; 64]);
@@ -2969,14 +2899,11 @@ endcmap"#;
 
     #[test]
     fn page_text_accumulation_is_hard_capped() {
-        // 回归：畸形/指数展开 PDF 曾在解释阶段累计出数十 GB 文本，
-        // 直到序列化时才以 96 GiB 分配失败崩溃。累计阶段必须硬封顶。
         let mut ctx = PageExtractCtx::default();
         ctx.push_text(&"x".repeat(MAX_PAGE_TEXT_ACCUM * 3));
         assert_eq!(ctx.out.len(), MAX_PAGE_TEXT_ACCUM);
         ctx.push_char('y');
         assert_eq!(ctx.out.len(), MAX_PAGE_TEXT_ACCUM);
-        // 多字节字符不得越过上限在中间阶段被截断
         ctx.out.truncate(MAX_PAGE_TEXT_ACCUM - 1);
         ctx.push_text("拥抱");
         assert!(ctx.out.len() <= MAX_PAGE_TEXT_ACCUM);

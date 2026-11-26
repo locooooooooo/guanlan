@@ -1,8 +1,3 @@
-/**
- * 多模态 Diff 纯函数层单测（行 Diff / MD 人类视图 / SVG 图元 / 表格数值 / XLSX）。
- * 口径锁定：预算超限诚实拒绝不伪造；行号/坐标确定；三类变化（增/删/改）语义；
- * XLSX 按名称+row_num+col_idx 对齐；CSV 行签名 LCS 对齐；数值增量 Δ。
- */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
@@ -19,12 +14,11 @@ import {
   type XlsxDiffResult,
 } from './multimodalDiff';
 
-// ---------- ① 行级 Diff ----------
 
 test('行Diff：增删行号确定（unchanged 双行号/added 新行号/removed 旧行号）', () => {
   const result = computeLineDiffRows('a\nb\nc', 'a\nX\nb\nc\nd');
   assert.ok(result.ok);
-  assert.equal(result.added, 2); // X 与 d（LCS: a,b,c 全配对）
+  assert.equal(result.added, 2);
   assert.equal(result.removed, 0);
   const added = result.rows.filter((r) => r.type === 'added').map((r) => r.text);
   const removed = result.rows.filter((r) => r.type === 'removed').map((r) => r.text);
@@ -53,7 +47,6 @@ test('行Diff：空旧版=全新增（不伪造「无变化」）', () => {
 });
 
 test('行Diff：预算超限诚实拒绝（DIFF_TOO_LARGE，不静默截断）', () => {
-  // 构造恰好越过 DP 单元预算的最小规模
   const lines = Math.ceil(Math.sqrt(LCS_MAX_CELLS)) + 1;
   const big = Array.from({ length: lines }, (_, i) => `line-${i}`).join('\n');
   const other = big.replace('line-0', 'LINE-0');
@@ -65,7 +58,6 @@ test('行Diff：预算超限诚实拒绝（DIFF_TOO_LARGE，不静默截断）',
   }
 });
 
-// ---------- collapseHunks ----------
 
 test('collapseHunks：两处远离变化→两窗口；相近变化→合并；无变化→[]', () => {
   const rows = computeLineDiffRows(
@@ -76,17 +68,14 @@ test('collapseHunks：两处远离变化→两窗口；相近变化→合并；�
   const hunks = collapseHunks(rows.rows, 2);
   assert.equal(hunks.length, 2);
   assert.ok(hunks[0].startIndex < hunks[0].endIndex);
-  // 相邻变化（隔 1 行）应合并为单窗口
   const close = computeLineDiffRows('a\nb\nc\nd\ne', 'a\nB\nC\nd\ne');
   assert.ok(close.ok);
   assert.equal(collapseHunks(close.rows, 1).length, 1);
-  // 完全相同 → 无窗口（诚实空）
   const same = computeLineDiffRows('a\nb', 'a\nb');
   assert.ok(same.ok);
   assert.deepEqual(collapseHunks(same.rows, 2), []);
 });
 
-// ---------- ② MD 人类可读 Diff ----------
 
 test('MD：决定变化三类（新增/移除/状态变化带 oldStatus）', () => {
   const oldText = [
@@ -127,7 +116,6 @@ test('MD：待办变化（新增待办/移除；两版相同项不误报变化�
   const kinds = result.todoChanges.map((change) => `${change.kind}:${change.text}`);
   assert.ok(kinds.includes('added:新增待办'));
   assert.ok(kinds.includes('removed:旧待办'));
-  // 两版勾选态相同的同名待办绝不产生 changed（诚实口径）
   assert.ok(!result.todoChanges.some((change) => change.text === '未变项'));
   assert.ok(!result.todoChanges.some((change) => change.text === '已完成项'));
 });
@@ -148,11 +136,10 @@ test('MD：标题结构 outline 携带逐章徽标；删除章只在 sections �
   assert.equal(byTitle.get('背景')!.changeKind, 'changed');
   assert.equal(byTitle.get('算法')!.changeKind, 'changed');
   assert.equal(byTitle.get('新增章')!.changeKind, 'added');
-  assert.ok(!byTitle.has('移除章')); // 新版结构里没有
+  assert.ok(!byTitle.has('移除章'));
   const removedSection = result.sections.find((change) => change.title === '移除章');
   assert.ok(removedSection);
   assert.equal(removedSection!.kind, '删除');
-  // 关键增删段非空且窗口落在 rows 界内
   assert.ok(result.keySegments.length > 0);
   assert.ok(result.lineDiff.ok);
   const total = result.lineDiff.ok ? result.lineDiff.rows.length : 0;
@@ -161,7 +148,6 @@ test('MD：标题结构 outline 携带逐章徽标；删除章只在 sections �
   }
 });
 
-// ---------- ③ SVG 图元 Diff ----------
 
 const SVG_A = [
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">',
@@ -175,11 +161,11 @@ const SVG_A = [
 
 const SVG_B = [
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">',
-  '<rect id="bg" x="0" y="0" width="400" height="310" fill="#111"/>', // 改：height
-  '<circle cx="180" cy="100" r="40" fill="#4C8DFF"/>', // 无 id 移位 → 签名异
+  '<rect id="bg" x="0" y="0" width="400" height="310" fill="#111"/>',
+  '<circle cx="180" cy="100" r="40" fill="#4C8DFF"/>',
   '<line x1="10" y1="10" x2="90" y2="90" stroke="#888"/>',
-  '<text x="200" y="150" font-size="18">登录方案v2</text>', // 文本改
-  '<polygon points="0,0 20,0 10,18"/>', // 新增
+  '<text x="200" y="150" font-size="18">登录方案v2</text>',
+  '<polygon points="0,0 20,0 10,18"/>',
   '</svg>',
 ].join('\n');
 
@@ -192,16 +178,16 @@ test('SVG：id 命中改尺寸→changed 取新版盒；新增/删除按签名 L
   assert.equal(rect.length, 1);
   assert.equal(rect[0].kind, 'changed');
   assert.equal(rect[0].id, 'bg');
-  assert.deepEqual(rect[0].box, { x: 0, y: 0, width: 400, height: 310 }); // 新版盒
+  assert.deepEqual(rect[0].box, { x: 0, y: 0, width: 400, height: 310 });
   const circle = byLabelTag('circle');
   assert.equal(circle.length, 1);
-  assert.equal(circle[0].kind, 'changed'); // 移位=改
+  assert.equal(circle[0].kind, 'changed');
   assert.deepEqual(circle[0].box, { x: 140, y: 60, width: 80, height: 80 });
   const text = byLabelTag('text');
   assert.equal(text.length, 1);
   assert.equal(text[0].kind, 'changed');
   const line = byLabelTag('line');
-  assert.equal(line.length, 0); // 未变不产出
+  assert.equal(line.length, 0);
   const polygon = byLabelTag('polygon');
   assert.equal(polygon.length, 1);
   assert.equal(polygon[0].kind, 'added');
@@ -251,10 +237,9 @@ test('SVG：无 viewBox 且无尺寸 → units=null（不伪造几何框），�
   assert.equal(result.ok ? result.changed : 0, 1);
   const change = result.ok ? result.changes[0] : undefined;
   assert.ok(change);
-  assert.ok(change!.box); // 盒仍按用户单位给出，只是 units 缺失不画叠加
+  assert.ok(change!.box);
 });
 
-// ---------- ④ 表格数值 Diff ----------
 
 test('表格：增/删/改行与数值 Δ；表头变化；identical 零变化', () => {
   const oldCsv = [
@@ -265,17 +250,17 @@ test('表格：增/删/改行与数值 Δ；表头变化；identical 零变化',
   ].join('\n');
   const newCsv = [
     '物料,数量,单价',
-    '螺栓,150,0.5', // 数值改 100→150（Δ+50）
+    '螺栓,150,0.5',
     '螺母,50,0.3',
-    '平垫,20,0.2', // 新增行
+    '平垫,20,0.2',
   ].join('\n');
   const result = buildTableDiff(oldCsv, newCsv, ',');
   assert.ok(result.ok);
   assert.equal(result.headerChanges.length, 0);
-  assert.equal(result.addedRows, 1); // 平垫
-  assert.equal(result.removedRows, 1); // 垫片
-  assert.equal(result.changedRows, 1); // 螺栓（首列同键还原为改行）
-  assert.equal(result.numericChanges, 1); // 数量 Δ+50（单价同值不改）
+  assert.equal(result.addedRows, 1);
+  assert.equal(result.removedRows, 1);
+  assert.equal(result.changedRows, 1);
+  assert.equal(result.numericChanges, 1);
   assert.equal(result.cellChanges, 1);
   const changedRow = result.rows.find((row) => row.kind === 'changed');
   assert.ok(changedRow && changedRow.kind === 'changed');
@@ -287,7 +272,7 @@ test('表格：增/删/改行与数值 Δ；表头变化；identical 零变化',
   assert.equal(change.numeric.oldValue, 100);
   const addedRow = result.rows.find((row) => row.kind === 'added');
   assert.ok(addedRow && addedRow.kind === 'added');
-  assert.equal(addedRow.rowNum, 4); // 新版第 4 行（表头=1，平垫在第 4 行）
+  assert.equal(addedRow.rowNum, 4);
   const removedRow = result.rows.find((row) => row.kind === 'removed');
   assert.ok(removedRow && removedRow.kind === 'removed');
   assert.equal(removedRow.oldRowNum, 4);
@@ -338,7 +323,6 @@ test('表格：行数超上限诚实 rowCapped（不冒充全量对比）', () =
   assert.equal(result.rowCap, 1000);
 });
 
-// ---------- ⑤ XLSX Diff ----------
 
 function sheetOf(
   name: string,
@@ -372,9 +356,9 @@ test('XLSX：同名工作表逐格对比（row_num/col_idx 对齐、数值 Δ）
   const newXlsx = {
     sheets: [
       sheetOf('报价', [
-        { row_num: 2, cells: [{ ref_id: 'A2', col_idx: 0, value: '螺栓', is_numeric: false }] }, // 未变
-        { row_num: 3, cells: [{ ref_id: 'A3', col_idx: 0, value: '螺母', is_numeric: false }, { ref_id: 'B3', col_idx: 1, value: '75', is_numeric: true }] }, // B3 改
-        { row_num: 4, cells: [{ ref_id: 'A4', col_idx: 0, value: '平垫', is_numeric: false }, { ref_id: 'B4', col_idx: 1, value: '20', is_numeric: true }] }, // 新增行
+        { row_num: 2, cells: [{ ref_id: 'A2', col_idx: 0, value: '螺栓', is_numeric: false }] },
+        { row_num: 3, cells: [{ ref_id: 'A3', col_idx: 0, value: '螺母', is_numeric: false }, { ref_id: 'B3', col_idx: 1, value: '75', is_numeric: true }] },
+        { row_num: 4, cells: [{ ref_id: 'A4', col_idx: 0, value: '平垫', is_numeric: false }, { ref_id: 'B4', col_idx: 1, value: '20', is_numeric: true }] },
       ]),
       sheetOf('新增表'),
     ],

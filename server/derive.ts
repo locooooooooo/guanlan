@@ -1,11 +1,3 @@
-/**
- * 观澜 Node 对拍基线 —— 服务端派生：决策陈述与引用关系
- *
- * 将决定的业务 ID 与陈述 ID 分开：
- * - 每条来源陈述都有独立 statement_id（同编号不同问题绝不共用身份）
- * - 业务决定 ID 由「命名空间 + 归一化问题」推导，只有同问题才归入同一决定
- * - 引用绑定到来源版本，并记录目标版本是否已知
- */
 
 import type { StatementRow, EdgeRow, TimeSource, TimePrecision } from './WorkspaceStore';
 import { EXTRACT_RULE_VERSION } from './WorkspaceStore';
@@ -20,11 +12,8 @@ export interface DeriveInput {
   format: 'md' | 'svg' | 'pdf';
   content: string;
   observedAt: string;
-  /** 工作区根目录：用于把原文中的绝对路径链接映射回工作区相对路径 */
   rootPath: string;
-  /** 已知文件路径 → file_id，用于把链接解析成有依据的关系 */
   pathIndex: Map<string, string>;
-  /** 目标文件当时的最新版本（引用随来源版本演进时记为 collected_version） */
   targetRevisionIndex: Map<string, string>;
 }
 
@@ -37,7 +26,6 @@ const stripMd = (s: string) =>
     .trim();
 
 function detectStatus(text: string): string {
-  // 去掉加粗/行内代码标记后再匹配，兼容「**当前状态**：已确认」这类写法
   const plain = text.replace(/\*\*/g, '').replace(/`/g, '');
   if (/状态[：:]\s*已确认/.test(plain) || /回执状态[：:]\s*已确认/.test(plain)) return '已确认';
   if (/状态[：:]\s*已否决/.test(plain)) return '已否决';
@@ -48,10 +36,6 @@ function detectStatus(text: string): string {
   return '未知';
 }
 
-/**
- * 归一化问题文本用于判定「是否同一项决定」。
- * 去掉空白、标点差异与编号前缀，保留语义主干。
- */
 function normalizeQuestion(q: string): string {
   return q
     .replace(/\s+/g, '')
@@ -62,7 +46,6 @@ function normalizeQuestion(q: string): string {
 }
 
 function stableKey(input: string): string {
-  // 短摘要：用于 statement/decision/edge 的可重放身份，重试沿用同一记录标识
   let h = 2166136261;
   for (let i = 0; i < input.length; i++) {
     h ^= input.charCodeAt(i);
@@ -71,10 +54,6 @@ function stableKey(input: string): string {
   return (h >>> 0).toString(36);
 }
 
-/**
- * 从条目正文提取选项、推荐语与影响范围。
- * 推荐语保留原文限定（“推荐”不等于“已确认”）。
- */
 function extractDetail(bodyLines: string[]): {
   options: string[];
   recommendation: string;
@@ -149,7 +128,6 @@ export function deriveStatements(input: DeriveInput): StatementRow[] {
     if (seen.has(identity)) return;
     seen.add(identity);
 
-    // 业务决定 ID：命名空间 + 归一化问题 —— 同问题才同一决定，不同问题各自独立
     const decisionId = `dec_${stableKey(`${namespaceBase}::${normalizeQuestion(question)}`)}`;
     const statementId = `stmt_${stableKey(`${input.revisionId}::${code}::L${lineStart}`)}`;
     const detail = extractDetail(bodyLines);
@@ -185,7 +163,6 @@ export function deriveStatements(input: DeriveInput): StatementRow[] {
     return body;
   };
 
-  // 格式 A：## N 标题 + 沿用编号
   let currentTitle = '';
   let currentStart = 0;
   const sections: Array<{ title: string; start: number; body: string[] }> = [];
@@ -211,7 +188,6 @@ export function deriveStatements(input: DeriveInput): StatementRow[] {
     }
   }
 
-  // 格式 B：### Q01：标题
   for (let i = 0; i < lines.length; i++) {
     const m = /^###\s+(Q\d+)\s*[:：]\s*(.+)$/.exec(lines[i].trim());
     if (!m) continue;
@@ -219,7 +195,6 @@ export function deriveStatements(input: DeriveInput): StatementRow[] {
     push(m[1].toUpperCase(), m[2].trim(), detectStatus(bodyLines.join('\n')), stripMd(bodyLines.filter((l) => l.trim()).join(' ')), i + 1, i + bodyLines.length, bodyLines);
   }
 
-  // 疑似决策候选：带「是不是可以考虑/口头探讨/尚未形成正式提案」的段落不计入真实待确认
   return out;
 }
 
@@ -245,19 +220,17 @@ export function deriveEdges(input: DeriveInput): EdgeRow[] {
       const hrefRaw = m[2];
       if (/^(https?:|mailto:|data:)/i.test(hrefRaw)) continue;
 
-      // 支持三元形式：[文字](相对路径) / [文字](<C:/绝对路径>) / [文字](path "title")
       let href = hrefRaw.trim();
       if (href.startsWith('<') && href.endsWith('>')) href = href.slice(1, -1).trim();
       try {
         href = decodeURIComponent(href);
       } catch {
-        /* 保留原样 */
       }
       href = href.split('#')[0];
       if (!href) continue;
 
       const resolved = resolveWorkspacePath(input.rootPath, currentDir, href);
-      if (resolved === null) continue; // 绝对路径指向工作区之外：不授予新目录权限
+      if (resolved === null) continue;
 
       const targetFileId = input.pathIndex.get(resolved);
 
@@ -305,12 +278,6 @@ function normalizeJoin(dir: string, rel: string): string {
   return stack.join('/');
 }
 
-/**
- * 把原文链接解析成工作区相对路径。
- * - 相对路径：按当前文档所在目录解析
- * - 根相对（/a/b）：按工作区根解析
- * - 绝对路径（C:/...）：仅当落在已配置根目录内才映射；越界返回 null
- */
 function resolveWorkspacePath(
   rootPath: string,
   currentDir: string,
@@ -356,7 +323,6 @@ export function deriveDocumentTime(content: string): {
     const cleaned = raw.trim().replace(/["']/g, '');
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(cleaned);
     if (m) {
-      // 只有日期：保留到天，不补零点时刻（只到日的事项归在日期组）
       return { occurredAt: `${m[1]}-${m[2]}-${m[3]}`, precision: 'day', source: 'document_self' };
     }
   }

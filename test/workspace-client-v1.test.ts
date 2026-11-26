@@ -22,22 +22,10 @@ import {
   type FileSummaryPage,
 } from '../src/services/workspaceClient';
 
-/**
- * /api/v1 workspaceClient 的 node:test（本地 http 桩，无外部依赖）。
- *
- * 覆盖（契约 native/docs/contract-query-api.md）：
- * - bootstrap 解析（§1.1）；
- * - files 分页遍历（§1.3，relative_path ASC + 游标）与游标失效重走（CURSOR_STALE）；
- * - events 窗口分页（§1.4，snapshot 绑定）与游标失效标记（stale=true，调用方保留数据重取首页）；
- * - 版本链分页合并（§1.7）与按需正文 / 错误包络（§1.8，SNAPSHOT_UNAVAILABLE）；
- * - wire → 视图模型转换（fileSummaryToFileRecord / revisionsFromHistory，镜像 server/project.ts）。
- */
 
-// ---------- 本地 http 桩 ----------
 
 type Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => void;
 
-/** 起一个随机端口 http 桩；routes 按「路径前缀 + 精确查询判定」逐条尝试 */
 async function startStub(routes: Array<{ match: (url: URL, req: IncomingMessage) => boolean; handler: Handler }>) {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url || '/', 'http://stub.local');
@@ -55,8 +43,6 @@ async function startStub(routes: Array<{ match: (url: URL, req: IncomingMessage)
     base: `http://127.0.0.1:${addr.port}`,
     close: () =>
       new Promise<void>((resolve) => {
-        // fetch（undici）默认 keep-alive：server.close() 会等常连接而挂起，
-        // 必须显式断掉全部连接再等关闭回调
         server.closeAllConnections();
         server.close(() => resolve());
       }),
@@ -68,7 +54,6 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-// ---------- 夹具 ----------
 
 function summaryOf(i: number): FileSummaryPage['items'][number] {
   const n = String(i).padStart(3, '0');
@@ -86,13 +71,10 @@ function summaryOf(i: number): FileSummaryPage['items'][number] {
     last_observed_at: '2026-11-10T00:00:00.000Z',
     first_source_time: '2026-11-05',
     coverage: 'full_text',
-    // md 不带 pdf_status：dto.rs Option+skip（非 PDF 不出现键），
-    // 夹具如实缺键，才能暴露类型可选性与 wire 的漂移
     snapshot_available: true,
   };
 }
 
-/** 按游标（页码）分页出 N 条摘要：游标形如 `cur-<offset>`，末页 next_cursor=null */
 function filePageFor(url: URL, total: number, pageSize: number): FileSummaryPage {
   const cursor = url.searchParams.get('cursor');
   const limit = Number(url.searchParams.get('limit') || pageSize);
@@ -117,7 +99,6 @@ describe('workspaceClient /api/v1（本地 http 桩）', () => {
       {
         match: (url) => url.pathname === '/api/v1/bootstrap',
         handler: (_req, res, url) => {
-          // 请求参数走 snake_case（days_limit 等，契约 §1.1）
           assert.equal(url.searchParams.get('days_limit'), '120');
           assert.equal(url.searchParams.get('days_samples'), '6');
           assert.equal(url.searchParams.get('events_limit'), '50');
@@ -161,7 +142,6 @@ describe('workspaceClient /api/v1（本地 http 桩）', () => {
       assert.equal(result.data.baseline, false, '空工作区 baseline=false，前端按「尚未覆盖」渲染');
       assert.equal(result.data.counts.events, 3);
       assert.equal(result.data.files_total, 2);
-      // 契约 §1.1 约束：bootstrap 响应任何位置不出现 svgSource / markdownContent / revisions[]
       assert.equal(JSON.stringify(result.data).includes('svgSource'), false);
       assert.equal(JSON.stringify(result.data).includes('markdownContent'), false);
     } finally {
@@ -187,7 +167,6 @@ describe('workspaceClient /api/v1（本地 http 桩）', () => {
       const result = await fetchAllFileSummaries({ limit: 3 }, (page) => pages.push(page));
       assert.equal(result.ok, true);
       assert.equal(result.items.length, 7, '三页（3+3+1）应合并全部 7 条');
-      // relative_path ASC 序：合并后仍单调
       const paths = result.items.map((i) => i.relative_path);
       assert.deepEqual(paths, [...paths].sort());
       assert.equal(new Set(result.items.map((i) => i.file_id)).size, 7, '按 file_id 去重不缺不重');
@@ -208,7 +187,6 @@ describe('workspaceClient /api/v1（本地 http 桩）', () => {
         match: (url) => url.pathname === '/api/v1/files',
         handler: (_req, res, url) => {
           const cursor = url.searchParams.get('cursor');
-          // 首次走到第 2 页时 bump 代际，让旧游标被判 CURSOR_STALE 一次
           if (cursor === 'cur-2' && !servedOldCursor) {
             servedOldCursor = true;
             generation += 1;
@@ -261,7 +239,6 @@ describe('workspaceClient /api/v1（本地 http 桩）', () => {
         match: (url) => url.pathname === '/api/v1/events',
         handler: (_req, res, url) => {
           const cursor = url.searchParams.get('cursor');
-          // 全窗 6 条（seq 6..1），每页 2 条；items 按 seq DESC（keyset 口径）
           const offset = cursor ? Number(cursor.replace('ec-', '')) : 0;
           const all = Array.from({ length: 6 }, (_, i) => ({
             seq: 6 - i,
@@ -301,13 +278,11 @@ describe('workspaceClient /api/v1（本地 http 桩）', () => {
     ]);
     try {
       setApiBaseUrl(stub.base);
-      // 首页
       const first = await fetchEventPage({ limit: 2 });
       assert.equal(first.stale, false);
       assert.ok(first.page);
       assert.equal(first.page.snapshot_max_seq, 6, '窗口快照绑定');
       const seen: number[] = first.page.items.map((i) => i.seq);
-      // 续页直到取完（调用方累计模式，同 App.loadMoreEvents）
       let cursor = first.page.next_cursor;
       let guard = 0;
       while (cursor && guard < 10) {
@@ -333,7 +308,6 @@ describe('workspaceClient /api/v1（本地 http 桩）', () => {
         handler: (_req, res, url) => {
           const cursor = url.searchParams.get('cursor');
           if (cursor && invalidateNext) {
-            // 指纹不符（续页漏 kinds）→ CURSOR_STALE；游标损坏 → 同码（契约 §0.2/§1.4）
             json(res, 409, { ok: false, code: 'CURSOR_STALE', error: '游标绑定筛选不一致', index_generation: 13 });
             return;
           }
@@ -363,7 +337,6 @@ describe('workspaceClient /api/v1（本地 http 桩）', () => {
       assert.equal(second.page, null, '游标失效不给页——已显示数据只能由调用方自己保留');
       assert.equal(second.stale, true, 'stale 标记驱动「重取首页」');
       assert.equal(second.code, 'CURSOR_STALE');
-      // 重取首页（不带游标）恢复新窗口
       invalidateNext = false;
       const fresh = await fetchEventPage({ limit: 2, kinds: ['modified'] });
       assert.equal(fresh.stale, false);
@@ -386,7 +359,7 @@ describe('workspaceClient /api/v1（本地 http 桩）', () => {
       occurred_at: `2026-11-0${i + 1}`,
       occurred_precision: 'day',
       occurred_source: 'document_self',
-      snapshot_available: i !== 1, // v2 快照淘汰
+      snapshot_available: i !== 1,
     }));
     let pageCalls = 0;
     const stub = await startStub([
@@ -395,7 +368,6 @@ describe('workspaceClient /api/v1（本地 http 桩）', () => {
         handler: (_req, res, url) => {
           pageCalls += 1;
           assert.equal(url.searchParams.get('order'), 'seq_asc');
-          // include 只在首页发送（文件级集合含 aliases，不随版本页重复传输）
           assert.equal(
             url.searchParams.get('include'),
             pageCalls === 1 ? 'events,statements,edges,aliases' : null,
@@ -423,7 +395,6 @@ describe('workspaceClient /api/v1（本地 http 桩）', () => {
             next_cursor: hasMore ? `rc-${offset + items.length}` : null,
             has_more: hasMore,
             total: revisions.length,
-            // 相关事件集合只在首页携带（不随版本分页）
             ...(cursor ? {} : {
               events: [
                 {
@@ -515,9 +486,6 @@ describe('workspaceClient /api/v1（本地 http 桩）', () => {
   });
 
   test('阅读器链路走 /revisions 分页（fetchFileHistory → revisionsFromHistory），include 仅首页发送', async () => {
-    // /detail 兼容视图退场后，阅读器版本链统一走 §1.7 分页端点：
-    // snake_case wire（seq/occurred_at/size_bytes）→ revisionsFromHistory，
-    // changedSectionsFromPrev 由首页 modified 事件 payload 归档。
     const requestedUrls: string[] = [];
     const revisions = [1, 2].map((seq) => ({
       revision_id: `rev_svg_r${seq}`,
@@ -584,7 +552,6 @@ describe('workspaceClient /api/v1（本地 http 桩）', () => {
       setApiBaseUrl(stub.base);
       const history = await fetchFileHistory('file_svg');
       assert.ok(history, '版本链读取成功');
-      // include 参数只在首页出现（续页不再请求文件级附集合）
       assert.match(requestedUrls[0], /include=events/, '首页携带 include');
       assert.equal(requestedUrls[1]?.includes('include'), false, '续页不再发送 include');
 
@@ -637,10 +604,8 @@ describe('workspaceClient /api/v1（本地 http 桩）', () => {
       assert.equal(evicted.ok, false);
       assert.equal(evicted.code, 'SNAPSHOT_UNAVAILABLE', 'v1 错误码改名（旧 REVISION_UNAVAILABLE 不再下发）');
 
-      // raw URL 自动绑定当前 apiBase（桌面壳 Tauri 跨源 WebView 下指向 127.0.0.1 端点；同源无 base 时保持相对路径）
       assert.equal(revisionRawUrl('rev_md'), `${stub.base}/api/v1/revisions/rev_md/content?raw=1`);
 
-      // 批量通道：失败项进 failed 不污染正文缓存（过渡通道语义保留）
       const batch = await fetchRevisionContentsBatch(['rev_md', 'rev_evicted']);
       assert.deepEqual(batch.contents, { rev_md: '# 正文' });
       assert.ok(batch.failed['rev_evicted']);
@@ -657,7 +622,6 @@ describe('workspaceClient /api/v1（本地 http 桩）', () => {
     assert.equal(record.relative_path, 'docs/a001.md');
     assert.equal(record.folder, 'docs');
     assert.equal(record.current_revision_id, 'rev_001_v1');
-    // 摘要不带 revisions[]，但当前版占位行必须有：阅读器/未读提示按 id 找版本不悬空
     assert.equal(record.revisions.length, 1);
     assert.equal(record.revisions[0].revision_id, 'rev_001_v1');
     assert.equal(record.revisions[0].source_time, '2026-11-05', 'first_source_time = 最早版本发生时间');

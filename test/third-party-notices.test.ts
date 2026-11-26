@@ -1,9 +1,3 @@
-/**
- * THIRD_PARTY_NOTICES 的守卫。分两类：
- * - 与当前的依赖对得上：只读文件，不需要 cargo，也不跑构建，所以 CI 的 frontend 作业也守得到。
- *   依赖变了却没有重新生成、或者有人手工改了文件，这里都会红。
- * - 取法本身：用小的夹具钉住「模块 id 对应到哪个包」「cargo tree 的哪一行是包」「哪些情况必须报错」。
- */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -28,7 +22,6 @@ const notices = parseNotices(noticesText);
 
 const rowKey = (row: { name: string; version: string }) => `${row.name}@${row.version}`;
 
-/** package-lock.json 里的全部「包名@版本」→ 它声明的许可。 */
 function npmLockLicenses(): Map<string, Set<string>> {
   const lock = JSON.parse(read('package-lock.json')) as {
     packages: Record<string, { version: string; license?: string }>;
@@ -44,7 +37,6 @@ function npmLockLicenses(): Map<string, Set<string>> {
   return out;
 }
 
-/** native/Cargo.lock 里的全部 crate：「名字@版本」→ 是不是本仓库自己的（没有 source 行）。 */
 function cargoLockCrates(): Map<string, boolean> {
   const out = new Map<string, boolean>();
   for (const block of read('native/Cargo.lock').split('[[package]]').slice(1)) {
@@ -68,7 +60,6 @@ describe('第三方许可索引：与当前的依赖对得上', () => {
   });
 
   it('文件里记着的两张表的 SHA-256 与表里的内容一致——表里任何一处手工改动都会让这里红', () => {
-    // 许可一栏在 Rust 一侧没有源头可对（Cargo.lock 不记许可），靠这个摘要保证它就是生成器写出来的
     assert.equal(notices.digests.npm, rowsDigest(notices.npm), '前端的表被手工改过');
     assert.equal(notices.digests.rust, rowsDigest(notices.rust), 'Rust 的表被手工改过');
   });
@@ -118,8 +109,6 @@ describe('第三方许可索引：与当前的依赖对得上', () => {
     for (const name of ['tauri', 'rusqlite', 'libsqlite3-sys', 'axum', 'tokio', 'windows']) {
       assert.ok(rustNames.includes(name), `Rust 清单里应当有 ${name}`);
     }
-    // 这几个都在 package-lock.json 里、也都算「非 dev」，但它们不进发行包。按锁文件的 dev 标记取
-    // 会把它们列进来，所以在这里钉住。
     for (const name of ['vite', 'rolldown', '@vitejs/plugin-react', '@tailwindcss/vite', '@tailwindcss/oxide', 'lightningcss']) {
       assert.ok(!npmNames.includes(name), `前端清单里不该有 ${name}：它是构建工具`);
     }
@@ -176,7 +165,6 @@ describe('第三方许可索引：模块 id 对应到锁文件里的哪个包', 
 
   it('仓库自己的文件、插件生成的虚拟模块与打包产物的文件名都不是第三方包', () => {
     assert.equal(packageOfModuleId('F:/GuanLan/src/App.tsx', root), null);
-    // 虚拟模块的 id 里可能带着真实包的路径（如 CommonJS 的代理模块），但它本身不是包里的文件
     assert.equal(packageOfModuleId('\0F:/GuanLan/node_modules/react/index.js?commonjs-proxy', root), null);
     assert.equal(packageOfModuleId('\0vite/modulepreload-polyfill', root), null);
     assert.equal(packageOfModuleId('assets/index-BuUSCYs-.css', root), null);
@@ -239,7 +227,6 @@ describe('第三方许可索引：由构建结果与锁文件得到前端一侧�
   });
 
   it('应用代码按名字导入、自己却没有代码进产物的包也列并注明；已有代码在产物里的不重复列', () => {
-    // d3 这个包自己只做转发，产物里只有它转出的 d3-* 各包的代码
     const rows = npmRowsFromLock(
       lock,
       ['F:/GuanLan/node_modules/d3-selection/src/index.js', 'F:/GuanLan/node_modules/react/index.js'],
@@ -361,7 +348,6 @@ describe('第三方许可索引：文件的写法与读法', () => {
     ]) {
       assert.notEqual(rowsDigest([changed]), rowsDigest([base]), `${JSON.stringify(changed)} 的摘要不该相同`);
     }
-    // 顺序不同就是不同的表
     assert.notEqual(rowsDigest([base, model.rust[1]]), rowsDigest([model.rust[1], base]));
   });
 

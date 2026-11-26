@@ -68,20 +68,15 @@ fn env_usize(name: &str, default: usize) -> usize {
 
 /// 有界查询执行器（AppState 持有 Arc 共享）
 pub struct QueryExecutor {
-    /// 连接池（Arc 以便归池闭环在阻塞任务内完成，见 [`QueryExecutor::run`]）
     pool: Arc<Mutex<Vec<ReadonlyStore>>>,
     permits: Arc<Semaphore>,
-    /// 正在排队（尚未取得许可）的请求数
     waiters: AtomicUsize,
     config: QueryConfig,
-    /// 连接数（= 并发执行上限）
     pool_size: usize,
-    /// generation 缓存：阻塞任务内轻量刷新，错误包络直接读（异步线程不抢 DB 锁）
     cached_generation: Arc<AtomicU64>,
     generation_valid: Arc<AtomicBool>,
 }
 
-/// 请求断开时打断进行中的查询；正常完成路径为 no-op（completed 已置位）
 struct CancelGuard {
     cancelled: Arc<AtomicBool>,
     completed: Arc<AtomicBool>,
@@ -144,13 +139,10 @@ impl QueryExecutor {
         T: Send + 'static,
         F: FnOnce(&ReadonlyStore) -> Result<T, GuanlanError> + Send + 'static,
     {
-        // ── ① 有界准入：队列满员 → 确定性拒绝（不进无界队列）
         if self.waiters.fetch_add(1, Ordering::SeqCst) >= self.config.max_waiters {
             self.waiters.fetch_sub(1, Ordering::SeqCst);
             return Err(GuanlanError::IndexBusy);
         }
-        // ── ② 排队 deadline：许可（=连接数）内等待，超时按饱和拒绝。
-        //      acquire_owned（Arc 许可，无生命周期绑定）——许可随阻塞任务闭环释放
         let permit = match tokio::time::timeout(
             self.config.wait_deadline,
             self.permits.clone().acquire_owned(),
@@ -158,15 +150,12 @@ impl QueryExecutor {
         .await
         {
             Ok(Ok(permit)) => permit,
-            // 超时 / 执行器已关闭 → 饱和反馈
             _ => {
                 self.waiters.fetch_sub(1, Ordering::SeqCst);
                 return Err(GuanlanError::IndexBusy);
             }
         };
         self.waiters.fetch_sub(1, Ordering::SeqCst);
-        // ── ③ 取连接：许可与池容量一一对应（持许可必持一条连接的占用权）；
-        //      panic 泄漏连接是唯一打破对应关系的路径（模块注释「容量回收纪律」）
         let store = {
             let mut pool = self.pool.lock().unwrap_or_else(|p| p.into_inner());
             pool.pop()
@@ -178,8 +167,6 @@ impl QueryExecutor {
             ));
         };
 
-        // ── ④ 取消传递：cancelled 标志 + InterruptHandle；响应 future 被丢弃
-        //      （客户端断开/切换）即打断进行中的 SQL（见 CancelGuard::drop）
         let cancelled = Arc::new(AtomicBool::new(false));
         let completed = Arc::new(AtomicBool::new(false));
         let interrupt = store.interrupt_handle();
@@ -187,7 +174,6 @@ impl QueryExecutor {
         {
             let cancelled = cancelled.clone();
             let completed = completed.clone();
-            // 安装失败仅少一层 progress 守护（interrupt 直打断仍在），不阻断查询
             let _ = store.install_query_cancel_guard(Box::new(move || {
                 cancelled.load(Ordering::Relaxed)
                     || (!completed.load(Ordering::Relaxed) && Instant::now() >= exec_deadline)
@@ -199,8 +185,6 @@ impl QueryExecutor {
             interrupt,
         };
 
-        // ── ⑤ 阻塞任务：generation 轻量刷新（缓存供错误包络，异步线程不抢 DB 锁）
-        //      → 执行查询 → 归池清理 → 连接入池 → 放许可（闭环归还，见函数注释）
         let pool = self.pool.clone();
         let cached_generation = self.cached_generation.clone();
         let generation_valid = self.generation_valid.clone();
@@ -209,8 +193,6 @@ impl QueryExecutor {
                 cached_generation.store(ws.index_generation, Ordering::SeqCst);
                 generation_valid.store(true, Ordering::SeqCst);
             }
-            // 查询体在 catch_unwind 里跑——panic 不再让连接随任务消失，
-            // 而是走「丢弃脏连接 → 重建并重新认领工作区 → 入池」
             let out = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&store)))
                 .unwrap_or_else(|_| {
                     Err(GuanlanError::Internal(
@@ -220,14 +202,11 @@ impl QueryExecutor {
             completed.store(true, Ordering::SeqCst);
             store.reset_query_state();
 
-            // 事务清理失败 / panic 中断过的连接：退出复用，重建后再入池
-            // （read_txn 的 RAII 守卫在 unwind 时已回滚；此处兜底回滚失败的情形）
             let poisoned = guanlan_core::storage::take_txn_poisoned();
             let store = if poisoned {
                 match store.reopen() {
                     Ok(fresh) => fresh,
                     Err(err) => {
-                        // 重建失败：该连接不再回池（池缩容），错误如实上报
                         drop(permit);
                         return Err(GuanlanError::Internal(format!(
                             "连接重建失败，已移出池：{err}"
@@ -241,7 +220,6 @@ impl QueryExecutor {
                 let mut pool = pool.lock().unwrap_or_else(|p| p.into_inner());
                 pool.push(store);
             }
-            // 连接先入池、许可后释放：排队者取得许可时池必有空闲连接
             drop(permit);
             out
         })
@@ -252,8 +230,6 @@ impl QueryExecutor {
                 drop(guard);
                 result
             }
-            // 任务级 panic（catch_unwind 之外的极端情形，如 OOM）：连接随任务消失，
-            // 池缩容；返回内部错误（客户端拿到明确的 500 而不是挂起）
             Err(join_err) => {
                 drop(guard);
                 Err(GuanlanError::Internal(format!("查询任务失败: {join_err}")))

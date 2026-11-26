@@ -243,8 +243,6 @@ async fn projects_search(
     Ok(Json(hub.search_all(q, limit).await))
 }
 
-// ===== 指定项目的原地文件夹 / 文档 CRUD =====
-
 async fn run_project_folder_op(
     state: &AppState,
     project_id: &str,
@@ -270,7 +268,6 @@ async fn run_project_folder_op(
     })?;
     match outcome {
         Ok(Ok(resp)) => {
-            // 目录结构变了：失效该项目的清单缓存
             rt.invalidate_folder_listing();
             Ok(Json(resp))
         }

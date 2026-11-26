@@ -21,17 +21,12 @@ use super::{build_router, AppState};
 use guanlan_core::error::GuanlanError;
 use guanlan_core::storage::ReadonlyStore;
 
-// ===== 夹具 =====
-
-/// 快照哈希（64 hex 形状即可，读取路径不做哈希校验）
 const H_MD: &str = "aa00000000000000000000000000000000000000000000000000000000000001";
 const H_SVG: &str = "aa00000000000000000000000000000000000000000000000000000000000002";
 const H_PDF: &str = "aa00000000000000000000000000000000000000000000000000000000000003";
 const H_GONE: &str = "aa00000000000000000000000000000000000000000000000000000000000004";
-/// 夹具 SVG 快照内容（含一个 <text> 文本节点）
 const SVG_SRC: &str = "<svg><text x=\"1\" y=\"2\">\u{6807}\u{9898}A</text><rect/></svg>";
 
-/// contract-storage.md §1.1 DDL 原文（38-170 行逐字摘录，与生产 schema 一致）
 const CONTRACT_DDL: &str = r#"
 CREATE TABLE IF NOT EXISTS workspaces (
   workspace_id       TEXT PRIMARY KEY,
@@ -287,7 +282,6 @@ CREATE INDEX IF NOT EXISTS idx_runs_state ON job_runs(workspace_id, state);
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(0);
 
-/// 临时夹具库：DDL 建表 + 可写连接（仅插数用）
 struct Fixture {
     dir: PathBuf,
     db_path: PathBuf,
@@ -313,7 +307,6 @@ impl Fixture {
         Self { dir, db_path, conn }
     }
 
-    /// 绝对测试根目录（cwd 无关）
     fn root(&self) -> String {
         self.dir.to_string_lossy().into_owned()
     }
@@ -527,8 +520,6 @@ impl Fixture {
     }
 }
 
-/// 丰富夹具：3 份可读资料（md/svg/pdf）+ 1 份 missing 文件 + 1 个快照缺失版本
-/// + 事件（可分页）/ 陈述 / 引用边。
 fn setup_workspace(tag: &str) -> (Fixture, String, String) {
     let fixture = Fixture::new(tag);
     let root = fixture.root();
@@ -541,8 +532,6 @@ fn setup_workspace(tag: &str) -> (Fixture, String, String) {
     fixture.blob(H_PDF, 8);
     fixture.write_blob_file(H_PDF, b"%PDF-1.4 fake");
 
-    // 可分页文件集（relative_path ASC：assets/doc.pdf, assets/logo.svg, docs/a.md,
-    // docs/b.md, notes/c.md；old/d.md 为 missing 不进 active 列表）
     let ra = {
         fixture.file(&ws_id, "f_a", "docs/a.md", "md", "方案", "active", None);
         fixture.revision(
@@ -678,7 +667,6 @@ fn setup_workspace(tag: &str) -> (Fixture, String, String) {
         "missing",
         None,
     );
-    // 快照缺失版本：snapshot_available=0 且磁盘无文件 → content 410
     let rg = {
         fixture.file(&ws_id, "f_gone", "gone/g.md", "md", "方案", "active", None);
         fixture.revision(
@@ -702,7 +690,6 @@ fn setup_workspace(tag: &str) -> (Fixture, String, String) {
         )
         .expect("回填");
 
-    // 事件：两条 modified（可分页，occurred 2026-06-01/02）+ 基线
     fixture.event(
         &ws_id,
         "modified",
@@ -743,7 +730,6 @@ fn setup_workspace(tag: &str) -> (Fixture, String, String) {
         "{}",
     );
 
-    // 陈述与引用边
     fixture.statement(
         &ws_id,
         "st_1",
@@ -761,7 +747,6 @@ fn setup_workspace(tag: &str) -> (Fixture, String, String) {
     (fixture, root, ws_id)
 }
 
-/// 组装路由（无 dist 口径）。单连接执行器 + 显式配置（不读 env，测试确定性）
 fn app_for(fixture: &Fixture, root: &str, instance: &str) -> axum::Router {
     let mut store = ReadonlyStore::open(&fixture.db_path).expect("打开夹具库失败");
     store.claim_workspace(root).expect("认领夹具工作区失败");
@@ -778,7 +763,6 @@ fn app_for(fixture: &Fixture, root: &str, instance: &str) -> axum::Router {
     })
 }
 
-/// 测试执行器配置：pool=1 串行口径与旧行为对齐；deadline 放宽避免偶发超时
 fn test_exec_config() -> QueryConfig {
     QueryConfig {
         wait_deadline: std::time::Duration::from_secs(5),
@@ -787,7 +771,6 @@ fn test_exec_config() -> QueryConfig {
     }
 }
 
-/// oneshot 请求：返回 (状态码, 响应头, 响应体字节)
 async fn send(
     app: &axum::Router,
     req: Request<Body>,
@@ -818,9 +801,6 @@ async fn get(app: &axum::Router, uri: &str) -> (StatusCode, serde_json::Value) {
     (status, json)
 }
 
-// ===== 断言 =====
-
-/// 错误包络形状断言（契约 §0.2）：ok:false + code，可选 index_generation
 fn assert_envelope(json: &serde_json::Value, expected_code: &str) {
     assert_eq!(
         json.get("ok").and_then(|v| v.as_bool()),
@@ -834,7 +814,6 @@ fn assert_envelope(json: &serde_json::Value, expected_code: &str) {
     );
 }
 
-/// bootstrap 硬约束：任何位置不出现正文/SVG 原文键与版本链数组（契约 §1.1）
 fn assert_no_body_content(json: &serde_json::Value) {
     let text = json.to_string();
     assert!(!text.contains("svgSource"), "bootstrap 不得携带 svgSource");
@@ -848,9 +827,6 @@ fn assert_no_body_content(json: &serde_json::Value) {
     );
 }
 
-// ===== 测试 =====
-
-/// bootstrap（契约 §1.1）：合成结构、参数生效、不含正文/版本链
 #[tokio::test]
 async fn bootstrap_composes_snapshot() {
     let (fixture, root, _ws) = setup_workspace("http-bootstrap");
@@ -882,7 +858,6 @@ async fn bootstrap_composes_snapshot() {
         json.pointer("/counts/events").and_then(|v| v.as_u64()),
         Some(3)
     );
-    // files_total = active 总数；files_page_size=2 生效
     assert_eq!(
         json.pointer("/files_total").and_then(|v| v.as_u64()),
         Some(6)
@@ -898,20 +873,17 @@ async fn bootstrap_composes_snapshot() {
             .and_then(|v| v.as_u64()),
         Some(6)
     );
-    // events_limit=1 生效；首页事件
     assert_eq!(
         json.pointer("/events/items")
             .and_then(|v| v.as_array())
             .map(Vec::len),
         Some(1)
     );
-    // days_limit=1 生效：2 个有日期桶折掉 1 个（hidden_days）
     assert_eq!(
         json.pointer("/event_days/hidden_days")
             .and_then(|v| v.as_u64()),
         Some(1)
     );
-    // 决定首批
     assert_eq!(
         json.pointer("/decisions")
             .and_then(|v| v.as_array())
@@ -922,19 +894,16 @@ async fn bootstrap_composes_snapshot() {
         json.pointer("/decisions/0/code").and_then(|v| v.as_str()),
         Some("Q1")
     );
-    // 关系总数（过滤 unresolved）
     assert_eq!(
         json.pointer("/relations_total").and_then(|v| v.as_u64()),
         Some(1)
     );
-    // 只读装配无进行中的索引任务
     assert_eq!(
         json.pointer("/index_jobs")
             .and_then(|v| v.as_array())
             .map(Vec::len),
         Some(0)
     );
-    // baseline = workspace_baseline 事件存在
     assert_eq!(
         json.pointer("/baseline").and_then(|v| v.as_bool()),
         Some(true)
@@ -942,7 +911,6 @@ async fn bootstrap_composes_snapshot() {
     assert_no_body_content(&json);
 }
 
-/// status（契约 §1.2）：实例身份与启动打印一致、api_version/schema_version/覆盖
 #[tokio::test]
 async fn status_reports_instance_and_coverage() {
     let (fixture, root, _ws) = setup_workspace("http-status");
@@ -959,7 +927,6 @@ async fn status_reports_instance_and_coverage() {
         json.pointer("/api_version").and_then(|v| v.as_str()),
         Some("v1")
     );
-    // schema_version=2（contract-storage.md §4.3.1）
     assert_eq!(
         json.pointer("/schema_version").and_then(|v| v.as_u64()),
         Some(2)
@@ -991,7 +958,6 @@ async fn status_reports_instance_and_coverage() {
             .map(Vec::len),
         Some(0)
     );
-    // time_range camelCase 键保留现状（契约 §1.6 同口径）
     assert_eq!(
         json.pointer("/time_range/occurredMin")
             .and_then(|v| v.as_str()),
@@ -1004,13 +970,11 @@ async fn status_reports_instance_and_coverage() {
     );
 }
 
-/// files（契约 §1.3）：排序、分页游标往返、dir 筛选、facets、FileSummary 字段
 #[tokio::test]
 async fn files_paginates_and_filters() {
     let (fixture, root, _ws) = setup_workspace("http-files");
     let app = app_for(&fixture, &root, "inst_test000000003");
 
-    // 第 1 页：limit=2，排序 relative_path ASC
     let (status, p1) = get(&app, "/api/v1/files?limit=2").await;
     assert_eq!(status, StatusCode::OK, "{p1}");
     assert_eq!(
@@ -1049,7 +1013,6 @@ async fn files_paginates_and_filters() {
         .expect("首页应签发游标")
         .to_owned();
 
-    // 第 2 页：游标续页（同筛选 = 无附加参数）
     let (status, p2) = get(&app, &format!("/api/v1/files?limit=2&cursor={cursor}")).await;
     assert_eq!(status, StatusCode::OK, "{p2}");
     let items2 = p2
@@ -1058,7 +1021,6 @@ async fn files_paginates_and_filters() {
         .cloned()
         .expect("items");
     assert_eq!(items2[0]["relative_path"], "docs/a.md");
-    // FileSummary 字段（契约 §1.3）：摘要含当前版本 ID 与版本数、first_source_time
     assert!(
         items2[0]
             .get("current_revision_id")
@@ -1080,7 +1042,6 @@ async fn files_paginates_and_filters() {
         Some("full_text")
     );
 
-    // 目录筛选（含子目录语义）+ facets
     let (_status, fd) = get(&app, "/api/v1/files?dir=docs&limit=10").await;
     let dir_items = fd
         .pointer("/items")
@@ -1114,7 +1075,6 @@ async fn files_paginates_and_filters() {
     );
 }
 
-/// files 陷阱：快照缺失版本 coverage=filename_only、missing 文件不进列表
 #[tokio::test]
 async fn files_marks_unavailable_snapshot() {
     let (fixture, root, _ws) = setup_workspace("http-files-gone");
@@ -1136,10 +1096,6 @@ async fn files_marks_unavailable_snapshot() {
     );
 }
 
-/// 默认分页拥有与排序匹配的表达式索引访问路径（EXPLAIN QUERY PLAN）。
-/// 索引经写入侧幂等 SCHEMA 迁移交付（contract-storage.md §1.1 与 server/WorkspaceStore.ts
-/// 同源），只读服务启动不改库；行为口径（反斜杠兼容、目录边界、字面通配符、
-/// 游标语义）由既有 files/events 测试覆盖。
 #[tokio::test]
 async fn pagination_uses_expression_sort_indexes() {
     let (fixture, _root, _ws) = setup_workspace("http-explain-plan");
@@ -1154,7 +1110,6 @@ async fn pagination_uses_expression_sort_indexes() {
             .expect("explain 收集")
     };
 
-    // files 默认无关键词分页：workspace/status 等值 + 规范化路径序 → 表达式索引
     let plans = plan_of(
         "SELECT f.* FROM files f WHERE f.workspace_id = 'w' AND f.status = 'active'          ORDER BY REPLACE(f.current_path, '\', '/') ASC, f.file_id ASC LIMIT 100",
     );
@@ -1165,7 +1120,6 @@ async fn pagination_uses_expression_sort_indexes() {
         "文件分页应命中规范化路径表达式索引：{plans:?}"
     );
 
-    // events 首页（无空转 seq 上界）：occurred 口径 → COALESCE 表达式排序索引
     let plans = plan_of(
         "SELECT e.* FROM events e WHERE e.workspace_id = 'w'          ORDER BY COALESCE(e.occurred_at, '') DESC, e.seq DESC LIMIT 50",
     );
@@ -1176,7 +1130,6 @@ async fn pagination_uses_expression_sort_indexes() {
         "events occurred 排序应命中表达式索引：{plans:?}"
     );
 
-    // events 首页：observed 口径 → observed 排序索引
     let plans = plan_of(
         "SELECT e.* FROM events e WHERE e.workspace_id = 'w'          ORDER BY e.observed_at DESC, e.seq DESC LIMIT 50",
     );
@@ -1187,7 +1140,6 @@ async fn pagination_uses_expression_sort_indexes() {
         "events observed 排序应命中表达式索引：{plans:?}"
     );
 
-    // events 游标续页（键集条件）：同样命中排序表达式索引（范围由键集条件提供）
     let plans = plan_of(
         "SELECT e.* FROM events e WHERE e.workspace_id = 'w'          AND (COALESCE(e.occurred_at, '') < 'k' OR (COALESCE(e.occurred_at, '') = 'k' AND e.seq < 9))          ORDER BY COALESCE(e.occurred_at, '') DESC, e.seq DESC LIMIT 50",
     );
@@ -1199,13 +1151,11 @@ async fn pagination_uses_expression_sort_indexes() {
     );
 }
 
-/// PDF/raw 快照的范围读取与条件请求
 #[tokio::test]
 async fn snapshot_stream_supports_range_and_conditional_requests() {
     let (fixture, root, _ws) = setup_workspace("http-range");
     let app = app_for(&fixture, &root, "inst_range00000001");
     let rp = guanlan_core::domain::revision_id_of("f_pdf", 1);
-    // 夹具 PDF 内容：b"%PDF-1.4 fake"（13 字节）
     let body_len = b"%PDF-1.4 fake".len() as u64;
 
     let req_with = |range: Option<&str>, extra: Option<(&str, &str)>| {
@@ -1219,7 +1169,6 @@ async fn snapshot_stream_supports_range_and_conditional_requests() {
         b.body(Body::empty()).expect("请求构建")
     };
 
-    // ① 全量：200 + Content-Length + Accept-Ranges + ETag
     let (status, headers, bytes) = send(&app, req_with(None, None)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
@@ -1238,7 +1187,6 @@ async fn snapshot_stream_supports_range_and_conditional_requests() {
     assert!(etag.starts_with("\"sha256-"), "ETag 由内容哈希生成：{etag}");
     assert_eq!(bytes.len() as u64, body_len);
 
-    // ② 单区间：206 + Content-Range + Content-Length + 精确字节
     let (status, headers, bytes) = send(&app, req_with(Some("bytes=0-3"), None)).await;
     assert_eq!(status, StatusCode::PARTIAL_CONTENT);
     assert_eq!(
@@ -1251,7 +1199,6 @@ async fn snapshot_stream_supports_range_and_conditional_requests() {
     );
     assert_eq!(bytes, b"%PDF".to_vec());
 
-    // ③ 开放结尾：bytes=6- → 到末尾
     let (status, headers, bytes) = send(&app, req_with(Some("bytes=6-"), None)).await;
     assert_eq!(status, StatusCode::PARTIAL_CONTENT);
     assert_eq!(
@@ -1260,12 +1207,10 @@ async fn snapshot_stream_supports_range_and_conditional_requests() {
     );
     assert_eq!(bytes, b".4 fake".to_vec());
 
-    // ④ 后缀：bytes=-4 → 末 4 字节
     let (status, _headers, bytes) = send(&app, req_with(Some("bytes=-4"), None)).await;
     assert_eq!(status, StatusCode::PARTIAL_CONTENT);
     assert_eq!(bytes, b"fake".to_vec());
 
-    // ⑤ 不可满足：416 + Content-Range: bytes */len
     let (status, headers, _bytes) = send(&app, req_with(Some("bytes=99-"), None)).await;
     assert_eq!(status, StatusCode::RANGE_NOT_SATISFIABLE);
     assert_eq!(
@@ -1273,12 +1218,10 @@ async fn snapshot_stream_supports_range_and_conditional_requests() {
         Some("bytes */13")
     );
 
-    // ⑥ 多区间：明确回退全量 200
     let (status, _h, bytes) = send(&app, req_with(Some("bytes=0-1,3-4"), None)).await;
     assert_eq!(status, StatusCode::OK, "多区间按明确回退全量");
     assert_eq!(bytes.len() as u64, body_len);
 
-    // ⑦ If-None-Match 命中 → 304 无 body
     let (status, headers, bytes) = send(&app, req_with(None, Some(("if-none-match", &etag)))).await;
     assert_eq!(status, StatusCode::NOT_MODIFIED);
     assert!(bytes.is_empty(), "304 不带 body");
@@ -1287,7 +1230,6 @@ async fn snapshot_stream_supports_range_and_conditional_requests() {
         Some(etag.as_str())
     );
 
-    // ⑧ If-Range 不匹配 → 忽略 Range，回全量 200（不拼错版本区间）
     let (status, _h, bytes) = send(
         &app,
         req_with(Some("bytes=0-3"), Some(("if-range", "\"sha256-other\""))),
@@ -1296,19 +1238,15 @@ async fn snapshot_stream_supports_range_and_conditional_requests() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(bytes.len() as u64, body_len);
 
-    // ⑨ If-Range 匹配 → Range 照常生效
     let (status, _h, bytes) =
         send(&app, req_with(Some("bytes=0-3"), Some(("if-range", &etag)))).await;
     assert_eq!(status, StatusCode::PARTIAL_CONTENT);
     assert_eq!(bytes, b"%PDF".to_vec());
 }
 
-/// 非法 content_hash 不再 panic，返回明确错误
 #[tokio::test]
 async fn invalid_content_hash_returns_explicit_error() {
     let (fixture, root, _ws) = setup_workspace("http-badhash");
-    // 把当前版快照 hash 改成以多字节 UTF-8 字符开头的非法值
-    // （旧实现 `&hash[..2]` 会落在这颗字符的字节中间 → panic）
     fixture
         .conn
         .execute(
@@ -1331,12 +1269,10 @@ async fn invalid_content_hash_returns_explicit_error() {
         "应返回明确错误而不是 panic：{detail}"
     );
 
-    // 服务仍可继续服务其它请求（连接未被脏事务/panic 卡死）
     let (status, _json) = get(&app, "/api/v1/status").await;
     assert_eq!(status, StatusCode::OK, "异常请求后常规查询仍正常");
 }
 
-/// 查询 panic 被捕获，连接重建后继续服务（不被脏事务钉住）
 #[tokio::test]
 async fn panicking_query_is_contained_and_pool_recovers() {
     let (fixture, root, _ws) = setup_workspace("http-panic");
@@ -1344,7 +1280,6 @@ async fn panicking_query_is_contained_and_pool_recovers() {
     store.claim_workspace(&root).expect("认领夹具工作区失败");
     let exec = Arc::new(QueryExecutor::with_config(vec![store], test_exec_config()));
 
-    // 故意 panic 的查询
     let panicked = exec
         .run(|_store| -> Result<u32, GuanlanError> {
             panic!("模拟查询体内 panic");
@@ -1355,7 +1290,6 @@ async fn panicking_query_is_contained_and_pool_recovers() {
         "panic 应转为内部错误而不是任务级 JoinError：{panicked:?}"
     );
 
-    // 连接已重建（重新认领工作区），后续查询正常
     let after = exec.run(|store| store.workspace().map(|_| 7u32)).await;
     assert!(
         matches!(after, Ok(7)),
@@ -1364,12 +1298,9 @@ async fn panicking_query_is_contained_and_pool_recovers() {
     assert_eq!(exec.pool_size(), 1, "池容量保持");
 }
 
-/// 响应字节预算——超单响应上限返回 413 UNSUPPORTED_CONTENT 并指向 raw=1；
-/// raw=1 走流式（原字节一致）；上限内正常内联且响应体带预算守护。
 #[tokio::test]
 async fn content_response_byte_budget_and_streaming_raw() {
     let (fixture, root, _ws) = setup_workspace("http-budget");
-    // 小预算实例：单响应上限 64 字节（夹具 md 快照 11 字节，足够内联）
     let small_budget_app = build_router(AppState {
         mounts: crate::mounts::MountRegistry::idle(),
         projects: None,
@@ -1390,7 +1321,6 @@ async fn content_response_byte_budget_and_streaming_raw() {
     });
     let ra = guanlan_core::domain::revision_id_of("f_a", 1);
 
-    // 上限内：正常内联，text 有值
     let (status, json) = get(
         &small_budget_app,
         &format!("/api/v1/revisions/{ra}/content"),
@@ -1402,7 +1332,6 @@ async fn content_response_byte_budget_and_streaming_raw() {
         Some("# body text")
     );
 
-    // raw=1：流式原字节（Content-Type 标注 utf-8 文本，字节一致）
     let (status, headers, bytes) = send(
         &small_budget_app,
         Request::builder()
@@ -1422,7 +1351,6 @@ async fn content_response_byte_budget_and_streaming_raw() {
     );
     assert_eq!(bytes, b"# body text".to_vec(), "流式原字节与快照一致");
 
-    // 超上限：把单响应上限压到 4 字节 → 413 UNSUPPORTED_CONTENT（提示 raw=1），不整读
     let tiny_budget_app = build_router(AppState {
         mounts: crate::mounts::MountRegistry::idle(),
         projects: None,
@@ -1449,13 +1377,11 @@ async fn content_response_byte_budget_and_streaming_raw() {
         .and_then(|v| v.as_str())
         .unwrap_or_default();
     assert!(detail.contains("raw=1"), "超限提示应指向流式读取：{detail}");
-    // 超限路径仍保留快照不可用语义位（错误包络带 index_generation）
     assert_eq!(
         over.pointer("/index_generation").and_then(|v| v.as_u64()),
         Some(7)
     );
 
-    // 同一超小上限下 raw=1 仍可用（流式不受内联预算约束）
     let (status, _h, bytes) = send(
         &tiny_budget_app,
         Request::builder()
@@ -1468,11 +1394,9 @@ async fn content_response_byte_budget_and_streaming_raw() {
     assert_eq!(bytes, b"# body text".to_vec(), "大正文可用流式 raw 读取");
 }
 
-/// 实际文件大小校验——DB size_bytes 与磁盘不符时以磁盘为准
 #[tokio::test]
 async fn content_uses_actual_file_size_not_db_size() {
     let (fixture, root, _ws) = setup_workspace("http-budget-actual");
-    // 制造不一致：把 DB 里的 size_bytes 改小（磁盘快照仍是 11 字节）
     fixture
         .conn
         .execute(
@@ -1480,7 +1404,6 @@ async fn content_uses_actual_file_size_not_db_size() {
             [],
         )
         .expect("改写 size_bytes");
-    // 单响应上限 8 字节：磁盘实际 11 字节 → 必须按实际大小拒绝（若信 DB 的 3 字节会误放行）
     let app = build_router(AppState {
         mounts: crate::mounts::MountRegistry::idle(),
         projects: None,
@@ -1509,8 +1432,6 @@ async fn content_uses_actual_file_size_not_db_size() {
     assert_envelope(&json, "UNSUPPORTED_CONTENT");
 }
 
-/// 文件事件关联的四路 UNION 各分支都走各自索引（EXPLAIN QUERY PLAN），
-/// 不再对整个工作区逐条求值四路 OR；UNION 按 rowid 去重，外层按 seq ASC。
 #[tokio::test]
 async fn event_file_association_branches_use_indexes() {
     let (fixture, _root, _ws) = setup_workspace("http-explain-eventfiles");
@@ -1546,22 +1467,16 @@ async fn event_file_association_branches_use_indexes() {
             "四路 UNION 分支应命中 {expected}：{plan_text}"
         );
     }
-    // 不应退化为对 events 的全表扫描（SCAN events 无索引）
     assert!(
         !plan_text.contains("SCAN events"),
         "事件关联不应全表扫描：{plan_text}"
     );
 }
 
-/// 文件摘要结构性用例：seq 空洞、last_revision_id 缺失回退最高 seq、
-/// 快照不可用、版本计数精确（COUNT 而非 MAX(seq)）、首版时间取 MIN(seq) 行
-/// 而非 MIN(occurred_at)
 #[tokio::test]
 async fn file_summary_structural_cases() {
     let (fixture, root, ws_id) = setup_workspace("http-files-struct");
 
-    // f_hist：4 个版本，seq 1,2,3,5（空洞）；last_revision_id 指向 seq5。
-    // 首版 occurred_at 晚于后续版本（证明首版时间取 MIN(seq) 而非 MIN(occurred_at)）
     fixture.file(
         &ws_id,
         "f_hist",
@@ -1627,7 +1542,6 @@ async fn file_summary_structural_cases() {
         )
         .expect("回填");
 
-    // f_nocur：2 个版本，last_revision_id 缺失（NULL）→ 回退最高 seq
     fixture.file(
         &ws_id,
         "f_nocur",
@@ -1671,20 +1585,16 @@ async fn file_summary_structural_cases() {
     );
     let item = json.pointer("/items/0").cloned().expect("items[0]");
 
-    // 版本计数精确：4（空洞下的 COUNT，不能用 MAX(seq)=5 冒充）
     assert_eq!(item.get("revision_count").and_then(|v| v.as_u64()), Some(4));
-    // 当前版命中 last_revision_id（seq5）
     assert_eq!(
         item.get("current_revision_id").and_then(|v| v.as_str()),
         Some(guanlan_core::domain::revision_id_of("f_hist", 5).as_str()),
         "last_revision_id 命中优先"
     );
-    // 首版时间 = MIN(seq) 行的 occurred_at（2026-06-10），不能用 MIN(occurred_at)=2026-06-01
     assert_eq!(
         item.get("first_source_time").and_then(|v| v.as_str()),
         Some("2026-06-10")
     );
-    // 当前版（seq5）快照可用 → md full_text（coverage 缓存路径）
     assert_eq!(
         item.get("snapshot_available").and_then(|v| v.as_bool()),
         Some(true)
@@ -1694,7 +1604,6 @@ async fn file_summary_structural_cases() {
         Some("full_text")
     );
 
-    // f_nocur：last_revision_id 缺失 → 回退最高 seq（rev2）；当前版快照可用
     let (_status, j2) = get(&app, "/api/v1/files?q=nocur").await;
     let item2 = j2.pointer("/items/0").cloned().expect("items[0]");
     assert_eq!(
@@ -1716,7 +1625,6 @@ async fn file_summary_structural_cases() {
     );
 }
 
-/// events（契约 §1.4）：窗口回显、分页、指纹不符 → CURSOR_STALE、损坏游标 → CURSOR_STALE
 #[tokio::test]
 async fn events_pagination_and_cursor_stale() {
     let (fixture, root, _ws) = setup_workspace("http-events");
@@ -1729,7 +1637,6 @@ async fn events_pagination_and_cursor_stale() {
         p1.pointer("/index_generation").and_then(|v| v.as_u64()),
         Some(7)
     );
-    // window 回显（契约 §1.4）
     assert_eq!(
         p1.pointer("/window/order").and_then(|v| v.as_str()),
         Some("occurred")
@@ -1744,7 +1651,6 @@ async fn events_pagination_and_cursor_stale() {
         .pointer("/snapshot_max_seq")
         .and_then(|v| v.as_u64())
         .is_some());
-    // occurred DESC：首页是 2026-06-02 那条；file 信息经 join 回填
     let items = p1
         .pointer("/items")
         .and_then(|v| v.as_array())
@@ -1768,7 +1674,6 @@ async fn events_pagination_and_cursor_stale() {
         .expect("游标")
         .to_owned();
 
-    // 正常续页：同参数
     let (status, p2) = get(
         &app,
         &format!("/api/v1/events?kinds=modified&limit=1&cursor={cursor}"),
@@ -1790,7 +1695,6 @@ async fn events_pagination_and_cursor_stale() {
         "末页游标应为 null：{p2}"
     );
 
-    // 指纹不符（换 kinds）→ 409 CURSOR_STALE（契约 §0.2/§0.3-3）
     let (status, bad) = get(
         &app,
         &format!("/api/v1/events?kinds=appeared&limit=1&cursor={cursor}"),
@@ -1798,19 +1702,16 @@ async fn events_pagination_and_cursor_stale() {
     .await;
     assert_eq!(status, StatusCode::CONFLICT);
     assert_envelope(&bad, "CURSOR_STALE");
-    // 错误包络补当前代际
     assert_eq!(
         bad.pointer("/index_generation").and_then(|v| v.as_u64()),
         Some(7),
         "错误包络应携带 index_generation：{bad}"
     );
 
-    // 损坏游标 → 409 CURSOR_STALE（v1 显式化，契约 §0.2）
     let (status, bad2) = get(&app, "/api/v1/events?cursor=not-a-cursor").await;
     assert_eq!(status, StatusCode::CONFLICT);
     assert_envelope(&bad2, "CURSOR_STALE");
 
-    // undated=1：全部事件都有 occurred_at → 空窗
     let (_status, u) = get(&app, "/api/v1/events?undated=1").await;
     assert_eq!(
         u.pointer("/window/undated").and_then(|v| v.as_bool()),
@@ -1822,7 +1723,6 @@ async fn events_pagination_and_cursor_stale() {
     );
 }
 
-/// events/days（契约 §1.5）：桶分组、样本、决策聚合
 #[tokio::test]
 async fn event_days_groups() {
     let (fixture, root, _ws) = setup_workspace("http-event-days");
@@ -1866,7 +1766,6 @@ async fn event_days_groups() {
         Some(0)
     );
 
-    // samples 上限参数生效（clamp 1..12）
     let (_status, s1) = get(&app, "/api/v1/events/days?samples=1&limit_days=1").await;
     let g1 = s1
         .pointer("/groups")
@@ -1877,7 +1776,6 @@ async fn event_days_groups() {
     assert_eq!(s1.pointer("/hidden_days").and_then(|v| v.as_u64()), Some(1));
 }
 
-/// events/range（契约 §1.6）：camelCase 保留现状
 #[tokio::test]
 async fn event_range_keeps_camel_case() {
     let (fixture, root, _ws) = setup_workspace("http-event-range");
@@ -1900,7 +1798,6 @@ async fn event_range_keeps_camel_case() {
     );
 }
 
-/// files/{file_id}/revisions（契约 §1.7）：版本链 + include 段 + NOT_FOUND
 #[tokio::test]
 async fn file_revisions_with_include() {
     let (fixture, root, _ws) = setup_workspace("http-revisions");
@@ -1912,7 +1809,6 @@ async fn file_revisions_with_include() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{json}");
-    // 文件头（project.ts:513-523 投影）
     assert_eq!(
         json.pointer("/file/file_id").and_then(|v| v.as_str()),
         Some("f_a")
@@ -1921,7 +1817,6 @@ async fn file_revisions_with_include() {
         json.pointer("/file/current_path").and_then(|v| v.as_str()),
         Some("docs/a.md")
     );
-    // 版本行（project.ts:454-466 字段）：无 snapshot_path
     let revs = json
         .pointer("/revisions")
         .and_then(|v| v.as_array())
@@ -1938,8 +1833,6 @@ async fn file_revisions_with_include() {
         !text.contains("snapshot_path"),
         "版本行不下发服务端路径：{text}"
     );
-    // include 段：modified 挂在 f_a 的版本链上（subject_id=r1）；workspace_baseline
-    // 的主体是工作区，不属四路覆盖
     assert_eq!(
         json.pointer("/events")
             .and_then(|v| v.as_array())
@@ -1961,7 +1854,6 @@ async fn file_revisions_with_include() {
         "edges 按来源文件（e1+e2）"
     );
 
-    // 不带 include：段不出现于 JSON
     let (_status, plain) = get(&app, "/api/v1/files/f_a/revisions").await;
     let plain_text = plain.to_string();
     assert!(
@@ -1969,18 +1861,14 @@ async fn file_revisions_with_include() {
         "未请求 include 时不下发 events 段：{plain_text}"
     );
 
-    // order=seq_asc 默认 seq_desc；NOT_FOUND
     let (status, nf) = get(&app, "/api/v1/files/f_nope/revisions").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_envelope(&nf, "NOT_FOUND");
 }
 
-/// 版本链分页——首页 COUNT 一次后 total 随游标携带，续页不再 COUNT；
-/// include 文件级附集合只在首页携带（续页不重复传输/查询）
 #[tokio::test]
 async fn file_revisions_total_travels_with_cursor_and_include_first_page_only() {
     let (fixture, root, ws_id) = setup_workspace("http-rev-total");
-    // f_a 加第二版（seq=2）以便产生续页
     let rb2 = fixture.revision(
         &ws_id,
         "f_a",
@@ -2002,7 +1890,6 @@ async fn file_revisions_total_travels_with_cursor_and_include_first_page_only() 
         .expect("回填");
     let app = app_for(&fixture, &root, "inst_test000000021");
 
-    // 首页（limit=1）：events 出现；total = 2（COUNT 一次）
     let (status, p1) = get(
         &app,
         "/api/v1/files/f_a/revisions?order=seq_asc&limit=1&include=events",
@@ -2027,7 +1914,6 @@ async fn file_revisions_total_travels_with_cursor_and_include_first_page_only() 
         .expect("has_more 时必有游标")
         .to_owned();
 
-    // 续页：total 从游标复用仍为 2；include 不再返回（文件级集合只在首页）
     let (status, p2) = get(
         &app,
         &format!(
@@ -2055,8 +1941,6 @@ async fn file_revisions_total_travels_with_cursor_and_include_first_page_only() 
     );
 }
 
-/// files/{file_id}/detail（契约 §1.7 末段）：
-/// 只返回头 + 当前版（camelCase 派生字段），不内联任何正文，附集合限额保留
 #[tokio::test]
 async fn file_detail_reader_compat() {
     let (fixture, root, _ws) = setup_workspace("http-detail");
@@ -2084,7 +1968,6 @@ async fn file_detail_reader_compat() {
         Some(true),
         "v1 受基线保护"
     );
-    // 不再内联任何正文（单次响应不随版本数线性增长），正文经 §1.8 单独取
     assert!(
         revs[0].get("svgSource").is_none(),
         "SVG 也不内联正文：{json}"
@@ -2095,10 +1978,8 @@ async fn file_detail_reader_compat() {
         !detail_text.contains(SVG_SRC),
         "detail 不携带 SVG 快照源文：{detail_text}"
     );
-    // 附集合限额保留（兼容退场策略；应用内已迁移到 §1.7 分页通道）
     assert!(json.get("events").is_some(), "附集合字段保留（限额 200）");
 
-    // md 同口径：无正文
     let (_status, md) = get(&app, "/api/v1/files/f_a/detail").await;
     assert!(
         md.pointer("/revisions/0/svgSource").is_none(),
@@ -2110,7 +1991,6 @@ async fn file_detail_reader_compat() {
     );
 }
 
-/// revisions/{revision_id}/content（契约 §1.8）：md 文本 / pdf JSON+raw_url / pdf raw 二进制流 / 410
 #[tokio::test]
 async fn revision_content_three_shapes() {
     let (fixture, root, _ws) = setup_workspace("http-content");
@@ -2119,7 +1999,6 @@ async fn revision_content_three_shapes() {
     let rp = guanlan_core::domain::revision_id_of("f_pdf", 1);
     let rg = guanlan_core::domain::revision_id_of("f_gone", 1);
 
-    // MD/SVG：utf-8 快照文本
     let (status, json) = get(&app, &format!("/api/v1/revisions/{ra}/content")).await;
     assert_eq!(status, StatusCode::OK, "{json}");
     assert_eq!(json.get("format").and_then(|v| v.as_str()), Some("md"));
@@ -2132,7 +2011,6 @@ async fn revision_content_three_shapes() {
         "非 PDF 不出现 raw_url：{json}"
     );
 
-    // PDF 无 raw：JSON + raw_url 指自身 v1 路径
     let (status, pdf) = get(&app, &format!("/api/v1/revisions/{rp}/content")).await;
     assert_eq!(status, StatusCode::OK, "{pdf}");
     assert_eq!(pdf.get("format").and_then(|v| v.as_str()), Some("pdf"));
@@ -2143,7 +2021,6 @@ async fn revision_content_three_shapes() {
     );
     assert!(pdf.get("text").is_none(), "PDF 默认不带 text：{pdf}");
 
-    // PDF raw=1：application/pdf 二进制流（原字节一致）
     let (status, headers, bytes) = send(
         &app,
         Request::builder()
@@ -2159,7 +2036,6 @@ async fn revision_content_three_shapes() {
     );
     assert_eq!(bytes, b"%PDF-1.4 fake".to_vec(), "raw 流应为快照原字节");
 
-    // 快照缺失（snapshot_available=0）→ 410 SNAPSHOT_UNAVAILABLE（不拿当前内容冒充）
     let (status, gone) = get(&app, &format!("/api/v1/revisions/{rg}/content")).await;
     assert_eq!(status, StatusCode::GONE);
     assert_envelope(&gone, "SNAPSHOT_UNAVAILABLE");
@@ -2168,13 +2044,11 @@ async fn revision_content_three_shapes() {
         Some(7)
     );
 
-    // revision 不存在 → 404 NOT_FOUND
     let (status, nf) = get(&app, "/api/v1/revisions/f_a_r99/content").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_envelope(&nf, "NOT_FOUND");
 }
 
-/// decisions（契约 §1.9）与 relations（契约 §1.10）
 #[tokio::test]
 async fn decisions_and_relations() {
     let (fixture, root, _ws) = setup_workspace("http-decisions");
@@ -2208,13 +2082,11 @@ async fn decisions_and_relations() {
         Some(7)
     );
 
-    // code 精确筛选
     let (_status, hit) = get(&app, "/api/v1/decisions?code=Q1").await;
     assert_eq!(hit.pointer("/total").and_then(|v| v.as_u64()), Some(1));
     let (_status, miss) = get(&app, "/api/v1/decisions?code=Q9").await;
     assert_eq!(miss.pointer("/total").and_then(|v| v.as_u64()), Some(0));
 
-    // relations：只下发可落文件的 explicit_reference（过滤 unresolved:）
     let (status, rel) = get(&app, "/api/v1/relations").await;
     assert_eq!(status, StatusCode::OK, "{rel}");
     let items = rel
@@ -2235,13 +2107,11 @@ async fn decisions_and_relations() {
     );
 }
 
-/// 预留 501 桩与未知路由（契约 §2.3 / fallback 包络）
 #[tokio::test]
 async fn stubs_and_unknown_routes() {
     let (fixture, root, _ws) = setup_workspace("http-stubs");
     let app = app_for(&fixture, &root, "inst_test000000012");
 
-    // /api/v1/search 已实现：缺 q → 400 包络（不再是 501 桩）
     let (status, json) = get(&app, "/api/v1/search").await;
     assert_eq!(
         status,
@@ -2250,13 +2120,10 @@ async fn stubs_and_unknown_routes() {
     );
     assert_envelope(&json, "BAD_REQUEST");
 
-    // /graph 维持 501 预留桩
     let (status, json) = get(&app, "/api/v1/graph").await;
     assert_eq!(status, StatusCode::NOT_IMPLEMENTED, "graph 端点维持 501");
     assert_envelope(&json, "NOT_IMPLEMENTED");
 
-    // diff/stream 已实现——diff 空 body → 400 包络；
-    // stream 返回 SSE（此处只验证不是 501/404，事件内容在专用用例）
     let (status, _json) = send(
         &app,
         Request::builder()
@@ -2278,14 +2145,11 @@ async fn stubs_and_unknown_routes() {
         "diff 已实现（缺 body 走 400）"
     );
 
-    // 未知 /api 路由 → 404 包络（无 dist 口径）
     let (status, json) = get(&app, "/api/v1/unknown").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_envelope(&json, "NOT_FOUND");
 }
 
-/// dist 存在才挂静态资源：/ 返回 index.html、资产按扩展名回 MIME、
-/// 未知 /api 路径仍走 404 包络（不落 SPA 回退）
 #[tokio::test]
 async fn dist_static_mounting() {
     let (fixture, root, _ws) = setup_workspace("http-dist");
@@ -2313,7 +2177,6 @@ async fn dist_static_mounting() {
         dist: Some(dist_dir.clone()),
     });
 
-    // SPA 根：index.html
     let (status, headers, bytes) = send(
         &app,
         Request::builder().uri("/").body(Body::empty()).unwrap(),
@@ -2330,7 +2193,6 @@ async fn dist_static_mounting() {
     );
     assert!(std::str::from_utf8(&bytes).unwrap().contains("guanlan"));
 
-    // 资产文件
     let (status, headers, bytes) = send(
         &app,
         Request::builder()
@@ -2347,7 +2209,6 @@ async fn dist_static_mounting() {
         .contains("javascript"));
     assert_eq!(bytes, b"console.log('ok');".to_vec());
 
-    // 未知前端路径 → SPA 回退 index.html
     let (status, _h, bytes) = send(
         &app,
         Request::builder()
@@ -2359,18 +2220,15 @@ async fn dist_static_mounting() {
     assert_eq!(status, StatusCode::OK, "SPA 回退应返回 index.html");
     assert!(std::str::from_utf8(&bytes).unwrap().contains("guanlan"));
 
-    // 未知 /api 路径 → 404 包络（不是 index.html）
     let (status, json) = get(&app, "/api/v1/unknown").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_envelope(&json, "NOT_FOUND");
 
-    // 已知 /api 路由在挂静态资源后仍正常工作
     let (status, json) = get(&app, "/api/v1/status").await;
     assert_eq!(status, StatusCode::OK, "{json}");
     assert_eq!(json.pointer("/ok").and_then(|v| v.as_bool()), Some(true));
 }
 
-/// 无 dist：前端路径不回 HTML，走 404 包络
 #[tokio::test]
 async fn no_dist_falls_back_to_envelope() {
     let (fixture, root, _ws) = setup_workspace("http-no-dist");
@@ -2386,15 +2244,12 @@ async fn no_dist_falls_back_to_envelope() {
     assert_envelope(&json, "NOT_FOUND");
 }
 
-/// 一段便捷管道（测试辅助）
 trait Pipe: Sized {
     fn pipe<T>(self, f: impl FnOnce(Self) -> T) -> T {
         f(self)
     }
 }
 impl<T> Pipe for T {}
-
-// ===== 有界查询执行通道（准入 / 隔离 / 取消 / generation 缓存） =====
 
 fn exec_config(wait_ms: u64, exec_ms: u64, max_waiters: usize) -> QueryConfig {
     QueryConfig {
@@ -2415,15 +2270,11 @@ fn exec_for(fixture: &Fixture, root: &str, pool: usize, config: QueryConfig) -> 
     Arc::new(QueryExecutor::with_config(stores, config))
 }
 
-/// 验收「队列溢出确定性拒绝」「排队 deadline」「归池后可继续服务」：
-/// 单连接被长查询占住 → 排队满员后新请求立即 INDEX_BUSY（不进无界队列）；
-/// 已排队的请求等满 deadline 也按 INDEX_BUSY 拒绝；重查询结束后容量回归。
 #[tokio::test]
 async fn bounded_executor_saturates_deterministically() {
     let (fixture, root, _ws) = setup_workspace("http-exec-sat");
     let exec = exec_for(&fixture, &root, 1, exec_config(120, 10_000, 1));
 
-    // A 占住唯一连接
     let exec_a = exec.clone();
     let heavy = tokio::spawn(async move {
         exec_a
@@ -2433,14 +2284,12 @@ async fn bounded_executor_saturates_deterministically() {
             })
             .await
     });
-    tokio::time::sleep(std::time::Duration::from_millis(40)).await; // A 已取得许可
+    tokio::time::sleep(std::time::Duration::from_millis(40)).await;
 
-    // B 进入排队（占满 max_waiters=1 的唯一 waiter 位）
     let exec_b = exec.clone();
     let queued = tokio::spawn(async move { exec_b.run(|_store| Ok(1u32)).await });
     tokio::time::sleep(std::time::Duration::from_millis(30)).await;
 
-    // C：队列满员 → 确定性立即拒绝（不做无限排队）
     let c_started = std::time::Instant::now();
     let rejected = exec.run(|_store| Ok(2u32)).await;
     assert!(
@@ -2453,13 +2302,11 @@ async fn bounded_executor_saturates_deterministically() {
         c_started.elapsed()
     );
 
-    // B：等满排队 deadline → INDEX_BUSY（不是无限等待）
     let b_result = tokio::time::timeout(std::time::Duration::from_secs(3), queued)
         .await
         .expect("排队 deadline 后应返回而非挂起");
     assert!(matches!(b_result, Ok(Err(GuanlanError::IndexBusy))));
 
-    // A 完成后连接归还：后续请求可正常服务
     let heavy_result = tokio::time::timeout(std::time::Duration::from_secs(3), heavy)
         .await
         .expect("重查询应完成");
@@ -2469,7 +2316,6 @@ async fn bounded_executor_saturates_deterministically() {
     assert!(matches!(after, Ok(3)), "归池后应可继续服务，实际 {after:?}");
 }
 
-/// 验收「轻量读取不等待其他请求的全量计算」：pool=2 时第二条连接独立服务。
 #[tokio::test]
 async fn light_request_proceeds_while_heavy_query_holds_one_connection() {
     let (fixture, root, _ws) = setup_workspace("http-exec-iso");
@@ -2484,7 +2330,7 @@ async fn light_request_proceeds_while_heavy_query_holds_one_connection() {
             })
             .await
     });
-    tokio::time::sleep(std::time::Duration::from_millis(40)).await; // A 已占住第一条连接
+    tokio::time::sleep(std::time::Duration::from_millis(40)).await;
 
     let started = std::time::Instant::now();
     let light = exec.run(|store| store.workspace().map(|_| 1u32)).await;
@@ -2500,16 +2346,11 @@ async fn light_request_proceeds_while_heavy_query_holds_one_connection() {
         .expect("重查询应成功");
 }
 
-/// 验收「取消后不无限积累任务」：响应 future 被丢弃（客户端断开）→
-/// CancelGuard 打断长查询 → 容量尽快归还。
 #[tokio::test]
 async fn cancel_releases_capacity_promptly() {
     let (fixture, root, _ws) = setup_workspace("http-exec-cancel");
     let exec = exec_for(&fixture, &root, 1, exec_config(5_000, 30_000, 8));
 
-    // A：长查询循环（大量 SQL step，progress handler/interrupt 可打断）。
-    // 用 timeout 包住 run future 模拟客户端断开：超时即同步丢弃 future——
-    // 与 hyper 断开时丢弃处理器 future 的路径一致（guard 在丢弃点确定性触发）。
     let heavy = exec.run(|store| {
         for _ in 0..500_000 {
             store.workspace()?;
@@ -2519,7 +2360,6 @@ async fn cancel_releases_capacity_promptly() {
     let raced = tokio::time::timeout(std::time::Duration::from_millis(80), heavy).await;
     assert!(raced.is_err(), "长查询 80ms 内不会自然完成，应被丢弃");
 
-    // 容量很快回归：随后的请求短时间内完成（不被已打断的长查询占死）
     let started = std::time::Instant::now();
     let after = exec.run(|store| store.workspace().map(|_| 7u32)).await;
     assert!(matches!(after, Ok(7)), "取消后应能继续服务，实际 {after:?}");
@@ -2530,8 +2370,6 @@ async fn cancel_releases_capacity_promptly() {
     );
 }
 
-/// 验收「错误 generation 由查询内缓存补齐，异步线程不抢 DB 锁」：
-/// 全新执行器的首个请求即错误路径，包络仍携带 index_generation（查询内刷新）。
 #[tokio::test]
 async fn generation_cached_for_error_envelope_on_first_request() {
     let (fixture, root, _ws) = setup_workspace("http-exec-gen");
@@ -2566,9 +2404,6 @@ async fn generation_cached_for_error_envelope_on_first_request() {
     );
 }
 
-// ===== 索引任务端点 =====
-
-/// POST JSON 请求：返回 (状态码, 解析后的 JSON)
 async fn post_json(app: &axum::Router, uri: &str, body: &str) -> (StatusCode, serde_json::Value) {
     let (status, _headers, bytes) = send(
         app,
@@ -2584,7 +2419,6 @@ async fn post_json(app: &axum::Router, uri: &str, body: &str) -> (StatusCode, se
     (status, json)
 }
 
-/// 装配一个带真实写线程的路由（写侧用临时工作区，读侧用夹具库）
 fn app_with_jobs(tag: &str) -> (axum::Router, String, std::path::PathBuf) {
     let base = std::env::temp_dir().join(format!("guanlan-svc-jobs-{}-{tag}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
@@ -2619,7 +2453,6 @@ fn app_with_jobs(tag: &str) -> (axum::Router, String, std::path::PathBuf) {
     (app, root, base)
 }
 
-/// 索引任务：受理 → 202 + job_id → 轮询到完成 → 报告里带本轮统计
 #[tokio::test]
 async fn index_jobs_accept_and_run_to_completion() {
     let (app, _root, base) = app_with_jobs("run");
@@ -2630,7 +2463,6 @@ async fn index_jobs_accept_and_run_to_completion() {
     let job_id = json["job_id"].as_str().expect("应有 job_id").to_owned();
     assert!(!job_id.is_empty());
 
-    // 轮询到终态
     let mut final_json = serde_json::Value::Null;
     for _ in 0..100 {
         let (status, body) = get(&app, &format!("/api/v1/jobs/{job_id}")).await;
@@ -2645,10 +2477,8 @@ async fn index_jobs_accept_and_run_to_completion() {
     assert_eq!(final_json["state"], "completed", "对账应完成：{final_json}");
     assert_eq!(final_json["kind"], "verify_all");
     assert_eq!(final_json["phase"], "done");
-    // 本轮统计：两份文档被纳入
     assert_eq!(final_json["report"]["scanned"], 2);
     assert_eq!(final_json["report"]["new_files"], 2);
-    // 完成后索引代已推进
     assert!(
         final_json["index_generation"].as_u64().unwrap_or(0) >= 1,
         "完成后应有索引代：{final_json}"
@@ -2658,7 +2488,6 @@ async fn index_jobs_accept_and_run_to_completion() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// 索引任务：重复提交并入同一任务（契约 §2「同工作区重复重扫合并」）
 #[tokio::test]
 async fn index_jobs_merge_duplicate_submissions() {
     let (app, _root, base) = app_with_jobs("merge");
@@ -2673,7 +2502,6 @@ async fn index_jobs_merge_duplicate_submissions() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// 索引任务：未支持的任务类型给明确错误（不假装已受理）
 #[tokio::test]
 async fn index_jobs_reject_unsupported_kind() {
     let (app, _root, base) = app_with_jobs("reject");
@@ -2682,7 +2510,6 @@ async fn index_jobs_reject_unsupported_kind() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_envelope(&json, "BAD_REQUEST");
 
-    // 坏 JSON 同样给 400 包络
     let (status, json) = post_json(&app, "/api/v1/index-jobs", "{not json").await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_envelope(&json, "BAD_REQUEST");
@@ -2690,7 +2517,6 @@ async fn index_jobs_reject_unsupported_kind() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// 索引任务：未知 job_id → 404 包络
 #[tokio::test]
 async fn job_status_unknown_id_is_not_found() {
     let (app, _root, base) = app_with_jobs("unknown");
@@ -2700,7 +2526,6 @@ async fn job_status_unknown_id_is_not_found() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// 全格式采集/筛选、/api/v1/storage/stats、/api/v1/storage/policy 与二进制流/降级语义
 #[tokio::test]
 async fn b01_open_formats_storage_stats_and_policy_roundtrip() {
     let base = std::env::temp_dir().join(format!("guanlan-svc-b01-{}", std::process::id()));
@@ -2741,7 +2566,6 @@ async fn b01_open_formats_storage_stats_and_policy_roundtrip() {
         notices: None,
     });
 
-    // 1) /api/v1/files 按任意扩展名与 class:<name> 筛选
     let (st_ts, j_ts) = get(&app, "/api/v1/files?format=ts").await;
     assert_eq!(st_ts, StatusCode::OK);
     assert_eq!(j_ts["items"].as_array().unwrap().len(), 1);
@@ -2764,7 +2588,6 @@ async fn b01_open_formats_storage_stats_and_policy_roundtrip() {
         .unwrap()
         .to_owned();
 
-    // 2) png 走 raw_url，?raw=1 流式返回 image/png；mp4 诚实返回 410 SNAPSHOT_UNAVAILABLE
     let (st_png_meta, j_png_meta) =
         get(&app, &format!("/api/v1/revisions/{png_rev}/content")).await;
     assert_eq!(st_png_meta, StatusCode::OK);
@@ -2790,7 +2613,6 @@ async fn b01_open_formats_storage_stats_and_policy_roundtrip() {
     assert_eq!(st_mp4, StatusCode::GONE);
     assert_envelope(&j_mp4, "SNAPSHOT_UNAVAILABLE");
 
-    // 3) GET /api/v1/storage/stats + POST /api/v1/storage/policy
     let (st_stats, j_stats) = get(&app, "/api/v1/storage/stats").await;
     assert_eq!(st_stats, StatusCode::OK);
     assert_eq!(j_stats["gitignore_respected"], true);
@@ -2827,8 +2649,6 @@ async fn b01_open_formats_storage_stats_and_policy_roundtrip() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// QuickLook 轻预览端点（代码分片+UTF-8 边界、PNG 尺寸元数据、L0 大二进制体检卡+历史体积 delta、
-/// /thumbnail 流式与 Range/304、desktop CORS Range 头放行）
 #[tokio::test]
 async fn b02_quick_preview_and_thumbnail_endpoints() {
     let base = std::env::temp_dir().join(format!("guanlan-svc-b02-{}", std::process::id()));
@@ -2839,14 +2659,12 @@ async fn b02_quick_preview_and_thumbnail_endpoints() {
     std::fs::create_dir_all(ws_root.join("assets")).unwrap();
     std::fs::create_dir_all(&data_dir).unwrap();
 
-    // 1) 长文本 CSV（> 2 KiB，含中文多字节，用于验证 max_bytes=1024 分片与 offset 续读）
     let mut csv_body = String::from("id,name,amount\n");
     for i in 1..=120 {
         csv_body.push_str(&format!("{i},观澜条目-{i},{:.2}\n", i as f64 * 1.5));
     }
     std::fs::write(ws_root.join("src/ledger.csv"), &csv_body).unwrap();
 
-    // 2) 真实 IHDR 的 PNG（640x360）
     let mut png_bytes = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
     png_bytes.extend_from_slice(&[0, 0, 0, 13, b'I', b'H', b'D', b'R']);
     png_bytes.extend_from_slice(&640u32.to_be_bytes());
@@ -2854,7 +2672,6 @@ async fn b02_quick_preview_and_thumbnail_endpoints() {
     png_bytes.extend_from_slice(&[8, 6, 0, 0, 0, 0, 0, 0, 0]);
     std::fs::write(ws_root.join("assets/banner.png"), &png_bytes).unwrap();
 
-    // 3) 第三档大二进制/音频（先写 v1 再更新 v2，验证历史体积变化 delta_bytes）
     std::fs::write(ws_root.join("assets/demo.mp4"), b"MP4-v1-bytes-12345").unwrap();
 
     let root = ws_root.to_string_lossy().into_owned();
@@ -2865,7 +2682,6 @@ async fn b02_quick_preview_and_thumbnail_endpoints() {
     )
     .unwrap();
 
-    // 更新 demo.mp4 生成 v2，形成体积 delta（确保 mtime 前进或内容变更被写入新修订）
     std::thread::sleep(std::time::Duration::from_millis(20));
     std::fs::write(
         ws_root.join("assets/demo.mp4"),
@@ -2893,7 +2709,6 @@ async fn b02_quick_preview_and_thumbnail_endpoints() {
         notices: None,
     });
 
-    // 取文件列表定位三个修订 ID
     let (st_files, j_files) = get(&app, "/api/v1/files?limit=20").await;
     assert_eq!(st_files, StatusCode::OK);
     let items = j_files["items"].as_array().unwrap();
@@ -2919,7 +2734,6 @@ async fn b02_quick_preview_and_thumbnail_endpoints() {
         .unwrap()
         .to_owned();
 
-    // A) CSV 轻预览分片（max_bytes=1024 → truncated=true，再用 slice_offset+slice_bytes 续读）
     let (st_csv1, h_csv1, b_csv1) = send(
         &app,
         Request::builder()
@@ -2940,7 +2754,6 @@ async fn b02_quick_preview_and_thumbnail_endpoints() {
         j_csv1["slice_offset"].as_u64().unwrap() + j_csv1["slice_bytes"].as_u64().unwrap();
     assert!(next_off <= 1024);
 
-    // 条件请求 304
     let etag_csv = h_csv1.get("etag").unwrap().to_str().unwrap().to_owned();
     let (st_304, _, _) = send(
         &app,
@@ -2955,7 +2768,6 @@ async fn b02_quick_preview_and_thumbnail_endpoints() {
     .await;
     assert_eq!(st_304, StatusCode::NOT_MODIFIED);
 
-    // B) PNG 轻预览尺寸元数据 + /thumbnail 流式与 Range 206 + 非图片拒绝 413
     let (st_png, j_png) = get(&app, &format!("/api/v1/revisions/{png_rev}/preview")).await;
     assert_eq!(st_png, StatusCode::OK);
     assert_eq!(j_png["preview_kind"], "image");
@@ -2984,12 +2796,10 @@ async fn b02_quick_preview_and_thumbnail_endpoints() {
     );
     assert!(h_th_range.get("access-control-expose-headers").is_some());
 
-    // 非图像请求 /thumbnail 明确返回不支持（413 UNSUPPORTED_CONTENT）
     let (st_th_csv, j_th_csv) = get(&app, &format!("/api/v1/revisions/{csv_rev}/thumbnail")).await;
     assert_eq!(st_th_csv, StatusCode::PAYLOAD_TOO_LARGE);
     assert_envelope(&j_th_csv, "UNSUPPORTED_CONTENT");
 
-    // C) 大二进制 L0 体检卡：200 OK、snapshot_available=false、含历史版本与体积变化 delta
     let (st_mp4, j_mp4) = get(&app, &format!("/api/v1/revisions/{mp4_rev}/preview")).await;
     assert_eq!(st_mp4, StatusCode::OK);
     assert_eq!(j_mp4["preview_kind"], "binary");
@@ -3002,12 +2812,10 @@ async fn b02_quick_preview_and_thumbnail_endpoints() {
     assert_eq!(hist[1]["seq"], 1);
     assert!(hist[1]["delta_bytes"].is_null());
 
-    // L0 无快照请求 /thumbnail → 410 SNAPSHOT_UNAVAILABLE
     let (st_th_mp4, j_th_mp4) = get(&app, &format!("/api/v1/revisions/{mp4_rev}/thumbnail")).await;
     assert_eq!(st_th_mp4, StatusCode::GONE);
     assert_envelope(&j_th_mp4, "SNAPSHOT_UNAVAILABLE");
 
-    // 未知修订 → 404 NOT_FOUND
     let (st_missing, j_missing) = get(&app, "/api/v1/revisions/rev_does_not_exist/preview").await;
     assert_eq!(st_missing, StatusCode::NOT_FOUND);
     assert_envelope(&j_missing, "NOT_FOUND");
@@ -3031,10 +2839,10 @@ fn build_stored_zip_for_http_test(files: &[(&str, &[u8])]) -> Vec<u8> {
         buf.extend_from_slice(&[0x50, 0x4B, 0x03, 0x04]);
         buf.extend_from_slice(&20u16.to_le_bytes());
         buf.extend_from_slice(&0u16.to_le_bytes());
-        buf.extend_from_slice(&0u16.to_le_bytes()); // stored
         buf.extend_from_slice(&0u16.to_le_bytes());
         buf.extend_from_slice(&0u16.to_le_bytes());
-        buf.extend_from_slice(&0u32.to_le_bytes()); // crc ignored by reader
+        buf.extend_from_slice(&0u16.to_le_bytes());
+        buf.extend_from_slice(&0u32.to_le_bytes());
         buf.extend_from_slice(&len.to_le_bytes());
         buf.extend_from_slice(&len.to_le_bytes());
         buf.extend_from_slice(&(name_bytes.len() as u16).to_le_bytes());
@@ -3081,8 +2889,6 @@ fn build_stored_zip_for_http_test(files: &[(&str, &[u8])]) -> Vec<u8> {
     buf
 }
 
-/// Office（`.docx`/`.xlsx` L2 端点、ETag/304、非 Office 拒绝、损坏/加密降级、
-/// Markdown → `.xlsx#Sheet!Range` 决定证据锚定与 `.docx` 内嵌段落锚定）
 #[tokio::test]
 async fn b03_office_endpoints_and_decision_evidence_anchoring() {
     let base = std::env::temp_dir().join(format!("guanlan-svc-b03-{}", std::process::id()));
@@ -3196,7 +3002,6 @@ async fn b03_office_endpoints_and_decision_evidence_anchoring() {
     let locked_rev = locked_item["current_revision_id"].as_str().unwrap();
     let md_rev = md_item["current_revision_id"].as_str().unwrap();
 
-    // 1) /preview 对已索引 Office 返回 office + office_summary；加密 Office 回退 binary
     let (st_prev, j_prev) = get(&app, &format!("/api/v1/revisions/{bom_rev}/preview")).await;
     assert_eq!(st_prev, StatusCode::OK);
     assert_eq!(j_prev["preview_kind"], "office");
@@ -3209,7 +3014,6 @@ async fn b03_office_endpoints_and_decision_evidence_anchoring() {
     assert_eq!(j_prev_locked["preview_kind"], "binary");
     assert_eq!(j_prev_locked["office_summary"]["status"], "encrypted");
 
-    // 2) /office 结构化端点 + ETag 304 + 非 Office 400 + 不存在 404
     let (st_off, h_off, b_off) = send(
         &app,
         Request::builder()
@@ -3251,7 +3055,6 @@ async fn b03_office_endpoints_and_decision_evidence_anchoring() {
     assert_eq!(st_nf, StatusCode::NOT_FOUND);
     assert_envelope(&j_nf, "NOT_FOUND");
 
-    // 3) /decisions 返回带 officeAnchor 的决定证据
     let (st_dec, j_dec) = get(&app, "/api/v1/decisions").await;
     assert_eq!(st_dec, StatusCode::OK);
     let decs = j_dec["items"].as_array().unwrap();
@@ -3273,11 +3076,10 @@ async fn b03_office_endpoints_and_decision_evidence_anchoring() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// 构造最小多页未压缩文本 PDF（第 idx 页内容为 `page_bodies[idx]`，页码 1-based）
 fn build_simple_pdf_for_http_test(page_bodies: &[&[u8]]) -> Vec<u8> {
     let mut objects: Vec<Vec<u8>> = Vec::new();
     objects.push(b"<< /Type /Catalog /Pages 2 0 R >>".to_vec());
-    objects.push(Vec::new()); // Pages 对象占位（1-based obj 2），kids 确定后回填
+    objects.push(Vec::new());
     let n = page_bodies.len();
     let font_obj = 3 + n * 2;
     let mut kids = Vec::new();
@@ -3324,8 +3126,6 @@ fn build_simple_pdf_for_http_test(page_bodies: &[&[u8]]) -> Vec<u8> {
     out
 }
 
-/// PDF 页级文本端点、ETag/304、非 PDF 拒绝、扫描页诚实降级与
-/// Markdown → `.pdf#page=N` 决定证据锚定
 #[tokio::test]
 async fn b04_pdf_page_extracts_and_decision_evidence_anchoring() {
     let base = std::env::temp_dir().join(format!("guanlan-svc-b04-{}", std::process::id()));
@@ -3336,7 +3136,6 @@ async fn b04_pdf_page_extracts_and_decision_evidence_anchoring() {
     std::fs::create_dir_all(ws_root.join("decisions")).unwrap();
     std::fs::create_dir_all(&data_dir).unwrap();
 
-    // 第 1 页为文本页；第 2 页仅含内联图像（模拟扫描页）→ 诚实标记 image_only
     let spec_pdf = build_simple_pdf_for_http_test(&[
         b"BT /F1 12 Tf 72 720 Td (Spec Freeze Window 30d) Tj ET",
         b"q BI /W 2 /H 2 /CS /G /BPC 8 ID \x00\x11\x22\x33 EI Q",
@@ -3371,7 +3170,6 @@ async fn b04_pdf_page_extracts_and_decision_evidence_anchoring() {
         notices: None,
     });
 
-    // 1) /files：pdf_page_text 覆盖 + page_indexed 徽标
     let (st_files, j_files) = get(&app, "/api/v1/files?limit=50").await;
     assert_eq!(st_files, StatusCode::OK);
     let items = j_files["items"].as_array().unwrap();
@@ -3389,7 +3187,6 @@ async fn b04_pdf_page_extracts_and_decision_evidence_anchoring() {
     let spec_rev = spec_item["current_revision_id"].as_str().unwrap();
     let md_rev = md_item["current_revision_id"].as_str().unwrap();
 
-    // 2) /preview：pdf_summary 页统计（2 页 · 1 文本页 · 1 纯图像页）
     let (st_prev, j_prev) = get(&app, &format!("/api/v1/revisions/{spec_rev}/preview")).await;
     assert_eq!(st_prev, StatusCode::OK);
     assert_eq!(j_prev["preview_kind"], "pdf");
@@ -3398,7 +3195,6 @@ async fn b04_pdf_page_extracts_and_decision_evidence_anchoring() {
     assert_eq!(j_prev["pdf_summary"]["text_page_count"], 1);
     assert_eq!(j_prev["pdf_summary"]["image_only_page_count"], 1);
 
-    // 3) /pdf 页级端点：1-based 页码精确、扫描页诚实标记 + ETag/304
     let (st_pdf, h_pdf, b_pdf) = send(
         &app,
         Request::builder()
@@ -3437,7 +3233,6 @@ async fn b04_pdf_page_extracts_and_decision_evidence_anchoring() {
     .await;
     assert_eq!(st_pdf_304, StatusCode::NOT_MODIFIED);
 
-    // 4) 非 PDF 400 + 不存在 404
     let (st_md_err, j_md_err) = get(&app, &format!("/api/v1/revisions/{md_rev}/pdf")).await;
     assert_eq!(st_md_err, StatusCode::BAD_REQUEST);
     assert_envelope(&j_md_err, "BAD_REQUEST");
@@ -3445,7 +3240,6 @@ async fn b04_pdf_page_extracts_and_decision_evidence_anchoring() {
     assert_eq!(st_nf, StatusCode::NOT_FOUND);
     assert_envelope(&j_nf, "NOT_FOUND");
 
-    // 5) /decisions：Markdown `#page=2` 链接派生 pdfAnchor 直跳证据卡
     let (st_dec, j_dec) = get(&app, "/api/v1/decisions").await;
     assert_eq!(st_dec, StatusCode::OK);
     let decs = j_dec["items"].as_array().unwrap();
@@ -3466,7 +3260,6 @@ async fn b04_pdf_page_extracts_and_decision_evidence_anchoring() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// 候选事项多信号编织（理由胶囊）、采纳固化与"误聚项剔除后重扫不反弹"
 #[tokio::test]
 async fn c01_initiative_candidates_weave_adopt_and_exclude() {
     let base = std::env::temp_dir().join(format!("guanlan-svc-c01-{}", std::process::id()));
@@ -3484,8 +3277,6 @@ async fn c01_initiative_candidates_weave_adopt_and_exclude() {
     }
     std::fs::create_dir_all(&data_dir).unwrap();
 
-    // 同名主干家族散落 4 个目录 + mtime 分散（会话共现信号读磁盘 mtime）；
-    // 主题无关干扰项（3 天前）
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -3547,7 +3338,6 @@ async fn c01_initiative_candidates_weave_adopt_and_exclude() {
         notices: None,
     });
 
-    // 1) verify_all 触发对账 + 候选编织
     let (st_submit, j_submit) = post_json(
         &app,
         "/api/v1/index-jobs",
@@ -3557,7 +3347,6 @@ async fn c01_initiative_candidates_weave_adopt_and_exclude() {
     assert_eq!(st_submit, StatusCode::ACCEPTED);
     wait_job_terminal(&app, j_submit["job_id"].as_str().unwrap()).await;
 
-    // 2) 候选列表：4 成员簇 + 理由胶囊非空
     let (st_list, j_list) = get(&app, "/api/v1/initiative-candidates").await;
     assert_eq!(st_list, StatusCode::OK);
     let items = j_list["items"].as_array().unwrap();
@@ -3583,7 +3372,6 @@ async fn c01_initiative_candidates_weave_adopt_and_exclude() {
         assert!(member["relative_path"].as_str().is_some());
     }
 
-    // 3) 单成员剔除（误聚项）→ 重扫不反弹
     let blueprint_file_id = members
         .iter()
         .find(|m| {
@@ -3626,7 +3414,6 @@ async fn c01_initiative_candidates_weave_adopt_and_exclude() {
     });
     assert!(!rebound, "误聚项剔除后重扫不得反弹");
 
-    // 4) 采纳剩余簇 → 候选置 adopted
     let (_, j_final) = get(&app, "/api/v1/initiative-candidates").await;
     let final_items = j_final["items"].as_array().unwrap();
     let adoptable = final_items
@@ -3657,7 +3444,6 @@ async fn c01_initiative_candidates_weave_adopt_and_exclude() {
         .map(|c| c["state"].clone());
     assert_eq!(adopted_state, Some(serde_json::json!("adopted")));
 
-    // 5) 不存在候选 404
     let (st_nf, j_nf) = post_json(
         &app,
         "/api/v1/initiative-candidates/cand_missing/adopt",
@@ -3671,7 +3457,6 @@ async fn c01_initiative_candidates_weave_adopt_and_exclude() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// 轮询任务到终态（completed 断言；failed 即刻 panic 带报告）
 async fn wait_job_terminal(app: &axum::Router, job_id: &str) {
     for _ in 0..200 {
         let (_, j) = get(app, &format!("/api/v1/jobs/{job_id}")).await;
@@ -3691,8 +3476,6 @@ async fn wait_job_terminal(app: &axum::Router, job_id: &str) {
     panic!("任务 20s 未到终态");
 }
 
-/// 混合倒排检索端到端（契约 §2.4）——真实文件 + 真实对账（reconcile 尾部
-/// 自动建检索索引）→ GET /search 四态策略/行号/片段 → 一键重建自愈。
 #[tokio::test]
 async fn c02_search_hybrid_index_and_rebuild_end_to_end() {
     let base = std::env::temp_dir().join(format!("guanlan-svc-c02-{}", std::process::id()));
@@ -3744,7 +3527,6 @@ async fn c02_search_hybrid_index_and_rebuild_end_to_end() {
         notices: None,
     });
 
-    // ① 中文双字短语：bigram_phrase_verified + 1-based 行号 + 版本号 + 片段
     let (st, j) = get(
         &app,
         "/api/v1/search?q=%E7%99%BB%E5%BD%95%E6%96%B9%E6%A1%88",
@@ -3772,7 +3554,6 @@ async fn c02_search_hybrid_index_and_rebuild_end_to_end() {
     assert_eq!(md_hit["locator"]["start"], 1, "1-based 行号");
     assert!(md_hit["snippet"].as_str().unwrap().contains("登录方案"));
 
-    // SVG 文本层：svg_text 覆盖 + fragment 定位
     let svg_hit = items
         .iter()
         .find(|h| h["format"] == "svg")
@@ -3784,7 +3565,6 @@ async fn c02_search_hybrid_index_and_rebuild_end_to_end() {
         .unwrap()
         .contains("登录方案"));
 
-    // ② 专有编号：exact_code + 行号；文件名命中诚实不冒充正文
     let (st, j) = get(&app, "/api/v1/search?q=REQ-03").await;
     assert_eq!(st, StatusCode::OK);
     assert_eq!(j["mode"], "code");
@@ -3797,7 +3577,6 @@ async fn c02_search_hybrid_index_and_rebuild_end_to_end() {
     assert_eq!(code_hit["locator"]["kind"], "lines");
     assert_eq!(code_hit["locator"]["start"], 3, "编号在第 3 行");
 
-    // ③ 文件名首字母缩写：uas → user-auth-service.ts（filename_match）
     let (st, j) = get(&app, "/api/v1/search?q=uas").await;
     assert_eq!(st, StatusCode::OK);
     let abbr_hit = j["items"]
@@ -3814,7 +3593,6 @@ async fn c02_search_hybrid_index_and_rebuild_end_to_end() {
         .expect("缩写应命中文件名");
     assert_eq!(abbr_hit["locator"]["kind"], "file");
 
-    // ④ format / dir 筛选
     let (st, j) = get(
         &app,
         "/api/v1/search?q=%E7%99%BB%E5%BD%95%E6%96%B9%E6%A1%88&format=md",
@@ -3839,7 +3617,6 @@ async fn c02_search_hybrid_index_and_rebuild_end_to_end() {
         "src 下无该短语正文"
     );
 
-    // ⑤ 损坏自愈：清空词项表 → 诚实空结果 → 一键重建恢复
     {
         let conn = rusqlite::Connection::open(data_dir.join("index.db")).unwrap();
         conn.execute("DELETE FROM search_postings", []).unwrap();
@@ -3866,7 +3643,6 @@ async fn c02_search_hybrid_index_and_rebuild_end_to_end() {
     assert_eq!(j["search_state"], "ready");
 }
 
-/// 建一个真实索引过的混合工作区（Writer + reconcile 全链路，与混合检索端到端测试同口径）
 fn c05_build_workspace(
     base: &std::path::Path,
     tag: &str,
@@ -3895,8 +3671,6 @@ fn c05_build_workspace(
     (root_str, data_dir)
 }
 
-/// 跨项目只读挂载与联合检索端到端（契约 §2.5）——挂载/来源标注/互斥拒绝/
-/// 跨挂载边界写拦截（确定性错误码）/版本级只读路由/离线降级/联合检索预算。
 #[tokio::test]
 async fn c05_mounts_cross_search_and_guardrails_end_to_end() {
     let base = std::env::temp_dir().join(format!("guanlan-svc-c05-{}", std::process::id()));
@@ -3928,7 +3702,6 @@ async fn c05_mounts_cross_search_and_guardrails_end_to_end() {
     let primary_normalized =
         guanlan_core::domain::mounts::normalize_mount_root(&primary_root).unwrap();
     let registry = crate::mounts::MountRegistry::load(&primary_data, &primary_normalized);
-    // HTTP 端到端：参考区数据目录显式映射（生产路径为 default_data_dir 解析）
     registry.set_test_data_dirs(std::collections::HashMap::from([
         (
             guanlan_core::domain::mounts::normalize_mount_root(&ref_a_root).unwrap(),
@@ -3954,12 +3727,10 @@ async fn c05_mounts_cross_search_and_guardrails_end_to_end() {
         notices: None,
     });
 
-    // ① 初始为空
     let (st, j) = get(&app, "/api/v1/mounts").await;
     assert_eq!(st, StatusCode::OK);
     assert!(j["items"].as_array().unwrap().is_empty());
 
-    // ② 挂载 ref-a：在线 + 摘要现读（active 文件数 / root_key / search_state=ready）
     let (st, j) = post_json(
         &app,
         "/api/v1/mounts",
@@ -3974,7 +3745,6 @@ async fn c05_mounts_cross_search_and_guardrails_end_to_end() {
     let mount_a_id = j["mount"]["mount_id"].as_str().unwrap().to_owned();
     assert!(mount_a_id.starts_with("m_"));
 
-    // ③ 路径规范化收敛：\\?\ 长路径 + 混合斜杠写法 → 同一挂载身份 → CONFLICT
     let (st, j) = post_json(
         &app,
         "/api/v1/mounts",
@@ -3985,7 +3755,6 @@ async fn c05_mounts_cross_search_and_guardrails_end_to_end() {
     assert_eq!(st, StatusCode::CONFLICT, "变体写法必须收敛为重复挂载：{j}");
     assert_envelope(&j, "CONFLICT");
 
-    // ④ 挂载 ref-b
     let (st, j) = post_json(
         &app,
         "/api/v1/mounts",
@@ -3994,7 +3763,6 @@ async fn c05_mounts_cross_search_and_guardrails_end_to_end() {
     .await;
     assert_eq!(st, StatusCode::OK, "挂载 ref-b 受理：{j}");
 
-    // ⑤ 父子互斥 100% 确定性拒绝：自我 / 主区子目录 / 主区父目录 / 挂载区子目录
     for (candidate, why) in [
         (primary_root.clone(), "自我挂载"),
         (format!(r"{primary_root}\nested"), "主区子目录"),
@@ -4018,8 +3786,6 @@ async fn c05_mounts_cross_search_and_guardrails_end_to_end() {
         assert_envelope(&j, "MOUNT_REJECTED");
     }
 
-    // ⑥ 联合检索：主区 + 两挂载区；挂载区命中带来源标注（工作区名 + root_key 哈希）；
-    //    实测耗时 < 80ms（验收预算）
     let started = std::time::Instant::now();
     let (st, j) = get(
         &app,
@@ -4061,7 +3827,6 @@ async fn c05_mounts_cross_search_and_guardrails_end_to_end() {
     assert!(elapsed_ms < 80, "联合检索实测 {elapsed_ms}ms 超预算 80ms");
     eprintln!("c05 联合检索实测：{elapsed_ms}ms（预算 80ms，2 挂载区 + 主区）");
 
-    // ⑦ 跨挂载边界写拦截：挂载区 file_id 的 rename/move/trash 100% 确定性 403
     let mounted_file_id = mounted_hit["file_id"].as_str().unwrap().to_owned();
     for (uri, body) in [
         (
@@ -4082,7 +3847,6 @@ async fn c05_mounts_cross_search_and_guardrails_end_to_end() {
         assert_envelope(&j, "CROSS_WORKSPACE_FORBIDDEN");
     }
 
-    // ⑧ 版本级只读路由：挂载区版本经主区端点可读（preview / raw content）
     let mounted_rev = mounted_hit["revision_id"].as_str().unwrap().to_owned();
     let (st, j) = get(&app, &format!("/api/v1/revisions/{mounted_rev}/preview")).await;
     assert_eq!(st, StatusCode::OK, "挂载区版本轻预览：{j}");
@@ -4103,7 +3867,6 @@ async fn c05_mounts_cross_search_and_guardrails_end_to_end() {
     let text = String::from_utf8_lossy(&bytes);
     assert!(text.contains("登录方案"), "raw 正文应为参考区快照原文");
 
-    // ⑨ 卸载：列表同步收缩；重复卸载 404
     let delete_mount = |mount_id: &str| {
         Request::builder()
             .method("DELETE")
@@ -4121,8 +3884,6 @@ async fn c05_mounts_cross_search_and_guardrails_end_to_end() {
     assert_eq!(st, StatusCode::OK);
     assert_eq!(j["items"].as_array().unwrap().len(), 1, "卸载后仅剩 ref-b");
 
-    // ⑩ 离线降级：重启装载一条索引库已消失的挂载 → online=false + 最后已知摘要保留
-    // （写入独立临时数据目录，不动真实侧车）
     let sidecar = serde_json::json!({
         "version": 1,
         "mounts": [{
@@ -4205,7 +3966,6 @@ async fn quiet_md_folder_ops_create_doc_batch_and_mount_tree_end_to_end() {
         notices: None,
     });
 
-    // 1) GET /api/v1/folders 包含空目录
     let (st, j) = get(&app, "/api/v1/folders").await;
     assert_eq!(st, StatusCode::OK);
     let folders: Vec<String> = j["folders"]
@@ -4217,7 +3977,6 @@ async fn quiet_md_folder_ops_create_doc_batch_and_mount_tree_end_to_end() {
     assert!(folders.contains(&"empty-folder".to_owned()));
     assert!(folders.contains(&"docs".to_owned()));
 
-    // 2) POST /api/v1/folders 新建子目录 + POST /api/v1/files/create 新建文档
     let (st, j) = post_json(
         &app,
         "/api/v1/folders",
@@ -4237,7 +3996,6 @@ async fn quiet_md_folder_ops_create_doc_batch_and_mount_tree_end_to_end() {
     assert_eq!(j["relative_path"], "empty-folder/notes/周会纪要.md");
     let created_id = j["file_id"].as_str().unwrap().to_owned();
 
-    // 3) POST /api/v1/folders/rename & /move + 防成环
     let (st, j) = post_json(
         &app,
         "/api/v1/folders/rename",
@@ -4256,7 +4014,6 @@ async fn quiet_md_folder_ops_create_doc_batch_and_mount_tree_end_to_end() {
     .await;
     assert_eq!(st, StatusCode::BAD_REQUEST, "移动文件夹进自身子目录必拒");
 
-    // 4) POST /api/v1/files/batch-move 批量移动
     let (st, j) = post_json(
         &app,
         "/api/v1/files/batch-move",
@@ -4271,7 +4028,6 @@ async fn quiet_md_folder_ops_create_doc_batch_and_mount_tree_end_to_end() {
     assert_eq!(j["succeeded"].as_array().unwrap().len(), 1);
     assert_eq!(j["succeeded"][0]["new_path"], "docs/周会纪要.md");
 
-    // 5) 挂载参考区并拉取 GET /api/v1/mounts/{mount_id}/files
     let (st, m_resp) = post_json(
         &app,
         "/api/v1/mounts",

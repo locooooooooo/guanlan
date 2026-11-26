@@ -1,28 +1,11 @@
-/**
- * 画布叙事抽屉：
- *
- * 取代 334px 常驻右侧检视器：双击节点 / 顶栏「详情」时右侧滑出的流式时间叙事面板
- * （w≈340px，translateX+opacity --dur-3 --ease-spring，见 canvasWidgets.css）。
- * 内容为时间轴叙事分节（发生→变更章节→关联决策→引用依据，竖向点线轴非分割表单）；
- * 「打开原文」作为 footer 首位按钮，承接双击打开详情后的原文跳转。
- *
- * Esc 先关本抽屉：capture 监听 + stopImmediatePropagation（与 KnowledgeGraph 同款），
- * 并带 [role="dialog"] 守卫——阅读器/决策弹层开着时不抢 Esc；
- * 可见浮层开着（data-esc-layer="open"）时同样让位，浮层先关闭。
- * 锚点：data-cv-narrative-drawer（根）、data-cv-narrative-section={id}（每节）。
- * 舷窗纪律：样式全走 .cvw-*，零内联色值。
- */
 
 import React, { useEffect } from 'react';
 import { ArrowLeft, X } from 'lucide-react';
-// 样式文件统一由 App.tsx 装载：Node 测试链不解析 .css 导入，由 App 常驻装载兜底
 
 export interface CanvasNarrativeSection {
   id: string;
   label: string;
-  /** 节时间戳（observed 口径 HH:MM / YYYY-MM-DD 等，原样透出） */
   timestamp?: string;
-  /** 节点色档：default=中性 / change=修改语义（--cv-lane-md）/ decision=决策语义（--cv-lav） */
   tone?: 'default' | 'change' | 'decision';
   body: React.ReactNode;
 }
@@ -30,13 +13,10 @@ export interface CanvasNarrativeSection {
 export interface CanvasNarrativeDrawerProps {
   open: boolean;
   title: string;
-  /** 标题下 mono 小字行（如「已选中 · 层级 N」） */
   metaLine?: string;
   sections: CanvasNarrativeSection[];
   onClose: () => void;
-  /** footer 首位=「打开原文」钮由宿主传入（复用 openFileReader 链路） */
   footer?: React.ReactNode;
-  /** 可选返回主轴钮 */
   backButton?: { label: string; onClick: () => void };
 }
 
@@ -49,11 +29,6 @@ export default function CanvasNarrativeDrawer({
   footer,
   backButton,
 }: CanvasNarrativeDrawerProps) {
-  // Esc 先关本抽屉（capture + stopImmediatePropagation；弹层守卫同 KnowledgeGraph 先例）。
-  // 仲裁让位：可见浮层开着（data-esc-layer="open"，如 FilterDropdown/顶栏帮助浮层）时
-  // 直接 return 不抢 Esc——浮层的 document bubble 关闭路径先收口，其 stopPropagation
-  // 天然挡住本抽屉与 App 阶梯，各层 Esc 各归各位。
-  // 依赖只有 open/onClose：常驻监听以 open 短路，不随抽屉挂卸反复注册。
   useEffect(() => {
     if (!open) return;
     const escape = (event: KeyboardEvent) => {

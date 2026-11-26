@@ -182,11 +182,9 @@ test('叙事抽屉引用依据：按目标文档合并重复边、不换行胶�
   }
 
   const html = renderToStaticMarkup(React.createElement(Harness));
-  // 引用依据合并重复边并显示 2 处，且为可点击 button
-  assert.equal((html.match(/cvw-narrative-ref-item/g) ?? []).length, 2); // base + --interactive on 1 button
+  assert.equal((html.match(/cvw-narrative-ref-item/g) ?? []).length, 2);
   assert.ok(html.includes('架构方案'));
   assert.ok(html.includes('显式引用（收录版本） · 2 处'));
-  // 变更章节不再原样复读「发生」行的文档自述日期
   assert.equal((html.match(/文档自述日期: README \(2026-11-23\)/g) ?? []).length, 1);
 });
 

@@ -5,7 +5,6 @@ import path from 'node:path';
 
 describe('OS watcher SSE 通知接线', () => {
   it('App.tsx 监听 watcher workspace-change 并驱动变更提示条（不干扰既有 proposal/writeback 路由）', () => {
-    // 拆层后 App 实现 = 装配层 + 单一 Store——联合文本断言（语义不变）
     const src = ['App.tsx', 'stores/useWorkspaceStore.tsx']
       .map((p) => fs.readFileSync(path.resolve(import.meta.dirname, '..', 'src', p), 'utf8'))
       .join(String.fromCharCode(10))

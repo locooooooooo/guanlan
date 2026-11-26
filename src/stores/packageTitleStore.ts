@@ -1,19 +1,6 @@
-/**
- * 任务包标题显示名固化 store（与 PackageGroupFrame 标题 Overlay 配套）。
- *
- * 「双击原位改名」的持久层：按任务包 id（taskPackageOf 派生的稳定 pkgId）固化
- * 用户改定的显示名。边界说明：
- *  - 固化的是「画布显示名」——重新派生（taskPackageOf 路径规则或候选簇
- *    归属固化 adopted_candidate_map）不会把它回退成目录名；
- *  - 不改动磁盘目录名（目录级改名走身份保真移动接口，另行触发）——hover title
- *    恒显真实目录名，绝不冒充文件系统已改名。
- * 模式：canvasThemeStore 同款（localStorage + 内存活值 + 订阅通知；读写全 try/catch
- * 静默降级，node 无 window 环境按空表处理，单测链直接 import 不炸）。
- */
 
 const STORAGE_KEY = 'guanlan.packageTitles.v1';
 
-/** pkgId → 用户固化显示名（空表 = 全部走 taskPackageOf 派生名） */
 let overrides: Record<string, string> = loadOverrides();
 
 type Listener = () => void;
@@ -41,7 +28,6 @@ function persist(): void {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides));
   } catch {
-    /* 隐私模式/配额满：静默——显示名固化是增强能力，不是阅读的前置条件 */
   }
 }
 

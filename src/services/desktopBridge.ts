@@ -311,7 +311,6 @@ export async function copyTextWithDesktopFallback(
       await bridge.writeClipboardText(text);
       return { ok: true };
     } catch {
-      // 降级到 Web 剪贴板 API
     }
   }
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
@@ -335,7 +334,6 @@ export async function copyTextWithDesktopFallback(
       document.body.removeChild(ta);
       if (copied) return { ok: true };
     } catch {
-      // fall through
     }
   }
   return { ok: false, error: '当前环境不可写入剪贴板' };
@@ -350,7 +348,6 @@ export async function resolveDesktopAbsolutePath(
     try {
       return await bridge.resolveWorkspacePath(relativePath);
     } catch {
-      // 如果只是路径还未落地或非法，仅回退到安全纯计算（同样校验穿越）
     }
   }
   if (!fallbackRootPath) return null;
@@ -419,8 +416,6 @@ export function subscribeGlobalShortcut(
   };
 }
 
-/** Rust 命令的错误串带一个可读前缀（如 `UPDATE_CHECK_FAILED: ...`），拆出来当码用；
- *  其余错误按桥的通用解析处理。 */
 function parseUpdaterError(err: unknown): { code: string; message: string } {
   const raw = err instanceof Error ? err.message : String(err);
   const match = /^([A-Z][A-Z_]+):\s*([\s\S]*)$/.exec(raw);

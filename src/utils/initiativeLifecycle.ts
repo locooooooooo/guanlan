@@ -1,17 +1,3 @@
-/**
- * 专项生命周期提示——纯函数层。
- *
- * 状态流转：Delivered 已交付 ──(用户确认验收 / 超期自动归档)──► Archived 已归档；
- * 当文档状态由待用户确认推进为已交付时，提示一键归档。
- *
- * 本模块只做提示所需的数据判定：
- *  - deliveredInitiativesOf：从 /state-overview 专项行筛出 delivered，按 updated_at
- *    降序（最近更新的先提示）；
- *  - initiativeArchiveWarn：从归档 job result 提取服务端 warn（如「当前非已交付态」），
- *    缺失/非字符串如实 null。
- *
- * 纪律：纯函数（node --test 直跑，禁 .css/React）；不读服务、不造状态。
- */
 
 import type { InitiativeStateView } from '../services/apiTypes';
 

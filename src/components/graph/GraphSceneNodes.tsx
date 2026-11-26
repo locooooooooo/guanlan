@@ -1,9 +1,3 @@
-/**
- * Scene 节点层 · GraphSceneNodes：
- * 承载扇出虚线容器盒（组头胶囊/收起钮）、司辰立绘、主节点与左侧日期导航卡。
- * 数据一律来自 controller ctx；d3 zoom/drag effect 仍在控制器（按 data-node-id /
- * .d3-draggable-node 类选择器跨子组件查询，保持稳定 DOM 结构）。
- */
 import React from 'react';
 import { Hourglass } from 'lucide-react';
 import { ChronosMascotNode } from '../ChronosMascotNode';
@@ -11,7 +5,6 @@ import PackageGroupFrame, { PACKAGE_GROUP_FRAME_H } from '../canvas/PackageGroup
 import RichDocPreviewCard from '../canvas/RichDocPreviewCard';
 import { cleanDisplayText } from '../../utils/displayText';
 import { computeDynamicEdgePath, hasUnreadChanges, unreadStatusLabel } from '../../utils/guanlanEngine';
-// 视口裁剪纯函数（Scene 层消费挂载判定与连接线判定）
 import { shouldDrawGroupConnector } from '../../utils/canvasViewport';
 import {
   artifactStageBadgeText,
@@ -116,7 +109,6 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
   } = ctx;
   return (
     <>
-        {/* 7. Fan-Out Dashed Container Box */}
         {canvasLayoutMode === 'xray' && (
           <g
             className="d3-draggable-node cursor-grab active:cursor-grabbing"
@@ -138,9 +130,6 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
             <g
               transform={`translate(12, ${fanOutHeaderCapsuleY(fanOutBounds.y, chronosPos.y)})`}
             >
-              {/* 事件轴标题框采用 --cv-axis-title-* 三件套（夜航=lav 调制、纸面=白底深灰字）；
-                  胶囊宽经 fanOutHeaderCapsuleWidth 按全量文本自适应，避免标题被提前截断，
-                  右缘恒在「收起」按钮左缘之前 ≥14px */}
               <rect
                 x="0"
                 y="0"
@@ -153,11 +142,6 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
                 }}
                 strokeWidth="1"
               />
-              {/* 日期组头可点击，一步切到列表态查看当天全部。
-                  文案统一由 fanOutDayHeaderLine 生成：
-                  「⑃ {日期} · 共 {n} 条事件（已合并为 {m} 份活跃文档 · 点击查看全天 →）」，
-                  n 为当日事件总数（active.count），m 为合并后活跃文档数（active.cards.length）；
-                  胶囊纵位经 fanOutHeaderCapsuleY 保证与司辰留白 ≥20px。 */}
               <text
                 x={FANOUT_HEADER_TEXT_LEFT}
                 y="16.5"
@@ -184,7 +168,6 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
                       0,
                       fanOutHeaderLine.length - FANOUT_DAY_HEADER_TAIL.length
                     )}
-                    {/* 尾串使用文字档 --cv-lav-ink（白底对比度 6.3:1），避免图形档 --cv-lav 在浅底上对比度不足 */}
                     <tspan style={{ fill: 'var(--cv-lav-ink)' }}>
                       {FANOUT_DAY_HEADER_TAIL}
                     </tspan>
@@ -194,7 +177,6 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
                 )}
               </text>
 
-              {/* 事件缺失/加载中时展示空态文案，不回退样本卡片（居中基准随自适应胶囊宽） */}
               {subAgentCards.length === 0 && (
                 <text
                   x={Math.max(
@@ -246,8 +228,6 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
           </g>
         )}
 
-        {/* 7.5 CHRONOS · GOD OF TIME MASCOT NODE
-            司辰常驻执掌时间轴：与当前激活日刻度同高，沙漏流沙注入主干，单击切换历史日 / 拖拽吸附刻度 */}
         {chronosSliderOpen && (
           <ChronosMascotNode
             x={chronosPos.x}
@@ -265,7 +245,6 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
             isHovered={hoveredCanvasNodeId === 'chronos_deity'}
             isSelected={selectedCanvasNodeId === 'chronos_deity'}
             onMouseEnter={() => {
-              // 司辰悬停卡不依赖文件预览数据，锚定第一个文件仅为兼容锚点结构
               const anchorFileId = files[0]?.file_id;
               if (anchorFileId) handleNodeMouseEnter(anchorFileId, 'chronos_deity');
               else handleNodeMouseEnter('', 'chronos_deity');
@@ -275,7 +254,6 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
           />
         )}
 
-        {/* 8. MAIN HUB NODE（司辰时间轴冠徽：以沙漏徽记与文档累积沉淀取代冷冰冰终端符号） */}
         <g
           className="d3-draggable-node cursor-grab active:cursor-grabbing"
           data-node-id="main_hub"
@@ -340,10 +318,6 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
           </foreignObject>
         </g>
 
-        {/* 9. LEFT SOURCE NODES (with generous vertical gap above tests/决策回执...)
-            1.2：日期汇总卡 = 独立左侧轨道（x 由 dateCardRailX 派生，离主干 ≥120px、
-            离司辰立绘左缘 ≥16px）；本组渲染在 ChronosMascotNode（7.5）之后，
-            但几何上零重叠，司辰仍是节点层最底层的装饰主体，任何文字都不压立绘 */}
         {leftSourceNodes.map((src, srcIdx) => {
           if (!isNodeVisibleByCategory(src.badge)) return null;
           const pos = resolveLeftSourcePos(src);
@@ -374,7 +348,6 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
               }}
               onMouseLeave={handleNodeMouseLeave}
               onClick={() => {
-                // 日期导航节点切换当前日期；文件入口保持原行为
                 if (src.date !== undefined) {
                   selectDate(src.date);
                   return;
@@ -385,7 +358,6 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
                 exploreAfterClick(src.fileId);
               }}
               onDoubleClick={() => {
-                // 双击查看详情（打开叙事抽屉），不直接跳转原文
                 if (src.fileId) openNarrativeDrawer({ fileId: src.fileId });
               }}
               onContextMenu={(e) => {
@@ -403,14 +375,10 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
                 });
               }}
             >
-              {/* 3.2：外框从锚点弹簧 scale+fade 弹出；子卡按 40ms 递增交错。
-                  外层 g 只吃 transform 属性，动画挂在内层 g（CSS transform 会覆盖
-                  SVG transform 属性，直接挂外层会让卡片丢位） */}
               <g
                 className="anim-spring-pop"
                 style={{
                   animationDelay: `${srcIdx * SPRING_STAGGER_MS}ms`,
-                  // 锚点 = 卡右缘中心（卡片连着主干那一侧），弹出方向朝主干
                   transformOrigin: 'right center',
                 }}
               >

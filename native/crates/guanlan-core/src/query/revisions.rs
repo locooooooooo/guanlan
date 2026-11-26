@@ -25,7 +25,6 @@ use crate::storage::{
     edge_row, event_row, internal_sql, statement_row, EventRow, FileRow, ReadonlyStore, RevisionRow,
 };
 
-/// 文件头（project.ts:513-523）
 fn file_header(file: &FileRow) -> FileHistoryHeader {
     FileHistoryHeader {
         file_id: file.file_id.clone(),
@@ -40,7 +39,6 @@ fn file_header(file: &FileRow) -> FileHistoryHeader {
     }
 }
 
-/// 版本行摘要（project.ts:454-466 字段逐字保留；不下发 snapshot_path）
 fn revision_summary(rev: &RevisionRow) -> RevisionSummary {
     RevisionSummary {
         revision_id: rev.revision_id.clone(),
@@ -56,19 +54,11 @@ fn revision_summary(rev: &RevisionRow) -> RevisionSummary {
     }
 }
 
-/// 事件覆盖四类（缺一不可，否则版本链天生不完整；project.ts:468-485）：
-/// 1) subject_id = file_id（file 主体事件）
-/// 2) revision_id 属于该文件（revision 主体事件）
-/// 3) payload_json.file_id = file_id（决策事件：file_id 只在 payload）
-/// 4) subject_id = 'path:' + current_path（read_error / read_recovered 以路径为主体）
 pub(crate) fn events_of_file(
     conn: &rusqlite::Connection,
     workspace_id: &str,
     file: &FileRow,
 ) -> Result<Vec<EventRow>, GuanlanError> {
-    // 四路来源采用 UNION 而非 OR：每路各有匹配索引可走，避免对整个工作区逐条求值；
-    // UNION 按 rowid 天然去重（seq 为 INTEGER PRIMARY KEY），外层 ORDER BY seq ASC
-    // 与既有历史顺序一致，四路来源全部保留。
     let sql = "SELECT * FROM ( \
                  SELECT * FROM events WHERE workspace_id = ?1 AND subject_id = ?2 \
                  UNION \
@@ -201,9 +191,6 @@ pub fn file_revisions_tx(
     }
     let snapshot_generation = cursor.as_ref().map_or(current_gen, |c| c.snap) as u64;
 
-    // 精确总数仅在首页 COUNT 一次，随游标携带给续页复用（避免每页重复 COUNT 整条版本链）；
-    // 同代际内无写入（writer 每次 bump generation），总数不漂。
-    // 用 COUNT 而非 MAX(seq) 以保证 seq 空洞下仍准确；旧游标无 total 字段时回退现算。
     let total: i64 = match cursor.as_ref().and_then(|c| c.total) {
         Some(t) => t as i64,
         None => conn
@@ -215,8 +202,6 @@ pub fn file_revisions_tx(
             .map_err(internal_sql)?,
     };
 
-    // 版本链按 per-file seq 排序；seq 在 (file_id, seq) 唯一约束下无并列，
-    // 键集只需 seq 比较（契约 §1.7 order：默认 seq_desc，时间机器 v3→v2→v1）
     let (cmp_op, dir) = match order {
         RevisionOrder::SeqAsc => (">", "ASC"),
         RevisionOrder::SeqDesc => ("<", "DESC"),
@@ -224,7 +209,6 @@ pub fn file_revisions_tx(
     let mut clauses = vec!["file_id = ?".to_owned()];
     let mut params: Vec<Value> = vec![sql_text(file_id)];
     if let Some(c) = &cursor {
-        // k 存 seq（字符串形态），s 存 revision_id（键集第二键，防御性保留）
         clauses.push(format!("seq {cmp_op} ?"));
         params.push(Value::from(c.k.parse::<i64>().map_err(|_| {
             GuanlanError::CursorStale("版本链游标不可解码，请从第一页重新查询。".to_owned())
@@ -261,8 +245,6 @@ pub fn file_revisions_tx(
 
     let revisions: Vec<RevisionSummary> = revs.iter().map(revision_summary).collect();
 
-    // include=events,statements,edges（契约 §1.7：文件级完整集合，仅在首页一次带回）。
-    // 续页请求不重复查询/传输整文件关联集合，避免随页数产生 Θ(V²/p) 的重复开销。
     let first_page = cursor.is_none();
     let include = &query.include;
     let contains = |section| include.contains(&section);
@@ -307,9 +289,6 @@ pub fn file_revisions_tx(
     })
 }
 
-/// 阅读器兼容视图的版本行（project.ts:132-172 toRevision，camelCase 派生字段）。
-/// 不内联任何正文（SVG 也不逐版本读快照内联 svgSource），保证单次响应不随版本数
-/// 线性增长；正文一律经 §1.8 按版本端点单独取。
 fn file_record_revision(
     rev: &RevisionRow,
     file: &FileRow,
@@ -326,7 +305,6 @@ fn file_record_revision(
                     Some("document_self") => "文档自述",
                     _ => "采集",
                 };
-                // occurred_at.replace('T',' ').slice(0,19)：只替换第一个 T
                 let stamped: String = occurred.replacen('T', " ", 1).chars().take(19).collect();
                 summary_parts.push(format!("{stamped}（{source_label}）"));
             }
@@ -388,7 +366,6 @@ pub fn file_detail_tx(
         .file_by_id(file_id)?
         .ok_or_else(|| GuanlanError::NotFound(format!("未找到文件 {file_id}")))?;
 
-    // 当前版：last_revision_id 命中优先，缺失/悬空回退最高 seq（与摘要投影同口径）
     let current = match file.last_revision_id.as_deref() {
         Some(last_id) => store.revision_by_id(last_id)?,
         None => None,
@@ -409,15 +386,12 @@ pub fn file_detail_tx(
 
     let revisions: Vec<FileRecordRevision> = match &current {
         Some(rev) => {
-            // changedSectionsFromPrev 与摘要同源：只查当前版 modified 事件 payload
             let changed = changed_sections_of_revision(conn, &ws.workspace_id, &rev.revision_id);
-            // isRollback 不下发到版本行（信息挂在事件上）
             vec![file_record_revision(rev, &file, changed.as_ref())]
         }
         None => Vec::new(),
     };
 
-    // 附集合限额（兼容保留；应用内已迁移到 §1.7 分页通道，不再消费本端点附集合）
     let events_sql = "SELECT * FROM events \
                WHERE workspace_id = ? \
                  AND ( \
@@ -503,7 +477,6 @@ pub fn file_detail_tx(
     })
 }
 
-/// 当前版 modified 事件的 changed_sections（project.ts:102-114 同源，单版本口径）
 fn changed_sections_of_revision(
     conn: &rusqlite::Connection,
     workspace_id: &str,
@@ -555,13 +528,11 @@ pub fn revision_content_tx(
         .revision_by_id(revision_id)?
         .ok_or_else(|| GuanlanError::NotFound(format!("未找到该版本 {revision_id}")))?;
     if rev.snapshot_available == 0 {
-        // 沿用原提示文案（workspace-plugin.ts:345），错误码为 SNAPSHOT_UNAVAILABLE
         return Err(GuanlanError::SnapshotUnavailable(
             "此版本正文已过保留期，仅保留版本元数据；可打开当前版本或查看其他仍可用的版本。"
                 .to_owned(),
         ));
     }
-    // 非法 hash 返回明确错误，避免后续按字节切片触发 panic
     let snapshot_path = store.blob_path_for(&rev.content_hash)?;
     if !snapshot_path.exists() {
         return Err(GuanlanError::SnapshotUnavailable(
@@ -578,7 +549,6 @@ pub fn revision_content_tx(
     let is_binary = !is_utf8_text;
     Ok(RevisionContentResponse {
         ok: true,
-        // 非 UTF-8 文本格式（PDF / 图片 / Office / 归档等）：raw_url 指向自身 `/api/v1/...?raw=1` 流式路径
         raw_url: is_binary.then(|| {
             format!(
                 "/api/v1/revisions/{}/content?raw=1",
@@ -587,10 +557,8 @@ pub fn revision_content_tx(
         }),
         format,
         revision_id: rev.revision_id.clone(),
-        // 正文不整读：UTF-8 文本格式由服务层按 snapshot_path 流式 utf-8 返回
         text: None,
         snapshot_path: (!is_binary || query.raw).then_some(snapshot_path),
-        // 稳定 ETag 的来源（内容寻址）
         content_hash: rev.content_hash.clone(),
     })
 }

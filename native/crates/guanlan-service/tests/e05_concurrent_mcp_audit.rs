@@ -87,7 +87,6 @@ impl Drop for TempEnv {
     }
 }
 
-/// 极简同步 HTTP/1.1 客户端（直连 127.0.0.1，零第三方依赖）
 fn http_call(endpoint: &str, method: &str, path: &str, body: Option<&Value>) -> (u16, Value) {
     let rest = endpoint.strip_prefix("http://").expect("http endpoint");
     let mut stream = TcpStream::connect(rest).expect("连接测试服务");
@@ -190,7 +189,6 @@ fn find_index_db(data_dir: &Path) -> PathBuf {
 fn e05_five_concurrent_mcp_clients_plus_ui_500_requests_sandbox_and_tamper_audit() {
     let env = TempEnv::new("stress");
 
-    // 1. 构造含方案、待确认决策、大文档（>300KiB 触发 MCP 有界截断）及敏感 .env 的真实工作区
     let arch_orig =
         "# 观澜并发架构方案\n\n核心目标：保障多智能体并发访问零死锁、零越界、零篡改。\n";
     let plan_orig = "# 实施计划\n\n阶段一：并发 MCP 压测与权限沙箱加固。\n";
@@ -225,7 +223,6 @@ fn e05_five_concurrent_mcp_clients_plus_ui_500_requests_sandbox_and_tamper_audit
     )
     .expect("写敏感 .env");
 
-    // 2. 运行真实 `guanlan scan` 建库并创建派生全文索引
     let scan_out = Command::new(BIN_PATH)
         .args([
             "scan",
@@ -243,7 +240,6 @@ fn e05_five_concurrent_mcp_clients_plus_ui_500_requests_sandbox_and_tamper_audit
         String::from_utf8_lossy(&scan_out.stderr)
     );
 
-    // 3. 启动真实 `guanlan serve --root <ws> --port 0`
     let mut serve_child = ChildGuard::new(
         Command::new(BIN_PATH)
             .args([
@@ -262,7 +258,6 @@ fn e05_five_concurrent_mcp_clients_plus_ui_500_requests_sandbox_and_tamper_audit
     let serve_stdout = serve_child.as_mut().stdout.take().expect("serve stdout");
     let endpoint = wait_for_endpoint(serve_stdout);
 
-    // 预取待确认陈述 ID 与专项 ID 供并发 UI 拍板与 MCP 检查点使用
     let (st, files_body) = http_call(&endpoint, "GET", "/api/v1/files?limit=50", None);
     assert_eq!(st, 200);
     let decision_file_id = files_body["items"]
@@ -301,7 +296,6 @@ fn e05_five_concurrent_mcp_clients_plus_ui_500_requests_sandbox_and_tamper_audit
         .expect("应存在演示专项")
         .to_owned();
 
-    // 4. 并发压测：5 路真实 `guanlan mcp` stdio 客户端（每路 85 次 RPC = 425 次）+ 2 路 UI HTTP 线程（每路 60 次 = 120 次）= 545 次真实请求
     let started = Instant::now();
     let total_requests = Arc::new(AtomicUsize::new(0));
     let mut handles = Vec::new();
@@ -347,14 +341,12 @@ fn e05_five_concurrent_mcp_clients_plus_ui_500_requests_sandbox_and_tamper_audit
                 reply
             };
 
-            // (a) 协议握手与工具列举（3 次）
             let init = send_rpc("initialize", json!({ "protocolVersion": "2024-11-05" }));
             assert_eq!(init["result"]["serverInfo"]["name"], "guanlan-mcp");
             let tools = send_rpc("tools/list", json!({}));
             assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 6);
             let _ = send_rpc("ping", json!({}));
 
-            // (b) 权限沙箱与敏感路径攻击探测（6 次）
             let attacks = [
                 "../outside-canary.txt".to_owned(),
                 "guanlan://../outside-canary.txt".to_owned(),
@@ -386,7 +378,6 @@ fn e05_five_concurrent_mcp_clients_plus_ui_500_requests_sandbox_and_tamper_audit
                 );
             }
 
-            // (c) 76 次混合高频业务调用（上下文组装 + 全文检索 + 常规读取 + 大包截断 + 草案提交 + 检查点）
             for round in 0..76usize {
                 match round % 6 {
                     0 => {
@@ -441,7 +432,6 @@ fn e05_five_concurrent_mcp_clients_plus_ui_500_requests_sandbox_and_tamper_audit
                         assert!(body_text.contains("实施计划"));
                     }
                     3 => {
-                        // 大文档读取：验证 MCP 有界截断（256 KiB）
                         let r = send_rpc(
                             "tools/call",
                             json!({
@@ -459,7 +449,6 @@ fn e05_five_concurrent_mcp_clients_plus_ui_500_requests_sandbox_and_tamper_audit
                         assert!(ret_bytes <= 256 * 1024, "返回字节不得超出 256KiB 预算");
                     }
                     4 => {
-                        // 仅在少数轮次提交并发草案（避免 5 路频繁写盘拥塞，仍保证多路真实竞争）
                         if round < 12 {
                             let r = send_rpc(
                                 "tools/call",
@@ -515,14 +504,12 @@ fn e05_five_concurrent_mcp_clients_plus_ui_500_requests_sandbox_and_tamper_audit
                 }
             }
 
-            // 优雅关闭 stdin，等待子进程正常退出（退出码 0）
             drop(stdin);
             let status = mcp.as_mut().wait().expect("等待 MCP 子进程退出");
             assert!(status.success(), "Agent {agent_idx} MCP 退出码异常：{status}");
         }));
     }
 
-    // 2 条人类 UI 并发线程（模拟浏览面板、检索、批阅看板、与原位拍板回写）
     for ui_idx in 0..2usize {
         let ep = endpoint.clone();
         let stmt_id = pending_stmt_id.clone();
@@ -531,7 +518,6 @@ fn e05_five_concurrent_mcp_clients_plus_ui_500_requests_sandbox_and_tamper_audit
         handles.push(std::thread::spawn(move || {
             for step in 0..60usize {
                 if ui_idx == 0 && step == 10 {
-                    // 人类在 5 路 MCP 压测高峰期间原位拍板（写入原 .md + 账本哈希链封存）
                     let (status, body) = http_call(
                         &ep,
                         "POST",
@@ -593,7 +579,6 @@ fn e05_five_concurrent_mcp_clients_plus_ui_500_requests_sandbox_and_tamper_audit
         "并发压测耗时过长（疑似死锁或严重锁竞争）：{elapsed:?}"
     );
 
-    // 5. 核验零越界、零原稿覆写、响应字节预算零泄漏、与账本哈希链完好
     assert_eq!(
         fs::read_to_string(&env.outside_canary).expect("读外部金丝雀"),
         "CANARY_OUTSIDE_WORKSPACE_DO_NOT_TOUCH_E05\n",
@@ -622,7 +607,6 @@ fn e05_five_concurrent_mcp_clients_plus_ui_500_requests_sandbox_and_tamper_audit
         "应至少封存了拍板 + 多路草案 + 检查点关键事件，实际：{verified_entries}"
     );
 
-    // CLI 诊断命令 `guanlan audit` 完好态退出码 0
     let audit_cli_ok = Command::new(BIN_PATH)
         .args(["audit", "--root", env.ws_root.to_str().unwrap(), "--json"])
         .env("GUANLAN_DATA_DIR", &env.data_dir)
@@ -635,7 +619,6 @@ fn e05_five_concurrent_mcp_clients_plus_ui_500_requests_sandbox_and_tamper_audit
         String::from_utf8_lossy(&audit_cli_ok.stderr)
     );
 
-    // 6. 篡改核验：直接修改 SQLite 中关键决定事件，HTTP 审计端点与 CLI 诊断命令必须立即检出
     let db_path = find_index_db(&env.data_dir);
     {
         let conn = rusqlite::Connection::open(&db_path).expect("打开 index.db 模拟篡改");
@@ -694,7 +677,6 @@ fn e05_five_concurrent_mcp_clients_plus_ui_500_requests_sandbox_and_tamper_audit
 #[test]
 fn e05_response_budget_413_fallback_and_forged_unsealed_event_audit() {
     let env = TempEnv::new("budget413");
-    // 构造 > 1 MiB 文本文件，配合 GUANLAN_RESPONSE_MAX_MIB=1 触发服务端真实 413 内联预算拒收 → MCP raw=1 流式回退 + 256KiB 截断
     let mega_doc = format!(
         "# 兆字节大文档预算测试\n\n{}",
         "观澜大包响应预算与流式回退验证行-0123456789ABCDEF\n".repeat(24_000)
@@ -728,7 +710,6 @@ fn e05_response_budget_413_fallback_and_forged_unsealed_event_audit() {
     );
     let ep = wait_for_endpoint(serve.as_mut().stdout.take().expect("stdout"));
 
-    // 1. 直接 HTTP 读内联内容应返回 413（UNSUPPORTED_CONTENT）
     let (st, files_body) = http_call(&ep, "GET", "/api/v1/files?limit=10", None);
     assert_eq!(st, 200);
     let rev_id = files_body["items"][0]["current_revision_id"]
@@ -745,7 +726,6 @@ fn e05_response_budget_413_fallback_and_forged_unsealed_event_audit() {
         "超过单响应 1MiB 预算必须返回 413：{inline_body}"
     );
 
-    // 2. 通过真实 `guanlan mcp` 调用 read_artifact 应自动回退 raw=1 并按 256 KiB 截断
     let mut mcp = ChildGuard::new(
         Command::new(BIN_PATH)
             .args(["mcp", "--endpoint", &ep])
@@ -783,7 +763,6 @@ fn e05_response_budget_413_fallback_and_forged_unsealed_event_audit() {
     drop(stdin);
     assert!(mcp.as_mut().wait().unwrap().success());
 
-    // 3. 验证预算 0 泄漏 + 绕过账本伪造未封存 decision_writeback 可被 `guanlan audit` 立即拦截
     let (_, audit_clean) = http_call(&ep, "GET", "/api/v1/audit/ledger", None);
     assert_eq!(audit_clean["response_budget"]["in_use_bytes"], 0);
     assert_eq!(audit_clean["ok"], true);
@@ -796,7 +775,6 @@ fn e05_response_budget_413_fallback_and_forged_unsealed_event_audit() {
                 r.get(0)
             })
             .unwrap();
-        // 先写入一条 meta head（模拟链曾启用）并伪造未封存决策事件
         conn.execute(
             "INSERT INTO meta (key, value) VALUES ('ledger_chain_head_seq', '1')
              ON CONFLICT (key) DO UPDATE SET value = '1'",

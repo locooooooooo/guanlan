@@ -1,36 +1,14 @@
-/**
- * 文件操作专属 Undo/Redo 账本（FileOpHistory）——纯函数模块（零 UI / 零 IO）。
- *
- * 设计口径：
- *  - 独立于正文编辑的账本：只记身份保真 rename / move 两类 Delta（trash 不可撤销，
- *    绝不入账——删除走系统回收站有独立确认链路）；
- *  - 默认保留最近 100 步（超出丢最旧并如实返回被丢计数）；
- *  - 支持关联动作合并：同 file_id 同 kind 且路径续接（上一步 new_path = 这一步 old_path）
- *    且间隔 ≤ FILE_OP_MERGE_WINDOW_MS 的相邻链合并为一步（改名链 A→B→C 记一步 A→C；
- *    若净零变化 A→B→A 则自动抵消弹栈，绝不存入自环 A→A）；
- *  - planUndo / planRedo 只产「请求 + 守卫判定」，绝不执行 IO——执行在 useFileOpHistory
- *    （复用原子接口 postRenameFile / postMoveFile，file_id 不裂链由服务端保证）；
- *  - 外部冲突守卫（严禁撤销静默覆盖外部新文件）：
- *      ① 当前索引里该文件不在了 → 中止；
- *      ② 文件当前路径 ≠ 账本记录（已被再次改名/移动）→ 中止；
- *      ③ 原路径已被其他文件占用 → 中止（绝不覆盖他人新文件）。
- *    服务端 409 CONFLICT（目标已存在）是最后兜底，由调用方如实透出。
- */
 
 import { fileNameOf, normalizeSlashes, parentDirOf } from './fileOps';
 
 /** 账本单步 Delta（undo 请求直接由 oldPath/newPath 反解，不存请求体）。 */
 export interface FileOpEntry {
-  /** 单调自增 id（同账本内唯一；合并步沿用首步 id）。 */
   id: number;
   kind: 'rename' | 'move';
   fileId: string;
-  /** 工作区相对路径（正斜杠归一化口径，与 FileMutationResponse.old_path/new_path 同源）。 */
   oldPath: string;
   newPath: string;
-  /** 合并进本步的底层动作数（1 = 未合并；如实计数，不谎报单步）。 */
   mergedCount: number;
-  /** 本步最后落账时刻（ms；合并步随合并刷新）。 */
   atMs: number;
 }
 
@@ -62,9 +40,7 @@ export interface FileOpRecordInput {
 
 export interface RecordFileOpResult {
   state: FileOpHistoryState;
-  /** true = 与上一步合并（含净零抵消）；false = 新开一步。 */
   merged: boolean;
-  /** 因超上限被丢的最旧步数（诚实计数）。 */
   evicted: number;
 }
 
@@ -96,7 +72,6 @@ export function recordFileOp(
   let merged = false;
   if (canMerge && top) {
     if (top.oldPath === normNew) {
-      // 窗口内 A→B→A 净零抵消：弹出栈顶，不留无意义的 A→A 自环步
       undo = state.undo.slice(0, -1);
     } else {
       const mergedTop: FileOpEntry = {
@@ -142,9 +117,7 @@ export function recordFileOp(
 export interface FileOpUndoRequest {
   kind: 'rename' | 'move';
   fileId: string;
-  /** kind=move 时的目标目录（'' = 工作区根）。 */
   targetDir: string;
-  /** 目标文件名（rename 与 move-with-rename 都带，确保精确还原原路径）。 */
   newName: string;
 }
 
@@ -159,24 +132,20 @@ export type FileOpPlan =
       ok: true;
       entry: FileOpEntry;
       request: FileOpUndoRequest;
-      /** 成功后才允许提交的账本推进（调用方失败时绝不提交）。 */
       nextState: FileOpHistoryState;
     }
   | {
       ok: false;
       reason: FileOpPlanFailureReason;
-      /** 人类可读中止原因（诚实透出，绝不静默）。 */
       message: string;
     };
 
 /** 守卫输入的最小文件索引快照（FileRecord 的鸭子子集）。 */
 export type FileOpHistoryFiles = ReadonlyArray<{ file_id: string; relative_path: string }>;
 
-/** 撤销/重做前置守卫（files = 当前工作区文件索引快照）。 */
 function guardEntry(
   entry: FileOpEntry,
   files: FileOpHistoryFiles,
-  /** undo 校验当前路径=entry.newPath；redo 校验当前路径=entry.oldPath。 */
   expectPath: string
 ): FileOpPlan | null {
   const mine = files.find((f) => f.file_id === entry.fileId);

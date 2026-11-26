@@ -58,7 +58,6 @@ fn is_windows_reserved_stem(segment: &str) -> bool {
     )
 }
 
-/// 剥离 Windows `canonicalize` 生成的 `\\?\` 逐字前缀，保持标准文件 API 兼容
 fn strip_win_verbatim_prefix(path: &Path) -> PathBuf {
     #[cfg(windows)]
     {
@@ -94,13 +93,11 @@ pub fn validate_workspace_rel_path(raw: &str) -> Result<String, GuanlanError> {
             "PATH_ESCAPE_DENIED: 剥离 guanlan:// 后路径为空".to_owned(),
         ));
     }
-    // 拦截 URI scheme 注入（如 file:///etc/passwd）及 Windows 盘符/NTFS ADS 冒号
     if stripped.contains(':') {
         return Err(GuanlanError::BadRequest(format!(
             "PATH_ESCAPE_DENIED: 禁止包含盘符、协议头或冒号：{trimmed}"
         )));
     }
-    // 拦截 URL 编码形式的路径逃逸（%2e / %2f / %5c / %00）
     let lower = stripped.to_ascii_lowercase();
     if lower.contains("%2e")
         || lower.contains("%2f")
@@ -111,7 +108,6 @@ pub fn validate_workspace_rel_path(raw: &str) -> Result<String, GuanlanError> {
             "PATH_ESCAPE_DENIED: 禁止包含编码型路径穿越序列：{trimmed}"
         )));
     }
-    // 拦截 UNC / 根绝对路径（统一斜杠前先检反斜杠 UNC）
     if stripped.starts_with('/') || stripped.starts_with('\\') {
         return Err(GuanlanError::BadRequest(format!(
             "PATH_ESCAPE_DENIED: 禁止绝对路径或 UNC 网络路径：{trimmed}"
@@ -276,7 +272,6 @@ pub fn audit_workspace_file_paths(
         if status == "active" {
             match resolve_existing_file_in_dir_jail(root, path) {
                 Ok(_) => {}
-                // 磁盘临时缺失不算越界（交由 reconcile 标 missing）；仅拦截真实越界/符号链接
                 Err(GuanlanError::NotFound(_)) => {}
                 Err(err) => {
                     violations.push(SandboxViolation {
@@ -331,13 +326,11 @@ mod tests {
             );
         }
 
-        // 合法工作区路径放行
         assert_eq!(
             validate_workspace_rel_path(r"guanlan://01-专项\方案.md").unwrap(),
             "01-专项/方案.md"
         );
 
-        // MCP 额外拦截敏感凭据路径
         for secret in [
             ".env",
             "config/.env.local",
@@ -373,7 +366,6 @@ mod tests {
 
         assert!(resolve_existing_file_in_dir_jail(&ws_root, "../outside.txt").is_err());
 
-        // 若当前环境具备创建符号链接权限，同步验证逃逸符号链接被阻断
         let link_path = ws_root.join("docs/escape-link.md");
         #[cfg(windows)]
         let symlink_res = std::os::windows::fs::symlink_file(&outside, &link_path);

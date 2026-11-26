@@ -1,9 +1,3 @@
-/**
- * App 抽屉与弹窗栈。
- * 文件时间线抽屉 / MCP 控制台 / 工作区设置 / 智能体上下文抽屉 / 草案回写通知 /
- * 决策变更单 Toast / 右键菜单 / 命令面板 / 挂载面板 / QuickLook / 文件操作弹窗 /
- * 拖放导入浮层 / 系统动作反馈条。数据一律来自 useWorkspaceStore ctx。
- */
 
 import React from 'react';
 import { FileTimelineDrawer } from '../FileTimelineDrawer';
@@ -68,12 +62,7 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
 
   return (
     <>
-      {/* 操作提示已统一合流进 TopHeader 顶部「?」帮助浮层（快捷键 ? / Esc 同步受控），
-          彻底消除右下角悬浮 ? 钮对右侧检查器「复制给智能体」与日历网格的遮挡。 */}
 
-      {/* Modals & Drawers */}
-      {/* 以文件为中心的时间线抽屉——版本链按 occurred_at（无则 observed_at）排列，
-          事件按 seq 挂到对应版本下；点有快照的版本可打开该时点内容 */}
       <FileTimelineDrawer
         isOpen={historyFileId !== ''}
         fileId={historyFileId}
@@ -103,9 +92,6 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
         onClearMutedFolders={ctx.handleClearMutedFolders}
       />
 
-      {/* 智能体上下文清单抽屉：
-          路由默认包一键带入 + 注入粒度 + Token 预算条 + 推荐挂载折叠 + MCP 自检 +
-          双模导出（离线降级经 agentContextExport 构建） */}
       <AgentContextDrawer
         isOpen={isContextDrawerOpen}
         onClose={() => setIsContextDrawerOpen(false)}
@@ -130,7 +116,6 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
         decisionChangeNote={decisionChangeNote}
       />
 
-      {/* 轻量「批阅看板」抽屉（五态分栏 + 失联 unknown 孤儿诊断与安全修复） */}
       <ReviewBoardDrawer
         isOpen={isReviewBoardOpen}
         onClose={() => setIsReviewBoardOpen(false)}
@@ -146,7 +131,6 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
         onRepairOrphan={handleBoardRepairOrphan}
       />
 
-      {/* 「司辰手记」今日 / 近 7 日沉淀简报抽屉（Sheet inset + 可溯源 Markdown 导出） */}
       <ChronosDigestDrawer
         isOpen={ctx.isChronosDigestOpen}
         onClose={() => ctx.setIsChronosDigestOpen(false)}
@@ -159,7 +143,6 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
         onOpenDecision={(decisionId) => ctx.handleOpenDecisionReference(decisionId)}
       />
 
-      {/* 回写通知条：智能体独立草案分支批阅（多模态 Diff / 退回重做 / 一键采纳） */}
       <ProposalToast
         toast={proposalToast}
         adopting={proposalAdopting}
@@ -176,7 +159,6 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
         onDismiss={handleDismissProposalToast}
       />
 
-      {/* 决策变更单推送通知——点击查看上下文清单 */}
       <DecisionChangeToast
         note={decisionChangeToast}
         onOpenContextDrawer={() => {
@@ -186,7 +168,6 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
         onDismiss={() => setDecisionChangeToast(null)}
       />
 
-      {/* 全局文件/目录右键操作菜单、身份保真文件操作弹窗、外部文件拖入引导浮层与系统动作反馈条 */}
       <FileContextMenu
         menu={fileContextMenu}
         onClose={() => setFileContextMenu(null)}
@@ -254,7 +235,6 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
         onToggleMuteFolder={(folderRel) => ctx.handleToggleMuteFolder(folderRel)}
       />
 
-      {/* Ctrl+K 全局时空命令面板（富预览 + Shift+Enter 直达时光机） */}
       <CommandPalette
         isOpen={isPaletteOpen}
         query={palette.query}
@@ -272,7 +252,6 @@ export function AppModalsStack({ ctx }: { ctx: WorkspaceStoreCtx }) {
         onRunAction={handlePaletteAction}
       />
 
-      {/* 挂载参考工作区管理面板（只读挂载 / 离线徽标 / 跨项目检索入口） */}
       <MountManagerPanel
         isOpen={isMountPanelOpen}
         onClose={() => setMountPanelOpen(false)}

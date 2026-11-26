@@ -1,11 +1,3 @@
-/**
- * 局部关系图限界验收测试：
- * - 节点用 ID Map 解析（不再对 files/decisions 线性 find）；
- * - 邻接表 + 边 Set：邻居查询只走本节点边，二跳不重复扫描；
- * - 回滚标记单遍历史索引（A→B→A 与相邻相同 hash 语义保持）；
- * - maxNodes 预算在物化过程中生效（不先构造全图再裁），truncatedCount 独立统计；
- * - 中心节点、有效边、canExpandTwoHop 语义与既有行为一致。
- */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildLocalRelationGraph } from '../src/utils/guanlanEngine';
@@ -75,7 +67,7 @@ test('节点经 ID Map 解析：1 跳邻居与决定节点都能命中，未知 
   const edges = [
     edgeOf('e1', 'f_a', 'f_b'),
     edgeOf('e2', 'f_a', 'dec_1'),
-    edgeOf('e3', 'f_a', 'unknown_id'), // 无法解析的目标 → 忽略
+    edgeOf('e3', 'f_a', 'unknown_id'),
   ];
   const graph = buildLocalRelationGraph('f_a', 1, files, decisions, edges);
   const ids = graph.nodes.map((n) => n.id).sort();
@@ -90,8 +82,8 @@ test('邻接表：二跳只从一跳节点出发，canExpandTwoHop 与 depth 语
   const files = ['f_a', 'f_b', 'f_c', 'f_d'].map((id) => fileOf(id, [revision({ revision_id: `${id}_r1` })]));
   const edges = [
     edgeOf('e1', 'f_a', 'f_b'),
-    edgeOf('e2', 'f_b', 'f_c'), // 二跳候选（经 f_b）
-    edgeOf('e3', 'f_d', 'f_c'), // 与中心无关的另一簇
+    edgeOf('e2', 'f_b', 'f_c'),
+    edgeOf('e3', 'f_d', 'f_c'),
   ];
 
   const depth1 = buildLocalRelationGraph('f_a', 1, files, [], edges);
@@ -104,13 +96,11 @@ test('邻接表：二跳只从一跳节点出发，canExpandTwoHop 与 depth 语
   assert.equal(depth2.nodes.find((n) => n.id === 'f_c')?.hop, 2);
   assert.deepEqual(depth2.edges.map((e) => e.edge_id).sort(), ['e1', 'e2'], '只含连通到中心的边');
 
-  // 与中心无关的簇不进图
   assert.equal(depth2.nodes.some((n) => n.id === 'f_d'), false);
 });
 
 test('边去重：同一事件对间的多条边不重复入列（边 Set 语义）', () => {
   const files = ['f_a', 'f_b'].map((id) => fileOf(id, [revision({ revision_id: `${id}_r1` })]));
-  // 邻接表会把同一条边挂到两端；1 跳遍历时同一条边只应出现一次
   const edges = [edgeOf('e1', 'f_a', 'f_b')];
   const graph = buildLocalRelationGraph('f_a', 2, files, [], edges);
   assert.equal(graph.edges.length, 1, '同一条边不重复');
@@ -120,7 +110,6 @@ test('边去重：同一事件对间的多条边不重复入列（边 Set 语义
 test('回滚标记单遍索引：A→B→A 恢复与相邻相同 hash 两种语义保持', () => {
   const H_A = 'hash-a';
   const H_B = 'hash-b';
-  // A→B→A：第三版与首版同 hash → 恢复
   const revs = [
     revision({ revision_id: 'r1', content_sha256: H_A, versionNumber: 1 }),
     revision({ revision_id: 'r2', content_sha256: H_B, versionNumber: 2 }),
@@ -137,7 +126,6 @@ test('回滚标记单遍索引：A→B→A 恢复与相邻相同 hash 两种语�
   assert.equal(evolutionLabels.includes('A→B→A 恢复'), true, '第三版标记恢复');
   assert.equal(evolutionLabels.filter((l) => l === '版本演进').length, 1, '第二版为普通演进');
 
-  // 相邻相同 hash（r2/r3 同内容）：r3 也标记恢复（与 detectRollbackRevision 同口径）
   const revs2 = [
     revision({ revision_id: 'q1', content_sha256: 'x', versionNumber: 1 }),
     revision({ revision_id: 'q2', content_sha256: 'y', versionNumber: 2 }),
@@ -152,7 +140,6 @@ test('回滚标记单遍索引：A→B→A 恢复与相邻相同 hash 两种语�
 });
 
 test('预算在物化过程中生效：maxNodes 限制节点数，truncatedCount 独立统计不虚报', () => {
-  // 中心 + 20 个邻居，maxNodes=5 → 只物化 5 个，其余计入 truncatedCount
   const center = fileOf('f_center', [revision({ revision_id: 'f_center_r1' })]);
   const neighbors = Array.from({ length: 20 }, (_, i) =>
     fileOf(`f_n${i}`, [revision({ revision_id: `f_n${i}_r1` })])
@@ -167,7 +154,6 @@ test('预算在物化过程中生效：maxNodes 限制节点数，truncatedCount
     21 - 5,
     '溢出计数 = 可解析节点总数 - 预算（独立统计，不因早停虚报）'
   );
-  // 边界过滤：所有边的两端都在物化集合内（无悬空边）
   const ids = new Set(graph.nodes.map((n) => n.id));
   assert.equal(
     graph.edges.every((e) => ids.has(e.source_id) && ids.has(e.target_id)),
