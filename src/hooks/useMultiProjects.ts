@@ -156,7 +156,10 @@ export function useMultiProjects({
     void refreshAll({ reloadExpandedTrees: true });
   }, [enabled, workspaceEpoch, bootstrapNonce, refreshAll]);
 
-  // 有项目正在扫描时轻轮询（1.2s）直至全部就绪，自动刷新项目树与总览计数
+  // 有项目正在扫描时轻轮询（1.2s）直至全部就绪：只刷新项目列表与总览计数。
+  // 目录树不跟着每拍重拉——扫描中的项目树每一拍都在变，这里带上 reloadExpandedTrees
+  // 会把其它已展开项目的整棵树反复塞进只读连接池（见 query 子系统：目录枚举曾拖垮
+  // 检索与翻页）。树改为扫描结束后补一次，或用户展开时取。
   const anyScanning = useMemo(
     () => projects.some((p) => p.is_scanning || p.status === 'scanning'),
     [projects]
@@ -164,10 +167,20 @@ export function useMultiProjects({
   useEffect(() => {
     if (!enabled || !anyScanning) return;
     const timer = setInterval(() => {
-      void refreshAll({ reloadExpandedTrees: true });
+      void refreshAll();
     }, 1200);
     return () => clearInterval(timer);
   }, [enabled, anyScanning, refreshAll]);
+
+  // 扫描收尾补一次目录树：扫描期间树没跟着轮询刷新，这里补上；只补已展开的
+  // 非激活项目（激活项目的树由它自己的取数路径管）。
+  const wasScanningRef = useRef(anyScanning);
+  useEffect(() => {
+    if (wasScanningRef.current && !anyScanning) {
+      void refreshAll({ reloadExpandedTrees: true });
+    }
+    wasScanningRef.current = anyScanning;
+  }, [anyScanning, refreshAll]);
 
   const toggleProjectExpanded = useCallback(
     (projectId: string) => {

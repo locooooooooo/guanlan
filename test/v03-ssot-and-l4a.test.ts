@@ -83,8 +83,10 @@ test('useWorkspaceStore polls L4A by queue_depth > 0, reacts to SSE l4a notice, 
     storeSrc.includes('decisions_unresolved_total'),
     'useWorkspaceStore must hydrate decisions_unresolved_total from bootstrap',
   );
+  const l4aStoreSrc = fs.readFileSync(path.join(ROOT, 'src/utils/l4aProgressStore.ts'), 'utf8');
   assert.ok(
-    storeSrc.includes('progress.queue_depth > 0'),
+    storeSrc.includes('isL4aProgressActive(progress)') &&
+      l4aStoreSrc.includes('progress.queue_depth > 0'),
     'L4A active polling guard must check queue_depth > 0 so failed/skipped rows never cause infinite 0% polling',
   );
   assert.ok(

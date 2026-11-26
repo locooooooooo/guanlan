@@ -85,7 +85,6 @@ import {
   type ReviewBoardResponse,
   type WorkspaceSummary,
   type WorkspaceStatusResponse,
-  type L4aProgress,
 } from '../services/workspaceClient';
 // 统一状态机投影 wire DTO（App 级唯一取数，四视图共享）
 import type {
@@ -104,6 +103,8 @@ import {
   requestRevisionContent,
 } from '../utils/revisionContentStore';
 import { clearFilePreviewCache } from '../utils/filePreviewCache';
+// L4A 进度不住 React 状态：每批 3 篇一条事件，整树重渲会把阅读器与星图一起拖下水
+import { isL4aProgressActive, resetL4aProgress, setL4aProgress } from '../utils/l4aProgressStore';
 import {
   copyTextWithDesktopFallback,
   getInitialDesktopSession,
@@ -541,8 +542,8 @@ export function useWorkspaceStore() {
   // J/K 游标（循环步进，消费侧按 items.length 取模防列表缩胀越界）
   const [spotlightEnabled, setSpotlightEnabled] = useState(false);
   const [spotlightCursor, setSpotlightCursor] = useState(0);
-  // L4A 沉淀进度。null = 服务未下发 l4a_progress 或当前无进行中的沉淀——横幅不渲染，不造进度
-  const [l4aProgress, setL4aProgress] = useState<L4aProgress | null>(null);
+  // L4A 沉淀进度住在 utils/l4aProgressStore（横幅叶子订阅），不进 React 状态：
+  // null = 服务未下发 l4a_progress 或当前无进行中的沉淀——横幅不渲染，不造进度
 
   // 一次 GET /api/v1/bootstrap 即得 event_days/events 首页/time_range/counts/baseline，
   // 文件元数据由 files 分页续拉补齐
@@ -1110,13 +1111,8 @@ export function useWorkspaceStore() {
       if (cancelled) return;
       const progress = status.ok ? (status.data.l4a_progress ?? null) : null;
       // 以 queue_depth > 0 为真正进行中口径（缺失快照标 failed 后 queue_depth 归 0，
-      // 绝不因 done < total 永久悬挂横幅）
-      const active =
-        !!progress &&
-        progress.total > 0 &&
-        (typeof progress.queue_depth === 'number'
-          ? progress.queue_depth > 0
-          : progress.done < progress.total);
+      // 绝不因 done < total 永久悬挂横幅）；total=0 不造 100% 假进度。
+      const active = isL4aProgressActive(progress);
       if (l4aWasActiveRef.current && !active && progress && progress.done > 0) {
         toastManager.add({
           title: '后台语义沉淀已完成',
@@ -3537,7 +3533,7 @@ export function useWorkspaceStore() {
     setPollTick(0);
     setServiceStatus(null);
     setStateOverview(null);
-    setL4aProgress(null);
+    resetL4aProgress();
     setEventDataReady(false);
     setWorkspaceSummary(null);
     setEventRange(null);
@@ -4984,7 +4980,7 @@ export function useWorkspaceStore() {
     eventKindFilter, dayGranularity, changeNotice,
     // 任务与投影
     rescanState, rescanError, serviceStatus, stateOverview, setStateOverview,
-    agentDraftFileIds, l4aProgress, eventDataReady, workspaceSummary, eventRange, dateFilter,
+    agentDraftFileIds, eventDataReady, workspaceSummary, eventRange, dateFilter,
     handleRescan,
     networkOffline, streamDisconnected, retryingConnection, handleRetryConnection,
     // 导航与选中

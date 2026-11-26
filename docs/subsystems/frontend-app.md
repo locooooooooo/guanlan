@@ -50,7 +50,7 @@
 
 ### 订阅方式
 
-视图不做选择器订阅。`App` 调用一次 Hook，把整个 `ctx` 传给五个分节，分节再按需解构 20 到 70 个字段。任何状态变化都会让 `App` 与五个分节重新渲染，下层视图通过逐个传 props 隔离。
+视图不做选择器订阅。`App` 调用一次 Hook，把整个 `ctx` 传给五个分节，分节再按需解构 20 到 70 个字段。任何状态变化都会让 `App` 与五个分节重新渲染，下层视图通过逐个传 props 隔离。高频或局部的纯展示状态（画布主题 `canvasThemeStore`、后台语义整理进度 `l4aProgressStore`）不进 store 状态，由对应叶子组件经 `useSyncExternalStore` 订阅，避免更新拖动整棵 `App` 树重渲。
 
 store 反过来从组件导入值（`pageItemToEvent`、`enterEventFrame`、`Tabs`、`toastManager`），组件又从 store 导入类型与常量。这是导入 store 的测试会把整棵组件树拉进来的原因。
 

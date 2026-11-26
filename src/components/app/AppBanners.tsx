@@ -4,22 +4,30 @@
  * 监听提示 / 冷启动首扫进度。数据一律来自 useWorkspaceStore ctx。
  */
 
-import React, { useState } from 'react';
+import React, { useState, useSyncExternalStore } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '../ui/primitives';
 import { ChronosLineArt, GlassSkeleton } from '../ui/GlassSkeleton';
 import { formatLocalClock } from '../../utils/timeFormat';
+import { getL4aProgress, subscribeL4aProgress } from '../../utils/l4aProgressStore';
 import type { WorkspaceStoreCtx } from '../../stores/useWorkspaceStore';
 
 export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
   const {
-    rescanState, rescanError, handleRescan, l4aProgress, hitlClearedAt,
+    rescanState, rescanError, handleRescan, hitlClearedAt,
     deliveredInitiative, deliveredInitiatives, initiativeLifecycle, runInitiativeLifecycle,
     activeInitiative, changeNotice, refreshEvents, silentMergeNewEvents, silentMergingEvents,
     dataSource, files, dataError, activeTab,
     networkOffline, streamDisconnected, retryingConnection, handleRetryConnection,
     switchingWorkspace,
   } = ctx;
+  // L4A 进度是叶子订阅：它不进 store ctx，更新只重渲本横幅，不带动阅读器与星图。
+  // 传第三参 getServerSnapshot 供 SSR/测试渲染直接读当前快照。
+  const l4aProgress = useSyncExternalStore(
+    subscribeL4aProgress,
+    getL4aProgress,
+    getL4aProgress
+  );
   const [dismissedNoticeKey, setDismissedNoticeKey] = useState<string | null>(null);
   const changeNoticeKey = changeNotice ? `${changeNotice.at}:${changeNotice.count}` : null;
   // 新事件分页并入条仅作用于全景溯源（星图/日历/时间线）；
