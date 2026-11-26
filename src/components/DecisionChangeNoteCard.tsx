@@ -31,7 +31,7 @@ export const DecisionChangeNoteCard: React.FC<{ note: DecisionChangeNote }> = ({
         <h3 className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-semibold text-[color:var(--ink-strong)]">
           {DECISION_CHANGE_NOTE_TITLE}
         </h3>
-        <span className="rounded-[var(--r-pill)] bg-white/70 px-1.5 py-0.5 text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)]">
+        <span className="rounded-[var(--r-pill)] bg-card/85 border border-border/70 px-1.5 py-0.5 text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)]">
           {stateLabel}
         </span>
       </div>

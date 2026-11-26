@@ -454,12 +454,12 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                 <span>正在扫描候选文件、检测敏感凭据目录并估算总体积…</span>
               </div>
             ) : previewError ? (
-              <div className="flex items-center justify-between gap-2 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-[12.5px] text-red-700">
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-red-300 dark:border-red-500/35 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-[12.5px] text-red-700 dark:text-red-300">
                 <span>{previewError}</span>
                 <button
                   type="button"
                   onClick={() => void runPreview()}
-                  className="cursor-pointer rounded-md border border-red-300 px-2.5 py-1 text-[12px] hover:bg-red-100"
+                  className="cursor-pointer rounded-md border border-red-300 dark:border-red-500/40 px-2.5 py-1 text-[12px] hover:bg-red-100 dark:hover:bg-red-900/40"
                 >
                   重试预览
                 </button>
@@ -500,9 +500,9 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                 </div>
 
                 {preview.sensitive_warnings.length > 0 && (
-                  <div className="rounded-xl border border-amber-300 bg-amber-50/90 px-3.5 py-2.5 text-[12px] text-amber-900">
+                  <div className="rounded-xl border border-amber-300 dark:border-amber-500/35 bg-amber-50/90 dark:bg-amber-950/35 px-3.5 py-2.5 text-[12px] text-amber-900 dark:text-amber-200">
                     <div className="flex items-center gap-1.5 font-medium">
-                      <ShieldAlert className="h-4 w-4 shrink-0 text-amber-700" />
+                      <ShieldAlert className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
                       <span>脱敏与敏感目录自检告警（已默认取消勾选敏感路径，绝不静默打包）</span>
                     </div>
                     <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
@@ -525,8 +525,8 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                           onClick={() => toggleDirExcluded(dir)}
                           className={`cursor-pointer rounded-full border px-2.5 py-0.5 font-mono transition-colors ${
                             excluded
-                              ? 'border-amber-300 bg-amber-50 text-amber-800 line-through'
-                              : 'border-black/10 bg-white text-[color:var(--ink-strong)] hover:bg-black/5'
+                              ? 'border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 line-through'
+                              : 'border-border bg-card text-[color:var(--ink-strong)] hover:bg-accent'
                           }`}
                         >
                           {dir}
@@ -536,12 +536,12 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                   </div>
                 )}
 
-                <div className="overflow-hidden rounded-xl border border-black/10">
-                  <div className="flex items-center justify-between border-b border-black/8 bg-black/[0.02] px-3 py-2 text-[11.5px] text-[color:var(--ink-soft)]">
+                <div className="overflow-hidden rounded-xl border border-border">
+                  <div className="flex items-center justify-between border-b border-border bg-muted/60 px-3 py-2 text-[11.5px] text-[color:var(--ink-soft)]">
                     <span>预览打包清单（可逐项勾选调整，敏感目录默认取消勾选）</span>
                     <span className="font-mono">Token: {preview.preview_token.slice(0, 18)}…</span>
                   </div>
-                  <div className="max-h-56 divide-y divide-black/6 overflow-y-auto">
+                  <div className="max-h-56 divide-y divide-border/70 overflow-y-auto">
                     {preview.files.length === 0 ? (
                       <div className="p-4 text-center text-[12.5px] text-[color:var(--ink-soft)]">
                         当前范围内未匹配到活跃文件
@@ -550,8 +550,8 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                       preview.files.map((f) => (
                         <label
                           key={f.file_id}
-                          className={`flex cursor-pointer items-center justify-between gap-3 px-3 py-2 text-[12px] hover:bg-black/[0.02] ${
-                            f.sensitive_path ? 'bg-amber-50/40' : ''
+                          className={`flex cursor-pointer items-center justify-between gap-3 px-3 py-2 text-[12px] hover:bg-accent/60 ${
+                            f.sensitive_path ? 'bg-amber-50/40 dark:bg-amber-950/25' : ''
                           }`}
                         >
                           <span className="flex min-w-0 items-center gap-2">
@@ -591,7 +591,7 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                   </div>
                 </div>
 
-                <div className="space-y-2.5 rounded-xl border border-black/10 bg-black/[0.015] p-3.5">
+                <div className="space-y-2.5 rounded-xl border border-border bg-muted/50 p-3.5">
                   <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
                     <label
                       htmlFor="capsule-output-dir"
@@ -605,7 +605,7 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                       value={outputDir}
                       onChange={(e) => setOutputDir(e.target.value)}
                       placeholder="留空默认输出至工作区数据目录 .guanlan/capsules/<事项>-<时间>"
-                      className="min-w-0 flex-1 rounded-lg border border-black/12 bg-white px-2.5 py-1.5 font-mono text-[12px] text-[color:var(--ink-strong)]"
+                      className="min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 py-1.5 font-mono text-[12px] text-[color:var(--ink-strong)]"
                     />
                   </div>
                   <label className="flex cursor-pointer items-center gap-2 text-[12.5px] font-medium text-[color:var(--ink-strong)]">
@@ -625,16 +625,16 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
             ) : null}
 
             {exportError && (
-              <div className="rounded-xl border border-red-300 bg-red-50 px-3.5 py-2.5 text-[12.5px] text-red-700">
+              <div className="rounded-xl border border-red-300 dark:border-red-500/35 bg-red-50 dark:bg-red-950/40 px-3.5 py-2.5 text-[12.5px] text-red-700 dark:text-red-300">
                 {exportError}
               </div>
             )}
 
             {exportReceipt && (
-              <div className="rounded-xl border border-emerald-300 bg-emerald-50/90 p-3.5 text-[12px] text-emerald-950 space-y-2">
+              <div className="rounded-xl border border-emerald-300 dark:border-emerald-500/35 bg-emerald-50/90 dark:bg-emerald-950/35 p-3.5 text-[12px] text-emerald-950 dark:text-emerald-200 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5 font-semibold">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                     <span>
                       事项资料胶囊已生成（{exportReceipt.files_exported} 文件 ·{' '}
                       {exportReceipt.snapshots_written} 份原件快照 · 脱敏{' '}
@@ -654,7 +654,7 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                     立即秒开核验 →
                   </button>
                 </div>
-                <div className="space-y-0.5 font-mono text-[11px] text-emerald-900/90 break-all">
+                <div className="space-y-0.5 font-mono text-[11px] text-emerald-900/90 dark:text-emerald-300/90 break-all">
                   <div>目录：{exportReceipt.output_dir}</div>
                   <div>离线浏览：{exportReceipt.index_html_path}</div>
                   <div>演进脉络：{exportReceipt.timeline_md_path}</div>
@@ -672,7 +672,7 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                 value={inspectPath}
                 onChange={(e) => setInspectPath(e.target.value)}
                 placeholder="输入任意开放事项胶囊目录绝对路径（内含 capsule-manifest.json）"
-                className="min-w-0 flex-1 rounded-lg border border-black/14 bg-white px-3 py-2 font-mono text-[12px] text-[color:var(--ink-strong)]"
+                className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3 py-2 font-mono text-[12px] text-[color:var(--ink-strong)]"
               />
               <button
                 type="button"
@@ -690,14 +690,14 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
             </div>
 
             {inspectError && (
-              <div className="rounded-xl border border-red-300 bg-red-50 px-3.5 py-2.5 text-[12.5px] text-red-700">
+              <div className="rounded-xl border border-red-300 dark:border-red-500/35 bg-red-50 dark:bg-red-950/40 px-3.5 py-2.5 text-[12.5px] text-red-700 dark:text-red-300">
                 {inspectError}
               </div>
             )}
 
             {inspectData && (
               <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-black/10 bg-black/[0.02] px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-muted/50 px-4 py-3">
                   <div>
                     <div className="text-[14px] font-semibold text-[color:var(--ink-strong)]">
                       {inspectData.manifest.title}
@@ -716,8 +716,8 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                   <div
                     className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium ${
                       inspectData.integrity_ok
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-red-100 text-red-800'
+                        ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300'
+                        : 'bg-red-100 dark:bg-red-950/50 text-red-800 dark:text-red-300'
                     }`}
                   >
                     {inspectData.integrity_ok ? (
@@ -734,7 +734,7 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                 </div>
 
                 {inspectData.integrity_issues.length > 0 && (
-                  <div className="rounded-xl border border-red-300 bg-red-50 px-3.5 py-2 text-[12px] text-red-800">
+                  <div className="rounded-xl border border-red-300 dark:border-red-500/35 bg-red-50 dark:bg-red-950/40 px-3.5 py-2 text-[12px] text-red-800 dark:text-red-300">
                     <ul className="list-disc pl-5 space-y-0.5">
                       {inspectData.integrity_issues.map((issue, idx) => (
                         <li key={idx}>{issue}</li>
@@ -929,7 +929,7 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                     ) : evidenceReader.error ? (
                       <div className="text-[12px] text-amber-800">{evidenceReader.error}</div>
                     ) : evidenceReader.content?.text != null ? (
-                      <div className="max-h-48 overflow-auto rounded-lg border border-black/10 bg-white font-mono text-[11.5px] leading-5">
+                      <div className="max-h-48 overflow-auto rounded-lg border border-border bg-card font-mono text-[11.5px] leading-5">
                         {sliceCapsuleEvidenceLines(
                           evidenceReader.content.text,
                           evidenceReader.lineStart,
@@ -940,7 +940,7 @@ export const ContextCapsuleModal: React.FC<ContextCapsuleModalProps> = ({
                             key={line.lineNumber}
                             className={`flex gap-3 px-2.5 py-0.5 ${
                               line.highlighted
-                                ? 'bg-amber-100/90 font-semibold text-amber-950'
+                                ? 'bg-amber-100/90 dark:bg-amber-500/20 font-semibold text-amber-950 dark:text-amber-200'
                                 : 'text-[color:var(--ink-strong)]'
                             }`}
                           >

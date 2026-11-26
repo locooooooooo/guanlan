@@ -281,7 +281,7 @@ const PeerRefCard: React.FC<PeerRefCardProps> = ({
         }
       }}
       title={hoverPreview}
-      className="group w-full text-left p-2.5 rounded-[12px] bg-white/85 shadow-[0_2px_10px_-4px_rgba(38,36,61,0.08),0_0_0_1px_rgba(38,36,61,0.055)] hover:bg-white hover:shadow-[0_6px_16px_-6px_rgba(38,36,61,0.14),0_0_0_1px_rgba(109,91,208,0.22)] hover:-translate-y-[1px] motion-safe:transition-all flex items-center justify-between gap-2 cursor-pointer"
+      className="group w-full text-left p-2.5 rounded-[12px] bg-card/90 border border-border/80 shadow-xs hover:bg-card hover:border-[color:color-mix(in_srgb,var(--accent-iris)_42%,transparent)] hover:-translate-y-[1px] motion-safe:transition-all flex items-center justify-between gap-2 cursor-pointer"
     >
       <div className="min-w-0">
         <div
@@ -424,7 +424,7 @@ const TimeTrailCard: React.FC<TimeTrailCardProps> = ({
                   className={`px-1.5 py-0.5 rounded-[var(--r-ctl)] font-mono text-[length:var(--text-micro)] tabular-nums shrink-0 ${
                     node.isCurrent
                       ? 'bg-[color:color-mix(in_srgb,var(--accent-iris)_12%,transparent)] text-[color:var(--accent-iris-ink)] font-medium'
-                      : 'bg-white/70 shadow-[0_0_0_1px_rgba(38,36,61,0.045)] text-[color:var(--ink-soft)]'
+                      : 'bg-muted/80 border border-border/70 text-[color:var(--ink-soft)]'
                   }`}
                 >
                   {node.label}
@@ -435,7 +435,7 @@ const TimeTrailCard: React.FC<TimeTrailCardProps> = ({
                   </span>
                 )}
                 {node.isLatest && !node.isCurrent && (
-                  <span className="px-1 rounded-full bg-white/70 shadow-[0_0_0_1px_rgba(38,36,61,0.045)] font-mono text-[length:var(--text-micro)] text-[color:var(--ink-soft)] shrink-0">
+                  <span className="px-1 rounded-full bg-muted/80 border border-border/70 font-mono text-[length:var(--text-micro)] text-[color:var(--ink-soft)] shrink-0">
                     最新
                   </span>
                 )}
@@ -497,8 +497,8 @@ const TimeTrailCard: React.FC<TimeTrailCardProps> = ({
                   title={`展开/收起「${node.label}」相对上一版的章节级差异`}
                   className={`w-full flex items-center gap-1.5 px-1.5 py-1 rounded-[var(--r-ctl)] cursor-pointer text-left ${
                     expanded
-                      ? 'bg-[color:color-mix(in_srgb,var(--accent-iris)_7%,transparent)]'
-                      : 'hover:bg-white/70'
+                      ? 'bg-[color:color-mix(in_srgb,var(--accent-iris)_10%,transparent)]'
+                      : 'hover:bg-accent/80'
                   } motion-safe:transition-colors`}
                 >
                   {head}
@@ -519,7 +519,7 @@ const TimeTrailCard: React.FC<TimeTrailCardProps> = ({
                     {node.changedSections.map((sec) => (
                       <div
                         key={sec}
-                        className="px-2 py-1 rounded bg-white/60 shadow-[0_0_0_1px_rgba(38,36,61,0.045)] text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)] text-[color:var(--ink-strong)] flex items-center justify-between gap-2"
+                        className="px-2 py-1 rounded bg-muted/75 border border-border/70 text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)] text-[color:var(--ink-strong)] flex items-center justify-between gap-2"
                       >
                         <span className="truncate">{sec}</span>
                         <span className="font-mono text-[length:var(--text-micro)] text-[color:var(--accent-iris-deep)] shrink-0">
@@ -809,7 +809,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
         className={`rounded border transition-colors ${
           selectedDecision?.decision_id === dec.decision_id
             ? 'bg-[color:color-mix(in_srgb,var(--accent-iris)_15%,transparent)] border-[color:color-mix(in_srgb,var(--accent-iris)_70%,transparent)]'
-            : 'bg-white/60 border-[color:var(--glass-hairline)] hover:border-[color:var(--glass-hairline-strong)]'
+            : 'bg-muted/70 border-[color:var(--glass-hairline)] hover:border-[color:var(--glass-hairline-strong)]'
         }`}
       >
         <button
@@ -877,7 +877,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
   return (
     <aside
       aria-label="所选对象详情检查器"
-      className="w-80 shrink-0 bg-white/62 backdrop-blur-xl shadow-[-1px_0_0_rgba(38,36,61,0.05)] text-[color:var(--ink-strong)] flex flex-col h-full overflow-hidden select-none"
+      className="w-80 shrink-0 bg-[color:var(--glass-bg)] backdrop-blur-xl border-l border-border text-[color:var(--ink-strong)] flex flex-col h-full overflow-hidden select-none"
     >
       <div className="flex-1 overflow-y-auto p-4 space-y-5">
         <section className="space-y-2 pb-1">
@@ -965,7 +965,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
             <p className="text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)] text-[color:var(--ink-soft)] pt-1 border-t border-[color:var(--glass-hairline)]">
               {currentRev.summaryNote}
             </p>
-            <div className="p-2.5 rounded-[var(--r-block)] bg-white/55 space-y-1.5 text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)] shadow-[0_0_0_1px_rgba(38,36,61,0.045)]">
+            <div className="p-2.5 rounded-[var(--r-block)] bg-muted/70 border border-border/70 space-y-1.5 text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)]">
               <div className="flex items-center justify-between">
                 <span className="text-[color:var(--ink-soft)] flex items-center gap-1">
                   <Tag className="w-3 h-3" />
@@ -1008,7 +1008,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
           </div>
 
           {metaExpanded ? (
-            <div className="p-3 rounded-[var(--r-block)] bg-white/55 space-y-1.5 text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-mono tabular-nums shadow-[0_0_0_1px_rgba(38,36,61,0.045)]">
+            <div className="p-3 rounded-[var(--r-block)] bg-muted/70 border border-border/70 space-y-1.5 text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-mono tabular-nums">
               <div className="flex items-center justify-between">
                 <span className="text-[color:var(--ink-soft)] font-sans">检测到更新 (observed_at)</span>
                 <span className="text-[color:var(--accent-iris-deep)]">{formatRelativeObservedAt(currentRev.observed_at)}</span>
@@ -1057,7 +1057,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
             <button
               type="button"
               onClick={() => setMetaExpanded(true)}
-              className="w-full px-2.5 py-1.5 rounded-[9px] bg-[color:var(--depth-1-bg)] hover:bg-white hover:shadow-[0_1px_4px_rgba(38,36,61,0.06)] font-mono text-[length:var(--text-micro)] text-[color:var(--ink-soft)] hover:text-[color:var(--ink-strong)] cursor-pointer flex items-center justify-between transition-all"
+              className="w-full px-2.5 py-1.5 rounded-[9px] bg-[color:var(--depth-1-bg)] hover:bg-accent border border-transparent hover:border-border font-mono text-[length:var(--text-micro)] text-[color:var(--ink-soft)] hover:text-[color:var(--ink-strong)] cursor-pointer flex items-center justify-between transition-all"
             >
               <span className="flex items-center gap-1.5">
                 <Clock className="w-3 h-3 text-[color:var(--accent-iris)]" />
@@ -1292,7 +1292,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
         </section>
       </div>
 
-      <div className="p-3.5 border-t border-[color:var(--glass-hairline)] bg-white/82 backdrop-blur-xl space-y-2">
+      <div className="p-3.5 border-t border-[color:var(--glass-hairline)] bg-[color:var(--glass-bg-panel)] backdrop-blur-xl space-y-2">
         {onOpenFileTimeline && (
           <Button
             variant="secondary"

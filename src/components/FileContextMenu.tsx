@@ -636,7 +636,7 @@ export const FileSystemActionBar: React.FC<FileSystemActionBarProps> = ({
   };
 
   const compactTileClass =
-    'justify-start !h-7 px-2 text-[11.5px] bg-[color:var(--depth-1-bg)] hover:bg-white hover:shadow-[0_1px_4px_rgba(38,36,61,0.08)] border border-transparent hover:border-[color:var(--glass-hairline)]';
+    'justify-start !h-7 px-2 text-[11.5px] bg-[color:var(--depth-1-bg)] hover:bg-accent border border-transparent hover:border-[color:var(--glass-hairline)]';
 
   return (
     <div

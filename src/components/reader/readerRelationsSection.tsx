@@ -21,29 +21,31 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
       className={`flex-1 overflow-y-auto p-6 space-y-5 ${
         paperLightMode
           ? 'bg-[#FAF9F5] text-[#1F1E1D]'
-          : 'bg-[#1A1917] text-[#F4F3EE]'
+          : 'bg-[#101218] text-[#F3F4F8]'
       }`}
     >
       <div className="max-w-5xl mx-auto space-y-4">
         <div
           className={`flex flex-wrap items-center justify-between gap-4 p-4 rounded-lg border ${
             paperLightMode
-              ? 'bg-white/60 border-[color:var(--glass-hairline)]'
-              : 'bg-white/60 border-[color:var(--glass-hairline)]'
+              ? 'bg-white/90 border-[#E3E0D8]'
+              : 'bg-[#171A24] border-white/[0.08]'
           }`}
         >
           <div>
             <h2
               className={`text-sm font-semibold ${
                 paperLightMode
-                  ? 'text-[color:var(--ink-strong)]'
-                  : 'text-[color:var(--ink-strong)]'
+                  ? 'text-[#1F1E1D]'
+                  : 'text-[#F3F4F8]'
               }`}
             >
               局部关系视图 · 以「{activeFile.title}」为中心
             </h2>
             <p
-              className="text-xs mt-0.5 text-[color:var(--ink-soft)]"
+              className={`text-xs mt-0.5 ${
+                paperLightMode ? 'text-[#6E6A61]' : 'text-[#A5A9BC]'
+              }`}
             >
               关系图服务于选下一份材料，不替代正文阅读。实线表示显式引用、版本演进或明确决策依据；虚线表示同主题/同任务号分组关联。
             </p>
@@ -70,12 +72,14 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
 
         <div
           className={`rounded-lg border p-4 ${
-            paperLightMode ? 'border-[#E3E0D8]' : 'border-[#383633]'
+            paperLightMode
+              ? 'border-[#E3E0D8] bg-white/75'
+              : 'border-white/[0.08] bg-[#161820]'
           }`}
         >
           <svg
             viewBox="0 0 920 420"
-            className="w-full h-96 bg-[#1A1917] rounded border border-[#383633]"
+            className="w-full h-96 bg-[#12141C] rounded border border-white/[0.08]"
             role="img"
             aria-label="局部对象一跳与二跳关系图"
           >
@@ -226,22 +230,24 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
                   key={edge.edge_id}
                   className={`p-2.5 rounded border text-xs flex flex-col gap-1 ${
                     paperLightMode
-                      ? 'bg-white/60 border-[color:var(--glass-hairline)]'
-                      : 'bg-white/60 border-[color:var(--glass-hairline)]'
+                      ? 'bg-white border-[#E3E0D8]'
+                      : 'bg-[#1D202C] border-white/[0.08]'
                   }`}
                   title={`${edge.source_id} → ${edge.target_id}`}
                 >
                   <div className="flex items-center justify-between">
                     <span
                       className={`font-semibold ${
-                        paperLightMode ? 'text-[#9A6A45]' : 'text-[#D99B52]'
+                        paperLightMode ? 'text-[#9A6A45]' : 'text-[#F0BA7B]'
                       }`}
                     >
                       {edge.label} ({edge.isInferred ? '虚线推断/同组' : '实线显式证据'})
                     </span>
                     {edge.locator && (
                       <span
-                        className="font-mono text-[length:var(--text-micro)] leading-[var(--lh-micro)] tabular-nums text-[color:var(--ink-soft)]"
+                        className={`font-mono text-[length:var(--text-micro)] leading-[var(--lh-micro)] tabular-nums ${
+                          paperLightMode ? 'text-[#6E6A61]' : 'text-[#9EA3B5]'
+                        }`}
                       >
                         原文 L{edge.locator.startLine}
                       </span>
@@ -250,8 +256,8 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
                   <p
                     className={
                       paperLightMode
-                        ? 'text-[color:var(--ink-soft)]'
-                        : 'text-[color:var(--ink-soft)]'
+                        ? 'text-[#6E6A61]'
+                        : 'text-[#A5A9BC]'
                     }
                   >
                     {edge.reason}

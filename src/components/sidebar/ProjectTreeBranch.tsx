@@ -178,7 +178,7 @@ const BranchInlineCreateRow: React.FC<{
   return (
     <div
       data-project-inline-create={kind}
-      className="flex items-center gap-1.5 px-2 py-1 rounded-[9px] bg-white/95 border border-[color:var(--accent-iris-deep)] shadow-sm my-0.5"
+      className="flex items-center gap-1.5 px-2 py-1 rounded-[9px] bg-card border border-[color:var(--accent-iris-deep)] shadow-sm my-0.5"
     >
       {Array.from({ length: depth }).map((_, i) => (
         <span
@@ -414,7 +414,7 @@ export const BranchFolderRows: React.FC<{
                     if (!open) onToggleDir(node.path);
                     onStartInlineCreate(node.path, 'folder');
                   }}
-                  className="w-4 h-4 rounded flex items-center justify-center text-[color:var(--ink-soft)] hover:bg-white hover:text-[color:var(--ink-strong)] cursor-pointer"
+                  className="w-4 h-4 rounded flex items-center justify-center text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] cursor-pointer"
                 >
                   <FolderPlus className="w-3 h-3" />
                 </button>
@@ -427,7 +427,7 @@ export const BranchFolderRows: React.FC<{
                     if (!open) onToggleDir(node.path);
                     onStartInlineCreate(node.path, 'doc');
                   }}
-                  className="w-4 h-4 rounded flex items-center justify-center text-[color:var(--ink-soft)] hover:bg-white hover:text-[color:var(--ink-strong)] cursor-pointer"
+                  className="w-4 h-4 rounded flex items-center justify-center text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] cursor-pointer"
                 >
                   <FilePlus className="w-3 h-3" />
                 </button>

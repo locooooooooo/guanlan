@@ -71,7 +71,9 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
             </span>
 
             <label
-              className="flex items-center gap-1.5 text-[color:var(--ink-soft)]"
+              className={`flex items-center gap-1.5 ${
+                paperLightMode ? 'text-[#6E6A61]' : 'text-[#A5A9BC]'
+              }`}
             >
               <span>基线版本 (From)</span>
               <select
@@ -83,8 +85,8 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
                 }}
                 className={`border rounded px-2 py-1 font-mono text-xs ${
                   paperLightMode
-                    ? 'bg-white/70 border-[color:var(--glass-hairline)] text-[color:var(--ink-strong)]'
-                    : 'bg-white/70 border-[color:var(--glass-hairline)] text-[color:var(--ink-strong)]'
+                    ? 'bg-white border-[#DDD9CF] text-[#1F1E1D]'
+                    : 'bg-[#1F2230] border-white/[0.12] text-[#F3F4F8] [color-scheme:dark]'
                 }`}
               >
                 {activeFile.revisions.map((r) => (
@@ -105,15 +107,17 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
             <span
               className={
                 paperLightMode
-                  ? 'text-[color:var(--ink-soft)]'
-                  : 'text-[color:var(--ink-soft)]'
+                  ? 'text-[#6E6A61]'
+                  : 'text-[#A5A9BC]'
               }
             >
               →
             </span>
 
             <label
-              className="flex items-center gap-1.5 text-[color:var(--ink-soft)]"
+              className={`flex items-center gap-1.5 ${
+                paperLightMode ? 'text-[#6E6A61]' : 'text-[#A5A9BC]'
+              }`}
             >
               <span>目标版本 (To)</span>
               <select
@@ -125,8 +129,8 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
                 }}
                 className={`border rounded px-2 py-1 font-mono text-xs ${
                   paperLightMode
-                    ? 'bg-white/70 border-[color:var(--glass-hairline)] text-[color:var(--ink-strong)]'
-                    : 'bg-white/70 border-[color:var(--glass-hairline)] text-[color:var(--ink-strong)]'
+                    ? 'bg-white border-[#DDD9CF] text-[#1F1E1D]'
+                    : 'bg-[#1F2230] border-white/[0.12] text-[#F3F4F8] [color-scheme:dark]'
                 }`}
               >
                 {activeFile.revisions.map((r) => (
@@ -167,15 +171,15 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
             role="status"
             className={`p-5 rounded-lg border space-y-2 ${
               paperLightMode
-                ? 'bg-white/60 border-[#E3E0D8] text-[color:var(--ink-soft)]'
-                : 'bg-white/60 border-[color:var(--glass-hairline)] text-[color:var(--ink-soft)]'
+                ? 'bg-white/85 border-[#E3E0D8] text-[#6E6A61]'
+                : 'bg-[#171A24] border-white/[0.08] text-[#A5A9BC]'
             }`}
           >
             <div
               className={`text-sm font-semibold ${
                 paperLightMode
-                  ? 'text-[color:var(--ink-strong)]'
-                  : 'text-[color:var(--ink-strong)]'
+                  ? 'text-[#1F1E1D]'
+                  : 'text-[#F3F4F8]'
               }`}
             >
               无可比较的版本
@@ -192,8 +196,8 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
           <div
             className={`p-5 rounded-lg border space-y-4 ${
               paperLightMode
-                ? 'bg-white/60 border-[color:var(--glass-hairline)]'
-                : 'bg-white/60 border-[color:var(--glass-hairline)]'
+                ? 'bg-white/85 border-[#E3E0D8]'
+                : 'bg-[#171A24] border-white/[0.08]'
             }`}
           >
             <div className="text-sm font-semibold text-[color:var(--stage-ink-decision-text)]">
@@ -210,7 +214,7 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
                     className={`p-4 rounded border space-y-2 ${
                       paperLightMode
                         ? 'bg-white border-[#DDD9CF]'
-                        : 'bg-white/60 border-[color:var(--glass-hairline)]'
+                        : 'bg-[#1D202C] border-white/[0.08]'
                     }`}
                   >
                     <div
@@ -224,7 +228,7 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
                     <div className="truncate">SHA-256：{rev.content_sha256}</div>
                     <div>观察时间：{formatRelativeObservedAt(rev.observed_at)}</div>
                     <div
-                      className="font-sans text-[color:var(--ink-soft)]"
+                      className={`font-sans ${paperLightMode ? 'text-[#6E6A61]' : 'text-[#A5A9BC]'}`}
                     >
                       {rev.summaryNote}
                     </div>
@@ -249,8 +253,8 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
             role="status"
             className={`p-5 rounded-lg border space-y-2 ${
               paperLightMode
-                ? 'bg-white/60 border-[#E3E0D8] text-[color:var(--ink-soft)]'
-                : 'bg-white/60 border-[color:var(--glass-hairline)] text-[color:var(--ink-soft)]'
+                ? 'bg-white/85 border-[#E3E0D8] text-[#6E6A61]'
+                : 'bg-[#171A24] border-white/[0.08] text-[#A5A9BC]'
             }`}
           >
             <p className="text-xs leading-relaxed">正在准备对比……</p>
@@ -261,8 +265,8 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
               role="status"
               className={`p-5 rounded-lg border space-y-2 ${
                 paperLightMode
-                  ? 'bg-white/60 border-[#E3E0D8] text-[color:var(--ink-soft)]'
-                  : 'bg-white/60 border-[color:var(--glass-hairline)] text-[color:var(--ink-soft)]'
+                  ? 'bg-white/85 border-[#E3E0D8] text-[#6E6A61]'
+                  : 'bg-[#171A24] border-white/[0.08] text-[#A5A9BC]'
               }`}
             >
               <div className="text-sm font-semibold flex items-center gap-2">
@@ -273,7 +277,11 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
           ) : (
             <div
               role="alert"
-              className="p-5 rounded-lg border border-rose-300 bg-rose-50 text-rose-800 space-y-2"
+              className={`p-5 rounded-lg border space-y-2 ${
+                paperLightMode
+                  ? 'border-rose-300 bg-rose-50 text-rose-800'
+                  : 'border-rose-500/35 bg-rose-950/40 text-rose-200'
+              }`}
             >
               <div className="text-sm font-semibold flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-rose-500" />
@@ -302,9 +310,13 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
                 </span>
               </div>
               <div>
-                <span className="text-emerald-400">+{diffResult.addedCount} 行新增</span>
+                <span className={paperLightMode ? 'text-emerald-700' : 'text-emerald-400'}>
+                  +{diffResult.addedCount} 行新增
+                </span>
                 {' · '}
-                <span className="text-rose-400">-{diffResult.removedCount} 行移除</span>
+                <span className={paperLightMode ? 'text-rose-700' : 'text-rose-400'}>
+                  -{diffResult.removedCount} 行移除
+                </span>
               </div>
             </div>
 
@@ -313,7 +325,7 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
                 className={`rounded-lg border overflow-x-auto font-mono text-xs tabular-nums ${
                   paperLightMode
                     ? 'bg-white border-[#DDD9CF]'
-                    : 'bg-[#262524] border-[#383633]'
+                    : 'bg-[#161820] border-white/[0.08]'
                 }`}
               >
                 {diffResult.lines.map((line, idx) => (
@@ -321,24 +333,28 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
                     key={idx}
                     className={`flex items-start px-3 py-1 border-b ${
                       line.type === 'added'
-                        ? 'bg-emerald-950/40 text-emerald-200 border-[#383633]/40'
+                        ? paperLightMode
+                          ? 'bg-emerald-500/12 text-emerald-950 border-[#E3E0D8]/60'
+                          : 'bg-emerald-950/45 text-emerald-200 border-white/[0.05]'
                         : line.type === 'removed'
-                          ? 'bg-rose-950/40 text-rose-200 line-through opacity-85 border-[#383633]/40'
+                          ? paperLightMode
+                            ? 'bg-rose-500/12 text-rose-950 line-through opacity-85 border-[#E3E0D8]/60'
+                            : 'bg-rose-950/45 text-rose-200 line-through opacity-85 border-white/[0.05]'
                           : paperLightMode
                             ? 'text-[#6E6A61] border-[#E3E0D8]/60'
-                            : 'text-[#A1A09A] border-[#383633]/40'
+                            : 'text-[#A5A9BC] border-white/[0.05]'
                     }`}
                   >
                     <span
                       className={`w-10 shrink-0 select-none ${
-                        paperLightMode ? 'text-[#8A857C]' : 'text-[#6E6D68]'
+                        paperLightMode ? 'text-[#8A857C]' : 'text-[#6E7387]'
                       }`}
                     >
                       {line.oldLineNumber ?? ''}
                     </span>
                     <span
                       className={`w-10 shrink-0 select-none ${
-                        paperLightMode ? 'text-[#8A857C]' : 'text-[#6E6D68]'
+                        paperLightMode ? 'text-[#8A857C]' : 'text-[#6E7387]'
                       }`}
                     >
                       {line.newLineNumber ?? ''}
@@ -353,24 +369,24 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 font-mono text-xs tabular-nums">
                 <div
-                className={`rounded-lg border overflow-hidden ${
-                  paperLightMode
-                    ? 'bg-white border-[#DDD9CF]'
-                    : 'bg-[#262524] border-[#383633]'
-                }`}
-              >
+                  className={`rounded-lg border overflow-hidden ${
+                    paperLightMode
+                      ? 'bg-white border-[#DDD9CF]'
+                      : 'bg-[#161820] border-white/[0.08]'
+                  }`}
+                >
                   <div
                     className={`px-3 py-2 border-b font-semibold ${
                       paperLightMode
-                        ? 'bg-white/60 border-[#E3E0D8] text-[color:var(--ink-soft)]'
-                        : 'bg-white/60 border-[color:var(--glass-hairline)] text-[color:var(--ink-soft)]'
+                        ? 'bg-[#F5F3EE] border-[#E3E0D8] text-[#4A463F]'
+                        : 'bg-[#1D202C] border-white/[0.08] text-[#A5A9BC]'
                     }`}
                   >
                     基线版本：{effectiveFromRevId}
                   </div>
                   <div
                     className={`divide-y max-h-[540px] overflow-y-auto ${
-                      paperLightMode ? 'divide-[#EFEDE7]' : 'divide-[#31302D]'
+                      paperLightMode ? 'divide-[#EFEDE7]' : 'divide-white/[0.05]'
                     }`}
                   >
                     {diffResult.lines
@@ -380,15 +396,17 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
                           key={idx}
                           className={`flex items-start px-3 py-1 ${
                             line.type === 'removed'
-                              ? 'bg-rose-950/50 text-rose-200'
+                              ? paperLightMode
+                                ? 'bg-rose-500/12 text-rose-950'
+                                : 'bg-rose-950/50 text-rose-200'
                               : paperLightMode
                                 ? 'text-[#6E6A61]'
-                                : 'text-[#A1A09A]'
+                                : 'text-[#A5A9BC]'
                           }`}
                         >
                           <span
                             className={`w-9 shrink-0 select-none ${
-                              paperLightMode ? 'text-[#8A857C]' : 'text-[#6E6D68]'
+                              paperLightMode ? 'text-[#8A857C]' : 'text-[#6E7387]'
                             }`}
                           >
                             {line.oldLineNumber}
@@ -405,21 +423,21 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
                   className={`rounded-lg border overflow-hidden ${
                     paperLightMode
                       ? 'bg-white border-[#DDD9CF]'
-                      : 'bg-[#262524] border-[#383633]'
+                      : 'bg-[#161820] border-white/[0.08]'
                   }`}
                 >
                   <div
                     className={`px-3 py-2 border-b font-semibold ${
                       paperLightMode
-                        ? 'bg-white/60 border-[#E3E0D8] text-[#9A6A45]'
-                        : 'bg-white/60 border-[color:var(--glass-hairline)] text-[#D99B52]'
+                        ? 'bg-[#F5F3EE] border-[#E3E0D8] text-[#9A6A45]'
+                        : 'bg-[#1D202C] border-white/[0.08] text-[#F0BA7B]'
                     }`}
                   >
                     对比目标：{effectiveToRevId}
                   </div>
                   <div
                     className={`divide-y max-h-[540px] overflow-y-auto ${
-                      paperLightMode ? 'divide-[#EFEDE7]' : 'divide-[#31302D]'
+                      paperLightMode ? 'divide-[#EFEDE7]' : 'divide-white/[0.05]'
                     }`}
                   >
                     {diffResult.lines
@@ -429,15 +447,17 @@ export function ReaderDiffSection({ ctx }: { ctx: ReaderCtx }) {
                           key={idx}
                           className={`flex items-start px-3 py-1 ${
                             line.type === 'added'
-                              ? 'bg-emerald-950/50 text-emerald-200'
+                              ? paperLightMode
+                                ? 'bg-emerald-500/12 text-emerald-950'
+                                : 'bg-emerald-950/50 text-emerald-200'
                               : paperLightMode
                                 ? 'text-[#6E6A61]'
-                                : 'text-[#A1A09A]'
+                                : 'text-[#A5A9BC]'
                           }`}
                         >
                           <span
                             className={`w-9 shrink-0 select-none ${
-                              paperLightMode ? 'text-[#8A857C]' : 'text-[#6E6D68]'
+                              paperLightMode ? 'text-[#8A857C]' : 'text-[#6E7387]'
                             }`}
                           >
                             {line.newLineNumber}

@@ -25,8 +25,11 @@ const DiffSummaryCard: React.FC<DiffSummaryCardProps> = ({
   paperLightMode = true,
   title = '变更摘要',
 }) => {
-  const border = paperLightMode ? 'border-[#E3D9C8]' : 'border-[#3A3730]';
-  const bg = paperLightMode ? 'bg-[#FBF7EF]' : 'bg-[#28241F]';
+  const border = paperLightMode ? 'border-[#E3D9C8]' : 'border-white/[0.10]';
+  const bg = paperLightMode ? 'bg-[#FBF7EF]' : 'bg-[#1D1B1A]';
+  const strongInk = paperLightMode ? 'text-[#1F1E1D]' : 'text-[#F3F4F8]';
+  const softInk = paperLightMode ? 'text-[#6E6A61]' : 'text-[#A5A9BC]';
+  const metricInk = paperLightMode ? 'text-[#A8432F]' : 'text-[#F58C7A]';
   return (
     <div
       data-diff-summary-card=""
@@ -35,22 +38,22 @@ const DiffSummaryCard: React.FC<DiffSummaryCardProps> = ({
     >
       <div className="flex flex-wrap items-center gap-2">
         <GitCompare className="w-3.5 h-3.5 shrink-0 text-[color:var(--stage-ink-exec)]" />
-        <span className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-medium text-[color:var(--ink-strong)]">
+        <span className={`text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-medium ${strongInk}`}>
           {title}
         </span>
         {loading && (
-          <span className="text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)]">
+          <span className={`text-[length:var(--text-micro)] leading-[var(--lh-micro)] ${softInk}`}>
             语义摘要任务执行中（202 → 任务队列）…
           </span>
         )}
         {result && (
-          <span className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-soft)] truncate">
+          <span className={`text-[length:var(--text-ui)] leading-[var(--lh-ui)] ${softInk} truncate`}>
             {result.summary.headline}
           </span>
         )}
       </div>
       {error && (
-        <p className="mt-1.5 text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)]" role="status">
+        <p className={`mt-1.5 text-[length:var(--text-micro)] leading-[var(--lh-micro)] ${softInk}`} role="status">
           语义摘要暂不可用：{error}（本地逐行对比不受影响）
         </p>
       )}
@@ -60,13 +63,13 @@ const DiffSummaryCard: React.FC<DiffSummaryCardProps> = ({
             <span
               key={metric.label}
               data-diff-metric={metric.label}
-              className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--stage-ink-exec-text)]"
+              className={`text-[length:var(--text-ui)] leading-[var(--lh-ui)] ${metricInk}`}
             >
               {formatDiffMetric(metric)}
             </span>
           ))}
           {diffSummaryCardOf(result).checkpointId && (
-            <span className="text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-mono text-[color:var(--ink-soft)]">
+            <span className={`text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-mono ${softInk}`}>
               Checkpoint：{diffSummaryCardOf(result).checkpointId}
             </span>
           )}

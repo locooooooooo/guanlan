@@ -161,7 +161,11 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
               onClick={() => setAnnotationsOpen(true)}
               data-annotation-drawer-toggle
               title="本版本批注清单（按版本哈希绑定）"
-              className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5 rounded-full border border-[color:var(--glass-hairline)] bg-white/85 px-3 py-1.5 text-xs font-medium text-[color:var(--ink-strong)] shadow-[var(--glass-shadow)] backdrop-blur hover:border-[#D99B52] cursor-pointer"
+              className={`absolute bottom-4 right-4 z-20 flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium shadow-[var(--glass-shadow)] backdrop-blur hover:border-[#D99B52] cursor-pointer ${
+                paperLightMode
+                  ? 'border-[#E3E0D8] bg-white/90 text-[#1F1E1D]'
+                  : 'border-white/[0.12] bg-[#1B1D27]/92 text-[#F3F4F8]'
+              }`}
             >
               <StickyNote className="w-3.5 h-3.5 text-[#D99B52]" />
               <span className="tabular-nums">批注 {annotations.length}</span>

@@ -1235,7 +1235,7 @@ export function CalendarBoardView({
                   type="button"
                   aria-label="取消日期聚焦"
                   onClick={() => setFocusedDate(null)}
-                  className="w-4 h-4 rounded-full flex items-center justify-center text-[color:var(--ink-soft)] hover:text-[color:var(--ink-strong)] hover:bg-white/80 cursor-pointer"
+                  className="w-4 h-4 rounded-full flex items-center justify-center text-[color:var(--ink-soft)] hover:text-[color:var(--ink-strong)] hover:bg-accent cursor-pointer"
                 >
                   <X className="w-2.5 h-2.5" strokeWidth={2} aria-hidden="true" />
                 </button>
@@ -1304,7 +1304,7 @@ export function CalendarBoardView({
 
         <ScrollArea scrollFade className="flex-1 min-h-0" viewportClassName="h-full">
           {files.length === 0 ? (
-            <div className="m-6 rounded-[var(--r-block)] border border-[#26243D]/10 bg-white/60 p-6 text-center text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)] text-[color:var(--ink-soft)]">
+            <div className="m-6 rounded-[var(--r-block)] border border-border bg-card/75 p-6 text-center text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)] text-[color:var(--ink-soft)]">
               工作区文档索引加载中或为空
             </div>
           ) : (

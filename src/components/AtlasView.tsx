@@ -490,7 +490,7 @@ const FolderPeekPaper: React.FC<{ item: AtlasCardItem; index: number }> = ({ ite
           : formatUiMeta(item.file.format).dotColor;
   return (
     <div
-      className="glx-folder-paper h-[64px] w-[52px] shrink-0 overflow-hidden rounded-md border border-[#26243D]/10 bg-white shadow-[var(--glass-shadow)]"
+      className="glx-folder-paper h-[64px] w-[52px] shrink-0 overflow-hidden rounded-md border border-[#26243D]/10 dark:border-white/[0.14] bg-card shadow-[var(--glass-shadow)]"
       style={{ '--peek-rot': `${rotate}deg` } as React.CSSProperties}
       aria-hidden="true"
     >
@@ -500,21 +500,20 @@ const FolderPeekPaper: React.FC<{ item: AtlasCardItem; index: number }> = ({ ite
           alt=""
           loading="lazy"
           draggable={false}
-          className="h-full w-full object-cover object-top p-0.5"
+          className="h-full w-full object-cover object-top p-0.5 dark:brightness-[0.88] dark:contrast-[1.06]"
         />
       ) : (
         <div
-          className="flex h-full w-full flex-col justify-between p-1"
-          style={{ background: 'linear-gradient(180deg,#FAF9F5 0%,#EFEAF7 100%)' }}
+          className="flex h-full w-full flex-col justify-between p-1 bg-gradient-to-b from-[#FAF9F5] to-[#EFEAF7] dark:from-[#232738] dark:to-[#181B27]"
         >
           <span
-            className="text-[length:var(--text-micro)] leading-none font-mono font-medium"
+            className="text-[length:var(--text-micro)] leading-none font-mono font-medium dark:brightness-125"
             style={{ color: formatInk }}
           >
             {item.file.format.toUpperCase()}
           </span>
-          <span className="block h-0.5 w-full rounded bg-[#26243D]/10" />
-          <span className="block h-0.5 w-3/4 rounded bg-[#26243D]/10" />
+          <span className="block h-0.5 w-full rounded bg-[#26243D]/12 dark:bg-white/15" />
+          <span className="block h-0.5 w-3/4 rounded bg-[#26243D]/12 dark:bg-white/15" />
         </div>
       )}
     </div>
@@ -574,12 +573,12 @@ const FolderCard: React.FC<{
         : {})}
     >
       <div
-        className="absolute -top-2.5 left-5 h-6 w-24 rounded-t-xl border border-b-0 border-white/70"
+        className="absolute -top-2.5 left-5 h-6 w-24 rounded-t-xl border border-b-0 border-white/60 dark:border-white/15"
         style={{ background: `linear-gradient(135deg, ${art.from}CC, ${art.to}CC)` }}
         aria-hidden="true"
       />
       <div
-        className="absolute inset-x-0 top-0 bottom-3 overflow-hidden rounded-2xl rounded-bl-md border border-white/60 shadow-[var(--glass-shadow)]"
+        className="absolute inset-x-0 top-0 bottom-3 overflow-hidden rounded-2xl rounded-bl-md border border-white/55 dark:border-white/15 shadow-[var(--glass-shadow)]"
         style={{ background: `linear-gradient(135deg, ${art.from}, ${art.to})` }}
         aria-hidden="true"
       >

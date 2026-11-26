@@ -520,13 +520,13 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
           {redactedSecretsCount > 0 && (
             <div
               data-context-redacted-notice=""
-              className="rounded-[var(--r-block)] border border-[color:color-mix(in_srgb,var(--stage-ink-deliver)_32%,transparent)] bg-[color:color-mix(in_srgb,var(--stage-ink-deliver)_8%,white)] px-3 py-2 text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--stage-ink-deliver-text)]"
+              className="rounded-[var(--r-block)] border border-[color:color-mix(in_srgb,var(--stage-ink-deliver)_32%,transparent)] bg-[color:color-mix(in_srgb,var(--stage-ink-deliver)_10%,var(--card))] px-3 py-2 text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--stage-ink-deliver-text)]"
             >
               安全脱敏护栏已拦截并隐藏 {redactedSecretsCount} 处疑似密钥/敏感凭证（替换为 [REDACTED_SECRET]），未混入任何本机环境变量。
             </div>
           )}
 
-          <div className="rounded-[var(--r-block)] border border-[color:var(--glass-hairline)] bg-white/60 px-3 py-2.5 space-y-2">
+          <div className="rounded-[var(--r-block)] border border-[color:var(--glass-hairline)] bg-muted/65 px-3 py-2.5 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-medium px-1.5 py-0.5 rounded-[var(--r-pill)] bg-[color:color-mix(in_srgb,var(--accent-iris)_10%,transparent)] text-[color:var(--accent-iris-ink)]">
                 {intent === 'document' ? '文档正文页' : intent === 'initiative' ? '专项详情' : '首页总览'}
@@ -718,7 +718,7 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
             className={`space-y-2 rounded-[12px] border px-3.5 py-2.5 text-[length:var(--text-ui)] leading-[var(--lh-ui)] tabular-nums ${
               budgetView.overThreshold
                 ? 'border-[color:var(--stage-ink-decision)] bg-[color:color-mix(in_srgb,var(--stage-ink-decision)_10%,transparent)] text-[color:var(--stage-ink-decision-text)]'
-                : 'border-[color:var(--glass-hairline)] bg-white/75 text-[color:var(--ink-soft)]'
+                : 'border-[color:var(--glass-hairline)] bg-card/85 text-[color:var(--ink-soft)]'
             }`}
             data-context-budget-bar=""
           >
@@ -769,7 +769,7 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
           </div>
 
           {recommendedMounts.length > 0 && (
-            <details className="rounded-[var(--r-block)] border border-[color:var(--glass-hairline)] bg-white/60 px-3 py-2">
+            <details className="rounded-[var(--r-block)] border border-[color:var(--glass-hairline)] bg-muted/65 px-3 py-2">
               <summary className="cursor-pointer text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-medium text-[color:var(--ink-soft)]">
                 推荐挂载（基于星图血缘与代码引用） · {recommendedMounts.length}
               </summary>
@@ -777,7 +777,7 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
                 {recommendedMounts.map(({ pointer, reason }) => (
                   <div
                     key={`rec-${pointer.file_id}`}
-                    className="flex items-center justify-between gap-2 rounded-[var(--r-ctl)] border border-[color:var(--glass-hairline)] bg-white/55 px-2.5 py-1.5"
+                    className="flex items-center justify-between gap-2 rounded-[var(--r-ctl)] border border-[color:var(--glass-hairline)] bg-card/80 px-2.5 py-1.5"
                   >
                     <span className="flex items-center gap-1.5 min-w-0">
                       <span
@@ -808,7 +808,7 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
             <details
               open
               data-context-upstream-snippets=""
-              className="rounded-[var(--r-block)] border border-[color:var(--glass-hairline)] bg-white/60 px-3 py-2"
+              className="rounded-[var(--r-block)] border border-[color:var(--glass-hairline)] bg-muted/65 px-3 py-2"
             >
               <summary className="cursor-pointer text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-medium text-[color:var(--ink-strong)]">
                 上游规范引用片段（已自动随包带入） · {upstreamSnippets.length}
@@ -817,7 +817,7 @@ export const AgentContextDrawer: React.FC<AgentContextDrawerProps> = ({
                 {upstreamSnippets.map((up) => (
                   <div
                     key={`up-${up.file_id}`}
-                    className="rounded-[var(--r-ctl)] border border-[color:var(--glass-hairline)] bg-white/65 px-2.5 py-2 space-y-1"
+                    className="rounded-[var(--r-ctl)] border border-[color:var(--glass-hairline)] bg-card/80 px-2.5 py-2 space-y-1"
                   >
                     <div className="flex items-center justify-between gap-2 text-[length:var(--text-micro)] leading-[var(--lh-micro)]">
                       <span className="font-mono font-medium text-[color:var(--accent-iris-deep)] truncate" title={up.path}>

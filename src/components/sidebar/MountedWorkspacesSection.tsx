@@ -23,7 +23,7 @@ export interface MountedWorkspacesSectionProps {
 }
 
 const ROW_CLS =
-  'w-full flex items-center gap-1.5 px-2 py-1 rounded-[9px] border border-transparent text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-soft)] hover:bg-white/75 hover:text-[color:var(--ink-strong)] cursor-pointer motion-safe:transition-colors';
+  'w-full flex items-center gap-1.5 px-2 py-1 rounded-[9px] border border-transparent text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] cursor-pointer motion-safe:transition-colors';
 
 const MountedTreeRows: React.FC<{
   nodes: MountedFolderNode[];
@@ -263,7 +263,7 @@ export const MountedWorkspacesSection: React.FC<MountedWorkspacesSectionProps> =
           onClick={onOpenMountManager}
           title="挂载或管理只读参考工作区"
           aria-label="管理挂载目录"
-          className="w-5 h-5 rounded-[6px] flex items-center justify-center text-[color:var(--ink-soft)] hover:bg-white/80 hover:text-[color:var(--ink-strong)] cursor-pointer transition-colors"
+          className="w-5 h-5 rounded-[6px] flex items-center justify-center text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] cursor-pointer transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />
         </button>
@@ -273,7 +273,7 @@ export const MountedWorkspacesSection: React.FC<MountedWorkspacesSectionProps> =
         <button
           type="button"
           onClick={onOpenMountManager}
-          className="w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-[9px] text-left text-[length:var(--text-micro)] text-[color:var(--ink-faint)] hover:bg-white/65 hover:text-[color:var(--ink-soft)] cursor-pointer transition-colors"
+          className="w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-[9px] text-left text-[length:var(--text-micro)] text-[color:var(--ink-faint)] hover:bg-accent hover:text-[color:var(--ink-soft)] cursor-pointer transition-colors"
         >
           <Plus className="w-3 h-3 shrink-0" />
           <span className="truncate">挂载其他观澜目录（只读浏览）…</span>

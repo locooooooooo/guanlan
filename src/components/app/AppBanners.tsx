@@ -234,7 +234,7 @@ export function AppBanners({ ctx }: { ctx: WorkspaceStoreCtx }) {
         <div
           data-initiative-reopen-prompt=""
           role="status"
-          className="px-4 py-1 bg-white/60 backdrop-blur-md border-b border-[color:var(--glass-hairline)] text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-soft)] flex flex-wrap items-center gap-2 shrink-0 tabular-nums"
+          className="px-4 py-1 bg-[color:var(--glass-bg)] backdrop-blur-md border-b border-[color:var(--glass-hairline)] text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-soft)] flex flex-wrap items-center gap-2 shrink-0 tabular-nums"
         >
           <span className="w-1.5 h-1.5 rounded-full bg-[color:var(--ink-soft)]" />
           <span>专项「{activeInitiative.name}」已归档，需要继续推进时可重开</span>

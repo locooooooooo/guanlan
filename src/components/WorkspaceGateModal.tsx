@@ -109,7 +109,7 @@ export const WorkspaceGateModal: React.FC<WorkspaceGateModalProps> = ({
         </div>
 
         {(isConflict || isError) && err && (
-          <div className="rounded-[var(--r-block)] border border-[color:var(--glass-hairline)] bg-white/70 p-3.5 space-y-1.5 font-mono text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)]">
+          <div className="rounded-[var(--r-block)] border border-[color:var(--glass-hairline)] bg-muted/70 p-3.5 space-y-1.5 font-mono text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)]">
             <div className="break-all">
               <span className="font-semibold text-[color:var(--ink-strong)]">目标目录：</span>
               {err.root}
@@ -205,7 +205,7 @@ export const WorkspaceGateModal: React.FC<WorkspaceGateModalProps> = ({
               {session.recentWorkspaces.map((entry) => (
                 <div
                   key={entry.root}
-                  className="flex items-center justify-between gap-2 rounded-[var(--r-ctl)] border border-[color:var(--glass-hairline)] bg-white/60 px-2.5 py-1.5"
+                  className="flex items-center justify-between gap-2 rounded-[var(--r-ctl)] border border-[color:var(--glass-hairline)] bg-card/85 px-2.5 py-1.5"
                 >
                   <button
                     type="button"

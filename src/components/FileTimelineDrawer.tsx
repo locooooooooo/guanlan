@@ -411,13 +411,13 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
                         <div className="flex items-center gap-2 min-w-0">
                           {rev ? (
                             <span
-                              className="px-1.5 py-0.5 rounded bg-white/70 border border-[#26243D]/15 font-mono text-[length:var(--text-micro)] text-[color:var(--accent-iris-deep)] shrink-0"
+                              className="px-1.5 py-0.5 rounded bg-muted/80 border border-border font-mono text-[length:var(--text-micro)] text-[color:var(--accent-iris-deep)] shrink-0"
                               title={`版本 v${rev.seq} · ${(rev.size_bytes / 1024).toFixed(1)} KB${rev.snapshot_available ? '' : ' · 快照已淘汰（仅保留元数据）'}`}
                             >
                               v{rev.seq}
                             </span>
                           ) : (
-                            <span className="px-1.5 py-0.5 rounded bg-white/70 border border-[#26243D]/15 font-mono text-[length:var(--text-micro)] text-[color:var(--ink-soft)] shrink-0">
+                            <span className="px-1.5 py-0.5 rounded bg-muted/80 border border-border font-mono text-[length:var(--text-micro)] text-[color:var(--ink-soft)] shrink-0">
                               前导事件
                             </span>
                           )}
@@ -543,7 +543,7 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
                               );
                             })()
                           ) : (
-                            <pre className="p-3 rounded border border-[#26243D]/10 bg-white/70 font-mono text-[length:var(--text-micro)] text-[color:var(--ink-soft)] whitespace-pre-wrap break-all max-h-72 overflow-y-auto">
+                            <pre className="p-3 rounded border border-border bg-muted/70 font-mono text-[length:var(--text-micro)] text-[color:var(--ink-soft)] whitespace-pre-wrap break-all max-h-72 overflow-y-auto">
                               {previewText || '（该版本正文为空）'}
                             </pre>
                           )}

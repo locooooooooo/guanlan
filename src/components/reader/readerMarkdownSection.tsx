@@ -357,7 +357,11 @@ export function ReaderMarkdownSection({ ctx }: { ctx: ReaderCtx }) {
           data-decision-action-bar
           role="group"
           aria-label="决策回传动作条"
-          className="glx-slide-up-in absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2 rounded-lg border border-[color:var(--glass-hairline)] bg-white/85 px-3 py-2 shadow-[var(--glass-shadow)] backdrop-blur"
+          className={`glx-slide-up-in absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2 rounded-lg border px-3 py-2 shadow-[var(--glass-shadow)] backdrop-blur ${
+            paperLightMode
+              ? 'border-[#E3E0D8] bg-white/92 text-[#1F1E1D]'
+              : 'border-white/[0.12] bg-[#1B1D27]/94 text-[#F3F4F8]'
+          }`}
         >
           <span className="whitespace-nowrap text-xs font-medium text-[color:var(--ink-strong)]">
             已选择 {decisionSelectedCount} 项决策

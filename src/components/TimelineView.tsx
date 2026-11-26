@@ -852,7 +852,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
             {stamp.stamp}
           </span>
           <span className="shrink-0 text-[length:var(--text-micro)] font-mono text-[color:var(--ink-soft)]">{kindLabel}</span>
-          <span className="shrink-0 rounded-[var(--r-ctl)] border border-[color:color-mix(in_srgb,var(--accent-iris)_60%,transparent)] bg-white/70 px-1.5 py-0.5 text-[length:var(--text-micro)] font-mono font-medium leading-none text-[color:var(--accent-iris-deep)] tabular-nums">
+          <span className="shrink-0 rounded-[var(--r-ctl)] border border-[color:color-mix(in_srgb,var(--accent-iris)_60%,transparent)] bg-card/85 px-1.5 py-0.5 text-[length:var(--text-micro)] font-mono font-medium leading-none text-[color:var(--accent-iris-deep)] tabular-nums">
             ×{cluster.members.length}
           </span>
           {(() => {
@@ -860,7 +860,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
             return newestFile ? (
               <span
                 title={`任务包：${taskPackageOf(newestFile.relative_path).name}`}
-                className="shrink-0 rounded-[var(--r-ctl)] border border-[#26243D]/10 bg-white/70 px-1.5 py-0.5 text-[length:var(--text-micro)] font-mono font-medium leading-none text-[color:var(--ink-soft)]"
+                className="shrink-0 rounded-[var(--r-ctl)] border border-border bg-muted/75 px-1.5 py-0.5 text-[length:var(--text-micro)] font-mono font-medium leading-none text-[color:var(--ink-soft)]"
               >
                 {taskPackageOf(newestFile.relative_path).name}
               </span>
@@ -918,8 +918,8 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   title={`${file?.relative_path || ev.headline} · ${memberStamp.stamp}（${memberStamp.basis}）`}
                   className={`flex items-start justify-between gap-3 rounded-md border px-2.5 py-1.5 cursor-pointer transition-colors ${
                     memberSelected
-                      ? 'border-[color:color-mix(in_srgb,var(--accent-iris)_60%,transparent)] bg-white/70'
-                      : 'border-transparent hover:border-[#26243D]/10 hover:bg-white/70'
+                      ? 'border-[color:color-mix(in_srgb,var(--accent-iris)_60%,transparent)] bg-accent/80'
+                      : 'border-transparent hover:border-border hover:bg-accent/60'
                   }`}
                 >
                   <div className="min-w-0">
@@ -997,13 +997,13 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
               {stamp.stamp}
             </span>
             <span className="shrink-0 text-[length:var(--text-micro)] font-mono text-[color:var(--ink-soft)]">连续更新</span>
-            <span className="shrink-0 rounded-[var(--r-ctl)] border border-[color:color-mix(in_srgb,var(--accent-wave)_50%,transparent)] bg-white/70 px-1.5 py-0.5 text-[length:var(--text-micro)] font-mono font-medium leading-none text-[color:var(--accent-wave)] tabular-nums">
+            <span className="shrink-0 rounded-[var(--r-ctl)] border border-[color:color-mix(in_srgb,var(--accent-wave)_50%,transparent)] bg-card/85 px-1.5 py-0.5 text-[length:var(--text-micro)] font-mono font-medium leading-none text-[color:var(--accent-wave)] tabular-nums">
               ×{group.count}
             </span>
             {packageName && (
               <span
                 title={`任务包：${packageName}`}
-                className="shrink-0 rounded-[var(--r-ctl)] border border-[#26243D]/10 bg-white/70 px-1.5 py-0.5 text-[length:var(--text-micro)] font-mono font-medium leading-none text-[color:var(--ink-soft)]"
+                className="shrink-0 rounded-[var(--r-ctl)] border border-border bg-muted/75 px-1.5 py-0.5 text-[length:var(--text-micro)] font-mono font-medium leading-none text-[color:var(--ink-soft)]"
               >
                 {packageName}
               </span>
@@ -1077,8 +1077,8 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   title={`${memberFile?.relative_path || ev.headline} · ${memberStamp.stamp}（${memberStamp.basis}）`}
                   className={`anim-spring-pop flex items-start justify-between gap-3 rounded-md border px-2.5 py-1.5 cursor-pointer transition-colors ${
                     memberSelected
-                      ? 'border-[color:color-mix(in_srgb,var(--accent-iris)_60%,transparent)] bg-white/70'
-                      : 'border-transparent hover:border-[#26243D]/10 hover:bg-white/70'
+                      ? 'border-[color:color-mix(in_srgb,var(--accent-iris)_60%,transparent)] bg-accent/80'
+                      : 'border-transparent hover:border-border hover:bg-accent/60'
                   }`}
                   style={{ animationDelay: `${idx * 40}ms` }}
                 >

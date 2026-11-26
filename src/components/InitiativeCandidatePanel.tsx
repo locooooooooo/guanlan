@@ -128,7 +128,7 @@ export const InitiativeCandidatePanel: React.FC<InitiativeCandidatePanelProps> =
       {active.map((item) => (
         <div
           key={item.candidate_id}
-          className="rounded-lg border border-[color:var(--glass-hairline)] bg-white/70 p-2.5 space-y-1.5"
+          className="rounded-lg border border-[color:var(--glass-hairline)] bg-card/85 p-2.5 space-y-1.5"
           data-candidate-id={item.candidate_id}
         >
           <div className="flex items-start justify-between gap-2">

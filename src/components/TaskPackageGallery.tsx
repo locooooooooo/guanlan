@@ -423,13 +423,13 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
 
                       {coverUri ? (
                         <>
-                          <span className="relative my-1 flex flex-1 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-background/90 p-1">
+                          <span className="relative my-1 flex flex-1 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-muted/60 p-1">
                             <img
                               src={coverUri}
                               alt=""
                               aria-hidden="true"
                               loading="lazy"
-                              className="h-full w-full object-contain motion-safe:transition-transform motion-safe:duration-300 group-hover:scale-105"
+                              className="h-full w-full rounded-[5px] object-contain motion-safe:transition-transform motion-safe:duration-300 group-hover:scale-105 dark:brightness-[0.88] dark:contrast-[1.06]"
                             />
                           </span>
                           <PackageFingerprintVisual

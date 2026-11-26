@@ -241,7 +241,7 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
             </div>
           </div>
 
-          <div className="p-3.5 rounded-[var(--r-block)] border border-[color:var(--glass-hairline)] bg-white/60 space-y-2.5 text-xs">
+          <div className="p-3.5 rounded-[var(--r-block)] border border-[color:var(--glass-hairline)] bg-muted/65 space-y-2.5 text-xs">
             <div className="font-semibold text-[color:var(--ink-strong)]">
               一键验证标准错误类型与协议边界（stdout 仅输出协议消息，诊断输出到 stderr）：
             </div>
@@ -372,7 +372,7 @@ export const McpConsoleModal: React.FC<McpConsoleModalProps> = ({
                 {response.ok ? 'STATUS: OK' : `ERROR: ${response.error_code}`}
               </span>
             </div>
-            <pre className="p-4 rounded-[var(--r-block)] border border-[color:var(--glass-hairline)] bg-white/60 text-xs font-mono text-[color:var(--ink-strong)] overflow-x-auto max-h-80">
+            <pre className="p-4 rounded-[var(--r-block)] border border-[color:var(--glass-hairline)] bg-muted/65 text-xs font-mono text-[color:var(--ink-strong)] overflow-x-auto max-h-80">
               {JSON.stringify(response, null, 2)}
             </pre>
           </div>

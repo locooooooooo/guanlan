@@ -896,7 +896,7 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
           </div>
 
           {(!preview && showSpinner) || fullHtmlLoading ? (
-            <div className="flex-1 flex items-center justify-center py-16 gap-2 text-[12px] text-[color:var(--ink-soft)] bg-white min-h-[460px]">
+            <div className="flex-1 flex items-center justify-center py-16 gap-2 text-[12px] text-[color:var(--ink-soft)] bg-card min-h-[460px]">
               <Loader2 className="w-4 h-4 animate-spin" />
               <span>正在读取 HTML 快照并构建沙盒…</span>
             </div>
@@ -912,13 +912,13 @@ export const QuickPreviewModal: React.FC<QuickPreviewModalProps> = ({
               className="w-full flex-1 min-h-[460px] bg-white border-0"
             />
           ) : preview ? (
-            <div className="flex-1 flex items-center justify-center py-16 text-[12px] text-[color:var(--ink-soft)] bg-white min-h-[460px]">
+            <div className="flex-1 flex items-center justify-center py-16 text-[12px] text-[color:var(--ink-soft)] bg-card min-h-[460px]">
               {preview.truncated
                 ? '完整 HTML 快照未能载入，可切换「HTML 源码」或按 Enter 进入完整阅读器查看'
                 : 'HTML 文件为空'}
             </div>
           ) : (
-            <div className="flex-1 min-h-[460px] bg-white" />
+            <div className="flex-1 min-h-[460px] bg-card" />
           )}
         </div>
       );
