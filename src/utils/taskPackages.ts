@@ -136,11 +136,13 @@ function packageConclusionOf(docs: PackageDoc[]): string {
   return '';
 }
 
+const READING_ORDER_COLLATOR = new Intl.Collator(undefined, { numeric: true });
+
 function compareReadingOrder(a: PackageDoc, b: PackageDoc): number {
   const rankA = STAGE_RANK[a.stage];
   const rankB = STAGE_RANK[b.stage];
   if (rankA !== rankB) return rankA - rankB;
-  return a.title.localeCompare(b.title, undefined, { numeric: true });
+  return READING_ORDER_COLLATOR.compare(a.title, b.title);
 }
 
 const STAGE_RANK: Record<StageRole, number> = {

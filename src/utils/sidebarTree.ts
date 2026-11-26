@@ -32,6 +32,7 @@ export const SIDEBAR_WIDTH_DEFAULT = 264;
 
 const SIDEBAR_PREFS_KEY = 'guanlan.sidebarPrefs.v1';
 const PINNED_FILES_KEY_PREFIX = 'guanlan.pinnedFiles.v1:';
+const ZH_COLLATOR = new Intl.Collator('zh-Hans-CN');
 
 export function clampSidebarWidth(width: number): number {
   if (!Number.isFinite(width)) return SIDEBAR_WIDTH_DEFAULT;
@@ -173,6 +174,35 @@ export function buildMergedFolderTree(
     directFiles: [],
     children: [],
   };
+  const childrenByNode = new Map<FolderNode, Map<string, FolderNode>>();
+
+  const getOrCreateChild = (
+    parent: FolderNode,
+    part: string,
+    acc: string,
+    isEmpty: boolean
+  ): FolderNode => {
+    let byName = childrenByNode.get(parent);
+    if (!byName) {
+      byName = new Map();
+      childrenByNode.set(parent, byName);
+    }
+    let child = byName.get(part);
+    if (!child) {
+      child = {
+        name: part,
+        path: acc,
+        direct: 0,
+        total: 0,
+        isEmpty,
+        directFiles: [],
+        children: [],
+      };
+      parent.children.push(child);
+      byName.set(part, child);
+    }
+    return child;
+  };
 
   const ensureFolderPath = (rawFolder: string): FolderNode => {
     const norm = normalizeFolderPath(rawFolder);
@@ -182,20 +212,7 @@ export function buildMergedFolderTree(
     let acc = '';
     for (const part of parts) {
       acc = acc ? `${acc}/${part}` : part;
-      let child = node.children.find((c) => c.name === part);
-      if (!child) {
-        child = {
-          name: part,
-          path: acc,
-          direct: 0,
-          total: 0,
-          isEmpty: true,
-          directFiles: [],
-          children: [],
-        };
-        node.children.push(child);
-      }
-      node = child;
+      node = getOrCreateChild(node, part, acc, true);
     }
     return node;
   };
@@ -212,19 +229,7 @@ export function buildMergedFolderTree(
     let acc = '';
     for (const part of parts) {
       acc = acc ? `${acc}/${part}` : part;
-      let child = node.children.find((c) => c.name === part);
-      if (!child) {
-        child = {
-          name: part,
-          path: acc,
-          direct: 0,
-          total: 0,
-          isEmpty: false,
-          directFiles: [],
-          children: [],
-        };
-        node.children.push(child);
-      }
+      const child = getOrCreateChild(node, part, acc, false);
       child.total += 1;
       node = child;
     }
@@ -233,14 +238,14 @@ export function buildMergedFolderTree(
   }
 
   const finalize = (nodes: FolderNode[]) => {
-    nodes.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+    nodes.sort((a, b) => ZH_COLLATOR.compare(a.name, b.name));
     for (const n of nodes) {
-      n.directFiles.sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans-CN'));
+      n.directFiles.sort((a, b) => ZH_COLLATOR.compare(a.title, b.title));
       finalize(n.children);
       n.isEmpty = n.total === 0 && n.children.length === 0;
     }
   };
-  root.directFiles.sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans-CN'));
+  root.directFiles.sort((a, b) => ZH_COLLATOR.compare(a.title, b.title));
   finalize(root.children);
 
   return { nodes: root.children, rootFiles: root.directFiles };
@@ -281,7 +286,7 @@ export function collectMergedFolderOptions(
   return Array.from(set).sort((a, b) => {
     if (a === '') return -1;
     if (b === '') return 1;
-    return a.localeCompare(b, 'zh-Hans-CN');
+    return ZH_COLLATOR.compare(a, b);
   });
 }
 
@@ -341,13 +346,13 @@ export function buildMountedFolderTree(
   }
 
   const sortRec = (nodes: MountedFolderNode[]) => {
-    nodes.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+    nodes.sort((a, b) => ZH_COLLATOR.compare(a.name, b.name));
     for (const n of nodes) {
-      n.directFiles.sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans-CN'));
+      n.directFiles.sort((a, b) => ZH_COLLATOR.compare(a.title, b.title));
       sortRec(n.children);
     }
   };
-  root.directFiles.sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans-CN'));
+  root.directFiles.sort((a, b) => ZH_COLLATOR.compare(a.title, b.title));
   sortRec(root.children);
   return { nodes: root.children, rootFiles: root.directFiles };
 }
@@ -512,14 +517,14 @@ export function buildProjectFolderTree(
   }
 
   const finalize = (nodes: ProjectFolderNode[]) => {
-    nodes.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+    nodes.sort((a, b) => ZH_COLLATOR.compare(a.name, b.name));
     for (const n of nodes) {
-      n.directFiles.sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans-CN'));
+      n.directFiles.sort((a, b) => ZH_COLLATOR.compare(a.title, b.title));
       finalize(n.children);
       n.isEmpty = n.total === 0 && n.children.length === 0;
     }
   };
-  root.directFiles.sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans-CN'));
+  root.directFiles.sort((a, b) => ZH_COLLATOR.compare(a.title, b.title));
   finalize(root.children);
   return { nodes: root.children, rootFiles: root.directFiles };
 }
@@ -543,7 +548,7 @@ export function computeSiblingSharedPrefixMap(names: readonly string[]): Map<str
     for (const n of names) result.set(n, 0);
     return result;
   }
-  const sorted = [...names].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'));
+  const sorted = [...names].sort((a, b) => ZH_COLLATOR.compare(a, b));
   for (let i = 0; i < sorted.length; i += 1) {
     const cur = sorted[i];
     const prevLen = i > 0 ? commonPrefixLengthOfTwo(cur, sorted[i - 1]) : 0;
@@ -672,7 +677,7 @@ export function toggleMutedFolderList(
   if (exists) {
     return current.filter((m) => normalizeMutedFolderPath(m) !== norm);
   }
-  return [...current, norm].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'));
+  return [...current, norm].sort((a, b) => ZH_COLLATOR.compare(a, b));
 }
 
 /** 判定某目录（或其任意祖先目录）是否已被静默。 */
@@ -871,7 +876,7 @@ export function sortFolderTreeNodes(
   if (mode === 'name') {
     const sortByName = (list: readonly FolderNode[]): FolderNode[] =>
       [...list]
-        .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
+        .sort((a, b) => ZH_COLLATOR.compare(a.name, b.name))
         .map((n) => (n.children.length > 0 ? { ...n, children: sortByName(n.children) } : n));
     return sortByName(nodes);
   }
@@ -886,7 +891,7 @@ export function sortFolderTreeNodes(
       .sort((a, b) => {
         const diff = scoreOf(b) - scoreOf(a);
         if (diff !== 0) return diff;
-        return a.name.localeCompare(b.name, 'zh-Hans-CN');
+        return ZH_COLLATOR.compare(a.name, b.name);
       })
       .map((n) => (n.children.length > 0 ? { ...n, children: sortRecursive(n.children) } : n));
   return sortRecursive(nodes);

@@ -5,6 +5,7 @@ import type { ReadingStateMap } from '../utils/readingStateStore';
 import { unreadStatusLabel } from '../utils/guanlanEngine';
 import {
   computeReadingIslandStats,
+  computeReadingIslandSummary,
   formatIslandQuotaLine,
   islandPercent,
   ISLAND_STATUS_COLORS,
@@ -583,10 +584,15 @@ export default function ReadingIsland({
   onMarkReadingBaseline,
 }: ReadingIslandProps) {
   const [expanded, setExpanded] = useState(false);
-  const stats = useMemo(
-    () => computeReadingIslandStats(files, readingStates),
+  const summary = useMemo(
+    () => computeReadingIslandSummary(files, readingStates),
     [files, readingStates],
   );
+  const expandedStats = useMemo(
+    () => (expanded ? computeReadingIslandStats(files, readingStates) : null),
+    [expanded, files, readingStates],
+  );
+  const stats = expandedStats ?? summary;
   const compact = placement === 'header';
 
   return (
@@ -648,7 +654,7 @@ export default function ReadingIsland({
         )}
       </button>
 
-      {expanded && (
+      {expanded && expandedStats && (
         <Sheet open={expanded} onOpenChange={setExpanded}>
           <SheetPopup
             side="right"
@@ -659,7 +665,7 @@ export default function ReadingIsland({
           >
             <ReadingIslandPanel
               inSheet
-              stats={stats}
+              stats={expandedStats}
               quota={quota}
               onOpenDoc={(fileId) => {
                 onOpenDoc(fileId);
