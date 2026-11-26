@@ -166,7 +166,7 @@ export const DirOpsModal: React.FC<DirOpsModalProps> = ({
 
               {request.kind === 'folder-move' && (
                 <p className="text-[length:var(--text-micro)] text-[color:var(--ink-soft)]">
-                  已自动隐藏当前父目录、本文件夹及其全部子目录（防成环），移动后子树内所有文件的 file_id 与版本历史保持连续。
+                  已自动隐藏当前父目录、本文件夹及其全部子目录（防成环），移动后子树内所有文件的身份与版本历史保持连续。
                 </p>
               )}
 
@@ -231,7 +231,7 @@ export const DirOpsModal: React.FC<DirOpsModalProps> = ({
                 )}
                 <div className="pl-6 flex items-center gap-1.5 text-[length:var(--text-micro)] text-[color:var(--ink-soft)]">
                   <ShieldCheck className="w-3.5 h-3.5 shrink-0 text-[color:var(--accent-iris-deep)]" />
-                  <span>绝不永久删除；从系统回收站还原后自动重连原 file_id 与历史版本。</span>
+                  <span>绝不永久删除；从系统回收站还原后自动重连原文件身份与历史版本。</span>
                 </div>
               </div>
 

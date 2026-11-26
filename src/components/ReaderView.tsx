@@ -113,7 +113,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
         aria-valuemax={100}
         aria-valuenow={0}
         data-reader-progress=""
-        className="relative z-30 h-[2px] w-full shrink-0 overflow-hidden bg-[color:var(--ink-faint)]"
+        className="relative z-10 h-[2px] w-full shrink-0 overflow-hidden bg-[color:var(--ink-faint)]"
       >
         <div
           ref={readerProgressBarRef}

@@ -2397,7 +2397,7 @@ export function SlotDayList({
                 data-slot-jump-starmap={date}
                 onClick={() => onJumpToStarMap(date)}
                 title={`在司辰星图中溯源 ${date}`}
-                className="inline-flex items-center gap-0.5 rounded-full bg-[color:color-mix(in_srgb,var(--accent-iris)_12%,white)] px-2 py-0.5 text-[10px] font-medium text-[color:var(--accent-iris-deep)] hover:bg-[color:var(--accent-iris-deep)] hover:text-white cursor-pointer motion-safe:transition-colors"
+                className="inline-flex items-center gap-0.5 rounded-full bg-[color:color-mix(in_srgb,var(--accent-iris)_14%,var(--card))] px-2 py-0.5 text-[10px] font-medium text-[color:var(--accent-iris-deep)] hover:bg-[color:var(--accent-iris-deep)] hover:text-white cursor-pointer motion-safe:transition-colors"
               >
                 <Compass className="w-2.5 h-2.5" strokeWidth={1.8} aria-hidden="true" />
                 <span>星图</span>

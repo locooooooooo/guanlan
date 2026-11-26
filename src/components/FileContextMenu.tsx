@@ -423,7 +423,7 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
                 type="button"
                 role="menuitem"
                 data-menu-action="rename-folder"
-                title="原子重命名文件夹（子树内所有文件 file_id 保持连续）"
+                title="原子重命名文件夹（子树内所有文件身份与历史版本保持连续）"
                 className={MENU_ITEM_CLS}
                 onClick={() => runAndClose(() => onRenameFolder(target.relativePath))}
               >
@@ -436,7 +436,7 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
                 type="button"
                 role="menuitem"
                 data-menu-action="move-folder"
-                title="移动文件夹到其他目录（自动防成环，子树文件 file_id 保持连续）"
+                title="移动文件夹到其他目录（自动防成环，子树文件身份与历史保持连续）"
                 className={MENU_ITEM_CLS}
                 onClick={() => runAndClose(() => onMoveFolder(target.relativePath))}
               >
@@ -495,7 +495,7 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
                 type="button"
                 role="menuitem"
                 data-menu-action="rename-file"
-                title="同目录原子重命名（保持 file_id、历史版本与决定关联 100% 连续）"
+                title="同目录原子重命名（保持文件身份、历史版本与决定关联 100% 连续）"
                 className={MENU_ITEM_CLS}
                 onClick={() =>
                   runAndClose(() =>
@@ -537,7 +537,7 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
                 type="button"
                 role="menuitem"
                 data-menu-action="trash-file"
-                title="仅移入操作系统回收站（非永久删除，还原后自动重连原 file_id）"
+                title="仅移入操作系统回收站（非永久删除，还原后自动重连原文件身份）"
                 className={`${MENU_ITEM_CLS} text-[color:var(--btn-danger-ink)]`}
                 onClick={() =>
                   runAndClose(() =>
@@ -721,7 +721,7 @@ export const FileSystemActionBar: React.FC<FileSystemActionBarProps> = ({
           data-action="rename-file"
           className={compact ? compactTileClass : undefined}
           onClick={() => onRenameFile(opTarget)}
-          title="同目录原子重命名（保持 file_id、历史版本与决定关联连续）"
+          title="同目录原子重命名（保持文件身份、历史版本与决定关联连续）"
         >
           <Pencil className="w-3.5 h-3.5" />
           <span className="truncate">重命名</span>

@@ -23,6 +23,7 @@ import type { DesktopSessionState, RecentWorkspaceStatus } from '../services/des
 import type { ProjectEntryDto } from '../services/apiTypes';
 import { DecisionAssertion, DecisionSourceEvidence, FileFormat, FileRecord, WorkspaceConfig } from '../types/guanlan';
 import { SearchHit, unreadStatusLabel } from '../utils/guanlanEngine';
+import { buildHighlightSegments } from '../utils/commandPaletteGrammar';
 import { basenameOf } from '../utils/documentIdentity';
 import { taskPackageOf } from '../utils/taskPackages';
 import type { WorkspaceSource, FileFacets } from '../services/workspaceClient';
@@ -175,6 +176,10 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onMarkReadingBaselineFromIsland,
 }) => {
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const [searchDropdownDismissed, setSearchDropdownDismissed] = useState(false);
+  const [activeSearchHitIndex, setActiveSearchHitIndex] = useState(0);
+  const searchRootRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const [workspacePathInput, setWorkspacePathInput] = useState('');
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
@@ -258,6 +263,28 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
     };
   }, [isHelpOpen]);
 
+  const searchDropdownOpen = searchQuery.trim().length > 0 && !searchDropdownDismissed;
+  const clampedSearchHitIndex =
+    searchHits.length > 0 ? Math.min(activeSearchHitIndex, searchHits.length - 1) : 0;
+
+  useEffect(() => {
+    setActiveSearchHitIndex(0);
+    if (searchQuery.trim().length === 0) {
+      setSearchDropdownDismissed(false);
+    }
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (!searchDropdownOpen) return;
+    const handleDocMouseDown = (e: MouseEvent) => {
+      if (searchRootRef.current && !searchRootRef.current.contains(e.target as Node)) {
+        setSearchDropdownDismissed(true);
+      }
+    };
+    document.addEventListener('mousedown', handleDocMouseDown);
+    return () => document.removeEventListener('mousedown', handleDocMouseDown);
+  }, [searchDropdownOpen]);
+
   const formatCoverageLabel = (
     coverage: SearchHit['coverage'],
     format: FileFormat
@@ -294,7 +321,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               stage: 'decision',
               dotColor: 'var(--stage-ink-decision)',
               textColor: 'var(--stage-ink-decision-text)',
-              tintBg: 'color-mix(in srgb, var(--stage-ink-decision) 9%, white)',
+              tintBg: 'color-mix(in srgb, var(--stage-ink-decision) 10%, var(--card))',
               borderTint: 'color-mix(in srgb, var(--stage-ink-decision) 34%, transparent)',
               title: '目标工作区正被另一实例占用，请在面板中选择恢复或换目录',
               label: '目录被占用',
@@ -449,7 +476,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   };
 
   return (
-    <header className="relative z-30 select-none bg-background dark:bg-background text-[color:var(--ink-strong)] border-b border-border">
+    <header className="relative z-40 select-none bg-background dark:bg-background text-[color:var(--ink-strong)] border-b border-border">
       <div className="flex flex-wrap lg:flex-nowrap items-center justify-between gap-x-2 gap-y-1.5 px-2.5 sm:px-3.5 py-1.5 lg:py-0 min-h-[var(--chrome-h)] lg:h-[var(--chrome-h)] min-w-0 max-w-full">
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 min-w-0 max-w-full">
           {onToggleSidebar && (
@@ -807,22 +834,56 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             role="group"
             aria-label="核心行动"
           >
-            <div className="relative">
+            <div className="relative" ref={searchRootRef} data-topheader-search="">
               <div
                 className={`glass-input flex h-7 items-center rounded-[var(--r-ctl)] px-2 focus-within:border-[color:var(--ring)] focus-within:ring-2 focus-within:ring-[color:color-mix(in_srgb,var(--ring)_35%,transparent)] motion-safe:transition-all ${
                   isSearchExpanded || searchQuery
-                    ? 'w-36 sm:w-40 border-[color:var(--accent-iris)] ring-2 ring-[color:color-mix(in_srgb,var(--accent-iris)_22%,transparent)]'
+                    ? 'w-36 sm:w-44 border-[color:var(--accent-iris)] ring-2 ring-[color:color-mix(in_srgb,var(--accent-iris)_22%,transparent)]'
                     : 'w-[84px] sm:w-[92px] xl:w-[108px] hover:border-[color:var(--btn-secondary-border-hover)]'
                 }`}
               >
                 <Search className="w-3.5 h-3.5 text-[color:var(--ink-soft)] mr-1 shrink-0" />
                 <input
+                  ref={searchInputRef}
                   type="text"
                   aria-label="搜索文件、内容或编号"
                   value={searchQuery}
-                  onFocus={() => setIsSearchExpanded(true)}
+                  onFocus={() => {
+                    setIsSearchExpanded(true);
+                    setSearchDropdownDismissed(false);
+                  }}
                   onBlur={() => setIsSearchExpanded(false)}
-                  onChange={(e) => onSearchChange(e.target.value)}
+                  onChange={(e) => {
+                    setSearchDropdownDismissed(false);
+                    onSearchChange(e.target.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      if (searchQuery || searchDropdownOpen) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onSearchChange('');
+                        setSearchDropdownDismissed(false);
+                        searchInputRef.current?.blur();
+                      }
+                      return;
+                    }
+                    if (!searchDropdownOpen || searchHits.length === 0) return;
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setActiveSearchHitIndex((i) => (i + 1) % searchHits.length);
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setActiveSearchHitIndex((i) => (i - 1 + searchHits.length) % searchHits.length);
+                    } else if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const chosen = searchHits[clampedSearchHitIndex];
+                      if (chosen) {
+                        onSelectSearchHit(chosen);
+                        searchInputRef.current?.blur();
+                      }
+                    }
+                  }}
                   placeholder="检索"
                   className="w-full min-w-0 bg-transparent text-[color:var(--ink-strong)] placeholder-[color:var(--ink-soft)] focus-visible:outline-2 focus-visible:outline-[color:var(--ring)] rounded-[4px] text-[length:var(--text-ui)] leading-[var(--lh-ui)] motion-safe:transition-colors"
                 />
@@ -835,7 +896,10 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                   <button
                     type="button"
                     aria-label="清空搜索"
-                    onClick={() => onSearchChange('')}
+                    onClick={() => {
+                      onSearchChange('');
+                      setSearchDropdownDismissed(false);
+                    }}
                     className="cursor-pointer text-[color:var(--ink-faint)] hover:text-[color:var(--ink-strong)] ml-1"
                   >
                     <X className="w-3 h-3" />
@@ -843,19 +907,23 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 )}
               </div>
 
-              {searchQuery.trim().length > 0 && (
+              {searchDropdownOpen && (
                 <div
                   role="region"
                   aria-label="搜索结果列表"
-                  className="glass-pop glx-popover-in absolute right-0 top-full mt-2 w-[420px] rounded-[var(--r-card)] max-h-96 overflow-y-auto z-50 divide-y divide-[color:var(--glass-hairline)]"
+                  data-esc-layer="open"
+                  className="glass-pop glx-popover-in absolute right-0 top-full mt-2 w-[min(420px,calc(100vw-24px))] rounded-[var(--r-card)] max-h-96 overflow-y-auto z-50 divide-y divide-[color:var(--glass-hairline)]"
                 >
-                  <div className="px-3.5 py-2 bg-muted/60 flex items-center justify-between text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)]">
-                    <span>
+                  <div className="px-3.5 py-2 bg-muted/60 flex items-center justify-between gap-2 text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)]">
+                    <span className="truncate">
                       检索「<strong className="text-[color:var(--ink-strong)]">{searchQuery}</strong>」命中{' '}
                       <strong className="font-mono tabular-nums text-[color:var(--accent-violet-ink)]">
                         {searchHits.length}
                       </strong>{' '}
                       处{searchHitsTruncated ? '（已截断）' : ''}
+                    </span>
+                    <span className="shrink-0 hidden sm:inline font-mono text-[10px] text-[color:var(--ink-faint)]">
+                      ↑↓ · Enter · Esc
                     </span>
                   </div>
 
@@ -873,35 +941,67 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                       {config.enumSnapshot.totalCount} 文件名）
                     </div>
                   ) : (
-                    searchHits.map((hit, idx) => (
-                      <button
-                        key={`${hit.file_id}-${idx}`}
-                        type="button"
-                        onClick={() => onSelectSearchHit(hit)}
-                        className="w-full text-left px-3.5 py-2.5 hover:bg-accent/70 motion-safe:transition-colors flex flex-col gap-1 cursor-pointer"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-strong)] flex items-center gap-1.5 min-w-0">
-                            <FileText className="w-3.5 h-3.5 text-[color:var(--accent-wave)] shrink-0" />
-                            <span
-                              className="shrink-0 rounded-[var(--r-ctl)] border border-[color:var(--glass-hairline)] bg-card/80 px-1 py-px text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-medium text-[color:var(--ink-soft)]"
-                              title={`任务包：${taskPackageOf(hit.relative_path).name}`}
-                            >
-                              {taskPackageOf(hit.relative_path).name}
+                    searchHits.map((hit, idx) => {
+                      const isActive = idx === clampedSearchHitIndex;
+                      const fileBase = basenameOf(hit.relative_path);
+                      const titleSegs = buildHighlightSegments(fileBase, searchQuery);
+                      const snippetSegs = buildHighlightSegments(hit.snippet, searchQuery);
+                      return (
+                        <button
+                          key={`${hit.file_id}-${idx}`}
+                          type="button"
+                          data-search-hit-active={isActive ? 'true' : undefined}
+                          onMouseEnter={() => setActiveSearchHitIndex(idx)}
+                          onClick={() => onSelectSearchHit(hit)}
+                          className={`w-full text-left px-3.5 py-2.5 motion-safe:transition-colors flex flex-col gap-1 cursor-pointer ${
+                            isActive ? 'bg-accent/80' : 'hover:bg-accent/70'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-strong)] flex items-center gap-1.5 min-w-0">
+                              <FileText className="w-3.5 h-3.5 text-[color:var(--accent-wave)] shrink-0" />
+                              <span
+                                className="shrink-0 rounded-[var(--r-ctl)] border border-[color:var(--glass-hairline)] bg-card/80 px-1 py-px text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-medium text-[color:var(--ink-soft)]"
+                                title={`任务包：${taskPackageOf(hit.relative_path).name}`}
+                              >
+                                {taskPackageOf(hit.relative_path).name}
+                              </span>
+                              <span className="truncate font-mono" title={hit.relative_path}>
+                                {titleSegs.map((seg, si) =>
+                                  seg.hit ? (
+                                    <mark
+                                      key={si}
+                                      className="rounded-[3px] bg-[color:color-mix(in_srgb,var(--accent-iris)_22%,transparent)] px-0.5 text-[color:var(--ink-strong)]"
+                                    >
+                                      {seg.text}
+                                    </mark>
+                                  ) : (
+                                    <React.Fragment key={si}>{seg.text}</React.Fragment>
+                                  )
+                                )}
+                              </span>
                             </span>
-                            <span className="truncate font-mono" title={hit.relative_path}>
-                              {basenameOf(hit.relative_path)}
+                            <span className="text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)] shrink-0">
+                              {formatCoverageLabel(hit.coverage, hit.format)}
                             </span>
-                          </span>
-                          <span className="text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-soft)] shrink-0">
-                            {formatCoverageLabel(hit.coverage, hit.format)}
-                          </span>
-                        </div>
-                        <p className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-soft)] line-clamp-1">
-                          {hit.snippet}
-                        </p>
-                      </button>
-                    ))
+                          </div>
+                          <p className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-soft)] line-clamp-1">
+                            {snippetSegs.map((seg, si) =>
+                              seg.hit ? (
+                                <mark
+                                  key={si}
+                                  className="rounded-[3px] bg-[color:color-mix(in_srgb,var(--accent-iris)_22%,transparent)] px-0.5 font-medium text-[color:var(--ink-strong)]"
+                                >
+                                  {seg.text}
+                                </mark>
+                              ) : (
+                                <React.Fragment key={si}>{seg.text}</React.Fragment>
+                              )
+                            )}
+                          </p>
+                        </button>
+                      );
+                    })
                   )}
                 </div>
               )}
@@ -932,7 +1032,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 size="sm"
                 onClick={onOpenReviewBoard}
                 data-topheader-review-board=""
-                title="打开批阅看板（HITL 拍板唤醒与 Agent 回执分流）"
+                title="打开批阅看板（人工拍板与智能体回执分流）"
                 className="cursor-pointer !h-7 !px-2 !gap-1 whitespace-nowrap"
               >
                 <ClipboardList className="w-3.5 h-3.5 text-[color:var(--stage-ink-decision)] shrink-0" />
@@ -988,7 +1088,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             >
               <ClipboardCopy
                 className={`w-3.5 h-3.5 shrink-0 ${
-                  contextBasketCount > 0 ? 'text-[color:var(--accent-wave-bright)]' : 'text-[color:var(--ink-soft)]'
+                  contextBasketCount > 0 ? 'text-current' : 'text-[color:var(--ink-soft)]'
                 }`}
               />
               <span className={contextBasketCount > 0 ? '' : 'sr-only'}>证据篮</span>

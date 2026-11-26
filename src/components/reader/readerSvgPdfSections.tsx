@@ -506,8 +506,12 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
                   paperLightMode ? 'bg-[#F2F0EA]' : 'bg-[#232220]'
                 }`}
               >
-                <AlertTriangle className="w-6 h-6 text-amber-400" />
-                <p className="text-sm font-semibold text-amber-200">
+                <AlertTriangle className="w-6 h-6 text-amber-500 dark:text-amber-400" />
+                <p
+                  className={`text-sm font-semibold ${
+                    paperLightMode ? 'text-[#9A6A45]' : 'text-amber-200'
+                  }`}
+                >
                   此版本快照已过保留期，无法按版本直读原页
                 </p>
                 <p
@@ -515,7 +519,7 @@ export function ReaderPdfSection({ ctx }: { ctx: ReaderCtx }) {
                     paperLightMode ? 'text-[#6E6A61]' : 'text-[#A1A09A]'
                   }`}
                 >
-                  版本 {currentRev.revision_id} 仅保留元数据（大小 / SHA-256 / 观察时间）
+                  版本 v{currentRev.versionNumber} 仅保留元数据（大小 / SHA-256 / 观察时间）
                 </p>
                 <p
                   className={`text-xs ${

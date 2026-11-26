@@ -481,6 +481,52 @@
   max-width: var(--measure-read);
 }
 
+.glx-reader-frame {
+  container-type: inline-size;
+  container-name: reader-shell;
+}
+
+.glx-reader-header {
+  min-height: 2.75rem;
+}
+
+@container reader-shell (max-width: 980px) {
+  .glx-reader-header {
+    height: auto;
+    flex-wrap: wrap;
+    row-gap: 0.375rem;
+    padding-top: 0.4375rem;
+    padding-bottom: 0.4375rem;
+  }
+
+  .glx-reader-header > [data-reader-header-identity] {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+
+  .glx-reader-header > [data-reader-header-controls] {
+    flex: 1 1 100%;
+    padding-top: 0.375rem;
+    border-top: 1px solid var(--glass-hairline);
+  }
+
+  .glx-reader-header [data-reader-header-controls-sep] {
+    display: none;
+  }
+
+  .glx-reader-header [data-reader-toolbar] {
+    margin-left: auto;
+  }
+}
+
+@container reader-shell (max-width: 680px) {
+  .glx-reader-header [data-reader-doc-time-prefix],
+  .glx-reader-header [data-reader-initiative-name],
+  .glx-reader-header [data-reader-initiative-sep] {
+    display: none;
+  }
+}
+
 /* 夜间阅读模式（ReaderView 切至「深色」时局部作用域令牌覆写）：
    仅作用于 [data-reader-dark="true"] 子树，零污染浅色壳层与星图舷窗；
    使阅读顶栏、分段按钮、五阶段 Stepper 与大纲侧栏一键协同进入高对比夜间书房。 */

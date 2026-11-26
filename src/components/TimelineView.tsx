@@ -551,7 +551,10 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     if (ev.commit_time) {
       cardTitleParts.push(`Git提交：${ev.commit_time.slice(5, 16).replace('T', ' ')}`);
     }
-    if (file && ev.revision_id) cardTitleParts.push(`版本：${ev.revision_id}`);
+    if (file && ev.revision_id) {
+      const ver = revisionVersionById.get(ev.revision_id);
+      cardTitleParts.push(`版本：${ver !== undefined ? `v${ver}` : formatRevision(ev.revision_id)}`);
+    }
 
     return (
       <div
@@ -655,7 +658,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
               return (
                 <div
                   className="flex items-center gap-1.5 text-[length:var(--text-micro)] font-mono text-[color:var(--ink-soft)] truncate"
-                  title={`${file.relative_path}${ev.revision_id ? ` · ${ev.revision_id}` : ''}`}
+                  title={`${file.relative_path}${verText ? ` · ${verText}` : ''}`}
                 >
                   {subFolder && <span className="truncate opacity-80">{subFolder}</span>}
                   {subFolder && (showName || showVer) && (

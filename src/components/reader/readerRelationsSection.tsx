@@ -12,10 +12,15 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
     setGraphHopDepth,
     localGraph,
     onNavigateLinkedFile,
+    onChangeRevision,
+    onChangeSubMode,
     currentRev,
     onSelectDecision,
   } = ctx;
   if (subMode !== 'relations') return null;
+  const nodeLabelById = new Map(localGraph.nodes.map((n) => [n.id, n.label]));
+  const truncateGraphText = (text: string, max: number) =>
+    text.length > max ? `${text.slice(0, max - 1)}…` : text;
   return (
     <div
       className={`flex-1 overflow-y-auto p-6 space-y-5 ${
@@ -79,7 +84,11 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
         >
           <svg
             viewBox="0 0 920 420"
-            className="w-full h-96 bg-[#12141C] rounded border border-white/[0.08]"
+            className={`w-full h-96 rounded border ${
+              paperLightMode
+                ? 'bg-[#F4F1EA] border-[#E3E0D8]'
+                : 'bg-[#12141C] border-white/[0.08]'
+            }`}
             role="img"
             aria-label="局部对象一跳与二跳关系图"
           >
@@ -127,10 +136,10 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
                           y2={p2.y}
                           stroke={
                             edge.isInferred
-                              ? '#f59e0b'
+                              ? paperLightMode ? '#B4691E' : '#f59e0b'
                               : edge.type === 'decision_basis'
-                                ? '#38bdf8'
-                                : '#64748b'
+                                ? paperLightMode ? '#0284c7' : '#38bdf8'
+                                : paperLightMode ? '#948F84' : '#64748b'
                           }
                           strokeWidth={edge.isInferred ? 1.5 : 2}
                           strokeDasharray={edge.isInferred ? '6,4' : undefined}
@@ -138,7 +147,7 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
                         <text
                           x={midX}
                           y={midY - 6}
-                          fill="#94a3b8"
+                          fill={paperLightMode ? '#6E6A61' : '#94a3b8'}
                           fontSize="10"
                           textAnchor="middle"
                         >
@@ -152,6 +161,42 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
                     const pos = positions.get(node.id);
                     if (!pos) return null;
                     const isCenter = node.hop === 0;
+                    const nodeFill = paperLightMode
+                      ? isCenter
+                        ? '#2A2742'
+                        : node.kind === 'decision'
+                          ? '#FDF4E7'
+                          : '#FFFFFF'
+                      : isCenter
+                        ? '#0284c7'
+                        : node.kind === 'decision'
+                          ? '#451a03'
+                          : '#1e293b';
+                    const nodeStroke = paperLightMode
+                      ? isCenter
+                        ? '#6D5BD0'
+                        : node.kind === 'decision'
+                          ? '#D99B52'
+                          : '#D8D4C9'
+                      : isCenter
+                        ? '#7dd3fc'
+                        : node.kind === 'decision'
+                          ? '#f59e0b'
+                          : '#475569';
+                    const titleFill = paperLightMode
+                      ? isCenter
+                        ? '#FAF9F5'
+                        : node.kind === 'decision'
+                          ? '#7C4A15'
+                          : '#1F1E1D'
+                      : '#f8fafc';
+                    const subFill = paperLightMode
+                      ? isCenter
+                        ? '#D8D4EC'
+                        : '#6E6A61'
+                      : isCenter
+                        ? '#e0f2fe'
+                        : '#94a3b8';
                     return (
                       <g
                         key={node.id}
@@ -166,47 +211,39 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
                             });
                           } else if (node.kind === 'decision') {
                             onSelectDecision(node.id);
+                          } else if (node.kind === 'revision') {
+                            onChangeRevision(node.id);
+                            onChangeSubMode('read');
                           }
                         }}
                       >
+                        <title>{`${node.label} · ${node.subLabel}`}</title>
                         <rect
                           width="170"
                           height="48"
                           rx="8"
-                          fill={
-                            isCenter
-                              ? '#0284c7'
-                              : node.kind === 'decision'
-                                ? '#451a03'
-                                : '#1e293b'
-                          }
-                          stroke={
-                            isCenter
-                              ? '#7dd3fc'
-                              : node.kind === 'decision'
-                                ? '#f59e0b'
-                                : '#475569'
-                          }
+                          fill={nodeFill}
+                          stroke={nodeStroke}
                           strokeWidth={isCenter ? '2' : '1.5'}
                         />
                         <text
                           x="85"
                           y="20"
-                          fill="#f8fafc"
+                          fill={titleFill}
                           fontSize="11"
                           fontWeight="600"
                           textAnchor="middle"
                         >
-                          {node.label.slice(0, 16)}
+                          {truncateGraphText(node.label, 16)}
                         </text>
                         <text
                           x="85"
                           y="36"
-                          fill={isCenter ? '#e0f2fe' : '#94a3b8'}
+                          fill={subFill}
                           fontSize="9.5"
                           textAnchor="middle"
                         >
-                          {node.subLabel.slice(0, 22)}
+                          {truncateGraphText(node.subLabel, 22)}
                         </text>
                       </g>
                     );
@@ -225,7 +262,10 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
               关系证据与方向明细（共 {localGraph.edges.length} 条连线 · 节点上限 80）：
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {localGraph.edges.map((edge) => (
+              {localGraph.edges.map((edge) => {
+                const srcLabel = nodeLabelById.get(edge.source_id) ?? '关联节点';
+                const dstLabel = nodeLabelById.get(edge.target_id) ?? '关联节点';
+                return (
                 <div
                   key={edge.edge_id}
                   className={`p-2.5 rounded border text-xs flex flex-col gap-1 ${
@@ -233,7 +273,7 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
                       ? 'bg-white border-[#E3E0D8]'
                       : 'bg-[#1D202C] border-white/[0.08]'
                   }`}
-                  title={`${edge.source_id} → ${edge.target_id}`}
+                  title={`${srcLabel} → ${dstLabel}`}
                 >
                   <div className="flex items-center justify-between">
                     <span
@@ -263,7 +303,8 @@ export function ReaderRelationsSection({ ctx }: { ctx: ReaderCtx }) {
                     {edge.reason}
                   </p>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

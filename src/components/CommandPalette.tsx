@@ -992,7 +992,7 @@ export function CommandPalette(props: CommandPaletteProps): React.ReactElement |
               <Kbd>Ctrl+Enter</Kbd> 定位目录
             </span>
             <span className="inline-flex items-center gap-1">
-              <Kbd>Tab</Kbd> Tab 加入证据篮
+              <Kbd>Tab</Kbd> 加入证据篮
             </span>
             <span className="inline-flex items-center gap-1">
               <Kbd>Esc</Kbd> 关闭

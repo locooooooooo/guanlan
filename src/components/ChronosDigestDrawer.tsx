@@ -123,7 +123,7 @@ export const ChronosDigestDrawer: React.FC<ChronosDigestDrawerProps> = ({
                 司辰手记 · 时光沉淀简报
               </h2>
               <p className="mt-0.5 font-mono text-[11px] text-muted-foreground tabular-nums">
-                {spanText} · 基于真实事件、版本链与 L4A 摘要本地生成
+                {spanText} · 基于真实事件、版本链与本地语义摘要生成
               </p>
             </div>
           </div>

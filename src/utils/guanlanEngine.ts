@@ -845,9 +845,10 @@ export function buildLocalRelationGraph(
       const rollback = seenAt !== undefined && seenAt < i;
       firstSeenByHash.set(rev.content_sha256, i);
       const revNodeId = rev.revision_id;
+      const isLatestRev = revNodeId === centerFile.current_revision_id;
       const revNode: GraphNode = {
         id: revNodeId,
-        label: `v${rev.versionNumber} (${rev.revision_id})`,
+        label: isLatestRev ? `v${rev.versionNumber}（最新）` : `v${rev.versionNumber}`,
         subLabel: formatLocalStamp(rev.observed_at),
         kind: 'revision',
         hop: 1,

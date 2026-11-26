@@ -61,7 +61,7 @@ export const REVIEW_BOARD_LANES: ReadonlyArray<{
   { key: 'pending_decision', label: '待拍板', description: '存在阻塞级 P0/P1 未决或人工挂起' },
   { key: 'awaiting_receipt', label: '待批阅回执', description: '智能体已交草案回执，须经人工批阅' },
   { key: 'dispatchable', label: '可派发', description: '阻塞已清零，可交办智能体或推进下一步' },
-  { key: 'agent_running', label: 'Agent 运行中', description: '执行/交付槽活跃运行，等待回执' },
+  { key: 'agent_running', label: '智能体运行中', description: '执行/交付槽活跃运行，等待回执' },
   { key: 'completed', label: '已办结', description: '全部清单、拍板与回执核验已完成' },
   { key: 'unknown', label: '状态未知', description: '无回执或进程失联，需人工孤儿修复' },
 ];
@@ -350,7 +350,7 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
               <ClipboardList className="w-4 h-4" />
             </span>
             <h2 className="font-serif-claude text-[17px] leading-[1.35] font-semibold tracking-[-0.01em] truncate">
-              批阅看板 · HITL 拍板与回执联动
+              批阅看板 · 人工拍板与回执联动
             </h2>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -550,7 +550,7 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
                         <div
                           key={stmt.statement_id}
                           data-board-pending-stmt={stmt.statement_id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-[9px] border border-[color:color-mix(in_srgb,var(--stage-ink-decision)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--stage-ink-decision)_6%,white)] px-2.5 py-1.5"
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-[9px] border border-[color:color-mix(in_srgb,var(--stage-ink-decision)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--stage-ink-decision)_10%,var(--card))] px-2.5 py-1.5"
                         >
                           <div className="min-w-0 flex-1">
                             <span className="font-mono text-[10.5px] font-semibold text-[color:var(--stage-ink-decision-text)] mr-1.5">
@@ -598,7 +598,7 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
                       <div
                         key={draft.draft_id}
                         data-board-draft={draft.draft_id}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-[9px] border border-[color:color-mix(in_srgb,var(--accent-iris)_28%,transparent)] bg-[color:color-mix(in_srgb,var(--accent-iris)_6%,white)] px-2.5 py-1.5"
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-[9px] border border-[color:color-mix(in_srgb,var(--accent-iris)_28%,transparent)] bg-[color:color-mix(in_srgb,var(--accent-iris)_10%,var(--card))] px-2.5 py-1.5"
                       >
                         <div className="min-w-0 flex-1 text-[length:var(--text-ui)]">
                           <span className="font-mono text-[10.5px] font-semibold text-[color:var(--accent-iris-deep)] mr-1.5">
@@ -634,7 +634,7 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
                 {card.orphan && (
                   <div
                     data-board-orphan={card.orphan.node_id}
-                    className="rounded-[10px] border border-[color:var(--stage-ink-anomaly)] bg-[color:color-mix(in_srgb,var(--stage-ink-anomaly)_8%,white)] p-3 space-y-2"
+                    className="rounded-[10px] border border-[color:var(--stage-ink-anomaly)] bg-[color:color-mix(in_srgb,var(--stage-ink-anomaly)_10%,var(--card))] p-3 space-y-2"
                   >
                     <div className="flex items-start gap-2 text-[length:var(--text-ui)] text-[color:var(--stage-ink-anomaly-text)]">
                       <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />

@@ -70,7 +70,8 @@ test('palette：关闭时渲染 null；打开时具备 esc-layer/输入/底栏�
   assert.ok(html.includes('data-esc-layer="open"'), '浮层标记（App Esc 阶梯/Space 守卫依赖）');
   assert.ok(html.includes('data-command-palette-input'), '输入框存在（呼出即可输入）');
   assert.ok(html.includes('Ctrl+Enter'), '底栏键位提示常驻');
-  assert.ok(html.includes('Tab 加入证据篮'), 'Tab 闭环提示');
+  assert.ok(html.includes('>Tab<') && html.includes('加入证据篮'), 'Tab 闭环提示');
+  assert.ok(!html.includes('</kbd> Tab '), '底栏快捷键胶囊后不得重复拼接 Tab 文案');
   assert.ok(html.includes('没有匹配结果'), '空列表占位');
 });
 

@@ -211,7 +211,7 @@ export const FileOpsModal: React.FC<FileOpsModalProps> = ({
       ? {
           icon: <Pencil className="w-4 h-4 text-[color:var(--accent-iris-deep)] shrink-0" />,
           title: '安全重命名',
-          subtitle: '同目录原子改名，file_id、版本链、关联决定与阅读进度 100% 连续',
+          subtitle: '同目录原子改名，文件身份、版本链、关联决定与阅读进度 100% 连续',
         }
       : request.kind === 'move'
         ? {

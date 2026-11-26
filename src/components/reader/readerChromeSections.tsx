@@ -397,10 +397,13 @@ function InitiativeStageDropdown({ ctx }: { ctx: ReaderCtx }) {
             : 'text-white/65 hover:bg-white/[0.08] hover:text-white'
         }`}
       >
-        <span className="max-w-[9rem] truncate font-medium text-[color:var(--ink-strong)]">
+        <span
+          data-reader-initiative-name=""
+          className="max-w-[9rem] truncate font-medium text-[color:var(--ink-strong)]"
+        >
           {activePackage.name}
         </span>
-        <span aria-hidden="true" className="opacity-45">·</span>
+        <span data-reader-initiative-sep="" aria-hidden="true" className="opacity-45">·</span>
         <span className="font-medium text-[color:var(--accent-iris-ink)]">{stageShort}</span>
         <ChevronDown
           className={`w-3 h-3 shrink-0 opacity-60 transition-transform ${open ? 'rotate-180' : ''}`}
@@ -645,10 +648,16 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
     currentRev.observed_at,
     currentRev.content_sha256 !== '',
   );
+  const rollbackMatchedRev = rollbackInfo.matchesEarlierRevisionId
+    ? activeFile.revisions.find((r) => r.revision_id === rollbackInfo.matchesEarlierRevisionId)
+    : undefined;
+  const rollbackTargetLabel = rollbackMatchedRev
+    ? `v${rollbackMatchedRev.versionNumber}`
+    : '早期版本';
   return (
     <div
       data-reader-header=""
-      className={`relative z-20 h-11 px-4 backdrop-blur-xl flex items-center gap-3 transition-colors ${
+      className={`glx-reader-header relative z-20 h-11 px-4 backdrop-blur-xl flex items-center gap-3 transition-colors ${
         paperLightMode
           ? 'bg-white/85 shadow-[0_1px_0_rgba(38,36,61,0.06),0_6px_18px_-12px_rgba(38,36,61,0.09)]'
           : 'bg-[#151822]/95 shadow-[0_1px_0_rgba(255,255,255,0.08),0_10px_24px_-12px_rgba(0,0,0,0.65)]'
@@ -666,7 +675,11 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
         });
       }}
     >
-      <div className="flex-1 min-w-0 flex items-center gap-1.5">
+      <div
+        data-reader-header-identity=""
+        className="flex-1 min-w-0 flex items-center gap-1.5"
+      >
+        <div className="min-w-0 flex items-center gap-1.5">
         {returnBreadcrumb && (
           <button
             type="button"
@@ -749,6 +762,7 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
             </span>
           </span>
         </div>
+        </div>
         <div className="shrink-0 flex items-center gap-1 text-[length:var(--text-micro)] leading-[var(--lh-micro)] tabular-nums text-[color:var(--ink-soft)]">
           <div>
             <button
@@ -785,7 +799,7 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
           >
             <CalendarDays className="w-3 h-3 shrink-0 opacity-70" aria-hidden="true" />
             <span>
-              {docTime.prefix}
+              <span data-reader-doc-time-prefix="">{docTime.prefix}</span>
               <time
                 dateTime={docTime.dateTime}
                 className="font-semibold tabular-nums text-[color:var(--ink-strong)]"
@@ -799,16 +813,19 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
               <span aria-hidden="true">·</span>
               <span
                 className="max-w-[130px] truncate text-[color:var(--stage-ink-decision-text)]"
-                title={`A→B→A 恢复自 ${rollbackInfo.matchesEarlierRevisionId}`}
+                title={`内容回滚：与早期版本 ${rollbackTargetLabel} 一致`}
               >
-                A→B→A 恢复自 {rollbackInfo.matchesEarlierRevisionId}
+                恢复自 {rollbackTargetLabel}
               </span>
             </>
           )}
         </div>
       </div>
 
-      <div className="shrink-0 flex items-center gap-2">
+      <div
+        data-reader-header-controls=""
+        className="shrink-0 flex items-center gap-2"
+      >
         {visibleNotice && (
           <ReaderChangeNoticeChip
             count={visibleNotice.count}
@@ -895,6 +912,7 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
         </div>
 
         <span
+          data-reader-header-controls-sep=""
           aria-hidden="true"
           className="h-3.5 w-px bg-[color:var(--glass-hairline)] shrink-0"
         />
