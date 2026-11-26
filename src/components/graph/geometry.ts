@@ -71,6 +71,12 @@ export function dateCardChronosGap(trunkX: number): number {
 export const FIXED_TEXT_TRUNK_DX = -170;
 /** C2：主干时间轴纵向呼吸位（轴顶/轴底各让出 36px，不顶着主节点/底端） */
 export const TRUNK_AXIS_PAD = 36;
+export const TRUNK_DOCK_CLEARANCE_PX = 128;
+
+export function computeSafeTrunkEndY(stageHeight: number): number {
+  if (!Number.isFinite(stageHeight) || stageHeight <= 0) return 640;
+  return Math.max(500, Math.min(640, Math.round(stageHeight - TRUNK_DOCK_CLEARANCE_PX)));
+}
 /** 3.4：点日期/司辰切版本时的运镜时长（ms）——与 index.css 的 --dur-pan 同值 */
 export const PAN_TRANSITION_MS = 500;
 /** 3.2：展开时内部子卡的弹簧交错步长（ms，契约 40ms） */

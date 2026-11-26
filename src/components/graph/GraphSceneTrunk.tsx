@@ -267,8 +267,9 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
                 }
 
                 if (tick.isGap) {
+                  const pillW = Math.max(46, Math.round(tickDisplayLabel.length * 7 + 14));
                   return (
-                    <g key={`milestone-${tick.date}`} className="d3-no-pan">
+                    <g key={`milestone-${tick.date}`} className="d3-no-pan" data-trunk-gap-label={tick.date}>
                       <title>{`跳过 ${tick.gapDays ?? 0} 个无事件空档日`}</title>
                       <line
                         x1={trunkX - 14}
@@ -280,10 +281,22 @@ export function GraphSceneTrunk({ ctx }: { ctx: GraphCanvasCtx }) {
                         strokeDasharray="2 3"
                         opacity="0.7"
                       />
+                      <rect
+                        x={trunkX + 16}
+                        y={y - 7.5}
+                        width={pillW}
+                        height={15}
+                        rx="4"
+                        style={{
+                          fill: 'color-mix(in srgb, var(--cv-void) 92%, var(--cv-panel))',
+                          stroke: 'color-mix(in srgb, var(--cv-ink-meta) 26%, transparent)',
+                        }}
+                        strokeWidth="0.75"
+                      />
                       <text
-                        x={trunkX - 18}
+                        x={trunkX + 16 + pillW / 2}
                         y={y + 3}
-                        textAnchor="end"
+                        textAnchor="middle"
                         style={{ fill: 'var(--cv-ink-meta)' }}
                         fontSize="8.5"
                         fontFamily="var(--font-mono)"

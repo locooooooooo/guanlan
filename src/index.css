@@ -821,20 +821,20 @@
   --cv-hairline-ink: #26243D; /* ≈--glass-hairline 相位（8% 白→墨） */
   --cv-shadow-ink: #5446A0; /* =--glass-shadow 同相 */
   --cv-dot: rgba(35, 33, 80, 0.05); /* =.glass-page 点阵配方 */
-  /* B */
-  --cv-ink: var(--ink-strong);
-  --cv-ink-2: var(--ink-strong);
-  --cv-ink-3: var(--ink-soft);
-  --cv-ink-muted: var(--ink-onmuteglass);
-  --cv-ink-meta: var(--ink-onmuteglass);
-  --cv-ink-dim: var(--ink-soft);
-  --cv-ink-ghost: var(--ink-faint);
+  /* B · 纸面档独立浅底墨色，严禁继承 html.dark 可变 --ink-* 令牌 */
+  --cv-ink: #26243D;
+  --cv-ink-2: #26243D;
+  --cv-ink-3: #5A5779;
+  --cv-ink-muted: #6F6C8C;
+  --cv-ink-meta: #6F6C8C;
+  --cv-ink-dim: #5A5779;
+  --cv-ink-ghost: #64627B;
   /* C */
   --cv-brand: #B4530A; /* 浅底 4.77:1，文字与图形均满足对比度 */
   --cv-brand-hover: #9A4208;
-  --cv-brand-ink: var(--accent-wave);
+  --cv-brand-ink: #A84A1A;
   --cv-lav: #7C6FD0; /* 值同 --accent-iris，保持独立令牌避免语义串写 */
-  --cv-lav-ink: var(--accent-iris-ink);
+  --cv-lav-ink: #5E4BC0;
   --cv-amber: #A8762B; /* 值同 --stage-ink-decision，独立令牌 */
   --cv-amber-ink: #8A621E; /* 值同 --stage-ink-decision-text，独立令牌 */
   /* D */
@@ -859,7 +859,7 @@
   --cv-ref-out: #0E7490;
   --cv-trunk: #8D8AA6; /* 纸面底图形对比度 3.15:1 */
   /* 派生 */
-  --cv-on-brand: var(--paper-on-ink); /* 浅档主钮字 4.71:1 */
+  --cv-on-brand: #F4F8FF; /* 浅档主钮字 4.71:1 */
   --cv-line-strong: #7D6B54; /* 降饱和暖褐：白卡上 5.07:1 图形级 */
   /* 浅档底部药丸选中态：#1F2937 底白字（14.65:1） */
   --cv-pill-active-bg: #1F2937;
@@ -868,10 +868,30 @@
   --cv-axis-title-bg: #FFFFFF;
   --cv-axis-title-line: color-mix(in srgb, #1F2937 18%, transparent);
   --cv-axis-title-ink: #1F2937;
-  --cv-seg-active-bg: var(--ink-anchor); /* =壳层控件语法 */
-  --cv-seg-active-ink: var(--paper-on-ink); /* 15.49:1 */
-  --cv-seg-idle: var(--ink-soft); /* slot 复合底上 5.79:1 */
-  --cv-seg-idle-hover: var(--ink-soft);
+  --cv-seg-active-bg: #112030; /* =浅色壳层控件语法，隔离 html.dark */
+  --cv-seg-active-ink: #F4F8FF; /* 15.49:1 */
+  --cv-seg-idle: #5A5779; /* slot 复合底上 5.79:1 */
+  --cv-seg-idle-hover: #26243D;
+  /* 纸面舷窗内部挂载的壳层原语同步锁回浅档墨色与表面，防 html.dark 透穿 */
+  --ink-strong: #26243D;
+  --ink-soft: #5A5779;
+  --ink-faint: #64627B;
+  --ink-onmuteglass: #6F6C8C;
+  --ink-anchor: #112030;
+  --paper-on-ink: #F4F8FF;
+  --accent-iris-deep: #6D5BD0;
+  --accent-iris-ink: #5E4BC0;
+  --accent-wave: #A84A1A;
+  --glass-hairline: rgba(35, 33, 80, 0.08);
+  --glass-hairline-strong: rgba(35, 33, 80, 0.25);
+  --glass-shadow: 0 2px 8px rgba(17, 24, 39, 0.06);
+  --foreground: #26243D;
+  --muted-foreground: #5A5779;
+  --card: #FFFFFF;
+  --card-foreground: #26243D;
+  --popover: #FFFFFF;
+  --popover-foreground: #26243D;
+  --border: rgba(35, 33, 80, 0.10);
   /* 纸面档悬浮阴影：轻盈冷灰层次，消除高饱和阴影产生的紫晕 */
   --cv-shadow-elevated: 0 10px 28px -4px rgba(38, 36, 61, 0.10), 0 2px 6px rgba(38, 36, 61, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.85);
 
@@ -880,8 +900,8 @@
   background-image:
     radial-gradient(760px 440px at 14% 8%, rgba(124, 111, 208, 0.065), transparent 65%),
     radial-gradient(640px 380px at 88% 86%, rgba(237, 138, 80, 0.055), transparent 65%);
-  border: 1px solid var(--glass-hairline);
-  box-shadow: var(--glass-shadow);
+  border: 1px solid rgba(35, 33, 80, 0.10);
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.06);
 }
 
 /* 泳道光束滤镜按主题切换：暗档强发光（stdDeviation 2.6），

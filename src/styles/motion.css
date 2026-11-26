@@ -254,23 +254,23 @@
 
 /* 3.10 斜叠微缩卡悬停展扇（纯 transform 过渡，悬停时前后纸片轻柔展角与上浮） */
 .glx-fan-front {
-  transform: rotate(-3.5deg) translate3d(0, 0, 0);
+  transform: rotate(-1.8deg) translate3d(0, 0, 0);
   transition: transform var(--dur-3) var(--ease-spring), box-shadow var(--dur-2) var(--ease-spring);
 }
 
 .glx-fan-back {
-  transform: rotate(4.5deg) translate3d(0, 0, 0);
+  transform: rotate(1.8deg) translate3d(0, 0, 0);
   transition: transform var(--dur-3) var(--ease-spring), opacity var(--dur-2) var(--ease-fade);
 }
 
 .group:hover .glx-fan-front,
 .glx-fan-stage:hover .glx-fan-front {
-  transform: rotate(-6deg) translate3d(-4px, -5px, 0) scale(1.02);
+  transform: rotate(-3deg) translate3d(-2px, -3px, 0) scale(1.015);
 }
 
 .group:hover .glx-fan-back,
 .glx-fan-stage:hover .glx-fan-back {
-  transform: rotate(8deg) translate3d(6px, -2px, 0) scale(1.01);
+  transform: rotate(3deg) translate3d(2px, 1px, 0) scale(1.01);
 }
 
 /* 3.11 弹层遮罩 / 居中模态框 / 右侧抽屉进场（纯 transform + opacity，合成器友好） */

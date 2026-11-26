@@ -83,6 +83,7 @@ import {
   SOURCES_PANEL_SAFE_LEFT,
   PAN_TRANSITION_MS,
   TRUNK_AXIS_PAD,
+  computeSafeTrunkEndY,
   dateCardRailX,
   fanOutHeaderCapsuleWidth,
   type CapabilityCode,
@@ -342,7 +343,7 @@ export function useGraphCanvasController({
   const mainHubPos = nodePositions.main_hub || DEFAULT_NODE_POSITIONS.main_hub;
   const trunkX = mainHubPos.x + 62;
   const trunkStartY = mainHubPos.y + 74;
-  const trunkEndY = 710;
+  const trunkEndY = computeSafeTrunkEndY(stageHeight);
   const TRUNK_AXIS_TOP = trunkStartY + TRUNK_AXIS_PAD;
   const TRUNK_AXIS_BOTTOM = trunkEndY - TRUNK_AXIS_PAD;
   const chronosIdx = trunkTicks.findIndex((t) => t.date === scene.activeDate);
@@ -373,11 +374,12 @@ export function useGraphCanvasController({
   const rulerLabelStep = useMemo(() => {
     const n = trunkTicks.length;
     if (n <= 1) return 1;
-    const perDay = 532 / (n - 1);
+    const span = Math.max(240, TRUNK_AXIS_BOTTOM - TRUNK_AXIS_TOP);
+    const perDay = span / (n - 1);
     return [1, 2, 3, 5, 7, 10, 14, 30, 60, 90, 180, 365].find(
       (step) => step * perDay >= 30
     ) ?? 365;
-  }, [trunkTicks]);
+  }, [trunkTicks, TRUNK_AXIS_TOP, TRUNK_AXIS_BOTTOM]);
 
   const fanOutHeaderLine =
     scene.hasRealEvents && scene.active
@@ -1343,8 +1345,8 @@ export function useGraphCanvasController({
     const cx = (triptychLeft + triptychRight) / 2;
     const cy = (TRUNK_AXIS_TOP + fanOutBounds.y + fanOutBounds.height) / 2 - 20;
     const rawX = stageWidth / 2 - cx * k;
-    const usableH = Math.max(240, stageHeight - 72);
-    const rawY = Math.max(28, Math.min(48, usableH / 2 - cy * k));
+    const usableH = Math.max(240, stageHeight - 96);
+    const rawY = Math.max(24, Math.min(40, usableH / 2 - cy * k));
     const safeLeft = sourcesPanelCollapsed
       ? SOURCES_PANEL_COLLAPSED_LEFT
       : SOURCES_PANEL_SAFE_LEFT;

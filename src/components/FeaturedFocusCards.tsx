@@ -70,8 +70,8 @@ const MiniDecisionCard: React.FC<{
     : 'var(--stage-ink-decision-text)';
   const posClass =
     layer === 0
-      ? 'left-0 top-0.5 z-[2] glx-fan-front'
-      : 'right-0 bottom-0.5 z-[1] glx-fan-back';
+      ? 'left-1 top-1 z-[2] glx-fan-front'
+      : 'right-1 bottom-1 z-[1] glx-fan-back';
   const cleanQuestion = cleanDisplayText(item.question) || item.question;
   return (
     <div className={`absolute ${posClass}`} data-featured-mini-layer={layer}>
@@ -80,8 +80,8 @@ const MiniDecisionCard: React.FC<{
         onClick={() => onOpenDecision(item.decisionId)}
         title={`${item.status} · ${cleanQuestion}`}
         aria-label={`查看决策：${cleanQuestion}`}
-        className={`group/mini glx-sheen-card flex w-[184px] cursor-pointer flex-col justify-between overflow-hidden rounded-[12px] border border-border/80 bg-card/95 text-left shadow-[0_6px_18px_-6px_rgba(38,36,61,0.14)] dark:shadow-[0_8px_20px_-6px_rgba(0,0,0,0.48)] hover:border-[color:color-mix(in_srgb,var(--accent-wave)_45%,transparent)] hover:shadow-[0_12px_24px_-6px_rgba(168,74,26,0.22)] motion-safe:transition-shadow ${
-          layer === 0 ? 'h-[70px] px-2.5 py-2' : 'h-[44px] px-2.5 py-1.5'
+        className={`group/mini glx-sheen-card flex w-[192px] cursor-pointer flex-col justify-between overflow-hidden rounded-[12px] border border-border bg-popover/95 text-left shadow-[0_6px_18px_-6px_rgba(38,36,61,0.14)] dark:shadow-[0_8px_20px_-6px_rgba(0,0,0,0.48)] hover:border-[color:color-mix(in_srgb,var(--accent-wave)_45%,transparent)] hover:shadow-[0_12px_24px_-6px_rgba(168,74,26,0.22)] motion-safe:transition-shadow ${
+          layer === 0 ? 'h-[70px] px-3 py-2' : 'h-[44px] px-3 py-1.5'
         }`}
       >
         {layer === 0 ? (
@@ -173,7 +173,7 @@ const FeaturedFocusCards: React.FC<FeaturedFocusCardsProps> = ({
             </div>
           </div>
 
-          <div className="relative h-[120px] w-[204px] shrink-0 hidden sm:block">
+          <div className="relative h-[132px] w-[212px] shrink-0 hidden sm:block">
             {decisionItems.length === 0 ? (
               <div
                 aria-hidden="true"
@@ -255,8 +255,8 @@ const FeaturedFocusCards: React.FC<FeaturedFocusCardsProps> = ({
           </span>
         </span>
 
-        <span className="relative h-[120px] w-[184px] shrink-0 hidden sm:block" aria-hidden="true">
-          <span className="glx-fan-front absolute right-2 top-2 flex h-[100px] w-[164px] flex-col justify-between overflow-hidden rounded-[var(--r-block)] border border-border bg-card p-3 shadow-xs">
+        <span className="relative h-[132px] w-[188px] shrink-0 hidden sm:block" aria-hidden="true">
+          <span className="glx-fan-front absolute right-2.5 top-3 flex h-[108px] w-[166px] flex-col justify-between overflow-hidden rounded-[var(--r-block)] border border-border bg-popover/95 p-3 shadow-[0_6px_18px_-6px_rgba(38,36,61,0.14)] dark:shadow-[0_8px_20px_-6px_rgba(0,0,0,0.48)]">
             {coverImage ? (
               <img
                 src={coverImage}
