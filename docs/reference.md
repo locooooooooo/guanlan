@@ -107,6 +107,7 @@ guanlan-desktop --unregister-context-menu
 | `GUANLAN_ENDPOINT` | `guanlan mcp` | 代理要连接的服务端点 | 无。缺失时退出 1 |
 | `GUANLAN_DIST_DIR` | `guanlan serve` | 静态前端目录，存在才挂载 | 可执行文件同级的 `dist/` |
 | `GUANLAN_PROJECTS_FILE` | 服务 | 项目表文件路径；填 `none` 关闭持久化 | `<GUANLAN_DATA_DIR>/projects.json`，否则 `%LOCALAPPDATA%\Guanlan\projects.json` |
+| `GUANLAN_FOLDER_CACHE_MS` | 服务 | 目录清单缓存有效期（毫秒）；填 `0` 每次重扫，非法或负数回落默认 | 3000 |
 | `GUANLAN_QUERY_POOL_SIZE` | 查询执行器 | 只读连接数，也是并发执行上限 | 4 |
 | `GUANLAN_QUERY_MAX_QUEUE` | 查询执行器 | 排队上限，满了立即返回 `INDEX_BUSY` | 64 |
 | `GUANLAN_QUERY_WAIT_MS` | 查询执行器 | 排队等待超时 | 5000 |
