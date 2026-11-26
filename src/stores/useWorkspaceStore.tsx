@@ -348,6 +348,8 @@ function draftTimestampIndex(items: { file_id: string; created_at: string }[]): 
 }
 
 const SPOTLIGHT_EMPTY_DIMMED: ReadonlySet<string> = new Set<string>();
+const SPOTLIGHT_EMPTY_ITEMS: SpotlightChangeItem[] = [];
+const EMPTY_FOLDER_OPTIONS: string[] = [];
 
 
 export function useWorkspaceStore() {
@@ -373,6 +375,7 @@ export function useWorkspaceStore() {
 
   const [config, setConfig] = useState<WorkspaceConfig>(EMPTY_WORKSPACE_CONFIG);
   const [files, setFiles] = useState<FileRecord[]>([]);
+  const [hydratedFilesById, setHydratedFilesById] = useState<Record<string, FileRecord>>({});
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [decisions, setDecisions] = useState<DecisionAssertion[]>([]);
   const [decisionsUnresolvedTotal, setDecisionsUnresolvedTotal] = useState<number | null>(null);
@@ -618,8 +621,16 @@ export function useWorkspaceStore() {
 
   const applyFileSummaries = useCallback(
     (items: FileSummary[]) => {
+      const invalidatedHydratedIds: string[] = [];
+      const refreshedHydrated = new Map<string, FileRecord>();
       for (const item of items) {
-        if (item.status === 'missing' || item.status === 'trashed') continue;
+        if (item.status === 'missing' || item.status === 'trashed') {
+          if (detailLoadedIdsRef.current.has(item.file_id)) {
+            detailLoadedIdsRef.current.delete(item.file_id);
+            invalidatedHydratedIds.push(item.file_id);
+          }
+          continue;
+        }
         const existing = fileCacheRef.current.get(item.file_id);
         const next = fileSummaryToFileRecord(item);
         if (existing && detailLoadedIdsRef.current.has(item.file_id)) {
@@ -628,8 +639,10 @@ export function useWorkspaceStore() {
             existing.revisions.some((r) => r.revision_id === next.current_revision_id);
           if (existing.current_revision_id === next.current_revision_id && hasCurrent) {
             next.revisions = existing.revisions;
+            refreshedHydrated.set(item.file_id, next);
           } else {
             detailLoadedIdsRef.current.delete(item.file_id);
+            invalidatedHydratedIds.push(item.file_id);
             const seen = new Set(existing.revisions.map((r) => r.revision_id));
             next.revisions = [
               ...existing.revisions,
@@ -638,6 +651,32 @@ export function useWorkspaceStore() {
           }
         }
         fileCacheRef.current.set(item.file_id, next);
+      }
+      if (invalidatedHydratedIds.length > 0 || refreshedHydrated.size > 0) {
+        setHydratedFilesById((prev) => {
+          let changed = false;
+          for (const id of invalidatedHydratedIds) {
+            if (id in prev) {
+              changed = true;
+              break;
+            }
+          }
+          if (!changed) {
+            for (const id of refreshedHydrated.keys()) {
+              if (id in prev) {
+                changed = true;
+                break;
+              }
+            }
+          }
+          if (!changed) return prev;
+          const nextMap = { ...prev };
+          for (const id of invalidatedHydratedIds) delete nextMap[id];
+          for (const [id, rec] of refreshedHydrated) {
+            if (id in nextMap) nextMap[id] = rec;
+          }
+          return nextMap;
+        });
       }
       publishFiles();
     },
@@ -688,9 +727,17 @@ export function useWorkspaceStore() {
         revisions,
         current_revision_id: history.file.last_revision_id || base.current_revision_id,
       };
+      const catalogUnchanged =
+        Boolean(cached) &&
+        cached!.current_revision_id === merged.current_revision_id &&
+        cached!.relative_path === merged.relative_path &&
+        cached!.title === merged.title;
       fileCacheRef.current.set(fileId, merged);
       detailLoadedIdsRef.current.add(fileId);
-      publishFiles();
+      setHydratedFilesById((prev) => ({ ...prev, [fileId]: merged }));
+      if (!catalogUnchanged) {
+        publishFiles();
+      }
       return merged;
     },
     [publishFiles]
@@ -718,8 +765,12 @@ export function useWorkspaceStore() {
           ? r
           : { ...r, svgSource: text, svgExtractedTexts: extractSvgTextNodes(text) };
       });
-      fileCacheRef.current.set(fileId, { ...current, revisions });
-      publishContentFor(fileId);
+      const updated = { ...current, revisions };
+      fileCacheRef.current.set(fileId, updated);
+      setHydratedFilesById((prev) => ({ ...prev, [fileId]: updated }));
+      if (current.format === 'svg') {
+        publishContentFor(fileId);
+      }
     },
     [publishContentFor]
   );
@@ -1025,6 +1076,7 @@ export function useWorkspaceStore() {
     void ensureFileDetail(activeFileId);
   }, [activeFileId, ensureFileDetail]);
 
+  const activeHydratedFile = activeFileId ? hydratedFilesById[activeFileId] : undefined;
   useEffect(() => {
     if (!activeFileId) return;
     const file = fileCacheRef.current.get(activeFileId);
@@ -1038,7 +1090,7 @@ export function useWorkspaceStore() {
     if (file.format === 'svg' && rev.svgSource) return;
     if (file.format !== 'md' && file.format !== 'svg') return;
     void ensureRevisionContent(file.file_id, rev.revision_id);
-  }, [activeFileId, files, pinnedRevisionId, ensureRevisionContent]);
+  }, [activeFileId, activeHydratedFile, files, pinnedRevisionId, ensureRevisionContent]);
 
 
   const escKeyDownHandlerRef = useRef<(e: KeyboardEvent) => void>(() => {});
@@ -1176,14 +1228,16 @@ export function useWorkspaceStore() {
 
   const spotlightItems = useMemo(
     () =>
-      computeSpotlightChanges({
-        files,
-        readingStates,
-        artifactsByFileId: smartViewArtifactsByFileId,
-        agentDraftAtByFileId,
-        nowMs: Date.now(),
-      }),
-    [agentDraftAtByFileId, files, readingStates, smartViewArtifactsByFileId]
+      spotlightEnabled
+        ? computeSpotlightChanges({
+            files,
+            readingStates,
+            artifactsByFileId: smartViewArtifactsByFileId,
+            agentDraftAtByFileId,
+            nowMs: Date.now(),
+          })
+        : SPOTLIGHT_EMPTY_ITEMS,
+    [agentDraftAtByFileId, files, readingStates, smartViewArtifactsByFileId, spotlightEnabled]
   );
   const spotlightDimmedFileIds = useMemo(
     () =>
@@ -1202,7 +1256,15 @@ export function useWorkspaceStore() {
     setSpotlightCursor(cursor);
   }, []);
 
+  const sidebarFilterActive =
+    sidebarFilters.quickScope !== 'all' ||
+    sidebarFilters.folder !== 'all' ||
+    sidebarFilters.format !== 'all' ||
+    sidebarFilters.role !== 'all' ||
+    sidebarFilters.topic !== 'all';
+
   const filteredFiles = useMemo(() => {
+    if (!sidebarFilterActive) return files;
     return files.filter((f) => {
       const st = readingStates[f.file_id];
       if (activeSmartMemberIds && !activeSmartMemberIds.has(f.file_id)) {
@@ -1238,11 +1300,14 @@ export function useWorkspaceStore() {
       }
       return true;
     });
-  }, [activeSmartMemberIds, files, readingStates, sidebarFilters]);
+  }, [activeSmartMemberIds, files, readingStates, sidebarFilterActive, sidebarFilters]);
+
+  const fileById = useMemo(() => new Map(files.map((f) => [f.file_id, f])), [files]);
 
   const activeFile = useMemo(() => {
-    return files.find((f) => f.file_id === activeFileId) || files[0];
-  }, [files, activeFileId]);
+    const base = (activeFileId ? fileById.get(activeFileId) : undefined) || files[0];
+    return base ? hydratedFilesById[base.file_id] ?? base : base;
+  }, [activeFileId, fileById, files, hydratedFilesById]);
 
   const packageList = useMemo<TaskPackage[]>(
     () => groupFilesIntoPackages(files),
@@ -1925,13 +1990,6 @@ export function useWorkspaceStore() {
     setProposalDiffError(null);
   }, []);
 
-  const sidebarFilterActive =
-    sidebarFilters.quickScope !== 'all' ||
-    sidebarFilters.folder !== 'all' ||
-    sidebarFilters.format !== 'all' ||
-    sidebarFilters.role !== 'all' ||
-    sidebarFilters.topic !== 'all';
-
   const activeSmartViewDef =
     activeSmartView !== null
       ? (SMART_VIEWS.find((v) => v.id === activeSmartView) ?? null)
@@ -1959,8 +2017,11 @@ export function useWorkspaceStore() {
   };
 
   const activeFileInFilter = useMemo(
-    () => filteredFiles.some((f) => f.file_id === activeFile?.file_id),
-    [filteredFiles, activeFile?.file_id]
+    () =>
+      !sidebarFilterActive
+        ? Boolean(activeFile)
+        : filteredFiles.some((f) => f.file_id === activeFile?.file_id),
+    [activeFile, filteredFiles, sidebarFilterActive]
   );
 
   const readerPaneRef = useRef<HTMLDivElement | null>(null);
@@ -3107,6 +3168,7 @@ export function useWorkspaceStore() {
     clearFilePreviewCache();
     setConfig(EMPTY_WORKSPACE_CONFIG);
     setFiles([]);
+    setHydratedFilesById({});
     setFilesTotal(0);
     setFileFacets(null);
     setEvents([]);
@@ -3946,12 +4008,15 @@ export function useWorkspaceStore() {
     setLibraryMode('read');
   }, [files]);
 
+  const folderOptionsNeeded = Boolean(fileOpModal || dirShell.dirOpModal);
   const fileOpFolderOptions = useMemo(
     () =>
-      dirShell.realFolders.length > 0
-        ? collectMergedFolderOptions(files, dirShell.realFolders)
-        : baseFileOpFolderOptions,
-    [baseFileOpFolderOptions, dirShell.realFolders, files]
+      !folderOptionsNeeded
+        ? EMPTY_FOLDER_OPTIONS
+        : dirShell.realFolders.length > 0
+          ? collectMergedFolderOptions(files, dirShell.realFolders)
+          : baseFileOpFolderOptions,
+    [baseFileOpFolderOptions, dirShell.realFolders, files, folderOptionsNeeded]
   );
 
   const referenceRepair = useReferencePathRepair({

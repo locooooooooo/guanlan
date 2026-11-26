@@ -1224,10 +1224,13 @@ export const FilterDropdown: React.FC<FilterDropdownProps> = ({
     };
   }, [open]);
 
-  const roles = useMemo(() => Array.from(new Set(files.map((f) => f.role))), [files]);
+  const roles = useMemo(
+    () => (open ? Array.from(new Set(files.map((f) => f.role))) : []),
+    [files, open]
+  );
   const topics = useMemo(
-    () => Array.from(new Set(files.flatMap((f) => f.topics.map((t) => t.name)))),
-    [files]
+    () => (open ? Array.from(new Set(files.flatMap((f) => f.topics.map((t) => t.name)))) : []),
+    [files, open]
   );
 
   const activeFilterCount =

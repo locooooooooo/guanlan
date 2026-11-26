@@ -26,6 +26,7 @@ import type { ReadingState } from '../types/guanlan';
 
 const SEARCH_DEBOUNCE_MS = 130;
 const RESULT_LIMIT = 30;
+const EMPTY_PALETTE_ITEMS: PaletteItem[] = [];
 
 export interface UseCommandPaletteOptions {
   files: PaletteFileLite[];
@@ -164,18 +165,20 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
   const parsed = useMemo(() => parsePaletteQuery(query), [query]);
   const items = useMemo(
     () =>
-      assemblePaletteResults({
-        query: parsed,
-        files,
-        readingStates,
-        serverItems,
-        crossItems,
-        initiatives,
-        artifacts,
-        recentWorkspaces,
-        limit: RESULT_LIMIT,
-      }),
-    [parsed, files, readingStates, serverItems, crossItems, initiatives, artifacts, recentWorkspaces]
+      isOpen
+        ? assemblePaletteResults({
+            query: parsed,
+            files,
+            readingStates,
+            serverItems,
+            crossItems,
+            initiatives,
+            artifacts,
+            recentWorkspaces,
+            limit: RESULT_LIMIT,
+          })
+        : EMPTY_PALETTE_ITEMS,
+    [isOpen, parsed, files, readingStates, serverItems, crossItems, initiatives, artifacts, recentWorkspaces]
   );
 
   return { isOpen, open, close, toggle, query, setQuery, items, searching };

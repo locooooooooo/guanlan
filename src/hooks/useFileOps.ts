@@ -51,7 +51,10 @@ export function useFileOps({
     setServerError(null);
   }, [workspaceEpoch]);
 
-  const folderOptions = useMemo(() => collectWorkspaceFolderOptions(files), [files]);
+  const folderOptions = useMemo(
+    () => (modalRequest ? collectWorkspaceFolderOptions(files) : []),
+    [files, modalRequest]
+  );
 
   const openFileOp = useCallback(
     (kind: FileOpModalKind, target: FileOpActionTarget) => {

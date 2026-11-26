@@ -3,6 +3,8 @@ import type { FileRecord, TimelineEvent } from '../types/guanlan';
 import type { QuickPreviewTarget } from '../components/QuickPreviewModal';
 import { clearQuickPreviewCache } from '../utils/quickPreviewHelpers';
 
+const EMPTY_QUICK_PREVIEW_QUEUE: QuickPreviewTarget[] = [];
+
 export interface BuildQueueInput {
   activeTab: 'home' | 'panorama' | 'library';
   panoramaMode: 'canvas' | 'list' | 'calendar';
@@ -117,14 +119,16 @@ export function useQuickPreview({
 
   const queue = useMemo(
     () =>
-      buildQuickPreviewQueue({
-        activeTab,
-        panoramaMode,
-        files,
-        filteredFiles,
-        events,
-        currentTarget: target,
-      }),
+      target
+        ? buildQuickPreviewQueue({
+            activeTab,
+            panoramaMode,
+            files,
+            filteredFiles,
+            events,
+            currentTarget: target,
+          })
+        : EMPTY_QUICK_PREVIEW_QUEUE,
     [activeTab, panoramaMode, files, filteredFiles, events, target]
   );
 

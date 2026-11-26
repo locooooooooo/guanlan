@@ -42,8 +42,9 @@
 
 ### 状态如何流动
 
-- **事实放在 ref 里，React 状态是它的投影。** `fileCacheRef` 是文件清单的事实源；`files` 是它排序后的投影，由 `publishFiles` 以 150 毫秒尾沿防抖合批发布。
-- **正文补齐走目标化行替换。** `publishContentFor` 只替换一行，其余行保持引用身份，让卡片上的 memo 不失效。
+- **事实放在 ref 里，React 状态是它的投影。** `fileCacheRef` 是文件清单的事实源；`files` 是它排序后的投影，由 `publishFiles` 以 150 毫秒尾沿防抖合批发布。单篇详情水合（`ensureFileDetail`）与 Markdown 正文补齐在目录元数据未变时仅写入局部 `hydratedFilesById`（`activeFile` 经 `fileById` + `hydratedFilesById` 以 O(1) 读取），避免选中文件触发整表重排与全站 `useMemo` 级联失效；`applyFileSummaries` 发现新版本或删除时同步失效 `hydratedFilesById`。
+- **SVG 封面正文补齐走目标化行替换。** `publishContentFor` 只替换一行，其余行保持引用身份，让首页/画廊卡片上的 memo 不失效。
+- **关闭态浮层与非 Markdown 链接索引按需惰性计算。** 命令面板（`useCommandPalette`）、轻预览队列（`useQuickPreview`）、文件/目录移动选项（`useFileOps` / `fileOpFolderOptions`）、筛选下拉（`FilterDropdown`）、增量聚光灯（`spotlightItems`）、阅读岛明细表（`ReadingIsland`）及阅读器 Markdown 路径索引（`useReaderController`）在未开启或非 Markdown 文件时跳过全量扫描。
 - **代际计数当竞态守卫。** `eventFetchGenRef` 让旧窗口的在途请求作废；`dayQueryRef` 配合 `sameDayQuery` 防止日期窗口串页。
 - **按工作区分桶的持久化。** 阅读状态与静音文件夹按 `workspace_id` 分桶存在本机存储；阅读状态经 `coalescedPersist` 做 800 毫秒尾沿合批写入（页面隐藏、切换工作区或项目前立刻补写）。
 - **切换工作区或项目时整体复位。** `resetWorkspaceScopedState` 重置全部工作区范围内的状态（含 SSE 断连状态与重扫/重试防重锁）。桌面端切换工作区期间，由 `switchingWorkspace` 与同步镜像 `switchingWorkspaceRef` 暂停旧后端的 SSE 订阅、任务与状态轮询以及断连/扫描失败红条，改为在 `AppBanners` 展示中性「正在切换工作区」状态条。

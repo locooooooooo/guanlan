@@ -17,7 +17,7 @@ import {
   hasUnreadChanges,
   parseMarkdownOutline,
 } from '../../utils/guanlanEngine';
-import { groupFilesIntoPackages, stageOfPath } from '../../utils/taskPackages';
+import { groupFilesIntoPackages, stageOfPath, taskPackageOf } from '../../utils/taskPackages';
 import type { PackageDoc, StageRole, TaskPackage } from '../../utils/taskPackages';
 import {
   artifactStateOf,
@@ -176,6 +176,11 @@ export interface ReaderViewProps {
   onBlockingCleared?: (payload: { fileId: string }) => void;
   systemActions?: DesktopFileActionCallbacks;
 }
+
+const EMPTY_READER_FILES: FileRecord[] = [];
+const EMPTY_EXACT_PATH_MAP = new Map<string, FileRecord>();
+const EMPTY_FIRST_EXACT_IDX_MAP = new Map<string, number>();
+const EMPTY_MARKDOWN_BLOCKS: MarkdownBlock[] = [];
 
 export function useReaderController({
   sourceLine,
@@ -473,12 +478,15 @@ export function useReaderController({
 
   const activePackage = useMemo<TaskPackage | null>(() => {
     if (packageContext === undefined || packageContext === null) return null;
+    if (taskPackageOf(activeFile.relative_path).id === packageContext.id) {
+      return packageContext;
+    }
     if (packageContext.docs.some((d) => d.fileId === activeFile.file_id)) {
       return packageContext;
     }
     const pkgs = groupFilesIntoPackages(files);
     return pkgs.find((p) => p.docs.some((d) => d.fileId === activeFile.file_id)) ?? null;
-  }, [packageContext, files, activeFile.file_id]);
+  }, [packageContext, files, activeFile.file_id, activeFile.relative_path]);
 
   const activeFileStage = stageOfPath(activeFile.relative_path);
 
@@ -638,7 +646,9 @@ export function useReaderController({
     return parseMarkdownOutline(markdownContent);
   }, [activeFile.format, markdownContent]);
 
-  const markdownLinkIndex = useMemo<MarkdownLinkIndex>(() => {
+  const isMarkdownFile = activeFile.format === 'md';
+  const markdownPathMaps = useMemo(() => {
+    if (!isMarkdownFile) return null;
     const exactPath = new Map<string, FileRecord>();
     const firstExactIdx = new Map<string, number>();
     files.forEach((f, idx) => {
@@ -647,18 +657,26 @@ export function useReaderController({
         firstExactIdx.set(f.relative_path, idx);
       }
     });
-    return {
-      files,
+    return { exactPath, firstExactIdx };
+  }, [files, isMarkdownFile]);
+
+  const markdownLinkIndex = useMemo<MarkdownLinkIndex>(
+    () => ({
+      files: markdownPathMaps ? files : EMPTY_READER_FILES,
       sourceFilePath: activeFile.relative_path,
-      exactPath,
-      firstExactIdx,
+      exactPath: markdownPathMaps?.exactPath ?? EMPTY_EXACT_PATH_MAP,
+      firstExactIdx: markdownPathMaps?.firstExactIdx ?? EMPTY_FIRST_EXACT_IDX_MAP,
       resolveCache: new Map(),
-    };
-  }, [files, activeFile.relative_path]);
+    }),
+    [markdownPathMaps, files, activeFile.relative_path]
+  );
 
   const markdownBlocks = useMemo(
-    () => buildMarkdownBlocks(markdownContent, markdownLinkIndex),
-    [markdownContent, markdownLinkIndex]
+    () =>
+      isMarkdownFile && markdownContent
+        ? buildMarkdownBlocks(markdownContent, markdownLinkIndex)
+        : EMPTY_MARKDOWN_BLOCKS,
+    [isMarkdownFile, markdownContent, markdownLinkIndex]
   );
 
   const decisionFormItems = useMemo<Map<number, DecisionFormItem>>(
