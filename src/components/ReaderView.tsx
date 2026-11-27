@@ -143,6 +143,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
                   currentRev={currentRev}
                   paperLightMode={paperLightMode}
                   indexGeneration={indexGeneration}
+                  sourceLine={props.sourceLine}
                   officeAnchor={officeAnchor}
                   systemActions={systemActions}
                   onAddEvidencePointer={onAddEvidencePointer}

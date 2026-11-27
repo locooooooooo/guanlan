@@ -8,6 +8,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { FileRecord, Revision } from '../src/types/guanlan';
 import {
+  formatByteSize as formatByteSizeFromMeta,
   formatClassLabel,
   formatClassOf,
   formatLabel,
@@ -135,6 +136,54 @@ describe('L0/L1 非传统文件预览分型', () => {
     assert.equal(formatByteSize(512), '512 B');
     assert.equal(formatByteSize(2048), '2.0 KiB');
     assert.equal(formatByteSize(5 * 1024 * 1024), '5.00 MiB');
+    assert.equal(formatByteSizeFromMeta(11162), '10.9 KiB');
+
+    const previewHtml = renderToStaticMarkup(
+      React.createElement(NonLegacyFilePreviewPanel, {
+        activeFile: {
+          file_id: 'f_rs_b01',
+          relative_path: 'native/src/lib.rs',
+          title: 'lib.rs',
+          format: 'rs',
+          folder: 'native/src',
+          role: '其他',
+          roleProvenance: '来自路径',
+          topics: [],
+          current_revision_id: 'rev_rs_b01',
+          revisions: [
+            {
+              revision_id: 'rev_rs_b01',
+              file_id: 'f_rs_b01',
+              versionNumber: 1,
+              content_sha256: 'ab12cd34'.repeat(8),
+              observed_at: '2026-11-24T08:00:00Z',
+              sizeBytes: 11162,
+              snapshotAvailable: true,
+              isBaselineProtected: true,
+              summaryNote: 'v1',
+              markdownContent: 'pub fn hello() {}\n',
+            } as Revision,
+          ],
+          coverage: 'full_text',
+        } as FileRecord,
+        currentRev: {
+          revision_id: 'rev_rs_b01',
+          file_id: 'f_rs_b01',
+          versionNumber: 1,
+          content_sha256: 'ab12cd34'.repeat(8),
+          observed_at: '2026-11-24T08:00:00Z',
+          sizeBytes: 11162,
+          snapshotAvailable: true,
+          isBaselineProtected: true,
+          summaryNote: 'v1',
+          markdownContent: 'pub fn hello() {}\n',
+        } as Revision,
+        paperLightMode: true,
+        indexGeneration: 1,
+      })
+    );
+    assert.ok(previewHtml.includes('10.9 KiB'), '非传统预览底栏统一以 KiB 呈现体积');
+    assert.ok(previewHtml.includes('入库于 2026-11-24'), '预览底栏日期携带「入库于」语义前缀');
   });
 });
 

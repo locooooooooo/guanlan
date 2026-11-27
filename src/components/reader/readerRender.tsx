@@ -176,13 +176,18 @@ export function useReaderRender({
     excerptForCopy?: string
   ) => {
     const lineAnnotations = annotationsByLine.get(lineNum);
+    const isAnchorLine = lineNum === sourceLine;
     return (
       <div
         key={lineNum}
         data-event-source-line={lineNum}
+        data-anchor-highlight={isAnchorLine ? 'true' : undefined}
         data-flash-anchor={lineNum === flashSourceLine ? String(lineNum) : undefined}
-        style={lineNum === sourceLine ? { outline: '2px solid #9b8afb', outlineOffset: '2px' } : undefined}
-        className={`group relative flex items-baseline gap-3 rounded px-1 -mx-1 transition-colors ${
+        className={`group relative flex items-baseline gap-3 rounded px-1.5 -mx-1.5 border-l-[3px] transition-colors ${
+          isAnchorLine
+            ? 'border-l-[color:var(--accent-iris-deep)] bg-[color:color-mix(in_srgb,var(--accent-iris)_11%,transparent)]'
+            : 'border-l-transparent'
+        } ${
           lineNum === flashSourceLine ? 'glx-anchor-flash' : ''
         } ${
           paperLightMode ? 'hover:bg-[#1F1E1D]/[0.04]' : 'hover:bg-white/[0.04]'
@@ -349,11 +354,13 @@ export function useReaderRender({
                   <tr
                     key={rIdx}
                     data-event-source-line={row.line}
-                    style={row.line === sourceLine ? { outline: '2px solid #9b8afb' } : undefined}
+                    data-anchor-highlight={row.line === sourceLine ? 'true' : undefined}
                     className={
-                      paperLightMode
-                        ? 'hover:bg-[#F5F4EE]'
-                        : 'hover:bg-[#2A2825]'
+                      row.line === sourceLine
+                        ? 'bg-[color:color-mix(in_srgb,var(--accent-iris)_12%,transparent)] ring-1 ring-inset ring-[color:var(--accent-iris-deep)]'
+                        : paperLightMode
+                          ? 'hover:bg-[#F5F4EE]'
+                          : 'hover:bg-[#2A2825]'
                     }
                   >
                     {row.cells.map((cell, cIdx) => (

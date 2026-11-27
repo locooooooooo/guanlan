@@ -129,7 +129,7 @@ test('Polish-02 · AppLibraryStage 目录面包屑栏与暗夜模式格式/快�
     })
   );
   assert.ok(!darkHtml.includes('已保存去重快照'), '常态图片预览脚标不再铺陈内部「已保存去重快照」术语');
-  assert.ok(darkHtml.includes('v1 · 2026-11-22'), '版本与观测日期应完整呈现，不再被长 revision_id 挤截');
+  assert.ok(darkHtml.includes('v1 · 入库于 2026-11-22'), '版本与入库日期应带语义前缀并完整呈现，不再被长 revision_id 挤截');
   assert.ok(!darkHtml.includes('>PNG<'), '图片脚下不再重复格式徽标');
   assert.ok(!darkHtml.includes('>查看原图<'), '查看原图只留图标，不压在画面上');
   assert.ok(darkHtml.includes('aria-label="查看原图"'), '原图入口仍可发现');
@@ -213,7 +213,10 @@ test('Polish-04 · 内容优先排版：源码/预览收折技术元数据、阅
   assert.ok(!textHtml.includes('data-preview-meta-drawer=""'), '默认态不得在正文上方展开占高元数据抽屉');
   assert.ok(!textHtml.includes('UTF-8 源码 / 文本快照预览'), '不得再在源码区上方叠放重复的二级标题栏');
   assert.ok(!textHtml.includes('max-h-[64vh]'), '源码区应占满剩余阅读视口高度，不再硬裁 64vh');
-  assert.ok(textHtml.includes('export const ok = true;'), '源码正文应直接呈现');
+  assert.ok(
+    textHtml.replace(/<[^>]+>/g, '').includes('export const ok = true;'),
+    '源码正文应直接呈现'
+  );
 
   const binRev: Revision = { ...tsRev, revision_id: 'rev_bin_v1', snapshotAvailable: false };
   const binFile: FileRecord = {
@@ -241,6 +244,10 @@ test('Polish-04 · 内容优先排版：源码/预览收折技术元数据、阅
     '目录面包屑工作栏应仅在 overview 概览态显示，阅读态不再压占正文高度'
   );
   assert.ok(stageSrc.includes('data-reader-filter-mismatch=""'), '阅读态筛选不匹配应提供紧凑单条提示');
+  assert.ok(
+    stageSrc.includes('超出筛选范围') && stageSrc.includes('outOfFilterScope='),
+    '当前阅读文档超出筛选范围时应在阅读顶条与右栏检查器显式标注'
+  );
 
   const readerHtmlSingle = renderToStaticMarkup(
     React.createElement(ReaderView, {
@@ -441,9 +448,14 @@ test('Polish-05 · 信息降密：扫描态并入同步胶囊、时光机合流�
       onAddEvidencePointer: () => true,
     })
   );
-  const codeIdx = codeHtml.indexOf('export const alpha = 1;');
+  const plainCodeHtml = codeHtml.replace(/<[^>]+>/g, '');
+  const codeIdx = plainCodeHtml.indexOf('export const alpha = 1;');
   const footerIdx = codeHtml.indexOf('data-preview-compact-bar=""');
-  assert.ok(codeIdx > 0 && footerIdx > codeIdx, '源码正文应位于底部状态脚标之前（首屏正文顶格直出）');
+  const footerPlainIdx = plainCodeHtml.indexOf('1.0 KiB');
+  assert.ok(
+    codeIdx > 0 && footerIdx > 0 && footerPlainIdx > codeIdx,
+    '源码正文应位于底部状态脚标之前（首屏正文顶格直出）'
+  );
   assert.ok(codeHtml.includes('data-preview-floating-actions=""'), '应提供右上角轻悬浮复制/入篮入口');
 
   const pkg = groupFilesIntoPackages([tsFile])[0] ?? null;
@@ -472,6 +484,10 @@ test('Polish-05 · 信息降密：扫描态并入同步胶囊、时光机合流�
     })
   );
   assert.ok(readerHtml.includes('data-reader-initiative-pill=""'), '专项五阶段应默认收拢为紧凑胶囊触发器');
+  assert.ok(
+    readerHtml.includes('专项 ') && readerHtml.includes('阶段'),
+    '顶栏专项胶囊显式标注「专项 … · …阶段」，避免与右栏文档角色混淆'
+  );
   assert.ok(!readerHtml.includes('aria-label="五阶段进度 Stepper"'), '未点击展开前不应在 Row 2 常驻铺满五阶段 Stepper');
 
   const sidebarShellSrc = readSrc('components/app/GlobalDirectorySidebar.tsx');
