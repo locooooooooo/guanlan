@@ -44,7 +44,9 @@ export function AppLibraryStage({ ctx }: { ctx: WorkspaceStoreCtx }) {
       : [];
 
   const activeFolderReadStats = useMemo(() => {
-    if (sidebarFilters.folder === 'all') return { total: 0, unread: 0 };
+    if (libraryMode !== 'overview' || sidebarFilters.folder === 'all') {
+      return { total: 0, unread: 0 };
+    }
     const normalized = sidebarFilters.folder.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
     if (!normalized) return { total: 0, unread: 0 };
     const prefix = `${normalized}/`;
@@ -60,7 +62,7 @@ export function AppLibraryStage({ ctx }: { ctx: WorkspaceStoreCtx }) {
       }
     }
     return { total, unread };
-  }, [files, readingStates, sidebarFilters.folder]);
+  }, [files, libraryMode, readingStates, sidebarFilters.folder]);
 
   const zenSidebarRestoreRef = useRef<boolean | null>(null);
   const handleZenModeChange = (nextZen: boolean) => {
@@ -374,58 +376,61 @@ export function AppLibraryStage({ ctx }: { ctx: WorkspaceStoreCtx }) {
           )}
         </div>
 
-        <div
-          className={`${
-            isMobileRightOpen
-              ? 'fixed inset-y-0 right-0 z-40 block shadow-2xl'
-              : (libraryMode === 'overview' && !overviewInspectorCollapsed) || libraryInspectorOpen
-                ? 'hidden xl:block'
-                : 'hidden'
-          } h-full shrink-0`}
-        >
-          <RightInspector
-            selectedFile={activeFile}
-            selectedDecision={decisions.find(
-              (d) => d.decision_id === selectedDecisionId
-            )}
-            files={files}
-            decisions={decisions}
-            relations={relations}
-            readingState={readingStates[activeFile.file_id]}
-            onSavePersonalNote={handleSavePersonalNote}
-            onOpenFile={(fileId, revId) => {
-              const target = files.find((f) => f.file_id === fileId);
-              if (target) {
-                setActiveFileId(target.file_id);
-                setPinnedRevisionId(revId || target.current_revision_id);
-                setReaderSubMode('read');
-                setActiveTab('library');
-                setLibraryMode('read');
+        {(isMobileRightOpen ||
+          libraryInspectorOpen ||
+          (libraryMode === 'overview' && !overviewInspectorCollapsed)) && (
+          <div
+            className={`${
+              isMobileRightOpen
+                ? 'fixed inset-y-0 right-0 z-40 block shadow-2xl'
+                : 'hidden xl:block'
+            } h-full shrink-0`}
+          >
+            <RightInspector
+              selectedFile={activeFile}
+              selectedDecision={decisions.find(
+                (d) => d.decision_id === selectedDecisionId
+              )}
+              files={files}
+              packages={ctx.packageList}
+              decisions={decisions}
+              relations={relations}
+              readingState={readingStates[activeFile.file_id]}
+              onSavePersonalNote={handleSavePersonalNote}
+              onOpenFile={(fileId, revId) => {
+                const target = files.find((f) => f.file_id === fileId);
+                if (target) {
+                  setActiveFileId(target.file_id);
+                  setPinnedRevisionId(revId || target.current_revision_id);
+                  setReaderSubMode('read');
+                  setActiveTab('library');
+                  setLibraryMode('read');
+                  setIsMobileRightOpen(false);
+                }
+              }}
+              onOpenDecision={handleOpenDecisionReference}
+              onOpenFileTimeline={handleOpenFileTimeline}
+              onViewRelationsGraph={() => {
+                setEventTrail(prev => enterEventFrame(prev, activeFile, undefined, activeFile.title, pinnedRevisionId));
+                setActiveTab('panorama');
+                setPanoramaMode('canvas');
                 setIsMobileRightOpen(false);
-              }
-            }}
-            onOpenDecision={handleOpenDecisionReference}
-            onOpenFileTimeline={handleOpenFileTimeline}
-            onViewRelationsGraph={() => {
-              setEventTrail(prev => enterEventFrame(prev, activeFile, undefined, activeFile.title, pinnedRevisionId));
-              setActiveTab('panorama');
-              setPanoramaMode('canvas');
-              setIsMobileRightOpen(false);
-            }}
-            onCopyObjectToAgent={async (pointer) => {
-              handleAddEvidencePointer(pointer);
-              openContextDrawer();
-              setIsMobileRightOpen(false);
-              const res = await copyTextWithDesktopFallback(
-                formatContextForAgent([pointer], config.rootPath)
-              );
-              return res.ok;
-            }}
-            indexGeneration={config.runtimeStatus.indexGeneration}
-            stateOverview={stateOverview}
-            systemActions={systemActions}
-          />
-        </div>
+              }}
+              onCopyObjectToAgent={async (pointer) => {
+                handleAddEvidencePointer(pointer);
+                openContextDrawer();
+                setIsMobileRightOpen(false);
+                const res = await copyTextWithDesktopFallback(
+                  formatContextForAgent([pointer], config.rootPath)
+                );
+                return res.ok;
+              }}
+              indexGeneration={config.runtimeStatus.indexGeneration}
+              stateOverview={stateOverview}
+              systemActions={systemActions}
+            />
+          </div>
+        )}
       </main>
     </>
   );

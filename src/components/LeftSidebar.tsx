@@ -513,7 +513,38 @@ function HighlightedLabel({ text, query }: { text: string; query?: string }) {
   );
 }
 
-const SidebarFileLeaf: React.FC<{
+const getSidebarFileKey = (file: FileRecord): string => file.file_id;
+const siblingPrefixCache = new WeakMap<readonly FileRecord[], Map<string, number>>();
+const mixedFormatCache = new WeakMap<readonly FileRecord[], boolean>();
+
+function getCachedSiblingPrefixMap(files: readonly FileRecord[]): Map<string, number> | null {
+  if (files.length <= 1) return null;
+  let cached = siblingPrefixCache.get(files);
+  if (!cached) {
+    cached = computeSiblingSharedPrefixMap(files.map((f) => f.title));
+    siblingPrefixCache.set(files, cached);
+  }
+  return cached;
+}
+
+function getCachedMixedFormats(files: readonly FileRecord[]): boolean {
+  if (files.length <= 1) return false;
+  let cached = mixedFormatCache.get(files);
+  if (cached === undefined) {
+    const first = files[0].format;
+    cached = false;
+    for (let i = 1; i < files.length; i += 1) {
+      if (files[i].format !== first) {
+        cached = true;
+        break;
+      }
+    }
+    mixedFormatCache.set(files, cached);
+  }
+  return cached;
+}
+
+const SidebarFileLeafImpl: React.FC<{
   file: FileRecord;
   depth: number;
   active: boolean;
@@ -726,6 +757,7 @@ const SidebarFileLeaf: React.FC<{
   }
   return rowEl;
 };
+const SidebarFileLeaf = React.memo(SidebarFileLeafImpl);
 
 /** 目录树层级行渲染件（供单测直接渲染断言行尾未读/活跃微标）。 */
 export const FolderTreeRows: React.FC<{
@@ -831,10 +863,8 @@ export const FolderTreeRows: React.FC<{
       const drag = dragRowProps ? dragRowProps(node.path) : null;
       const isDenseFolder = node.directFiles.length >= SIDEBAR_DENSE_FOLDER_THRESHOLD;
       const folderMuted = isFolderMuted(node.path, mutedFolders);
-      const siblingPrefixMap =
-        isOpen && node.directFiles.length > 1
-          ? computeSiblingSharedPrefixMap(node.directFiles.map((f) => f.title))
-          : null;
+      const siblingPrefixMap = isOpen ? getCachedSiblingPrefixMap(node.directFiles) : null;
+      const folderHasMixedFormats = isOpen ? getCachedMixedFormats(node.directFiles) : false;
       const activity = folderActivity?.get(node.path);
       const treeDropTone =
         'bg-[color:var(--chip-active-bg)] border-[color:var(--accent-iris-deep)] text-[color:var(--accent-iris-ink)] font-medium ring-1 ring-[color:var(--accent-iris)]';
@@ -1142,14 +1172,11 @@ export const FolderTreeRows: React.FC<{
                   />
                   <VirtualFileSlice
                     items={node.directFiles}
-                    getKey={(file) => file.file_id}
+                    getKey={getSidebarFileKey}
                     activeKey={activeFileId}
                     renderItem={(file, fileIdx) => (
                       <SidebarFileLeaf
-                        showFormat={
-                          node.directFiles.length > 1 &&
-                          node.directFiles.some((sibling) => sibling.format !== file.format)
-                        }
+                        showFormat={folderHasMixedFormats}
                         file={file}
                         depth={depth + 1}
                         active={file.file_id === activeFileId}
@@ -1467,49 +1494,53 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const [baselineConfirmOpen, setBaselineConfirmOpen] = useState(false);
   const [baselineBusy, setBaselineBusy] = useState(false);
 
-  const continueReadingFiles = files
-    .filter((f) => {
-      const st = readingStates[f.file_id];
-      if (!st) return false;
-      const unreadInfo = hasUnreadChanges(f, st);
-      if (!unreadInfo.isUnread) return false;
-      const updatedSinceBaseline = unreadInfo.reason === 'updated_since_last_read';
-      if (st.baselineOnly && !updatedSinceBaseline && st.scrollPercent <= 0 && !st.last_section_id) {
-        return false;
-      }
-      const hasRealProgress =
-        st.scrollPercent > 0 ||
-        Boolean(st.last_section_id) ||
-        updatedSinceBaseline;
-      return hasRealProgress;
-    })
-    .sort(
-      (a, b) =>
-        readingRecency(readingStates[b.file_id]) - readingRecency(readingStates[a.file_id])
-    )
-    .slice(0, 2);
+  const fileById = useMemo(() => new Map(files.map((f) => [f.file_id, f])), [files]);
+
+  const continueReadingFiles = useMemo(
+    () =>
+      files
+        .filter((f) => {
+          const st = readingStates[f.file_id];
+          if (!st) return false;
+          const unreadInfo = hasUnreadChanges(f, st);
+          if (!unreadInfo.isUnread) return false;
+          const updatedSinceBaseline = unreadInfo.reason === 'updated_since_last_read';
+          if (st.baselineOnly && !updatedSinceBaseline && st.scrollPercent <= 0 && !st.last_section_id) {
+            return false;
+          }
+          const hasRealProgress =
+            st.scrollPercent > 0 ||
+            Boolean(st.last_section_id) ||
+            updatedSinceBaseline;
+          return hasRealProgress;
+        })
+        .sort(
+          (a, b) =>
+            readingRecency(readingStates[b.file_id]) - readingRecency(readingStates[a.file_id])
+        )
+        .slice(0, 2),
+    [files, readingStates]
+  );
 
   const pinnedFiles = useMemo(() => {
     if (!pinnedFileIds.length) return [];
-    const byId = new Map(files.map((f) => [f.file_id, f]));
     const out: FileRecord[] = [];
     for (const id of pinnedFileIds) {
-      const hit = byId.get(id);
+      const hit = fileById.get(id);
       if (hit) out.push(hit);
     }
     return out;
-  }, [files, pinnedFileIds]);
+  }, [fileById, pinnedFileIds]);
 
-  const unreadFileIds = useMemo(
-    () => collectUnreadFileIds(files, readingStates),
-    [files, readingStates]
-  );
-  const unreadReasonByFileId = useMemo(() => {
-    const map = new Map<string, UnreadReason>();
+  const { unreadFileIds, unreadReasonByFileId } = useMemo(() => {
+    const ids = new Set<string>();
+    const reasonMap = new Map<string, UnreadReason>();
     for (const file of files) {
-      map.set(file.file_id, hasUnreadChanges(file, readingStates[file.file_id]).reason);
+      const info = hasUnreadChanges(file, readingStates[file.file_id]);
+      if (info.isUnread) ids.add(file.file_id);
+      reasonMap.set(file.file_id, info.reason);
     }
-    return map;
+    return { unreadFileIds: ids, unreadReasonByFileId: reasonMap };
   }, [files, readingStates]);
   const unreadCount = unreadFileIds.size;
   const totalWorkspaceFiles = files.length;
@@ -1517,34 +1548,27 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const readProgressRatio =
     totalWorkspaceFiles > 0 ? readWorkspaceCount / totalWorkspaceFiles : 0;
   const readProgressPct = totalWorkspaceFiles > 0 ? Math.round(readProgressRatio * 100) : 0;
-  const selectedFolderUnreadCount = useMemo(() => {
-    if (filters.folder === 'all') return 0;
-    const normalized = filters.folder.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-    if (!normalized) return 0;
-    const prefix = `${normalized}/`;
-    let count = 0;
-    for (const f of files) {
-      const p = f.relative_path.replace(/\\/g, '/');
-      if ((p === normalized || p.startsWith(prefix)) && unreadFileIds.has(f.file_id)) {
-        count += 1;
-      }
-    }
-    return count;
-  }, [files, filters.folder, unreadFileIds]);
   const handleMarkFolderReadQuick = onMarkReadingBaseline
     ? (folderPath: string) => {
         void onMarkReadingBaseline('folder', folderPath);
       }
     : undefined;
-  const isSystemFile = (f: FileRecord) => {
-    const top = f.folder === '.' ? '' : f.folder.replace(/\\/g, '/').split('/')[0];
-    return top !== '' && isSystemDirName(top);
-  };
-  const businessUnreadCount = files.filter(
-    (f) => unreadFileIds.has(f.file_id) && !isSystemFile(f)
-  ).length;
-  const systemUnreadCount = unreadCount - businessUnreadCount;
-  const bookmarkedCount = files.filter((f) => readingStates[f.file_id]?.bookmarked).length;
+  const { businessUnreadCount, systemUnreadCount } = useMemo(() => {
+    let business = 0;
+    for (const f of files) {
+      if (!unreadFileIds.has(f.file_id)) continue;
+      const top = f.folder === '.' ? '' : f.folder.replace(/\\/g, '/').split('/')[0];
+      if (top === '' || !isSystemDirName(top)) business += 1;
+    }
+    return { businessUnreadCount: business, systemUnreadCount: unreadCount - business };
+  }, [files, unreadCount, unreadFileIds]);
+  const bookmarkedCount = useMemo(() => {
+    let count = 0;
+    for (const f of files) {
+      if (readingStates[f.file_id]?.bookmarked) count += 1;
+    }
+    return count;
+  }, [files, readingStates]);
 
   const nowMs = useMemo(() => Date.now(), [files]);
   const sidebarFiltersActive =
@@ -1610,6 +1634,23 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
       }),
     [artifactsByFileId, folderTree, nowMs, readingStates]
   );
+  const selectedFolderUnreadCount = useMemo(() => {
+    if (filters.folder === 'all') return 0;
+    const normalized = filters.folder.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    if (!normalized) return 0;
+    if (filters.quickScope === 'all') {
+      return folderActivity.get(normalized)?.unreadCount ?? 0;
+    }
+    const prefix = `${normalized}/`;
+    let count = 0;
+    for (const f of files) {
+      const p = f.relative_path.replace(/\\/g, '/');
+      if ((p === normalized || p.startsWith(prefix)) && unreadFileIds.has(f.file_id)) {
+        count += 1;
+      }
+    }
+    return count;
+  }, [files, filters.folder, filters.quickScope, folderActivity, unreadFileIds]);
   const [systemGroupOpen, setSystemGroupOpen] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [treeQuickFilter, setTreeQuickFilter] = useState('');
@@ -1825,8 +1866,18 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
       setSystemGroupOpen(true);
     }
     setExpandedFolders((prev) => {
-      const next = new Set(prev);
+      let allPresent = true;
       let acc = '';
+      for (const seg of segments) {
+        acc = acc ? `${acc}/${seg}` : seg;
+        if (!prev.has(acc)) {
+          allPresent = false;
+          break;
+        }
+      }
+      if (allPresent) return prev;
+      const next = new Set(prev);
+      acc = '';
       for (const seg of segments) {
         acc = acc ? `${acc}/${seg}` : seg;
         next.add(acc);
@@ -2022,13 +2073,13 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
       onDragStart: (event: React.DragEvent) => {
         const row = event.currentTarget as HTMLElement;
         const fileId = row.getAttribute('data-sidebar-file') ?? '';
-        const target = files.find((f) => f.file_id === fileId);
+        const target = fileById.get(fileId);
         if (!target) return;
         treeDrag.beginDrag(event, { file_id: target.file_id, folder: target.folder });
       },
       onDragEnd: () => treeDrag.endDrag(),
     };
-  }, [files, onMoveFile, treeDrag]);
+  }, [fileById, onMoveFile, treeDrag]);
   const folderDragHandlers = useMemo(() => {
     if (!onMoveFolder) return null;
     return {
@@ -2050,7 +2101,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
   useEffect(() => {
     if (!activeFileId) return;
-    const hit = files.find((f) => f.file_id === activeFileId);
+    const hit = fileById.get(activeFileId);
     if (!hit || !hit.folder || hit.folder === '.') return;
     expandAncestors(hit.folder);
   }, [activeFileId]);
@@ -3164,18 +3215,13 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                             emphasizeUnread={emphasizeFolderUnread}
                           />
                           {(() => {
-                            const rootPrefixMap =
-                              displayRootFiles.length > 1
-                                ? computeSiblingSharedPrefixMap(displayRootFiles.map((f) => f.title))
-                                : null;
+                            const rootPrefixMap = getCachedSiblingPrefixMap(displayRootFiles);
                             const rootDense = displayRootFiles.length >= SIDEBAR_DENSE_FOLDER_THRESHOLD;
-                            const rootMixedFormat =
-                              displayRootFiles.length > 1 &&
-                              displayRootFiles.some((sibling) => sibling.format !== displayRootFiles[0].format);
+                            const rootMixedFormat = getCachedMixedFormats(displayRootFiles);
                             return (
                               <VirtualFileSlice
                                 items={displayRootFiles}
-                                getKey={(file) => file.file_id}
+                                getKey={getSidebarFileKey}
                                 activeKey={activeFileId}
                                 renderItem={(file, fileIdx) => (
                                   <SidebarFileLeaf
@@ -3409,18 +3455,13 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 emphasizeUnread={emphasizeFolderUnread}
               />
               {(() => {
-                const rootPrefixMap =
-                  displayRootFiles.length > 1
-                    ? computeSiblingSharedPrefixMap(displayRootFiles.map((f) => f.title))
-                    : null;
+                const rootPrefixMap = getCachedSiblingPrefixMap(displayRootFiles);
                 const rootDense = displayRootFiles.length >= SIDEBAR_DENSE_FOLDER_THRESHOLD;
-                const rootMixedFormat =
-                  displayRootFiles.length > 1 &&
-                  displayRootFiles.some((sibling) => sibling.format !== displayRootFiles[0].format);
+                const rootMixedFormat = getCachedMixedFormats(displayRootFiles);
                 return (
                   <VirtualFileSlice
                     items={displayRootFiles}
-                    getKey={(file) => file.file_id}
+                    getKey={getSidebarFileKey}
                     activeKey={activeFileId}
                     renderItem={(file, fileIdx) => (
                       <SidebarFileLeaf

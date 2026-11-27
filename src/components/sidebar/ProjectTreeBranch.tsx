@@ -54,6 +54,24 @@ export const SIDEBAR_DENSE_FOLDER_THRESHOLD = 15;
 
 const TREE_ROW_ENTER = 'glx-tree-row-in';
 
+const getProjectTreeFileKey = (file: ProjectTreeFileEntryDto): string => file.file_id;
+const projectSiblingPrefixCache = new WeakMap<
+  readonly ProjectTreeFileEntryDto[],
+  Map<string, number>
+>();
+
+function getCachedProjectSiblingPrefixMap(
+  files: readonly ProjectTreeFileEntryDto[]
+): Map<string, number> | null {
+  if (files.length <= 1) return null;
+  let cached = projectSiblingPrefixCache.get(files);
+  if (!cached) {
+    cached = computeSiblingSharedPrefixMap(files.map((f) => f.title));
+    projectSiblingPrefixCache.set(files, cached);
+  }
+  return cached;
+}
+
 /**
  * 左栏高密目录直接子文件轻量视窗切片容器（> 150 条自动切片，维持 60fps 滚动）：
  * - 直接子文件 <= 150 份时零包裹直接渲染；
@@ -352,9 +370,7 @@ export const BranchFolderRows: React.FC<{
       const isCreatingInside = inlineCreate?.parentDir === node.path;
       const dense = node.directFiles.length >= SIDEBAR_DENSE_FOLDER_THRESHOLD;
       const siblingPrefixMap =
-        (open || isCreatingInside) && node.directFiles.length > 1
-          ? computeSiblingSharedPrefixMap(node.directFiles.map((f) => f.title))
-          : null;
+        open || isCreatingInside ? getCachedProjectSiblingPrefixMap(node.directFiles) : null;
       const pendingTotal = node.directFiles.reduce(
         (sum, f) => sum + (f.pending_decisions ?? 0),
         0
@@ -489,7 +505,7 @@ export const BranchFolderRows: React.FC<{
               />
               <VirtualFileSlice
                 items={node.directFiles}
-                getKey={(file) => file.file_id}
+                getKey={getProjectTreeFileKey}
                 renderItem={(file, fileIdx) => (
                   <BranchFileRow
                     project={project}
@@ -589,15 +605,12 @@ export const ProjectTreeBranch: React.FC<ProjectTreeBranchProps> = ({
             globalPinnedKeys={globalPinnedKeys}
           />
           {(() => {
-            const rootPrefixMap =
-              tree.rootFiles.length > 1
-                ? computeSiblingSharedPrefixMap(tree.rootFiles.map((f) => f.title))
-                : null;
+            const rootPrefixMap = getCachedProjectSiblingPrefixMap(tree.rootFiles);
             const rootDense = tree.rootFiles.length >= SIDEBAR_DENSE_FOLDER_THRESHOLD;
             return (
               <VirtualFileSlice
                 items={tree.rootFiles}
-                getKey={(file) => file.file_id}
+                getKey={getProjectTreeFileKey}
                 renderItem={(file, fileIdx) => (
                   <BranchFileRow
                     project={project}

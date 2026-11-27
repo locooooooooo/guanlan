@@ -27,7 +27,7 @@ import { InitiativeCandidatePanel } from './InitiativeCandidatePanel';
 import { formatPdfAnchorLabel, pickPrimaryPdfEvidence } from '../utils/pdfAnchor';
 import { hasUnreadChanges, unreadStatusLabel } from '../utils/guanlanEngine';
 import { groupFilesIntoPackages, taskPackageOf } from '../utils/taskPackages';
-import type { PackageDoc } from '../utils/taskPackages';
+import type { PackageDoc, TaskPackage } from '../utils/taskPackages';
 import {
   DECIDED_DECISION_STATUSES,
   DOC_STATE_LABEL,
@@ -604,6 +604,7 @@ interface RightInspectorProps {
   indexGeneration: number;
   stateOverview?: StateOverviewResponse | null;
   systemActions?: DesktopFileActionCallbacks;
+  packages?: TaskPackage[];
 }
 
 export const RightInspector: React.FC<RightInspectorProps> = ({
@@ -622,6 +623,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
   indexGeneration,
   stateOverview,
   systemActions,
+  packages,
 }) => {
   const [expandFullPath, setExpandFullPath] = useState(false);
   const [noteInput, setNoteInput] = useState(readingState?.personalNote || '');
@@ -683,8 +685,12 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
   };
 
   const unreadInfo = hasUnreadChanges(selectedFile, readingState);
+  const fileById = useMemo(() => new Map(files.map((f) => [f.file_id, f])), [files]);
 
-  const packageListLocal = useMemo(() => groupFilesIntoPackages(files), [files]);
+  const packageListLocal = useMemo(
+    () => packages ?? groupFilesIntoPackages(files),
+    [packages, files]
+  );
   const packageOfSelected = useMemo(() => {
     const id = taskPackageOf(selectedFile.relative_path).id;
     return (
@@ -745,7 +751,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
   const peerDocCount = outgoingPeerGroups.length + incomingPeerGroups.length;
 
   const peerTitleOf = (peerId: string): { title: string; prefix: string } => {
-    const peerFile = files.find((item) => item.file_id === peerId);
+    const peerFile = fileById.get(peerId);
     if (peerFile) {
       const sameTitlePaths = files
         .filter((item) => item.title === peerFile.title)
@@ -790,7 +796,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
     (d) => !isUnresolvedDecision(d) && !DECIDED_DECISION_STATUSES.includes(d.status)
   );
 
-  const isFileId = (id: string) => files.some((item) => item.file_id === id);
+  const isFileId = (id: string) => fileById.has(id);
 
   const canJumpMachine = canOpenTimeMachine(selectedFile.format);
 
@@ -1112,7 +1118,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
                 {refsOpen.out && (
                   <div className="mt-1 space-y-1.5">
                     {outgoingPeerGroups.map(({ peerId, edges }) => {
-                      const targetFile = files.find((f) => f.file_id === peerId);
+                      const targetFile = fileById.get(peerId);
                       const targetRev =
                         targetFile?.revisions.find((r) => r.revision_id === targetFile.current_revision_id) ??
                         targetFile?.revisions[0];
@@ -1171,7 +1177,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
                 {refsOpen.in && (
                   <div className="mt-1 space-y-1.5">
                     {incomingPeerGroups.map(({ peerId, edges }) => {
-                      const targetFile = files.find((f) => f.file_id === peerId);
+                      const targetFile = fileById.get(peerId);
                       const targetRev =
                         targetFile?.revisions.find((r) => r.revision_id === targetFile.current_revision_id) ??
                         targetFile?.revisions[0];
