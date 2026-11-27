@@ -81,10 +81,9 @@ function evalChronosWings(hx, hy) {
   if (ax < 0.08 || ax > 0.80 || hy < -0.34 || hy > 0.30) {
     return null;
   }
-  const f1 = sdCurvedFeather(ax, hy, 0.14, 0.00, 0.43, -0.22, 0.71, -0.17, 0.030, 0.060, 0.011);
-  const f2 = sdCurvedFeather(ax, hy, 0.14, 0.05, 0.38, -0.06, 0.59, -0.01, 0.026, 0.050, 0.010);
-  const f3 = sdCurvedFeather(ax, hy, 0.14, 0.09, 0.31, 0.07, 0.45, 0.14, 0.022, 0.038, 0.009);
-  return { f1, f2, f3, d: Math.min(f1.d, f2.d, f3.d) };
+  const f1 = sdCurvedFeather(ax, hy, 0.14, 0.00, 0.43, -0.22, 0.71, -0.17, 0.036, 0.072, 0.014);
+  const f2 = sdCurvedFeather(ax, hy, 0.14, 0.05, 0.38, -0.06, 0.59, -0.01, 0.031, 0.060, 0.013);
+  return { f1, f2, d: Math.min(f1.d, f2.d) };
 }
 
 const TAB_X0 = -0.28;
@@ -93,9 +92,9 @@ const BACK_TAB_Y = -0.75;
 const BACK_SHOULDER_Y = -0.51;
 const FOLDER_HALF_W = 0.90;
 const FOLDER_BOT_Y = 0.78;
-const PAPER_TOP_Y = -0.445;
+const PAPER_TOP_Y = -0.475;
 const PAPER_HALF_W = 0.818;
-const FRONT_TOP_Y = -0.375;
+const FRONT_TOP_Y = -0.36;
 const FRONT_CY = (FRONT_TOP_Y + FOLDER_BOT_Y) * 0.5;
 const FRONT_HALF_H = (FOLDER_BOT_Y - FRONT_TOP_Y) * 0.5;
 
@@ -134,7 +133,7 @@ function sdFolderBack(x, y) {
 }
 
 function sdPaperSheet(x, y) {
-  return sdRoundedBox(x, y - 0.02, PAPER_HALF_W, 0.465, 0.064);
+  return sdRoundedBox(x, y - 0.035, PAPER_HALF_W, 0.465, 0.064);
 }
 
 function sdFolderFront(x, y) {
@@ -192,7 +191,7 @@ function drawChronosTabEye(col, x, y, gx, gy, rOuter, rGem) {
   const bezelA = smoothstep(AA, -AA, dOuter);
   if (bezelA > 0) {
     const bt = clamp((y - (gy - rOuter)) / (2 * rOuter), 0, 1);
-    const bc = mix3([242, 245, 252], [156, 165, 188], bt);
+    const bc = mix3([198, 206, 226], [140, 148, 172], bt);
     blendOnOpaque(col, bc[0], bc[1], bc[2], bezelA * 0.96);
   }
   blendOnOpaque(col, 14, 17, 26, smoothstep(AA, -AA, sdCircle(x, y, gx, gy, rOuter * 0.72)) * 0.96);
@@ -221,7 +220,7 @@ function sampleIcon(x, y) {
     blendOnOpaque(bCol, 158, 168, 198, smoothstep(AA, -AA, dBackRim) * topRimMask * 0.36);
     const crease = smoothstep(-0.50, PAPER_TOP_Y + 0.01, y) * 0.28;
     blendOnOpaque(bCol, 10, 12, 18, crease);
-    drawChronosTabEye(bCol, x, y, -0.56, -0.595, 0.066, 0.038);
+    drawChronosTabEye(bCol, x, y, -0.56, -0.595, 0.078, 0.046);
     blendOverPremul(out, bCol[0], bCol[1], bCol[2], backA);
   }
 
@@ -241,24 +240,21 @@ function sampleIcon(x, y) {
     const fy = clamp((y - FRONT_TOP_Y) / (FOLDER_BOT_Y - FRONT_TOP_Y), 0, 1);
     const fx = clamp((x + FOLDER_HALF_W) / (2 * FOLDER_HALF_W), 0, 1);
     const diag = clamp(fy * 0.72 + fx * 0.28, 0, 1);
-    const fCol = mix3([62, 69, 90], [22, 26, 37], diag);
+    const fCol = mix3([84, 92, 120], [32, 37, 52], diag);
 
     const sheenBand = Math.exp(-Math.pow((x * 0.65 + (y - FRONT_CY) * 0.75 + 0.36) / 0.56, 2));
-    addGlow(fCol, 166, 158, 218, sheenBand * 0.14);
+    addGlow(fCol, 166, 158, 218, sheenBand * 0.18);
 
     const hx = x;
     const hy = y - FRONT_CY;
     const hr = Math.hypot(hx, hy);
-    addGlow(fCol, 244, 124, 70, Math.exp(-hr * hr * 6.8) * 0.14);
-
-    const dDialRing = Math.abs(hr - 0.445) - 0.0042;
-    blendOnOpaque(fCol, 184, 194, 226, smoothstep(AA * 1.4, -AA * 1.4, dDialRing) * 0.13);
+    addGlow(fCol, 244, 124, 70, Math.exp(-hr * hr * 6.8) * 0.18);
 
     const dOuterEdge = Math.abs(dFront + 0.011) - 0.0068;
     const outerEdgeA = smoothstep(AA, -AA, dOuterEdge);
-    blendOnOpaque(fCol, 134, 144, 174, outerEdgeA * 0.25);
+    blendOnOpaque(fCol, 134, 144, 174, outerEdgeA * 0.34);
     const topHi = smoothstep(FRONT_TOP_Y + 0.072, FRONT_TOP_Y, y);
-    blendOnOpaque(fCol, 198, 206, 232, outerEdgeA * topHi * 0.48);
+    blendOnOpaque(fCol, 206, 213, 238, outerEdgeA * topHi * 0.62);
     const botShade = smoothstep(FOLDER_BOT_Y - 0.095, FOLDER_BOT_Y, y) * 0.38;
     blendOnOpaque(fCol, 10, 12, 19, botShade);
 
@@ -277,9 +273,8 @@ function sampleIcon(x, y) {
       );
 
       const feathers = [
-        { f: wings.f3, hi: [164, 170, 192], lo: [96, 104, 128] },
-        { f: wings.f2, hi: [198, 204, 224], lo: [120, 128, 152] },
-        { f: wings.f1, hi: [236, 240, 250], lo: [146, 154, 178] },
+        { f: wings.f2, hi: [224, 229, 243], lo: [138, 147, 174] },
+        { f: wings.f1, hi: [240, 243, 251], lo: [158, 165, 188] },
       ];
       for (const item of feathers) {
         blendOnOpaque(fCol, 12, 15, 24, smoothstep(0.026, -0.004, item.f.d) * 0.34);
@@ -293,11 +288,11 @@ function sampleIcon(x, y) {
       }
     }
 
-    const H = 0.338;
-    const wCap = 0.262;
-    const wWaist = 0.046;
+    const H = 0.40;
+    const wCap = 0.30;
+    const wWaist = 0.055;
     const capW = wCap + 0.068;
-    const capH = 0.043;
+    const capH = 0.05;
 
     const shY = hy - 0.032;
     const dTotalSh = Math.min(
@@ -318,17 +313,17 @@ function sampleIcon(x, y) {
     const dCavity = sdHourglassBody(hx, hy, H - 0.008, wCap - 0.036, wWaist - 0.012);
     const cavityMask = smoothstep(AA, -AA, dCavity);
     if (cavityMask > 0) {
-      const topSurface = -0.195 + 0.040 * Math.exp(-(hx * hx) / 0.018);
-      const upperMask = smoothstep(-AA, AA, hy - topSurface) * smoothstep(AA, -AA, hy - 0.012);
-      const moundSurface = 0.095 + 1.04 * hx * hx + 0.12 * Math.abs(hx);
+      const topSurface = -0.23 + 0.045 * Math.exp(-(hx * hx) / 0.022);
+      const upperMask = smoothstep(-AA, AA, hy - topSurface) * smoothstep(AA, -AA, hy - 0.014);
+      const moundSurface = 0.115 + 1.04 * hx * hx + 0.12 * Math.abs(hx);
       const lowerMask = smoothstep(-AA, AA, hy - moundSurface);
-      const dStream = sdSegment(hx, hy, 0, -0.015, 0, 0.118) - 0.0155;
+      const dStream = sdSegment(hx, hy, 0, -0.018, 0, 0.135) - 0.018;
       const streamMask = smoothstep(AA, -AA, dStream);
-      const streamHi = streamMask * smoothstep(0.122, 0.065, hy);
+      const streamHi = streamMask * smoothstep(0.142, 0.075, hy);
 
       const sandA = clamp(Math.max(upperMask, lowerMask, streamMask), 0, 1) * cavityMask;
       if (sandA > 0) {
-        const st = clamp((hy + 0.21) / 0.55, 0, 1);
+        const st = clamp((hy + 0.24) / 0.62, 0, 1);
         const sCol = mix3([255, 166, 108], [212, 78, 42], st);
         const topHi2 = Math.exp(-Math.pow((hy - topSurface) / 0.028, 2)) * upperMask * 0.44;
         const boost = clamp(streamHi * 0.56 + Math.exp(-(hx * hx) / 0.024) * 0.12 + topHi2, 0, 0.80);
@@ -337,13 +332,13 @@ function sampleIcon(x, y) {
       }
     }
 
-    if (hx < -0.05 && hy > -0.28 && hy < -0.07) {
-      const dInnerSpec = Math.abs(dGlass + 0.046) - 0.008;
-      const arcFade = smoothstep(-0.28, -0.22, hy) * smoothstep(-0.07, -0.13, hy);
+    if (hx < -0.05 && hy > -0.33 && hy < -0.08) {
+      const dInnerSpec = Math.abs(dGlass + 0.052) - 0.008;
+      const arcFade = smoothstep(-0.33, -0.26, hy) * smoothstep(-0.08, -0.15, hy);
       blendOnOpaque(fCol, 255, 255, 255, smoothstep(AA, -AA, dInnerSpec) * arcFade * 0.38);
     }
 
-    const dGlassStroke = Math.abs(dGlass) - 0.024;
+    const dGlassStroke = Math.abs(dGlass) - 0.03;
     const strokeA = smoothstep(AA, -AA, dGlassStroke);
     if (strokeA > 0) {
       const gt2 = clamp((hy + H) / (2 * H), 0, 1);
@@ -366,7 +361,7 @@ function sampleIcon(x, y) {
     }
 
     const dWaist = Math.hypot(hx, hy);
-    addGlow(fCol, 255, 198, 136, Math.exp(-dWaist * dWaist * 150) * 0.28);
+    addGlow(fCol, 255, 198, 136, Math.exp(-dWaist * dWaist * 110) * 0.32);
 
     blendOverPremul(out, fCol[0], fCol[1], fCol[2], frontA);
   }

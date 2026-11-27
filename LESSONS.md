@@ -45,6 +45,7 @@
 - **身份公式连怪癖都要照抄。** 用 `chars()` 代替 `encode_utf16()` 会让含 emoji 的路径算出不同的 ID。用 `canonicalize` 求 `rootKey` 会引入 `\\?\` 前缀。`detail_json` 的键序是手工拼串保住的。`mtime` 列声明是 INTEGER，真实库里绝大多数行却是 REAL。来源：`index/ident.rs`、`domain/path_win32.rs`、`index/derive.rs`、`storage/mod.rs`。
 - **同一毫秒里的两次操作要有不同的事件身份。** 连续重命名、移动、删除曾在事件身份上碰撞，事件被静默丢弃。现在用严格单调的时间戳。来源：`index/file_ops.rs` 的 `monotonic_now_iso`。
 - **被跳过的对拍不算跑过。** 身份向量夹具不在 git 里，缺文件时那个测试打印 `[skip]` 就返回。来源：`domain/vectors_fixture_test.rs`。
+- **品牌徽是四份独立拷贝，换图标要一次换完。** 同一枚「司辰翼漏银匣徽」分别活在 `gen-icon.mjs`（→ `app-icon.png` → `icons/**`）、`BrandMark.tsx`、`public/guanlan-logo.svg` 与 `index.html` 的内联 favicon 里，互相没有引用；只改桌面源图会留下一新一旧两套母题。测试只锁配色 hex 与少量像素探针，锁不住几何漂移，改完要在 16–64px 明暗底对照图上逐格目检。来源：`test/brand-chronos-identity.test.ts`。
 
 ## 并发与状态
 

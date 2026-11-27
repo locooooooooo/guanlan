@@ -53,32 +53,32 @@ export const BrandMark: React.FC<BrandMarkProps> = ({ size = 'sm', className = '
             <stop offset="0%" stopColor="#323848" />
             <stop offset="100%" stopColor="#1A1E29" />
           </linearGradient>
-          <linearGradient id={paperGradId} x1="16" y1="8.8" x2="16" y2="11.2" gradientUnits="userSpaceOnUse">
+          <linearGradient id={paperGradId} x1="16" y1="8" x2="16" y2="10.4" gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="#F5F1EA" />
             <stop offset="100%" stopColor="#CCCFE0" />
           </linearGradient>
-          <linearGradient id={frontGradId} x1="4" y1="10" x2="28" y2="28.5" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#3E455A" />
-            <stop offset="56%" stopColor="#262B3B" />
-            <stop offset="100%" stopColor="#161A25" />
+          <linearGradient id={frontGradId} x1="4" y1="10.3" x2="28" y2="28.5" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#545C78" />
+            <stop offset="56%" stopColor="#363D53" />
+            <stop offset="100%" stopColor="#202534" />
           </linearGradient>
           <radialGradient id={sheenGlowId} cx="32%" cy="32%" r="64%">
-            <stop offset="0%" stopColor="#A69EDA" stopOpacity="0.18" />
+            <stop offset="0%" stopColor="#A69EDA" stopOpacity="0.22" />
             <stop offset="100%" stopColor="#A69EDA" stopOpacity="0" />
           </radialGradient>
           <linearGradient id={wingHiGradId} x1="16" y1="15.2" x2="16" y2="20.4" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#E8ECF8" />
-            <stop offset="100%" stopColor="#9DA6BE" />
+            <stop offset="0%" stopColor="#F0F3FB" />
+            <stop offset="100%" stopColor="#98A1BC" />
           </linearGradient>
           <linearGradient id={wingLoGradId} x1="16" y1="17.8" x2="16" y2="22.4" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#BDC4D9" />
-            <stop offset="100%" stopColor="#727C98" />
+            <stop offset="0%" stopColor="#C9CFE2" />
+            <stop offset="100%" stopColor="#8A93AE" />
           </linearGradient>
-          <linearGradient id={silverGradId} x1="16" y1="12.6" x2="16" y2="25.8" gradientUnits="userSpaceOnUse">
+          <linearGradient id={silverGradId} x1="16" y1="11.8" x2="16" y2="26.9" gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="#FAFBFD" />
             <stop offset="100%" stopColor="#A8B0C4" />
           </linearGradient>
-          <linearGradient id={sandGradId} x1="16" y1="15.2" x2="16" y2="24.5" gradientUnits="userSpaceOnUse">
+          <linearGradient id={sandGradId} x1="16" y1="15.5" x2="16" y2="25.5" gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="#FFA66C" />
             <stop offset="48%" stopColor="#F07440" />
             <stop offset="100%" stopColor="#D44E2A" />
@@ -90,66 +90,54 @@ export const BrandMark: React.FC<BrandMarkProps> = ({ size = 'sm', className = '
           fill={`url(#${backGradId})`}
         />
 
-        <circle cx="7.05" cy="6.48" r="1.12" fill="#DCE2F0" />
-        <circle cx="7.05" cy="6.48" r="0.80" fill="#10131C" />
-        <circle cx="7.05" cy="6.48" r="0.56" fill="#F07440" />
+        <circle cx="7.05" cy="6.48" r="1.25" fill="#C6CEE2" />
+        <circle cx="7.05" cy="6.48" r="0.90" fill="#10131C" />
+        <circle cx="7.05" cy="6.48" r="0.74" fill="#F07440" />
 
         <rect
           x="2.9"
-          y="8.88"
+          y="8"
           width="26.2"
-          height="3.2"
+          height="2.9"
           rx="1.05"
           fill={`url(#${paperGradId})`}
         />
 
         <rect
           x="1.6"
-          y="10"
+          y="10.24"
           width="28.8"
-          height="18.48"
+          height="18.24"
           rx="2.35"
           fill={`url(#${frontGradId})`}
         />
         <rect
           x="1.6"
-          y="10"
+          y="10.24"
           width="28.8"
-          height="18.48"
+          height="18.24"
           rx="2.35"
           fill={`url(#${sheenGlowId})`}
         />
-        <circle
-          cx="16"
-          cy="19.24"
-          r="7.1"
-          stroke="#B8C2E2"
-          strokeOpacity="0.16"
-          strokeWidth="0.45"
-        />
         <rect
           x="1.96"
-          y="10.36"
+          y="10.6"
           width="28.08"
-          height="17.76"
+          height="17.52"
           rx="2.0"
           stroke="#98A2C0"
-          strokeOpacity="0.28"
+          strokeOpacity="0.36"
           strokeWidth="0.72"
         />
         <path
-          d="M3.95 10.36H28.05"
+          d="M3.95 10.6H28.05"
           stroke="#CBD3EB"
-          strokeOpacity="0.48"
+          strokeOpacity="0.6"
           strokeWidth="0.72"
           strokeLinecap="round"
         />
 
         <g>
-          <path
-            d="M14.1 20.6C12.2 20.3 10.3 20.6 8.8 21.5C10.5 22.1 12.6 21.8 14.3 21.2Z"
-            fill={`url(#${wingLoGradId})`}
-          />
           <path
             d="M14.2 19.7C11.6 18.6 8.8 18.3 6.5 19.1C8.6 20.4 11.7 20.7 14.3 20.4Z"
             fill={`url(#${wingLoGradId})`}
@@ -157,10 +145,6 @@ export const BrandMark: React.FC<BrandMarkProps> = ({ size = 'sm', className = '
           <path
             d="M14.3 18.8C11.2 16.5 7.5 15.5 4.6 16.5C7.1 18.4 10.8 19.4 14.4 19.6Z"
             fill={`url(#${wingHiGradId})`}
-          />
-          <path
-            d="M17.9 20.6C19.8 20.3 21.7 20.6 23.2 21.5C21.5 22.1 19.4 21.8 17.7 21.2Z"
-            fill={`url(#${wingLoGradId})`}
           />
           <path
             d="M17.8 19.7C20.4 18.6 23.2 18.3 25.5 19.1C23.4 20.4 20.3 20.7 17.7 20.4Z"
@@ -173,37 +157,37 @@ export const BrandMark: React.FC<BrandMarkProps> = ({ size = 'sm', className = '
         </g>
 
         <path
-          d="M11.82 13.84C11.82 16.6 14.72 18.08 15.26 19.24C14.72 20.4 11.82 21.88 11.82 24.64H20.18C20.18 21.88 17.28 20.4 16.74 19.24C17.28 18.08 20.18 16.6 20.18 13.84Z"
+          d="M11.2 12.96C11.2 16.24 14.5 18 15.2 19.36C14.5 20.72 11.2 22.48 11.2 25.76H20.8C20.8 22.48 17.5 20.72 16.8 19.36C17.5 18 20.8 16.24 20.8 12.96Z"
           fill="#0F121B"
           fillOpacity="0.94"
         />
 
         <path
-          d="M12.82 15.96Q16 16.68 19.18 15.96C18.56 17.48 16.76 18.44 16 19.24C15.24 18.44 13.44 17.48 12.82 15.96Z"
+          d="M12.4 15.5Q16 17.5 19.6 15.5C18.9 17.3 16.8 18.4 16 19.36C15.2 18.4 13.1 17.3 12.4 15.5Z"
           fill={`url(#${sandGradId})`}
         />
         <path
-          d="M12.24 24.46C12.98 22.24 14.64 21.06 16 21.06C17.36 21.06 19.02 22.24 19.76 24.46Z"
+          d="M11.7 25.5C12.5 22.9 14.4 21.3 16 21.3C17.6 21.3 19.5 22.9 20.3 25.5Z"
           fill={`url(#${sandGradId})`}
         />
         <line
           x1="16"
-          y1="18.85"
+          y1="18.9"
           x2="16"
-          y2="21.35"
+          y2="21.86"
           stroke="#FFDAA6"
-          strokeWidth="0.9"
+          strokeWidth="1.0"
           strokeLinecap="round"
         />
 
         <path
-          d="M11.82 13.84C11.82 16.6 14.72 18.08 15.26 19.24C14.72 20.4 11.82 21.88 11.82 24.64H20.18C20.18 21.88 17.28 20.4 16.74 19.24C17.28 18.08 20.18 16.6 20.18 13.84Z"
+          d="M11.2 12.96C11.2 16.24 14.5 18 15.2 19.36C14.5 20.72 11.2 22.48 11.2 25.76H20.8C20.8 22.48 17.5 20.72 16.8 19.36C17.5 18 20.8 16.24 20.8 12.96Z"
           stroke={`url(#${silverGradId})`}
-          strokeWidth="0.94"
+          strokeWidth="1.06"
           strokeLinejoin="round"
         />
-        <rect x="10.72" y="12.74" width="10.56" height="1.48" rx="0.74" fill={`url(#${silverGradId})`} />
-        <rect x="10.72" y="24.22" width="10.56" height="1.48" rx="0.74" fill={`url(#${silverGradId})`} />
+        <rect x="10.1" y="11.8" width="11.8" height="1.6" rx="0.8" fill={`url(#${silverGradId})`} />
+        <rect x="10.1" y="25.32" width="11.8" height="1.6" rx="0.8" fill={`url(#${silverGradId})`} />
       </svg>
     </span>
   );

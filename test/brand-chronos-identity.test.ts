@@ -96,11 +96,12 @@ test('司辰翼漏银匣徽 SSR 与独立矢量标 public/guanlan-logo.svg：四
       html.includes('preserveAspectRatio="xMidYMid meet"'),
       'SVG 必须锁定等比居中缩放'
     );
-    assert.ok(html.includes('#3E455A') && html.includes('#161A25'), '文件夹前板应为曜石缎面灰蓝渐变');
+    assert.ok(html.includes('#545C78') && html.includes('#202534'), '文件夹前板应为提亮后的曜石缎面灰蓝渐变');
     assert.ok(html.includes('#F5F1EA'), '夹层应含温润象牙纸页');
-    assert.ok(html.includes('#E8ECF8') && html.includes('#BDC4D9'), '应含司辰对称拉丝银翼渐变');
+    assert.ok(html.includes('#F0F3FB') && html.includes('#C9CFE2'), '应含司辰对称拉丝银翼渐变');
     assert.ok(html.includes('#F07440') && html.includes('#D44E2A'), '沙漏流沙与折耳眼应为司辰朱砂琥珀');
     assert.equal(html.includes('#5868DA'), false, '不得退回高饱和塑料宝蓝');
+    assert.equal(html.includes('#3E455A'), false, '不得退回提亮前的旧前板深灰');
     assert.equal(html.includes('animate'), false, '品牌徽保持静态');
     assert.equal(html.includes('fill-rule="evenodd"'), false, '不得退回旧版偏心新月星盘环');
     assert.equal(/<circle[^>]*r="2\.1"/.test(html), false, '不得退回旧版中心实点圆徽');
@@ -110,9 +111,9 @@ test('司辰翼漏银匣徽 SSR 与独立矢量标 public/guanlan-logo.svg：四
   assert.ok(existsSync(logoSvgPath), 'public/guanlan-logo.svg 应存在');
   const logoSvg = readFileSync(logoSvgPath, 'utf8');
   assert.ok(
-    logoSvg.includes('#3E455A') &&
+    logoSvg.includes('#545C78') &&
       logoSvg.includes('#F5F1EA') &&
-      logoSvg.includes('#E8ECF8') &&
+      logoSvg.includes('#F0F3FB') &&
       logoSvg.includes('#F07440'),
     '独立矢量标应与 BrandMark 配色和母题一致'
   );
@@ -204,14 +205,15 @@ test('窗口标题、元数据、安装包描述、中英文 README 与 1024px �
   assert.ok(html.includes('name="theme-color" content="#1A1E29"'), 'theme-color 应匹配曜石品牌主色');
   assert.ok(html.includes(BRAND_SLOGAN_NOTE), 'index.html description 应同步升级后的 Slogan 副句');
   assert.ok(
-    html.includes('%23343B4F') &&
+    html.includes('%23414A63') &&
       html.includes('%23F2EFE9') &&
-      html.includes('%23B8C0D6') &&
+      html.includes('%23C9CFE2') &&
       html.includes('%23F07440'),
     '浏览器 favicon 应为曜石文件夹 + 折耳朱砂眼 + 象牙夹页 + 司辰银翼与朱砂沙漏'
   );
   assert.equal(html.includes('%234F5FD0'), false, 'favicon 不得残留旧亮宝蓝');
   assert.equal(html.includes('%23112030'), false, 'favicon 不得残留旧深色方框底');
+  assert.equal(html.includes('%23343B4F'), false, 'favicon 不得残留提亮前的旧前板深灰');
   assert.equal(html.includes('可追溯知识工作台'), false);
 
   const tauri = JSON.parse(
@@ -254,6 +256,12 @@ test('窗口标题、元数据、安装包描述、中英文 README 与 1024px �
   assert.ok(
     eyePx[0] > 215 && eyePx[1] > 100 && eyePx[2] < 140 && eyePx[0] > eyePx[2] + 90,
     `折耳权杖核心眼应呈暖朱砂色，实得 rgba(${eyePx.join(',')})`
+  );
+  const eyeRingPx = pixelAt(225, 170);
+  assert.equal(eyeRingPx[3], 255, '折耳朱砂眼外环上沿应不透明');
+  assert.ok(
+    eyeRingPx[0] > 175 && eyeRingPx[1] > 185 && eyeRingPx[2] > 205,
+    `折耳眼外环应放大至该点呈精钢银环而非折耳底色，实得 rgba(${eyeRingPx.join(',')})`
   );
   const paperPx = pixelAt(512, 300);
   assert.equal(paperPx[3], 255, '夹层纸页应不透明');
