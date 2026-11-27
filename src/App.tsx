@@ -155,6 +155,9 @@ function AppContent() {
           ctx.multiProjects.setAddProjectError(null);
           ctx.multiProjects.setAddProjectModalOpen(true);
         }}
+        onRemoveManagedProject={(projectId) => {
+          void ctx.multiProjects.handleRemoveProject(projectId);
+        }}
         readingIslandFiles={ctx.files}
         readingStates={ctx.readingStates}
         onOpenDocFromIsland={(fileId) => void ctx.openDocResumeReading(fileId)}

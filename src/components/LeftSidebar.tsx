@@ -12,8 +12,12 @@ import {
   Cog,
   Eye,
   EyeOff,
+  File,
+  FileArchive,
   FileCode,
+  FileImage,
   FilePlus2,
+  FileSpreadsheet,
   FileText,
   Filter,
   Folder,
@@ -31,6 +35,7 @@ import {
   Pin,
   PinOff,
   Plus,
+  Presentation,
   RefreshCw,
   RotateCcw,
   Search,
@@ -54,7 +59,6 @@ import type {
 } from '../services/apiTypes';
 import type { FileFacets } from '../services/workspaceClient';
 import type { MountedTreeCacheEntry } from '../hooks/useDirectoryShell';
-import type { ProjectTreeCacheEntry } from '../hooks/useMultiProjects';
 import { hasUnreadChanges, unreadStatusLabel, type UnreadReason } from '../utils/guanlanEngine';
 import { readingRecency } from '../utils/readingStateStore';
 import { formatRelativeObservedAt } from '../utils/timeFormat';
@@ -86,7 +90,6 @@ import {
 import { extractCoreSummary } from '../utils/taskPackages';
 import { MountedWorkspacesSection } from './sidebar/MountedWorkspacesSection';
 import {
-  ProjectTreeBranch,
   SIDEBAR_DENSE_FOLDER_THRESHOLD,
   VirtualFileSlice,
 } from './sidebar/ProjectTreeBranch';
@@ -115,7 +118,7 @@ import {
   SegmentedControl,
   SegmentedControlItem,
 } from './ui';
-import { formatUiMeta } from '../utils/formatMeta';
+import { formatClassOf, formatUiMeta, type FormatClass } from '../utils/formatMeta';
 
 export type QuickScope =
   | 'all'
@@ -188,28 +191,13 @@ interface LeftSidebarProps {
   } | null;
   projects?: ProjectEntryDto[];
   activeProjectId?: string;
-  expandedProjects?: ReadonlySet<string>;
-  projectTrees?: Record<string, ProjectTreeCacheEntry>;
   globalPins?: GlobalPinnedFile[];
   onToggleGlobalPin?: (item: GlobalPinnedFile) => void;
   onOpenGlobalPin?: (item: GlobalPinnedFile) => void;
-  onToggleProjectExpanded?: (projectId: string) => void;
-  onActivateProject?: (projectId: string, opts?: { folder?: string; fileId?: string }) => void;
-  onOpenAddProject?: () => void;
   onRenameProject?: (projectId: string, newName: string) => Promise<boolean> | void;
   onToggleProjectReadonly?: (projectId: string, nextReadonly: boolean) => Promise<boolean> | void;
   onRescanProject?: (projectId: string) => void;
   onRemoveProject?: (projectId: string) => void;
-  onCreateFolderInProject?: (
-    projectId: string,
-    parentDir: string,
-    name: string
-  ) => Promise<string | null> | void;
-  onCreateDocumentInProject?: (
-    projectId: string,
-    targetDir: string,
-    name: string
-  ) => Promise<string | null> | void;
 }
 
 const FILTER_ROW_BASE =
@@ -222,6 +210,8 @@ const ROW_COUNT =
   'font-mono text-[length:var(--text-micro)] leading-[var(--lh-micro)] tabular-nums text-[color:var(--ink-soft)] shrink-0';
 const TREE_ROW_ACTIVE =
   'bg-card/95 border-transparent text-[color:var(--ink-strong)] font-semibold shadow-[0_2px_8px_-2px_rgba(38,36,61,0.10),0_0_0_1px_var(--glass-hairline)]';
+const FOLDER_FILTER_ACTIVE =
+  'bg-[color:color-mix(in_srgb,var(--accent-iris)_9%,var(--card))] border-transparent border-l-[3px] border-l-[color:var(--accent-iris-deep)] text-[color:var(--accent-iris-ink)] font-semibold';
 const isSystemDirName = (name: string) => /^_/.test(name) || /^output/i.test(name);
 
 const SMART_VIEW_ICONS: Record<SmartViewId, React.ComponentType<{ className?: string }>> = {
@@ -440,9 +430,10 @@ const InlineCreateRow: React.FC<{
       {Array.from({ length: depth }).map((_, i) => (
         <span
           key={i}
-          className="w-3 self-stretch shrink-0 border-l border-[color:var(--glass-hairline)]"
+          className="w-2.5 self-stretch shrink-0 border-l border-[color:var(--glass-hairline)]"
         />
       ))}
+      <span className="w-4 shrink-0" aria-hidden="true" />
       {kind === 'folder' ? (
         <FolderPlus className="w-3.5 h-3.5 shrink-0 text-[color:var(--accent-iris-deep)]" />
       ) : (
@@ -543,6 +534,27 @@ function getCachedMixedFormats(files: readonly FileRecord[]): boolean {
   }
   return cached;
 }
+
+const FORMAT_CLASS_ICONS: Record<FormatClass, React.ComponentType<{ className?: string }>> = {
+  markdown: FileText,
+  text: FileText,
+  code: FileCode,
+  vector: FileImage,
+  image: FileImage,
+  document: FileText,
+  spreadsheet: FileSpreadsheet,
+  presentation: Presentation,
+  archive: FileArchive,
+  audio: File,
+  video: File,
+  font: File,
+  binary: File,
+};
+
+const SidebarFileIcon: React.FC<{ format: string | null | undefined }> = ({ format }) => {
+  const Icon = FORMAT_CLASS_ICONS[formatClassOf(format)];
+  return <Icon aria-hidden="true" className="w-3.5 h-3.5 shrink-0 text-[color:var(--ink-faint)]" />;
+};
 
 const SidebarFileLeafImpl: React.FC<{
   file: FileRecord;
@@ -668,7 +680,14 @@ const SidebarFileLeafImpl: React.FC<{
           className="w-2.5 self-stretch shrink-0 border-l border-[color:var(--glass-hairline)] group-hover/row:border-[color:var(--btn-secondary-border-hover)]"
         />
       ))}
-      {batchMode && <BatchCheckbox state={batchSelected ? 'on' : 'off'} />}
+      {batchMode ? (
+        <span className="w-4 h-4 shrink-0 flex items-center justify-center">
+          <BatchCheckbox state={batchSelected ? 'on' : 'off'} />
+        </span>
+      ) : (
+        <span className="w-4 shrink-0" aria-hidden="true" data-sidebar-file-chevron-spacer="" />
+      )}
+      <SidebarFileIcon format={file.format} />
       <span
         className={`flex-1 min-w-0 text-left truncate text-[12px] ${
           active || batchSelected
@@ -873,7 +892,7 @@ export const FolderTreeRows: React.FC<{
         : drag?.dropTarget || isDropTarget
           ? treeDropTone
           : active
-            ? TREE_ROW_ACTIVE
+            ? FOLDER_FILTER_ACTIVE
             : FILTER_ROW_IDLE;
       const activityDetail =
         !node.isEmpty && activity
@@ -1005,10 +1024,13 @@ export const FolderTreeRows: React.FC<{
               <button
                 type="button"
                 className="flex-1 min-w-0 text-left truncate cursor-pointer"
-                title={`点击进入目录 ${node.path}/（双击重命名）`}
+                title={
+                  hasExpandable || isCreatingInside
+                    ? `点击展开/收起 ${node.path}/（双击重命名；右侧按钮按此目录筛选）`
+                    : `${node.path}/（双击重命名；右侧按钮按此目录筛选）`
+                }
                 onClick={() => {
-                  if (hasExpandable && !isOpen) onToggle(node.path);
-                  onSelect(active ? 'all' : node.path);
+                  if (hasExpandable || isCreatingInside) onToggle(node.path);
                 }}
                 onDoubleClick={(e) => {
                   if (batchMode || !onStartRenameFolder) return;
@@ -1017,6 +1039,27 @@ export const FolderTreeRows: React.FC<{
                 }}
               >
                 <HighlightedLabel text={node.name} query={quickFilter} />
+              </button>
+            )}
+            {!isRenaming && !batchMode && (
+              <button
+                type="button"
+                data-folder-filter={node.path}
+                aria-pressed={active}
+                aria-label={active ? `取消目录筛选 ${node.name}` : `仅筛选目录 ${node.name}`}
+                title={active ? `取消目录筛选「${node.path}/」` : `仅查看目录「${node.path}/」`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (hasExpandable && !isOpen && !active) onToggle(node.path);
+                  onSelect(active ? 'all' : node.path);
+                }}
+                className={`${
+                  active
+                    ? 'flex bg-[color:color-mix(in_srgb,var(--accent-iris)_14%,transparent)] text-[color:var(--accent-iris-ink)]'
+                    : 'hidden group-hover/row:flex text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--accent-iris-ink)]'
+                } w-5 h-5 rounded-[6px] items-center justify-center shrink-0 cursor-pointer transition-colors`}
+              >
+                <Filter className="w-3 h-3" />
               </button>
             )}
             {!isRenaming && !batchMode && (
@@ -1476,20 +1519,13 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   inlineActionSignal = null,
   projects = [],
   activeProjectId = '',
-  expandedProjects,
-  projectTrees = {},
   globalPins = [],
   onToggleGlobalPin,
   onOpenGlobalPin,
-  onToggleProjectExpanded,
-  onActivateProject,
-  onOpenAddProject,
   onRenameProject,
   onToggleProjectReadonly,
   onRescanProject,
   onRemoveProject,
-  onCreateFolderInProject,
-  onCreateDocumentInProject,
 }) => {
   const [baselineConfirmOpen, setBaselineConfirmOpen] = useState(false);
   const [baselineBusy, setBaselineBusy] = useState(false);
@@ -1768,12 +1804,19 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const [renamingProjectId, setRenamingProjectId] = useState<string | null>(null);
   const [projectRenameDraft, setProjectRenameDraft] = useState('');
   const [projectRenameBusy, setProjectRenameBusy] = useState(false);
-  const [projectInlineCreate, setProjectInlineCreate] = useState<{
-    projectId: string;
-    parentDir: string;
-    kind: 'folder' | 'doc';
-  } | null>(null);
-  const [projectInlineCreateBusy, setProjectInlineCreateBusy] = useState(false);
+
+  const activeProject = useMemo(
+    () =>
+      projects.length > 0
+        ? projects.find((p) => p.project_id === activeProjectId) ?? projects[0]
+        : null,
+    [projects, activeProjectId]
+  );
+
+  useEffect(() => {
+    setProjectMenuId(null);
+    setRenamingProjectId(null);
+  }, [activeProject?.project_id]);
 
   useEffect(() => {
     if (!projectMenuId) return;
@@ -1791,11 +1834,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [projectMenuId]);
-
-  const globalPinnedKeys = useMemo(
-    () => new Set(globalPins.map((p) => `${p.projectId}:${p.fileId}`)),
-    [globalPins]
-  );
 
   const mergedPinnedItems = useMemo(() => {
     const out: Array<
@@ -1816,29 +1854,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     }
     return out;
   }, [activeProjectId, globalPins, pinnedFiles]);
-
-  const handleSubmitProjectInlineCreate = async (name: string) => {
-    if (!projectInlineCreate || projectInlineCreateBusy) return;
-    setProjectInlineCreateBusy(true);
-    try {
-      if (projectInlineCreate.kind === 'folder' && onCreateFolderInProject) {
-        await onCreateFolderInProject(
-          projectInlineCreate.projectId,
-          projectInlineCreate.parentDir,
-          name
-        );
-      } else if (projectInlineCreate.kind === 'doc' && onCreateDocumentInProject) {
-        await onCreateDocumentInProject(
-          projectInlineCreate.projectId,
-          projectInlineCreate.parentDir,
-          name
-        );
-      }
-    } finally {
-      setProjectInlineCreateBusy(false);
-      setProjectInlineCreate(null);
-    }
-  };
 
   const handleCommitProjectRename = async () => {
     if (!renamingProjectId || projectRenameBusy || !onRenameProject) {
@@ -2643,7 +2658,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           title={
             treeDrag.isDragging
               ? '释放到此可将文件或文件夹移回当前项目根目录'
-              : '多项目真实目录结构（含空文件夹；点击 + 添加本地项目目录，支持多项目同时展开与原地整理）'
+              : '当前项目真实目录结构（含空文件夹；切换项目请点击顶部项目下拉）'
           }
         >
           <span className="flex items-center gap-1.5 min-w-0 text-[length:var(--text-micro)] leading-[var(--lh-micro)] font-semibold tracking-wider text-[color:var(--ink-soft)]">
@@ -2651,30 +2666,12 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
             <span className="truncate">
               {rootDropActive
                 ? '释放移至根目录'
-                : projects.length > 0
+                : activeProject
                 ? '项目目录'
                 : '工作区目录'}
             </span>
-            {projects.length > 1 && !rootDropActive && (
-              <span className="font-mono text-[10px] tabular-nums rounded-full px-1.5 py-0 bg-[color:var(--depth-1-bg)] text-[color:var(--ink-soft)] shrink-0">
-                {projects.length}
-              </span>
-            )}
           </span>
           <div className="flex items-center gap-0.5 shrink-0">
-            {onOpenAddProject && (
-              <button
-                type="button"
-                data-add-project-btn=""
-                onClick={onOpenAddProject}
-                title="添加本地项目文件夹（多项目并列管理，自动索引）"
-                aria-label="添加项目"
-                className="px-1.5 h-5 rounded-[6px] inline-flex items-center gap-0.5 text-[10.5px] font-medium text-[color:var(--accent-iris-ink)] bg-[color:var(--chip-active-bg)] hover:bg-[color:var(--chip-active-border)]/30 cursor-pointer transition-colors"
-              >
-                <Plus className="w-3 h-3" />
-                <span>项目</span>
-              </button>
-            )}
             {desktopSystemSupported && onImportIntoFolder && !batchMode && (
               <button
                 type="button"
@@ -2808,351 +2805,257 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           className="flex-1 min-h-0"
           viewportClassName="px-1.5 pb-2 quiet-row"
         >
-          {projects.length > 0 ? (
-            <div className="space-y-1.5" data-multi-project-tree="">
-              {projects.map((project) => {
-                const isActive = project.project_id === (activeProjectId || projects[0]?.project_id);
-                const isExpanded = expandedProjects ? expandedProjects.has(project.project_id) : isActive;
-                const isOffline =
-                  project.status === 'offline' ||
-                  project.status === 'root_in_use' ||
-                  project.status === 'error';
-                const isRenaming = renamingProjectId === project.project_id;
-                const menuOpen = projectMenuId === project.project_id;
-                const canWriteProject = !project.readonly && !isOffline;
+          {activeProject ? (() => {
+            const project = activeProject;
+            const isOffline =
+              project.status === 'offline' ||
+              project.status === 'root_in_use' ||
+              project.status === 'error';
+            const isRenaming = renamingProjectId === project.project_id;
+            const menuOpen = projectMenuId === project.project_id;
+            const canWriteProject = !project.readonly && !isOffline;
 
-                return (
+            return (
+              <div className="space-y-1" data-active-project-tree="">
+                <div
+                  key={project.project_id}
+                  data-project-node={project.project_id}
+                  data-project-active="true"
+                  className="relative"
+                >
                   <div
-                    key={project.project_id}
-                    data-project-node={project.project_id}
-                    data-project-active={isActive ? 'true' : 'false'}
-                    className="relative"
+                    data-drop-folder=""
+                    onDragOver={
+                      dragRowProps ? (e) => treeDrag.handleFolderDragOver(e, '') : undefined
+                    }
+                    onDragLeave={
+                      dragRowProps ? (e) => treeDrag.handleFolderDragLeave(e, '') : undefined
+                    }
+                    onDrop={
+                      dragRowProps ? (e) => treeDrag.handleFolderDrop(e, '') : undefined
+                    }
+                    className="group/proj flex items-center gap-1.5 px-2 py-1.5 rounded-[10px] border bg-[color:var(--chip-active-bg)] border-[color:var(--chip-active-border)] text-[color:var(--ink-strong)] font-semibold transition-colors"
+                    title={`${project.name} · ${project.root_path}${
+                      project.readonly ? '（只读归档保护）' : ''
+                    }${project.error ? ` · ${project.error}` : ''}`}
                   >
-                    <div
-                      data-drop-folder={isActive ? '' : undefined}
-                      onDragOver={
-                        isActive && dragRowProps
-                          ? (e) => treeDrag.handleFolderDragOver(e, '')
-                          : undefined
-                      }
-                      onDragLeave={
-                        isActive && dragRowProps
-                          ? (e) => treeDrag.handleFolderDragLeave(e, '')
-                          : undefined
-                      }
-                      onDrop={
-                        isActive && dragRowProps
-                          ? (e) => treeDrag.handleFolderDrop(e, '')
-                          : undefined
-                      }
-                      className={`group/proj flex items-center gap-1 px-1.5 py-1.5 rounded-[10px] border transition-colors ${
-                        isActive
-                          ? 'bg-[color:var(--chip-active-bg)] border-[color:var(--chip-active-border)] text-[color:var(--ink-strong)] font-semibold'
-                          : 'border-transparent text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)]'
-                      }`}
-                      title={`${project.name} · ${project.root_path}${
-                        project.readonly ? '（只读归档保护）' : ''
-                      }${project.error ? ` · ${project.error}` : ''}`}
-                    >
+                    {project.is_scanning ? (
+                      <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-[color:var(--accent-iris-deep)]" />
+                    ) : project.readonly ? (
+                      <Lock className="w-3.5 h-3.5 shrink-0 text-[color:var(--accent-iris-deep)]" />
+                    ) : (
+                      <FolderOpen className="w-3.5 h-3.5 shrink-0 text-[color:var(--accent-iris-deep)]" />
+                    )}
+
+                    {isRenaming ? (
+                      <input
+                        type="text"
+                        autoFocus
+                        disabled={projectRenameBusy}
+                        value={projectRenameDraft}
+                        onChange={(e) => setProjectRenameDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            void handleCommitProjectRename();
+                          } else if (e.key === 'Escape') {
+                            e.preventDefault();
+                            setRenamingProjectId(null);
+                          }
+                        }}
+                        onBlur={() => void handleCommitProjectRename()}
+                        className="flex-1 min-w-0 bg-background rounded px-1.5 py-0.5 text-[12px] font-medium text-[color:var(--ink-strong)] border border-[color:var(--accent-iris-deep)] focus:outline-none"
+                      />
+                    ) : (
                       <button
                         type="button"
-                        data-project-toggle={project.project_id}
-                        aria-label={isExpanded ? `收起项目 ${project.name}` : `展开项目 ${project.name}`}
-                        onClick={() => onToggleProjectExpanded?.(project.project_id)}
-                        className="w-4 h-4 shrink-0 flex items-center justify-center rounded text-[color:var(--ink-faint)] hover:text-[color:var(--ink-strong)] cursor-pointer"
+                        data-project-select={project.project_id}
+                        onClick={() => onUpdateFilters({ folder: 'all', quickScope: 'all' })}
+                        className="flex-1 min-w-0 text-left truncate text-[12.5px] leading-tight cursor-pointer"
                       >
-                        {isExpanded ? (
-                          <ChevronDown className="w-3.5 h-3.5" />
-                        ) : (
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        )}
+                        {project.name}
                       </button>
+                    )}
 
-                      {project.is_scanning ? (
-                        <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-[color:var(--accent-iris-deep)]" />
-                      ) : project.readonly ? (
-                        <Lock
-                          className={`w-3.5 h-3.5 shrink-0 ${
-                            isActive ? 'text-[color:var(--accent-iris-deep)]' : 'text-[color:var(--ink-faint)]'
-                          }`}
-                        />
-                      ) : isExpanded ? (
-                        <FolderOpen
-                          className={`w-3.5 h-3.5 shrink-0 ${
-                            isActive ? 'text-[color:var(--accent-iris-deep)]' : 'text-[color:var(--ink-faint)]'
-                          }`}
-                        />
-                      ) : (
-                        <Folder
-                          className={`w-3.5 h-3.5 shrink-0 ${
-                            isActive ? 'text-[color:var(--accent-iris-deep)]' : 'text-[color:var(--ink-faint)]'
-                          }`}
-                        />
-                      )}
-
-                      {isRenaming ? (
-                        <input
-                          type="text"
-                          autoFocus
-                          disabled={projectRenameBusy}
-                          value={projectRenameDraft}
-                          onChange={(e) => setProjectRenameDraft(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              void handleCommitProjectRename();
-                            } else if (e.key === 'Escape') {
-                              e.preventDefault();
-                              setRenamingProjectId(null);
-                            }
-                          }}
-                          onBlur={() => void handleCommitProjectRename()}
-                          className="flex-1 min-w-0 bg-background rounded px-1.5 py-0.5 text-[12px] font-medium text-[color:var(--ink-strong)] border border-[color:var(--accent-iris-deep)] focus:outline-none"
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          data-project-select={project.project_id}
-                          onClick={() => {
-                            if (isActive) {
-                              onUpdateFilters({ folder: 'all', quickScope: 'all' });
-                              if (!isExpanded) onToggleProjectExpanded?.(project.project_id);
-                            } else if (!isOffline) {
-                              onActivateProject?.(project.project_id);
-                            }
-                          }}
-                          className="flex-1 min-w-0 text-left truncate text-[12.5px] leading-tight cursor-pointer"
-                        >
-                          {project.name}
-                        </button>
-                      )}
-
-                      {!isRenaming && (
-                        <span
-                          className={`${
-                            menuOpen ? 'flex' : 'hidden group-hover/proj:flex'
-                          } items-center gap-0.5 shrink-0`}
-                        >
-                          {canWriteProject && (
-                            <>
-                              <button
-                                type="button"
-                                data-project-create-folder={project.project_id}
-                                title={`在「${project.name}」根目录新建文件夹`}
-                                aria-label={`在 ${project.name} 新建文件夹`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (!isExpanded) onToggleProjectExpanded?.(project.project_id);
-                                  if (isActive) {
-                                    handleStartInlineCreate('', 'folder');
-                                  } else {
-                                    setProjectInlineCreate({
-                                      projectId: project.project_id,
-                                      parentDir: '',
-                                      kind: 'folder',
-                                    });
-                                  }
-                                }}
-                                className="w-5 h-5 rounded-[6px] flex items-center justify-center text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] cursor-pointer"
-                              >
-                                <FolderPlus className="w-3 h-3" />
-                              </button>
-                              <button
-                                type="button"
-                                data-project-create-doc={project.project_id}
-                                title={`在「${project.name}」根目录新建 Markdown 文档`}
-                                aria-label={`在 ${project.name} 新建文档`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (!isExpanded) onToggleProjectExpanded?.(project.project_id);
-                                  if (isActive) {
-                                    handleStartInlineCreate('', 'doc');
-                                  } else {
-                                    setProjectInlineCreate({
-                                      projectId: project.project_id,
-                                      parentDir: '',
-                                      kind: 'doc',
-                                    });
-                                  }
-                                }}
-                                className="w-5 h-5 rounded-[6px] flex items-center justify-center text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] cursor-pointer"
-                              >
-                                <Plus className="w-3 h-3" />
-                              </button>
-                            </>
-                          )}
-                          <button
-                            type="button"
-                            data-project-menu-btn={project.project_id}
-                            aria-label={`项目 ${project.name} 更多操作`}
-                            title="项目操作菜单"
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setProjectMenuId((cur) =>
-                                cur === project.project_id ? null : project.project_id
-                              );
-                            }}
-                            className="w-5 h-5 rounded-[6px] flex items-center justify-center text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] cursor-pointer"
-                          >
-                            <MoreHorizontal className="w-3.5 h-3.5" />
-                          </button>
-                        </span>
-                      )}
-
-                      {!isRenaming && !menuOpen && (projects.length > 1 || isOffline) && (
-                        <span className="flex items-center gap-1 shrink-0 group-hover/proj:hidden">
-                          {isOffline ? (
-                            <span className="font-mono text-[10px] text-[color:var(--stage-ink-exec-text)]">
-                              离线
-                            </span>
-                          ) : (
-                            <span className="font-mono text-[10.5px] tabular-nums text-[color:var(--ink-soft)]">
-                              {isActive ? totalCount ?? files.length : project.file_count}
-                            </span>
-                          )}
-                        </span>
-                      )}
-                    </div>
-
-                    {menuOpen && (
-                      <div
-                        role="menu"
-                        data-project-menu={project.project_id}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        className="glass-pop absolute right-1 top-8 z-40 w-44 rounded-[11px] border border-[color:var(--glass-hairline)] p-1 shadow-xl space-y-0.5 text-[12px]"
+                    {!isRenaming && (
+                      <span
+                        className={`${
+                          menuOpen ? 'flex' : 'hidden group-hover/proj:flex'
+                        } items-center gap-0.5 shrink-0`}
                       >
-                        {!isActive && !isOffline && (
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setProjectMenuId(null);
-                              onActivateProject?.(project.project_id);
-                            }}
-                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-[7px] text-left text-[color:var(--ink-strong)] hover:bg-[color:var(--chip-active-bg)] hover:text-[color:var(--accent-iris-ink)] cursor-pointer"
-                          >
-                            <FolderOpen className="w-3.5 h-3.5 shrink-0" />
-                            <span>设为当前聚焦项目</span>
-                          </button>
-                        )}
                         {canWriteProject && (
                           <>
                             <button
                               type="button"
-                              role="menuitem"
-                              onClick={() => {
-                                setProjectMenuId(null);
-                                if (!isExpanded) onToggleProjectExpanded?.(project.project_id);
-                                if (isActive) {
-                                  handleStartInlineCreate('', 'folder');
-                                } else {
-                                  setProjectInlineCreate({
-                                    projectId: project.project_id,
-                                    parentDir: '',
-                                    kind: 'folder',
-                                  });
-                                }
+                              data-project-create-folder={project.project_id}
+                              title={`在「${project.name}」根目录新建文件夹`}
+                              aria-label={`在 ${project.name} 新建文件夹`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStartInlineCreate('', 'folder');
                               }}
-                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-[7px] text-left text-[color:var(--ink-strong)] hover:bg-accent cursor-pointer"
+                              className="w-5 h-5 rounded-[6px] flex items-center justify-center text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] cursor-pointer"
                             >
-                              <FolderPlus className="w-3.5 h-3.5 shrink-0 text-[color:var(--ink-soft)]" />
-                              <span>新建文件夹</span>
+                              <FolderPlus className="w-3 h-3" />
                             </button>
                             <button
                               type="button"
-                              role="menuitem"
-                              onClick={() => {
-                                setProjectMenuId(null);
-                                if (!isExpanded) onToggleProjectExpanded?.(project.project_id);
-                                if (isActive) {
-                                  handleStartInlineCreate('', 'doc');
-                                } else {
-                                  setProjectInlineCreate({
-                                    projectId: project.project_id,
-                                    parentDir: '',
-                                    kind: 'doc',
-                                  });
-                                }
+                              data-project-create-doc={project.project_id}
+                              title={`在「${project.name}」根目录新建 Markdown 文档`}
+                              aria-label={`在 ${project.name} 新建文档`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStartInlineCreate('', 'doc');
                               }}
-                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-[7px] text-left text-[color:var(--ink-strong)] hover:bg-accent cursor-pointer"
+                              className="w-5 h-5 rounded-[6px] flex items-center justify-center text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] cursor-pointer"
                             >
-                              <FilePlus2 className="w-3.5 h-3.5 shrink-0 text-[color:var(--ink-soft)]" />
-                              <span>新建 Markdown 文档</span>
+                              <Plus className="w-3 h-3" />
                             </button>
                           </>
                         )}
-                        {!isOffline && onRescanProject && (
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setProjectMenuId(null);
-                              onRescanProject(project.project_id);
-                            }}
-                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-[7px] text-left text-[color:var(--ink-strong)] hover:bg-accent cursor-pointer"
-                          >
-                            <RefreshCw className="w-3.5 h-3.5 shrink-0 text-[color:var(--ink-soft)]" />
-                            <span>重新扫描此项目</span>
-                          </button>
-                        )}
-                        {onRenameProject && (
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setProjectMenuId(null);
-                              setRenamingProjectId(project.project_id);
-                              setProjectRenameDraft(project.name);
-                            }}
-                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-[7px] text-left text-[color:var(--ink-strong)] hover:bg-accent cursor-pointer"
-                          >
-                            <Pencil className="w-3.5 h-3.5 shrink-0 text-[color:var(--ink-soft)]" />
-                            <span>重命名显示名</span>
-                          </button>
-                        )}
-                        {onToggleProjectReadonly && (
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setProjectMenuId(null);
-                              void onToggleProjectReadonly(project.project_id, !project.readonly);
-                            }}
-                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-[7px] text-left text-[color:var(--ink-strong)] hover:bg-accent cursor-pointer"
-                          >
-                            {project.readonly ? (
-                              <LockOpen className="w-3.5 h-3.5 shrink-0 text-[color:var(--ink-soft)]" />
-                            ) : (
-                              <Lock className="w-3.5 h-3.5 shrink-0 text-[color:var(--ink-soft)]" />
-                            )}
-                            <span>{project.readonly ? '恢复读写模式' : '开启只读保护'}</span>
-                          </button>
-                        )}
-                        {projects.length > 1 && onRemoveProject && (
-                          <>
-                            <div className="my-1 border-t border-[color:var(--glass-hairline)]" />
-                            <button
-                              type="button"
-                              role="menuitem"
-                              data-project-remove={project.project_id}
-                              onClick={() => {
-                                setProjectMenuId(null);
-                                onRemoveProject(project.project_id);
-                              }}
-                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-[7px] text-left text-[color:var(--btn-danger-ink)] hover:bg-accent cursor-pointer"
-                            >
-                              <Unlink className="w-3.5 h-3.5 shrink-0" />
-                              <span>移出列表（不删磁盘）</span>
-                            </button>
-                          </>
-                        )}
-                      </div>
+                        <button
+                          type="button"
+                          data-project-menu-btn={project.project_id}
+                          aria-label={`项目 ${project.name} 更多操作`}
+                          title="项目操作菜单"
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setProjectMenuId((cur) =>
+                              cur === project.project_id ? null : project.project_id
+                            );
+                          }}
+                          className="w-5 h-5 rounded-[6px] flex items-center justify-center text-[color:var(--ink-soft)] hover:bg-accent hover:text-[color:var(--ink-strong)] cursor-pointer"
+                        >
+                          <MoreHorizontal className="w-3.5 h-3.5" />
+                        </button>
+                      </span>
                     )}
 
-                    {isExpanded &&
-                      (isActive ? (
-                        <div className="pl-2 mt-0.5 space-y-0.5">
+                    {!isRenaming && !menuOpen && (
+                      <span className="flex items-center gap-1 shrink-0 group-hover/proj:hidden">
+                        {isOffline ? (
+                          <span className="font-mono text-[10px] text-[color:var(--stage-ink-exec-text)]">
+                            离线
+                          </span>
+                        ) : (
+                          <span className="font-mono text-[10.5px] tabular-nums text-[color:var(--ink-soft)]">
+                            {totalCount ?? files.length}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </div>
+
+                  {menuOpen && (
+                    <div
+                      role="menu"
+                      data-project-menu={project.project_id}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      className="glass-pop absolute right-1 top-8 z-40 w-44 rounded-[11px] border border-[color:var(--glass-hairline)] p-1 shadow-xl space-y-0.5 text-[12px]"
+                    >
+                      {canWriteProject && (
+                        <>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setProjectMenuId(null);
+                              handleStartInlineCreate('', 'folder');
+                            }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-[7px] text-left text-[color:var(--ink-strong)] hover:bg-accent cursor-pointer"
+                          >
+                            <FolderPlus className="w-3.5 h-3.5 shrink-0 text-[color:var(--ink-soft)]" />
+                            <span>新建文件夹</span>
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setProjectMenuId(null);
+                              handleStartInlineCreate('', 'doc');
+                            }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-[7px] text-left text-[color:var(--ink-strong)] hover:bg-accent cursor-pointer"
+                          >
+                            <FilePlus2 className="w-3.5 h-3.5 shrink-0 text-[color:var(--ink-soft)]" />
+                            <span>新建 Markdown 文档</span>
+                          </button>
+                        </>
+                      )}
+                      {!isOffline && onRescanProject && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setProjectMenuId(null);
+                            onRescanProject(project.project_id);
+                          }}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-[7px] text-left text-[color:var(--ink-strong)] hover:bg-accent cursor-pointer"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5 shrink-0 text-[color:var(--ink-soft)]" />
+                          <span>重新扫描此项目</span>
+                        </button>
+                      )}
+                      {onRenameProject && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setProjectMenuId(null);
+                            setRenamingProjectId(project.project_id);
+                            setProjectRenameDraft(project.name);
+                          }}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-[7px] text-left text-[color:var(--ink-strong)] hover:bg-accent cursor-pointer"
+                        >
+                          <Pencil className="w-3.5 h-3.5 shrink-0 text-[color:var(--ink-soft)]" />
+                          <span>重命名显示名</span>
+                        </button>
+                      )}
+                      {onToggleProjectReadonly && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setProjectMenuId(null);
+                            void onToggleProjectReadonly(project.project_id, !project.readonly);
+                          }}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-[7px] text-left text-[color:var(--ink-strong)] hover:bg-accent cursor-pointer"
+                        >
+                          {project.readonly ? (
+                            <LockOpen className="w-3.5 h-3.5 shrink-0 text-[color:var(--ink-soft)]" />
+                          ) : (
+                            <Lock className="w-3.5 h-3.5 shrink-0 text-[color:var(--ink-soft)]" />
+                          )}
+                          <span>{project.readonly ? '恢复读写模式' : '开启只读保护'}</span>
+                        </button>
+                      )}
+                      {projects.length > 1 && onRemoveProject && (
+                        <>
+                          <div className="my-1 border-t border-[color:var(--glass-hairline)]" />
+                          <button
+                            type="button"
+                            role="menuitem"
+                            data-project-remove={project.project_id}
+                            onClick={() => {
+                              setProjectMenuId(null);
+                              onRemoveProject(project.project_id);
+                            }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-[7px] text-left text-[color:var(--btn-danger-ink)] hover:bg-accent cursor-pointer"
+                          >
+                            <Unlink className="w-3.5 h-3.5 shrink-0" />
+                            <span>移出列表（不删磁盘）</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {isOffline ? (
+                    <div className="px-3 py-2 text-[11px] text-[color:var(--ink-faint)]">
+                      {project.error || '该项目目录当前不可访问'}
+                    </div>
+                  ) : (
+                    <div className="mt-1 space-y-0.5">
                           {inlineCreate?.parentDir === '' && (
                             <InlineCreateRow
                               kind={inlineCreate.kind}
@@ -3355,49 +3258,12 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                               )}
                             </>
                           )}
-                        </div>
-                      ) : (
-                        <ProjectTreeBranch
-                          project={project}
-                          cache={projectTrees[project.project_id]}
-                          inlineCreate={
-                            projectInlineCreate?.projectId === project.project_id
-                              ? {
-                                  parentDir: projectInlineCreate.parentDir,
-                                  kind: projectInlineCreate.kind,
-                                }
-                              : null
-                          }
-                          inlineCreateBusy={projectInlineCreateBusy}
-                          onStartInlineCreate={
-                            canWriteProject && (onCreateFolderInProject || onCreateDocumentInProject)
-                              ? (parentDir, kind) =>
-                                  setProjectInlineCreate({
-                                    projectId: project.project_id,
-                                    parentDir,
-                                    kind,
-                                  })
-                              : undefined
-                          }
-                          onSubmitInlineCreate={(name) =>
-                            void handleSubmitProjectInlineCreate(name)
-                          }
-                          onCancelInlineCreate={() => setProjectInlineCreate(null)}
-                          onOpenFolder={(pid, folderPath) =>
-                            onActivateProject?.(pid, { folder: folderPath })
-                          }
-                          onOpenFile={(pid, fileId) =>
-                            onActivateProject?.(pid, { fileId })
-                          }
-                          onToggleGlobalPin={onToggleGlobalPin}
-                          globalPinnedKeys={globalPinnedKeys}
-                        />
-                      ))}
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })() : (
             <>
               {inlineCreate?.parentDir === '' && (
                 <InlineCreateRow
@@ -3621,17 +3487,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 </>
               )}
             </>
-          )}
-
-          {filters.folder !== 'all' && (
-            <button
-              type="button"
-              onClick={() => onUpdateFilters({ folder: 'all' })}
-              className={`${FILTER_ROW_BASE} group/row cursor-pointer border-transparent bg-[color:var(--depth-1-bg-soft)] hover:bg-[color:var(--depth-1-bg)] text-[color:var(--ink-soft)] hover:text-[color:var(--ink-strong)] mt-1`}
-            >
-              <span className="w-4 shrink-0" />
-              <span className="flex-1 min-w-0 text-left truncate">清除文件夹筛选</span>
-            </button>
           )}
 
           {mounts.length > 0 && onOpenMountManager && onExpandMount && onOpenMountedFile && (

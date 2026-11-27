@@ -130,13 +130,6 @@ export function useMultiProjects({
             return next;
           });
         }
-        if (opts.reloadExpandedTrees) {
-          for (const p of nextList) {
-            if (p.project_id !== nextActive && expandedRef.current.has(p.project_id)) {
-              void loadProjectTree(p.project_id, true);
-            }
-          }
-        }
       }
       if (ovRes.ok && ovRes.data) {
         setOverview(ovRes.data);

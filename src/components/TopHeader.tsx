@@ -7,6 +7,7 @@ import {
   FolderOpen,
   FolderPlus,
   HelpCircle,
+  Loader2,
   Lock,
   Monitor,
   Moon,
@@ -107,6 +108,7 @@ interface TopHeaderProps {
   activeProjectId?: string;
   onActivateProject?: (projectId: string) => void;
   onOpenAddProject?: () => void;
+  onRemoveManagedProject?: (projectId: string) => void;
   readingIslandFiles?: FileRecord[];
   readingStates?: ReadingStateMap;
   onOpenDocFromIsland?: (fileId: string) => void;
@@ -168,6 +170,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   activeProjectId = '',
   onActivateProject,
   onOpenAddProject,
+  onRemoveManagedProject,
   readingIslandFiles,
   readingStates,
   onOpenDocFromIsland,
@@ -516,19 +519,24 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             </span>
           </a>
 
-          {(config.rootPath || desktopWorkspaceSupported) && (
+          {(config.rootPath || desktopWorkspaceSupported || managedProjects.length > 0) && (
             <div className="relative min-w-0 shrink-0" ref={workspaceMenuRef}>
               <button
                 type="button"
                 data-workspace-switcher
                 aria-expanded={isWorkspaceMenuOpen}
                 onClick={() => setIsWorkspaceMenuOpen((v) => !v)}
-                title={config.rootPath || '管理与切换项目文件夹'}
+                title={
+                  managedProjects.length > 1
+                    ? `${config.rootPath || '当前项目'}（共 ${managedProjects.length} 个项目，点击下拉切换）`
+                    : config.rootPath || '管理与切换项目文件夹'
+                }
                 className="flex items-center gap-1 max-w-[112px] sm:max-w-[144px] h-7 rounded-[var(--r-ctl)] border border-border bg-card hover:border-ring/40 px-2 text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-strong)] cursor-pointer motion-safe:transition-colors overflow-hidden"
               >
                 <FolderOpen className="w-3 h-3 shrink-0 text-[color:var(--accent-iris-deep)]" />
                 <span className="truncate font-medium">
                   {managedProjects.find((p) => p.project_id === activeProjectId)?.name ||
+                    managedProjects[0]?.name ||
                     workspaceName ||
                     (config.rootPath
                       ? config.rootPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || config.rootPath
@@ -591,42 +599,64 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                             proj.status === 'root_in_use' ||
                             proj.status === 'error';
                           return (
-                            <button
+                            <div
                               key={proj.project_id}
-                              type="button"
-                              disabled={isOffline}
-                              data-switcher-project={proj.project_id}
-                              onClick={() => {
-                                setIsWorkspaceMenuOpen(false);
-                                if (!isCurrent) onActivateProject?.(proj.project_id);
-                              }}
-                              title={proj.root_path}
-                              className={`w-full flex items-center justify-between gap-2 rounded-[var(--r-ctl)] px-2 py-1.5 text-left transition-colors ${
+                              className={`flex items-center gap-1 rounded-[var(--r-ctl)] border transition-colors ${
                                 isCurrent
-                                  ? 'bg-[color:var(--chip-active-bg)] border border-[color:var(--chip-active-border)]'
-                                  : 'border border-transparent hover:bg-accent cursor-pointer'
-                              } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                  ? 'bg-[color:var(--chip-active-bg)] border-[color:var(--chip-active-border)]'
+                                  : 'border-transparent hover:bg-accent'
+                              }`}
                             >
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5 text-[12px] font-medium text-[color:var(--ink-strong)] truncate">
-                                  <span className="truncate">{proj.name}</span>
-                                  {proj.readonly && (
-                                    <Lock className="w-3 h-3 shrink-0 text-[color:var(--ink-faint)]" />
-                                  )}
-                                  {isCurrent && (
-                                    <span className="text-[10px] text-[color:var(--accent-iris-ink)] shrink-0">
-                                      当前
-                                    </span>
-                                  )}
+                              <button
+                                type="button"
+                                disabled={isOffline}
+                                data-switcher-project={proj.project_id}
+                                onClick={() => {
+                                  setIsWorkspaceMenuOpen(false);
+                                  if (!isCurrent) onActivateProject?.(proj.project_id);
+                                }}
+                                title={proj.root_path}
+                                className="flex-1 min-w-0 flex items-center justify-between gap-2 px-2 py-1.5 text-left cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 text-[12px] font-medium text-[color:var(--ink-strong)] truncate">
+                                    {proj.is_scanning && (
+                                      <Loader2 className="w-3 h-3 shrink-0 animate-spin text-[color:var(--accent-iris-deep)]" />
+                                    )}
+                                    <span className="truncate">{proj.name}</span>
+                                    {proj.readonly && (
+                                      <Lock className="w-3 h-3 shrink-0 text-[color:var(--ink-faint)]" />
+                                    )}
+                                    {isCurrent && (
+                                      <span className="text-[10px] text-[color:var(--accent-iris-ink)] shrink-0">
+                                        当前
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="font-mono text-[10.5px] text-[color:var(--ink-soft)] truncate">
+                                    {proj.root_path}
+                                  </div>
                                 </div>
-                                <div className="font-mono text-[10.5px] text-[color:var(--ink-soft)] truncate">
-                                  {proj.root_path}
-                                </div>
-                              </div>
-                              <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-[color:var(--ink-soft)]">
-                                {isOffline ? '离线' : `${proj.file_count} 份`}
-                              </span>
-                            </button>
+                                <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-[color:var(--ink-soft)]">
+                                  {isOffline ? '离线' : `${proj.file_count} 份`}
+                                </span>
+                              </button>
+                              {managedProjects.length > 1 && onRemoveManagedProject && (
+                                <button
+                                  type="button"
+                                  data-switcher-remove-project={proj.project_id}
+                                  aria-label={`移出项目 ${proj.name}`}
+                                  title="移出列表（不删磁盘）"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRemoveManagedProject(proj.project_id);
+                                  }}
+                                  className="mr-1.5 p-1 rounded-[6px] text-[color:var(--ink-faint)] hover:text-[color:var(--btn-danger-ink)] hover:bg-card/80 cursor-pointer shrink-0"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
                           );
                         })}
                       </div>

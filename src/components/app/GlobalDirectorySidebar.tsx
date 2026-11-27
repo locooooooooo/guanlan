@@ -158,8 +158,6 @@ export function GlobalDirectorySidebar({ ctx }: { ctx: WorkspaceStoreCtx }) {
       inlineActionSignal={sidebarInlineAction}
       projects={multiProjects.projects}
       activeProjectId={multiProjects.activeProjectId}
-      expandedProjects={multiProjects.expandedProjects}
-      projectTrees={multiProjects.projectTrees}
       globalPins={multiProjects.globalPins}
       onToggleGlobalPin={multiProjects.toggleGlobalPin}
       onOpenGlobalPin={(pin) => {
@@ -171,26 +169,6 @@ export function GlobalDirectorySidebar({ ctx }: { ctx: WorkspaceStoreCtx }) {
         });
         setIsMobileLeftOpen(false);
       }}
-      onToggleProjectExpanded={multiProjects.toggleProjectExpanded}
-      onActivateProject={(projectId, opts) => {
-        void multiProjects.handleActivateProject(
-          projectId,
-          opts
-            ? {
-                projectId,
-                folder: opts.folder,
-                fileId: opts.fileId,
-                openTab: opts.fileId || opts.folder !== undefined ? 'library' : undefined,
-                libraryMode: opts.fileId ? 'read' : opts.folder !== undefined ? 'overview' : undefined,
-              }
-            : undefined
-        );
-        setIsMobileLeftOpen(false);
-      }}
-      onOpenAddProject={() => {
-        multiProjects.setAddProjectError(null);
-        multiProjects.setAddProjectModalOpen(true);
-      }}
       onRenameProject={(projectId, newName) =>
         multiProjects.handleUpdateProject(projectId, { name: newName })
       }
@@ -199,8 +177,6 @@ export function GlobalDirectorySidebar({ ctx }: { ctx: WorkspaceStoreCtx }) {
       }
       onRescanProject={(projectId) => void multiProjects.handleRescanProject(projectId)}
       onRemoveProject={(projectId) => void multiProjects.handleRemoveProject(projectId)}
-      onCreateFolderInProject={multiProjects.handleCreateFolderInProject}
-      onCreateDocumentInProject={multiProjects.handleCreateDocumentInProject}
     />
   );
 

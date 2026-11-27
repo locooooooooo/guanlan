@@ -116,6 +116,7 @@ const MountedFileRow: React.FC<{
           className="w-2.5 self-stretch shrink-0 border-l border-[color:var(--glass-hairline)]"
         />
       ))}
+      <span className="w-3.5 shrink-0" aria-hidden="true" />
       <span className="w-3.5 shrink-0 flex items-center justify-center">
         <span
           aria-hidden="true"

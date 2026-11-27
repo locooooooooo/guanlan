@@ -621,6 +621,58 @@ export function formatMiddleEllipsisName(
     .join('')}${ext}`;
 }
 
+/**
+ * 路径中段省略纯函数：
+ * - 统一 `/` 分隔并去除首尾斜杠；未超限原样返回；
+ * - 多段路径优先保留首段与尽量多的末尾目录段及完整文件名（如 `native/…/application/bootstrap_tests.rs`
+ *   或 `…/application/bootstrap_tests.rs`），避免尾部截断丢失末级目录与文件名。
+ */
+export function formatMiddleEllipsisPath(rawPath: string, maxChars = 34): string {
+  const safeMax = Math.max(10, Math.floor(maxChars));
+  const norm = normalizeFolderPath(rawPath);
+  if (!norm) return '';
+  if (Array.from(norm).length <= safeMax) return norm;
+
+  const parts = norm.split('/').filter(Boolean);
+  if (parts.length <= 1) return formatMiddleEllipsisName(norm, 0, safeMax);
+
+  const first = parts[0];
+  const last = parts[parts.length - 1];
+  const prefixWithFirst = `${first}/…/`;
+
+  if (parts.length >= 3) {
+    const parentAndLast = `${parts[parts.length - 2]}/${last}`;
+    if (Array.from(`${prefixWithFirst}${parentAndLast}`).length <= safeMax) {
+      let tail = parentAndLast;
+      for (let i = parts.length - 3; i >= 1; i -= 1) {
+        const candidate = `${parts[i]}/${tail}`;
+        if (Array.from(`${prefixWithFirst}${candidate}`).length > safeMax) break;
+        tail = candidate;
+      }
+      return `${prefixWithFirst}${tail}`;
+    }
+    if (Array.from(`…/${parentAndLast}`).length <= safeMax) {
+      let tail = parentAndLast;
+      for (let i = parts.length - 3; i >= 0; i -= 1) {
+        const candidate = `${parts[i]}/${tail}`;
+        if (Array.from(`…/${candidate}`).length > safeMax) break;
+        tail = candidate;
+      }
+      return `…/${tail}`;
+    }
+  }
+
+  if (Array.from(`${prefixWithFirst}${last}`).length <= safeMax) {
+    return `${prefixWithFirst}${last}`;
+  }
+
+  if (Array.from(`…/${last}`).length <= safeMax) {
+    return `…/${last}`;
+  }
+
+  return `…/${formatMiddleEllipsisName(last, 0, Math.max(6, safeMax - 2))}`;
+}
+
 
 export const MUTED_FOLDERS_STORAGE_KEY = 'guanlan.mutedFolders.v1';
 

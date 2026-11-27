@@ -127,7 +127,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
                 添加项目文件夹
               </h2>
               <p className="text-[12px] text-[color:var(--ink-soft)] mt-0.5">
-                原地接入本机任意项目目录（零复制、自动建索引并实时监听），与现有项目并列显示在左侧目录栏。
+                原地接入本机任意项目目录（零复制、自动建索引并实时监听），接入后可在顶部项目下拉中随时切换。
               </p>
             </div>
           </div>

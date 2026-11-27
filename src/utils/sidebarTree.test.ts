@@ -11,15 +11,18 @@ import {
   collectSubtreeFileIds,
   expandedProjectsAfterActivate,
   filterMovableFolderTargets,
+  formatMiddleEllipsisPath,
   isFolderMoveBlocked,
   SIDEBAR_WIDTH_MAX,
   SIDEBAR_WIDTH_MIN,
 } from './sidebarTree';
 import { projectSearchHitsToItems } from './crossWorkspaceSearch';
 import { LeftSidebar } from '../components/LeftSidebar';
+import { TopHeader } from '../components/TopHeader';
 import { DirOpsModal } from '../components/DirOpsModal';
 import { AddProjectModal } from '../components/AddProjectModal';
 import { MultiProjectOverviewStrip } from '../components/MultiProjectOverviewStrip';
+import { EMPTY_WORKSPACE_CONFIG } from '../stores/useWorkspaceStore';
 import type { FileRecord } from '../types/guanlan';
 import type {
   MountedFileEntryDto,
@@ -268,7 +271,7 @@ test('buildProjectFolderTree & projectSearchHitsToItems：多项目树空目录�
   assert.equal(mapped[0].sourceWorkspace?.name, '项目 B');
 });
 
-test('多项目 SSR：LeftSidebar 平级多项目树 + AddProjectModal + MultiProjectOverviewStrip', () => {
+test('多项目 SSR：LeftSidebar 仅展示当前单项目，切换入口在 TopHeader 下拉 + AddProjectModal + MultiProjectOverviewStrip', () => {
   const projects: ProjectEntryDto[] = [
     {
       project_id: 'proj_a',
@@ -313,37 +316,6 @@ test('多项目 SSR：LeftSidebar 平级多项目树 + AddProjectModal + MultiPr
       onOpenFileToRead: noop,
       projects,
       activeProjectId: 'proj_a',
-      expandedProjects: new Set(['proj_a', 'proj_b']),
-      projectTrees: {
-        proj_b: {
-          loading: false,
-          data: {
-            ok: true,
-            project_id: 'proj_b',
-            name: '项目 Beta',
-            root_path: 'H:\\beta',
-            readonly: false,
-            is_active: false,
-            status: 'ready',
-            total: 1,
-            truncated: false,
-            folders: ['beta_empty'],
-            files: [
-              {
-                file_id: 'beta_f1',
-                relative_path: 'beta-note.md',
-                title: 'beta-note',
-                format: 'md',
-                folder: '.',
-                current_revision_id: 'beta_f1_r1',
-                updated_at: '2026-11-22T02:00:00Z',
-                revision_count: 1,
-                pending_decisions: 1,
-              },
-            ],
-          },
-        },
-      },
       globalPins: [
         {
           projectId: 'proj_b',
@@ -354,18 +326,89 @@ test('多项目 SSR：LeftSidebar 平级多项目树 + AddProjectModal + MultiPr
           relativePath: 'beta-note.md',
         },
       ],
-      onOpenAddProject: noop,
-      onToggleProjectExpanded: noop,
-      onActivateProject: noop,
       onToggleGlobalPin: noop,
       onOpenGlobalPin: noop,
     })
   );
-  assert.ok(sidebarHtml.includes('data-multi-project-tree'), '多项目树根节点');
-  assert.ok(sidebarHtml.includes('data-project-node="proj_a"'), '包含项目 Alpha');
-  assert.ok(sidebarHtml.includes('data-project-node="proj_b"'), '包含项目 Beta');
-  assert.ok(sidebarHtml.includes('beta_empty'), '非激活项目真实空目录同时展开可见');
-  assert.ok(sidebarHtml.includes('beta-note'), '非激活项目文件与跨项目置顶同时可见');
+  assert.ok(sidebarHtml.includes('data-active-project-tree'), '左侧单项目目录树根节点');
+  assert.ok(!sidebarHtml.includes('data-multi-project-tree'), '左侧不再渲染平级多项目列表');
+  assert.ok(sidebarHtml.includes('data-project-node="proj_a"'), '仅展示当前激活项目 Alpha');
+  assert.ok(!sidebarHtml.includes('data-project-node="proj_b"'), '不展示非激活项目 Beta');
+  assert.ok(!sidebarHtml.includes('data-add-project-btn'), '左侧目录头不再放置添加项目按钮');
+  assert.ok(sidebarHtml.includes('docs'), '当前项目目录树直接展开可见');
+  assert.ok(sidebarHtml.includes('beta-note'), '跨项目置顶条目依然可直达');
+
+  const switchedSidebarHtml = renderToStaticMarkup(
+    React.createElement(LeftSidebar, {
+      files: [makeFile('beta_doc', 'beta_docs')],
+      realFolders: ['beta_docs'],
+      readingStates: {},
+      activeFileId: 'beta_doc',
+      filters: { quickScope: 'all', folder: 'all', format: 'all', role: 'all', topic: 'all' },
+      onUpdateFilters: noop,
+      onResetFilters: noop,
+      onOpenFileToRead: noop,
+      projects,
+      activeProjectId: 'proj_b',
+    })
+  );
+  assert.ok(switchedSidebarHtml.includes('data-project-node="proj_b"'), '切换后仅展示新聚焦项目 Beta');
+  assert.ok(!switchedSidebarHtml.includes('data-project-node="proj_a"'), '切换后旧项目 Alpha 不再留在左侧');
+  assert.ok(switchedSidebarHtml.includes('beta_docs'), '切换后展示新聚焦项目的目录树');
+
+  const offlineSidebarHtml = renderToStaticMarkup(
+    React.createElement(LeftSidebar, {
+      files: [],
+      realFolders: [],
+      readingStates: {},
+      activeFileId: '',
+      filters: { quickScope: 'all', folder: 'all', format: 'all', role: 'all', topic: 'all' },
+      onUpdateFilters: noop,
+      onResetFilters: noop,
+      onOpenFileToRead: noop,
+      projects: [{ ...projects[0], status: 'offline', error: '目录已离线' }],
+      activeProjectId: 'proj_a',
+    })
+  );
+  assert.ok(offlineSidebarHtml.includes('离线'), '离线项目标注离线状态');
+  assert.ok(offlineSidebarHtml.includes('目录已离线'), '离线项目如实显示错误说明');
+
+  const headerHtml = renderToStaticMarkup(
+    React.createElement(TopHeader, {
+      activeTab: 'home',
+      onSelectTab: noop,
+      searchQuery: '',
+      onSearchChange: noop,
+      searchHits: [],
+      onSelectSearchHit: noop,
+      unreadFilesCount: 0,
+      contextBasketCount: 0,
+      eventCount: 0,
+      decisions: [],
+      onOpenDecision: noop,
+      config: { ...EMPTY_WORKSPACE_CONFIG, rootPath: 'H:\\alpha' },
+      dataSource: 'real',
+      scanSummary: '',
+      dataError: null,
+      files: [],
+      sidebarFilters: { quickScope: 'all', folder: 'all', format: 'all', role: 'all', topic: 'all' },
+      onUpdateSidebarFilters: noop,
+      onResetSidebarFilters: noop,
+      libraryMode: 'read',
+      onLibraryModeChange: noop,
+      onOpenSettings: noop,
+      onOpenMcpConsole: noop,
+      onOpenContextDrawer: noop,
+      managedProjects: projects,
+      activeProjectId: 'proj_a',
+      onActivateProject: noop,
+      onOpenAddProject: noop,
+      onRemoveManagedProject: noop,
+    })
+  );
+  assert.ok(headerHtml.includes('data-workspace-switcher'), '顶栏保留项目切换下拉入口');
+  assert.ok(headerHtml.includes('项目 Alpha'), '顶栏下拉触发器展示当前聚焦项目名');
+  assert.ok(headerHtml.includes('共 2 个项目，点击下拉切换'), '顶栏提示从下拉切换多项目');
 
   const modalHtml = renderToStaticMarkup(
     React.createElement(AddProjectModal, {
@@ -377,6 +420,7 @@ test('多项目 SSR：LeftSidebar 平级多项目树 + AddProjectModal + MultiPr
   );
   assert.ok(modalHtml.includes('data-add-project-modal="open"'));
   assert.ok(modalHtml.includes('添加项目文件夹'));
+  assert.ok(modalHtml.includes('顶部项目下拉'), '添加项目弹窗文案指向顶部下拉切换');
 
   const overview: ProjectsOverviewResponseDto = {
     ok: true,
@@ -443,3 +487,23 @@ test('切换聚焦项目：旧聚焦项目收起、新聚焦项目展开，手�
     '无新聚焦项目时不展开任何项目'
   );
 });
+
+test('formatMiddleEllipsisPath：深层路径中段省略，保留首段与末级目录/文件名', () => {
+  assert.equal(
+    formatMiddleEllipsisPath('docs/subsystems/frontend-app.md', 34),
+    'docs/subsystems/frontend-app.md'
+  );
+  assert.equal(
+    formatMiddleEllipsisPath('native\\crates\\guanlan-core\\src\\application\\mod.rs', 34),
+    'native/…/src/application/mod.rs'
+  );
+  assert.equal(
+    formatMiddleEllipsisPath(
+      'native/crates/guanlan-core/src/application/bootstrap_tests.rs',
+      34
+    ),
+    '…/application/bootstrap_tests.rs'
+  );
+  assert.equal(formatMiddleEllipsisPath('README.md', 34), 'README.md');
+});
+

@@ -1360,6 +1360,15 @@ test('侧栏目录树·渲染：目录树视觉极简化——去重复格式色
 
   assert.ok(!html.includes('F76808'), '文件行不再重复渲染左侧亮橙格式色点');
   assert.ok(!html.includes('>MD<'), '清一色目录不重复格式词');
+  assert.ok(
+    html.includes('data-sidebar-file-chevron-spacer'),
+    '文件行预留与文件夹等宽的箭头占位，确保子文件文本不左移到父目录左侧'
+  );
+  assert.match(
+    html,
+    /data-sidebar-file="s_a"[\s\S]*?data-sidebar-file-chevron-spacer[\s\S]*?class="lucide[^"]*w-3\.5 h-3\.5/,
+    '文件行具备与文件夹等宽的占位与中性类型图标'
+  );
 
   const unreadDots = (html.match(/data-sidebar-unread-dot/g) ?? []).length;
   assert.equal(unreadDots, 1, '仅读后有更新文件（s_b）渲染 1 枚提醒微点');
@@ -1393,6 +1402,38 @@ test('侧栏目录树·渲染：目录树视觉极简化——去重复格式色
 
   assert.ok(html.includes('glx-tree-row-in'), '目录行携带展开交错微过渡类');
   assert.ok(html.includes('--glx-tree-idx'), '交错行序写入 --glx-tree-idx');
+  assert.ok(
+    html.includes('data-folder-filter="01-方案文档"'),
+    '目录行提供显式目录筛选钮，与点击目录名展开/收起解耦'
+  );
+
+  const selectedFolderHtml = renderToString(
+    createElement(FolderTreeRows, {
+      nodes: nodes as never,
+      depth: 0,
+      selected: '01-方案文档',
+      activeFileId: 's_a',
+      expanded: new Set(['01-方案文档', '02-评审']),
+      onToggle: () => {},
+      onSelect: () => {},
+      onOpenFileToRead: () => {},
+      folderActivity: summaries,
+      unreadFileIds: collectUnreadFileIds([...denseFiles, ...sparseFiles], readingStates),
+      unreadReasonByFileId,
+    })
+  );
+  assert.ok(
+    selectedFolderHtml.includes('border-l-[color:var(--accent-iris-deep)]'),
+    '目录筛选采用左侧色条区分，不与当前阅读文档白色卡片混同'
+  );
+  const sidebarCode = readFileSync(
+    fileURLToPath(new URL('../src/components/LeftSidebar.tsx', import.meta.url)),
+    'utf8'
+  );
+  assert.ok(
+    !sidebarCode.includes('清除文件夹筛选'),
+    '左侧栏不再重复渲染底部「清除文件夹筛选」，统一走单入口清空'
+  );
 });
 
 test('侧栏目录树·多项目分支：同款减噪（高密隐格式点 / 待拍板数字微标 / 折叠箭头微过渡），无阅读基线不造未读数', () => {

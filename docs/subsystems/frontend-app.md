@@ -9,7 +9,7 @@
 | 入口 | 导入全局样式，首帧之前同步水合明暗主题，挂载 `App`。 | [`src/main.tsx`](../../src/main.tsx) |
 | 装配层 | `App` 是**唯一**调用 `useWorkspaceStore()` 的地方。它只做装配：顶栏、工作区门禁、五个分节、弹窗栈。 | [`src/App.tsx`](../../src/App.tsx) |
 | 状态 | `useWorkspaceStore` 是一个自定义 Hook，不是状态库。全部状态、副作用与处理器都在里面，返回一个 `ctx` 对象。 | [`src/stores/useWorkspaceStore.tsx`](../../src/stores/useWorkspaceStore.tsx) |
-| 分节渲染 | `AppBanners`、`AppMainViews`、`AppLibraryStage`、`AppModalsStack`、`GlobalDirectorySidebar`，都接收 `{ ctx }`。 | [`src/components/app/`](../../src/components/app) |
+| 分节渲染 | `AppBanners`、`AppMainViews`、`AppLibraryStage`、`AppModalsStack`、`GlobalDirectorySidebar`（左侧目录栏仅展示当前聚焦的单个项目目录树，多项目切换与增删统一由顶栏 `TopHeader` 下拉触发），都接收 `{ ctx }`。 | [`src/components/app/`](../../src/components/app) |
 | 取数客户端 | `workspaceClient.ts` 是 `src/` 里**唯一**调用 `fetch` 与 `EventSource` 的模块。 | [`src/services/workspaceClient.ts`](../../src/services/workspaceClient.ts) |
 | 契约类型 | `apiTypes.ts` 手工镜像 Rust DTO；`types/guanlan.ts` 是视图模型与既有的 wire 字段名。 | [`src/services/apiTypes.ts`](../../src/services/apiTypes.ts)、[`src/types/guanlan.ts`](../../src/types/guanlan.ts) |
 | 桌面桥 | `desktopBridge.ts` 包装壳注入的全局对象，在浏览器里全部优雅降级。 | [`src/services/desktopBridge.ts`](../../src/services/desktopBridge.ts) |

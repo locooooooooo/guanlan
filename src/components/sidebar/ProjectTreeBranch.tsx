@@ -204,6 +204,7 @@ const BranchInlineCreateRow: React.FC<{
           className="w-2.5 self-stretch shrink-0 border-l border-[color:var(--glass-hairline)]"
         />
       ))}
+      <span className="w-3.5 shrink-0" aria-hidden="true" />
       {kind === 'folder' ? (
         <FolderPlus className="w-3.5 h-3.5 shrink-0 text-[color:var(--accent-iris-deep)]" />
       ) : (
@@ -284,6 +285,7 @@ export const BranchFileRow: React.FC<{
           className="w-2.5 self-stretch shrink-0 border-l border-[color:var(--glass-hairline)]"
         />
       ))}
+      <span className="w-3.5 shrink-0" aria-hidden="true" />
       {dense ? (
         <span className="w-3.5 shrink-0 flex items-center justify-center" aria-hidden="true" />
       ) : (
