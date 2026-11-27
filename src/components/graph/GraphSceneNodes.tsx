@@ -240,8 +240,13 @@ export function GraphSceneNodes({ ctx }: { ctx: GraphCanvasCtx }) {
               const raw = sceneDateLabel(scene.activeDate, rulerGranularity);
               const compactDate = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw.slice(5) : raw;
               const count = scene.active?.count ?? 0;
-              return `${compactDate} · +${count} 变动`;
+              return count > 0 ? `${compactDate} · +${count} 变动` : compactDate;
             })()}
+            metaText={
+              accumulationSummary
+                ? `第 ${accumulationSummary.chronologicalOrder}/${accumulationSummary.totalActiveDays} 日 · 累计 ${accumulationSummary.cumulativeEvents}`
+                : undefined
+            }
             isHovered={hoveredCanvasNodeId === 'chronos_deity'}
             isSelected={selectedCanvasNodeId === 'chronos_deity'}
             onMouseEnter={() => {

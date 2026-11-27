@@ -3,6 +3,7 @@ import * as d3 from 'd3';
 
 interface ChronosMascotNodeProps {
   epochLabel?: string;
+  metaText?: string;
   x: number;
   y: number;
   activeTimeSlice: 'all' | '0:00' | '1:00' | '2:00';
@@ -171,6 +172,7 @@ export const ChronosMascotNode: React.FC<ChronosMascotNodeProps> = ({
   y,
   activeTimeSlice,
   epochLabel: epochLabelProp,
+  metaText,
   isHovered,
   isSelected,
   isPlaying = false,
@@ -562,51 +564,56 @@ export const ChronosMascotNode: React.FC<ChronosMascotNodeProps> = ({
         </g>
       </g>
 
-      <g transform="translate(2, 136)">
-        <rect
-          x="0"
-          y="0"
-          width="128"
-          height="38"
-          rx="10"
-          style={{
-            fill: isHovered || isSelected || isPlaying ? 'var(--cv-card-selected)' : 'var(--cv-card)',
-            stroke:
-              isPlaying
+      <foreignObject x="-28" y="136" width="192" height="52" className="overflow-visible">
+        <div className="flex justify-center">
+          <div
+            data-chronos-carrier="badge"
+            title={
+              metaText
+                ? `${caption ?? epochLabel}（${metaText}）`
+                : (caption ?? epochLabel)
+            }
+            style={{
+              backgroundColor:
+                isHovered || isSelected || isPlaying ? 'var(--cv-card-selected)' : 'var(--cv-card)',
+              borderColor: isPlaying
                 ? 'color-mix(in srgb, var(--cv-amber) 75%, transparent)'
                 : isHovered || isSelected || activeTimeSlice !== 'all'
                   ? 'color-mix(in srgb, var(--cv-brand) 65%, transparent)'
                   : 'color-mix(in srgb, var(--cv-hairline-ink) 16%, transparent)',
-          }}
-          strokeWidth="1"
-        />
-        <circle
-          cx="12"
-          cy="13"
-          r="3"
-          style={{ fill: isPlaying ? 'var(--cv-amber)' : 'var(--cv-brand)' }}
-          className={isPlaying ? 'cv-stream-glow' : undefined}
-        />
-        <text
-          x="20"
-          y="16"
-          style={{ fill: 'var(--cv-ink)' }}
-          fontSize="10.5"
-          fontWeight="600"
-          fontFamily="var(--font-sans)"
-        >
-          {isPlaying ? '司辰 · 时光流转' : '司辰 · 执掌时间'}
-        </text>
-        <text
-          x="12"
-          y="30.5"
-          style={{ fill: 'var(--cv-amber-ink)' }}
-          fontSize="9.5"
-          fontFamily="var(--font-mono)"
-        >
-          {caption ?? epochLabel}
-        </text>
-      </g>
+            }}
+            className="inline-flex max-w-[184px] flex-col items-center gap-0.5 rounded-[10px] border px-2.5 py-1 shadow-xs"
+          >
+            <div className="flex items-center gap-1.5 min-w-0 max-w-full">
+              <span
+                aria-hidden="true"
+                style={{ backgroundColor: isPlaying ? 'var(--cv-amber)' : 'var(--cv-brand)' }}
+                className={`h-1.5 w-1.5 rounded-full shrink-0 ${isPlaying ? 'cv-stream-glow' : ''}`}
+              />
+              <span
+                style={{ color: 'var(--cv-ink)' }}
+                className="truncate font-sans text-[10px] font-semibold leading-tight"
+              >
+                {isPlaying ? '司辰 · 时光流转' : '司辰 · 执掌时间'}
+              </span>
+            </div>
+            <div
+              style={{ color: 'var(--cv-amber-ink)' }}
+              className="max-w-full truncate font-mono text-[9.5px] leading-tight tabular-nums"
+            >
+              {caption ?? epochLabel}
+            </div>
+            {metaText && (
+              <div
+                style={{ color: 'var(--cv-ink-dim)' }}
+                className="max-w-full truncate font-mono text-[8.5px] leading-tight tabular-nums"
+              >
+                {metaText}
+              </div>
+            )}
+          </div>
+        </div>
+      </foreignObject>
     </g>
   );
 };

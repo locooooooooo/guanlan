@@ -5,7 +5,13 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import CanvasNarrativeDrawer from '../src/components/canvas/CanvasNarrativeDrawer';
-import { GraphNarrativeLinkOverlay } from '../src/components/graph/GraphOverlayLayer';
+import { ChronosMascotNode } from '../src/components/ChronosMascotNode';
+import { GraphTopBar } from '../src/components/graph/graphCanvasChrome';
+import {
+  GraphChronosDropBubble,
+  GraphHoverPreviewCard,
+  GraphNarrativeLinkOverlay,
+} from '../src/components/graph/GraphOverlayLayer';
 import { GraphSpotlightBar } from '../src/components/graph/GraphSpotlightBar';
 import { useGraphCanvasNarrative } from '../src/components/graph/graphCanvasNarrative';
 import type { FileRecord, RelationEdge } from '../src/types/guanlan';
@@ -197,3 +203,191 @@ test('星图缩放帧级同步：控制器订阅实时缩放流、标题 Overlay
   assert.ok(overlaySrc.includes('subscribeZoomFrame(syncDom)'));
   assert.ok(overlaySrc.includes("transform: 'translateY(-50%)'"));
 });
+
+test('全景溯源顶栏改版：功能分簇、详情按压态与列表/日历域过滤统一隐零', () => {
+  const topBarHtml = renderToStaticMarkup(
+    React.createElement(GraphTopBar, {
+      ctx: {
+        panoramaMode: 'canvas',
+        onPanoramaModeChange: () => {},
+        onCanvasThemeChange: () => {},
+        openNarrativeDrawer: () => {},
+        narrativeDrawerOpen: true,
+        activeDate: '2026-11-23',
+        scene: {
+          ...EMPTY_SCENE,
+          active: {
+            date: '2026-11-23',
+            label: '11-23',
+            count: 5,
+            matterCount: 2,
+            kinds: {},
+            formats: { md: 5 },
+            events: [],
+          },
+        },
+        rulerGranularity: 'day',
+        onGranularityChange: () => {},
+        isTimeFlowPlaying: false,
+        toggleTimeFlowPlay: () => {},
+        stepChronosDay: () => {},
+        canStepOlder: true,
+        canStepNewer: false,
+        accumulationSummary: {
+          date: '2026-11-23',
+          addedCount: 2,
+          modifiedCount: 3,
+          cumulativeEvents: 12,
+          totalEvents: 12,
+          cumulativePercent: 100,
+          chronologicalOrder: 3,
+          totalActiveDays: 3,
+        },
+        onOpenChronosDigest: () => {},
+        spotlight: {
+          enabled: false,
+          items: [],
+          dimmedFileIds: new Set<string>(),
+          cursor: 0,
+          onToggle: () => {},
+          onCursor: () => {},
+        },
+        visible: true,
+      } as never,
+    })
+  );
+
+  assert.ok(topBarHtml.includes('data-panorama-topbar="canvas"'));
+  assert.ok(topBarHtml.includes('data-topbar-cluster="view"'));
+  assert.ok(topBarHtml.includes('data-topbar-cluster="actions"'));
+  assert.ok(topBarHtml.includes('data-topbar-cluster="chronos"'));
+  assert.match(
+    topBarHtml,
+    /<button[^>]*data-cv-topbar-detail(?:="(?:true|)")?[^>]*aria-pressed="true"/
+  );
+  assert.ok(topBarHtml.includes('11-23'));
+  assert.ok(topBarHtml.includes('累计 12'));
+
+  const appMainSrc = readSrc('components/app/AppMainViews.tsx');
+  assert.ok(appMainSrc.includes('data-panorama-topbar="list"'));
+  assert.ok(appMainSrc.includes('data-panorama-topbar="calendar"'));
+  const domainMatches = appMainSrc.match(/domainCounts\.code > 0 && renderDomainToolbar/g) ?? [];
+  assert.equal(domainMatches.length, 3, '星图/列表/日历三态均应在无代码文件时隐藏域筛选条');
+});
+
+test('司辰信息载体改版：自适应胶囊铭牌、世界坐标纠偏落点气泡与三格遥测悬停卡', () => {
+  const mascotHtml = renderToStaticMarkup(
+    React.createElement(
+      'svg',
+      null,
+      React.createElement(ChronosMascotNode, {
+        x: 100,
+        y: 200,
+        activeTimeSlice: 'all',
+        epochLabel: '11-23 · +5 变动',
+        metaText: '第 2/3 日 · 累计 12',
+        isHovered: false,
+        isSelected: false,
+        prefersReducedMotion: true,
+        onMouseEnter: () => {},
+        onMouseLeave: () => {},
+        onClickCycleTime: () => {},
+      })
+    )
+  );
+  assert.ok(mascotHtml.includes('data-chronos-carrier="badge"'));
+  assert.ok(mascotHtml.includes('11-23 · +5 变动'));
+  assert.ok(mascotHtml.includes('第 2/3 日 · 累计 12'));
+
+  const dropHtml = renderToStaticMarkup(
+    React.createElement(GraphChronosDropBubble, {
+      ctx: {
+        chronosDropSummary: {
+          date: '2026-11-23',
+          count: 5,
+          addedCount: 2,
+          modifiedCount: 3,
+          cumulativeEvents: 12,
+          headlines: ['架构定版', '接口对齐'],
+          text: '架构定版；接口对齐',
+          x: 200,
+          y: 260,
+        },
+        dismissChronosDropSummary: () => {},
+        onOpenChronosDigest: () => {},
+        zoomTransform: { x: 0, y: 0, k: 1 },
+        selectDate: () => {},
+        stageWidth: 1280,
+        stageHeight: 720,
+        narrativeDrawerOpen: false,
+      } as never,
+    })
+  );
+  assert.ok(dropHtml.includes('data-chronos-carrier="drop-bubble"'));
+  assert.ok(dropHtml.includes('+2 新增'));
+  assert.ok(dropHtml.includes('3 演进'));
+  assert.ok(dropHtml.includes('累计 12 条'));
+  assert.ok(dropHtml.includes('架构定版'));
+  assert.ok(dropHtml.includes('关闭司辰日期气泡'));
+  assert.ok(dropHtml.includes('查看司辰手记'));
+
+  const hoverHtml = renderToStaticMarkup(
+    React.createElement(GraphHoverPreviewCard, {
+      ctx: {
+        hoverPreviewData: {
+          title: '观澜司辰',
+          format: 'md',
+          relativePath: 'README.md',
+          versionNumber: 1,
+          totalRevisions: 1,
+          modificationRoundLabel: 'v1',
+          unreadStatus: { isUnread: false, statusLabel: '已阅', scrollPercent: 100, changedSections: [] },
+          coreSummary: '',
+        },
+        hoveredPreviewAnchor: { fileId: 'f_readme', nodeId: 'chronos_deity', x: 112, y: 266 },
+        activeDraggingNodeId: null,
+        zoomTransform: { x: 0, y: 0, k: 1 },
+        scene: {
+          ...EMPTY_SCENE,
+          active: {
+            date: '2026-11-23',
+            label: '11-23',
+            count: 5,
+            matterCount: 2,
+            kinds: {},
+            formats: { md: 5 },
+            events: [],
+          },
+          totals: { events: 12, days: 3, matters: 2, undated: 0 },
+        },
+        activeTimeSlice: 'all',
+        files: [makeFile('f_readme', 'README', 'README.md')],
+        accumulationSummary: {
+          date: '2026-11-23',
+          addedCount: 2,
+          modifiedCount: 3,
+          cumulativeEvents: 12,
+          totalEvents: 12,
+          cumulativePercent: 100,
+          chronologicalOrder: 3,
+          totalActiveDays: 3,
+        },
+        stageWidth: 1280,
+        stageHeight: 720,
+        narrativeDrawerOpen: false,
+      } as never,
+    })
+  );
+  assert.ok(hoverHtml.includes('data-chronos-carrier="hover-card"'));
+  assert.ok(hoverHtml.includes('当前刻度'));
+  assert.ok(hoverHtml.includes('当日变动'));
+  assert.ok(hoverHtml.includes('累计沉淀'));
+  assert.ok(hoverHtml.includes('+2 / ↻3'));
+  assert.ok(!hoverHtml.includes('当前时间法则'));
+  assert.ok(!hoverHtml.includes('SHA-256'));
+
+  const ctrlSrc = readSrc('components/graph/useGraphCanvasController.tsx');
+  assert.ok(ctrlSrc.includes('pointerLocalX = (pointerX - transform.x) / k'));
+  assert.ok(ctrlSrc.includes('dismissChronosDropSummary'));
+});
+

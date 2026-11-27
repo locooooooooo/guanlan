@@ -329,10 +329,13 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
 
       {activeTab === 'panorama' && panoramaMode === 'list' && (
         <main key="view-panorama-list" className="glx-view-enter flex-1 flex flex-col min-h-0 overflow-hidden">
-          <div className="mx-3.5 mt-2.5 px-4 py-1.5 rounded-[14px] depth-2-card flex items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-3 min-w-0">
+          <div
+            data-panorama-topbar="list"
+            className="mx-3.5 mt-2.5 px-4 py-1.5 rounded-[14px] depth-2-card flex flex-wrap items-center justify-between gap-2.5 shrink-0"
+          >
+            <div className="flex items-center gap-3 min-w-0 flex-wrap">
               {renderPanoramaModeSwitch()}
-              {renderDomainToolbar()}
+              {domainCounts.code > 0 && renderDomainToolbar()}
             </div>
             <span className="flex items-center gap-2 font-mono text-[length:var(--text-micro)] tabular-nums text-[color:var(--ink-soft)] shrink-0">
               {mutedFolders.length > 0 && (
@@ -346,7 +349,7 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
                   已静默 {mutedFolders.length} 目录
                 </Badge>
               )}
-              <span>
+              <span className="whitespace-nowrap">
                 {panoramaDomain === 'all' && mutedFolders.length === 0
                   ? `${workspaceSummary?.counts.events ?? events.length} 条事件`
                   : `${domainFiltered.files.length} 资产 · ${domainFiltered.events.length} 条事件`}
@@ -355,8 +358,8 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
                 type="button"
                 data-open-chronos-digest=""
                 onClick={() => ctx.setIsChronosDigestOpen(true)}
-                title="打开「司辰手记」今日/本周沉淀简报"
-                className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-border/80 bg-card/90 px-2.5 py-0.5 font-sans text-[11px] font-medium text-[color:var(--accent-iris-deep)] hover:border-[color:var(--accent-iris)]"
+                title="打开「司辰手记」查看今日 / 近 7 日沉淀简报并一键复制 Markdown"
+                className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-border/80 bg-card/90 px-2.5 py-0.5 font-sans text-[11px] font-medium whitespace-nowrap text-[color:var(--accent-iris-deep)] hover:border-[color:var(--accent-iris)]"
               >
                 <BookMarked className="size-3" aria-hidden="true" />
                 <span>司辰手记</span>
@@ -401,10 +404,13 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
 
       {activeTab === 'panorama' && panoramaMode === 'calendar' && (
         <main key="view-panorama-calendar" className="glx-view-enter flex-1 flex flex-col min-h-0 overflow-hidden">
-          <div className="mx-3.5 mt-2.5 px-4 py-1.5 rounded-[14px] depth-2-card flex items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-3 min-w-0">
+          <div
+            data-panorama-topbar="calendar"
+            className="mx-3.5 mt-2.5 px-4 py-1.5 rounded-[14px] depth-2-card flex flex-wrap items-center justify-between gap-2.5 shrink-0"
+          >
+            <div className="flex items-center gap-3 min-w-0 flex-wrap">
               {renderPanoramaModeSwitch()}
-              {renderDomainToolbar()}
+              {domainCounts.code > 0 && renderDomainToolbar()}
             </div>
             <span className="flex items-center gap-2 font-mono text-[length:var(--text-micro)] tabular-nums text-[color:var(--ink-soft)] shrink-0">
               {mutedFolders.length > 0 && (
@@ -418,15 +424,15 @@ export function AppMainViews({ ctx }: { ctx: WorkspaceStoreCtx }) {
                   已静默 {mutedFolders.length} 目录
                 </Badge>
               )}
-              <span>
+              <span className="whitespace-nowrap">
                 {domainFiltered.files.length} 资产 · {domainFiltered.events.length} 事件
               </span>
               <button
                 type="button"
                 data-open-chronos-digest=""
                 onClick={() => ctx.setIsChronosDigestOpen(true)}
-                title="打开「司辰手记」今日/本周沉淀简报"
-                className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-border/80 bg-card/90 px-2.5 py-0.5 font-sans text-[11px] font-medium text-[color:var(--accent-iris-deep)] hover:border-[color:var(--accent-iris)]"
+                title="打开「司辰手记」查看今日 / 近 7 日沉淀简报并一键复制 Markdown"
+                className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-border/80 bg-card/90 px-2.5 py-0.5 font-sans text-[11px] font-medium whitespace-nowrap text-[color:var(--accent-iris-deep)] hover:border-[color:var(--accent-iris)]"
               >
                 <BookMarked className="size-3" aria-hidden="true" />
                 <span>司辰手记</span>

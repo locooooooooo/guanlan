@@ -1,6 +1,19 @@
 
 import React, { useSyncExternalStore } from 'react';
-import { Activity, BookMarked, ChevronLeft, ChevronRight, MoonStar, Orbit, Pause, Play, Sparkles, Sun } from 'lucide-react';
+import {
+  Activity,
+  BookMarked,
+  ChevronLeft,
+  ChevronRight,
+  Hourglass,
+  MoonStar,
+  Orbit,
+  PanelRight,
+  Pause,
+  Play,
+  Sparkles,
+  Sun,
+} from 'lucide-react';
 import { Tabs, type TabsProps } from '../ui/primitives';
 import { getCanvasTheme, subscribeCanvasTheme } from '../../utils/canvasThemeStore';
 import type { CanvasTheme } from '../../utils/canvasThemeStore';
@@ -12,13 +25,13 @@ import type { GraphCanvasCtx } from './useGraphCanvasController';
 
 /** 全景三态页签（星图/列表/日历）：主题形制自订阅，其余 props 原样透传 Tabs */
 export function CanvasThemeAwareTabs(props: Omit<TabsProps, 'theme'>) {
-  const canvasTheme = useSyncExternalStore(subscribeCanvasTheme, getCanvasTheme);
+  const canvasTheme = useSyncExternalStore(subscribeCanvasTheme, getCanvasTheme, getCanvasTheme);
   return <Tabs {...props} theme={canvasTheme === 'xray-light' ? 'light' : 'dark'} />;
 }
 
 /** 画布主题分段钮（双 aria-pressed 形制）：激活段自订阅 */
 export function CanvasThemeSegmented({ onChange }: { onChange?: (theme: CanvasTheme) => void }) {
-  const canvasTheme = useSyncExternalStore(subscribeCanvasTheme, getCanvasTheme);
+  const canvasTheme = useSyncExternalStore(subscribeCanvasTheme, getCanvasTheme, getCanvasTheme);
   return (
     <div
       role="group"
@@ -63,6 +76,7 @@ export function GraphTopBar({ ctx }: { ctx: GraphCanvasCtx }) {
     onPanoramaModeChange,
     onCanvasThemeChange,
     openNarrativeDrawer,
+    narrativeDrawerOpen,
     activeDate,
     scene,
     rulerGranularity,
@@ -77,8 +91,11 @@ export function GraphTopBar({ ctx }: { ctx: GraphCanvasCtx }) {
     topBarSlot,
   } = ctx;
   return (
-    <div className="mx-3.5 mt-2.5 px-4 py-1.5 rounded-[14px] bg-[color:var(--cv-panel)] border border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_8%,transparent)] flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-[12px] shrink-0 z-20">
-      <div className="flex items-center gap-3 min-w-0 flex-wrap">
+    <div
+      data-panorama-topbar="canvas"
+      className="mx-3.5 mt-2.5 px-4 py-1.5 rounded-[14px] bg-[color:var(--cv-panel)] border border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_8%,transparent)] flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-[12px] shrink-0 z-20"
+    >
+      <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
         <CanvasThemeAwareTabs
           items={[
             { key: 'canvas', label: '星图' },
@@ -97,62 +114,85 @@ export function GraphTopBar({ ctx }: { ctx: GraphCanvasCtx }) {
         aria-label="星图画布工具栏"
         className="flex items-center gap-2 flex-wrap justify-end"
       >
-        {onGranularityChange && scene.hasRealEvents && (
-          <div
-            role="group"
-            aria-label="事件轴粒度"
-            data-cv-granularity-switch=""
-            className="flex items-center gap-0.5 h-[var(--ctl-h)] px-1 rounded-full border border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_10%,transparent)]"
-          >
-            {(
-              [
-                { key: 'month', label: '月' },
-                { key: 'week', label: '周' },
-                { key: 'day', label: '日' },
-              ] as const
-            ).map((opt) => {
-              const activeOpt = rulerGranularity === opt.key;
-              return (
-                <button
-                  key={opt.key}
-                  type="button"
-                  aria-pressed={activeOpt}
-                  title={`按${opt.label}聚合事件轴刻度`}
-                  onClick={() => onGranularityChange(opt.key)}
-                  className={`h-[var(--ctl-h-sm)] px-2 rounded-full text-[11px] font-medium cursor-pointer motion-safe:[transition:background-color_var(--dur-1)_var(--ease-fade),color_var(--dur-1)_var(--ease-fade)] ${
-                    activeOpt
-                      ? 'bg-[color:var(--cv-seg-active-bg)] text-[color:var(--cv-seg-active-ink)]'
-                      : 'text-[color:var(--cv-seg-idle)] hover:text-[color:var(--cv-seg-idle-hover)]'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
-        <CanvasThemeSegmented onChange={onCanvasThemeChange} />
-        <button
-          type="button"
-          data-cv-topbar-detail
-          onClick={() => openNarrativeDrawer({})}
-          className="glx-pill-tactile px-2.5 py-0.5 rounded-full text-[11px] font-medium text-[color:var(--cv-ink-3)] hover:text-[color:var(--cv-ink)] border border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_10%,transparent)] hover:border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_25%,transparent)] cursor-pointer"
-        >
-          详情
-        </button>
-        {onOpenChronosDigest && (
+        <div data-topbar-cluster="view" className="flex items-center gap-1.5">
+          {onGranularityChange && scene.hasRealEvents && (
+            <div
+              role="group"
+              aria-label="事件轴粒度"
+              data-cv-granularity-switch=""
+              className="flex items-center gap-0.5 h-[var(--ctl-h)] px-1 rounded-full border border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_10%,transparent)]"
+            >
+              {(
+                [
+                  { key: 'month', label: '月' },
+                  { key: 'week', label: '周' },
+                  { key: 'day', label: '日' },
+                ] as const
+              ).map((opt) => {
+                const activeOpt = rulerGranularity === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    aria-pressed={activeOpt}
+                    title={`按${opt.label}聚合事件轴刻度`}
+                    onClick={() => onGranularityChange(opt.key)}
+                    className={`h-[var(--ctl-h-sm)] px-2 rounded-full text-[11px] font-medium whitespace-nowrap cursor-pointer motion-safe:[transition:background-color_var(--dur-1)_var(--ease-fade),color_var(--dur-1)_var(--ease-fade)] ${
+                      activeOpt
+                        ? 'bg-[color:var(--cv-seg-active-bg)] text-[color:var(--cv-seg-active-ink)]'
+                        : 'text-[color:var(--cv-seg-idle)] hover:text-[color:var(--cv-seg-idle-hover)]'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <CanvasThemeSegmented onChange={onCanvasThemeChange} />
+        </div>
+
+        <span
+          aria-hidden="true"
+          className="hidden md:block w-px h-4 bg-[color:color-mix(in_srgb,var(--cv-hairline-ink)_12%,transparent)] shrink-0"
+        />
+
+        <div data-topbar-cluster="actions" className="flex items-center gap-1.5">
           <button
             type="button"
-            data-open-chronos-digest=""
-            onClick={onOpenChronosDigest}
-            title="打开「司辰手记」查看今日 / 近 7 日沉淀简报并一键复制 Markdown"
-            className="glx-pill-tactile inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium text-[color:var(--cv-lav-ink)] bg-[color:color-mix(in_srgb,var(--cv-lav)_12%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--cv-lav)_20%,transparent)] border border-[color:color-mix(in_srgb,var(--cv-lav)_34%,transparent)] cursor-pointer"
+            data-cv-topbar-detail
+            aria-pressed={narrativeDrawerOpen}
+            title="展开或收起右侧叙事详情抽屉（双击节点亦可打开）"
+            onClick={() => openNarrativeDrawer({})}
+            className={`glx-pill-tactile inline-flex items-center gap-1 h-[var(--ctl-h)] px-2.5 rounded-full text-[11px] font-medium whitespace-nowrap border cursor-pointer ${
+              narrativeDrawerOpen
+                ? 'bg-[color:var(--cv-seg-active-bg)] text-[color:var(--cv-seg-active-ink)] border-transparent'
+                : 'text-[color:var(--cv-ink-3)] hover:text-[color:var(--cv-ink)] border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_10%,transparent)] hover:border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_25%,transparent)]'
+            }`}
           >
-            <BookMarked className="w-3 h-3" aria-hidden="true" />
-            <span>司辰手记</span>
+            <PanelRight className="w-3 h-3 shrink-0" aria-hidden="true" />
+            <span>详情</span>
           </button>
-        )}
-        <GraphSpotlightBar ctx={ctx} mode="toggle" />
+          <GraphSpotlightBar ctx={ctx} mode="toggle" />
+          {onOpenChronosDigest && (
+            <button
+              type="button"
+              data-open-chronos-digest=""
+              onClick={onOpenChronosDigest}
+              title="打开「司辰手记」查看今日 / 近 7 日沉淀简报并一键复制 Markdown"
+              className="glx-pill-tactile inline-flex items-center gap-1 h-[var(--ctl-h)] px-2.5 rounded-full text-[11px] font-medium whitespace-nowrap text-[color:var(--cv-lav-ink)] bg-[color:color-mix(in_srgb,var(--cv-lav)_12%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--cv-lav)_20%,transparent)] border border-[color:color-mix(in_srgb,var(--cv-lav)_34%,transparent)] cursor-pointer"
+            >
+              <BookMarked className="w-3 h-3 shrink-0" aria-hidden="true" />
+              <span>司辰手记</span>
+            </button>
+          )}
+        </div>
+
+        <span
+          aria-hidden="true"
+          className="hidden md:block w-px h-4 bg-[color:color-mix(in_srgb,var(--cv-hairline-ink)_12%,transparent)] shrink-0"
+        />
+
         {(() => {
           const fullDateText =
             activeDate === undefined
@@ -166,14 +206,16 @@ export function GraphTopBar({ ctx }: { ctx: GraphCanvasCtx }) {
           const canPlay = canStepOlder || canStepNewer;
           return (
             <div
+              data-topbar-cluster="chronos"
               data-cv-chronos-stepper=""
-              className="flex items-center gap-0.5 h-[var(--ctl-h)] px-1 rounded-full bg-[color:var(--cv-slot)] border border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_10%,transparent)] shrink-0"
+              className="flex items-center gap-0.5 h-[var(--ctl-h)] px-1.5 rounded-full bg-[color:var(--cv-slot)] border border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_10%,transparent)] shrink-0 whitespace-nowrap"
               title={
                 accumulationSummary
-                  ? `司辰 · ${fullDateText}（第 ${accumulationSummary.chronologicalOrder}/${accumulationSummary.totalActiveDays} 个沉淀日，截至当日累计沉淀 ${accumulationSummary.cumulativeEvents} 条文档记录，占总历程 ${accumulationSummary.cumulativePercent}%）`
+                  ? `司辰聚焦 · ${fullDateText}（第 ${accumulationSummary.chronologicalOrder}/${accumulationSummary.totalActiveDays} 个沉淀日，截至当日累计沉淀 ${accumulationSummary.cumulativeEvents} 条记录，占总历程 ${accumulationSummary.cumulativePercent}%）`
                   : `司辰聚焦时间 · ${fullDateText}`
               }
             >
+              <Hourglass className="w-3 h-3 text-[color:var(--cv-brand)] shrink-0 ml-0.5" strokeWidth={1.7} aria-hidden="true" />
               {canPlay && (
                 <button
                   type="button"
@@ -204,11 +246,11 @@ export function GraphTopBar({ ctx }: { ctx: GraphCanvasCtx }) {
                   )}
                 </button>
               )}
-              <span className="px-1.5 font-mono text-[10.5px] font-medium text-[color:var(--cv-ink)] tabular-nums">
+              <span className="px-1 font-mono text-[10.5px] font-medium text-[color:var(--cv-ink)] tabular-nums whitespace-nowrap">
                 {shortDateText}
               </span>
               {accumulationSummary && (
-                <span className="hidden xl:inline-flex items-center pr-1 font-mono text-[10px] text-[color:var(--cv-ink-meta)] tabular-nums">
+                <span className="hidden lg:inline-flex items-center pr-0.5 font-mono text-[10px] text-[color:var(--cv-ink-meta)] tabular-nums whitespace-nowrap">
                   · 累计 {accumulationSummary.cumulativeEvents}
                 </span>
               )}

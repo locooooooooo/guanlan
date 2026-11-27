@@ -25,6 +25,7 @@ import {
   hasUnreadChanges,
 } from '../../utils/guanlanEngine';
 import { formatLocalClock, localDay } from '../../utils/timeFormat';
+import { formatByteSize } from '../../utils/formatMeta';
 import { effectiveMotionDurationMs } from '../../utils/keyboardShortcuts';
 import {
   buildSpatialNavCards,
@@ -511,7 +512,7 @@ export function useGraphCanvasController({
       const rev =
         file.revisions.find((r) => r.revision_id === file.current_revision_id) ||
         file.revisions[file.revisions.length - 1];
-      const kb = ((rev?.sizeBytes || 0) / 1024).toFixed(0);
+      const sizeLabel = formatByteSize(rev?.sizeBytes || 0);
       const badge: CapabilityCode =
         file.format === 'svg' ? 'SVG' : file.format === 'pdf' ? 'PDF' : file.role === '决策' ? 'DEC' : 'MD';
       return {
@@ -519,7 +520,7 @@ export function useGraphCanvasController({
         label: shortLabel,
         badge,
         roundLabel: `${file.role} · v${rev?.versionNumber || 1} · ${rev && rev.observed_at ? formatLocalClock(rev.observed_at) : '—'}`,
-        meta: `${kb} KB · ${rel.split('/').length} 层`,
+        meta: `${sizeLabel} · ${rel.split('/').length} 层`,
       };
     };
 
@@ -793,11 +794,22 @@ export function useGraphCanvasController({
   const [chronosDropSummary, setChronosDropSummary] = useState<{
     date: string;
     count: number;
+    addedCount: number;
+    modifiedCount: number;
+    cumulativeEvents: number;
+    headlines: string[];
     text: string;
     x: number;
     y: number;
   } | null>(null);
   const chronosDropTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dismissChronosDropSummary = () => {
+    if (chronosDropTimerRef.current !== null) {
+      clearTimeout(chronosDropTimerRef.current);
+      chronosDropTimerRef.current = null;
+    }
+    setChronosDropSummary(null);
+  };
   const chronosDropContextRef = useRef<{
     scene: CanvasEventScene;
     events: TimelineEvent[];
@@ -834,6 +846,7 @@ export function useGraphCanvasController({
     const [pointerX, pointerY] = d3.pointer(dragEvent.sourceEvent, svgEl);
     const transform = d3.zoomTransform(svgEl);
     const k = transform.k || 1;
+    const pointerLocalX = (pointerX - transform.x) / k;
     const pointerLocalY = (pointerY - transform.y) / k;
     const { axisTop, axisBottom } = chronosDropContextRef.current;
     const total = rulerTicks.length;
@@ -851,6 +864,9 @@ export function useGraphCanvasController({
     if (!tick || tick.isTruncation || tick.isGap || !tick.hasEvents) return;
 
     selectDateInternal(tick.date, { pan: false });
+
+    const accumRows = computeTrunkAccumulation(rulerTicks);
+    const accumAtTick = accumRows[nearestIdx];
 
     const dropOrder = chronosDropContextRef.current.eventDays?.order ?? 'occurred';
     const tickEvents = chronosDropContextRef.current.events.filter((item) =>
@@ -885,9 +901,13 @@ export function useGraphCanvasController({
     setChronosDropSummary({
       date: tick.date,
       count: tick.count,
+      addedCount: accumAtTick?.addedCount ?? 0,
+      modifiedCount: accumAtTick?.modifiedCount ?? 0,
+      cumulativeEvents: accumAtTick?.cumulativeEvents ?? tick.count,
+      headlines: headlines.slice(0, 3),
       text,
-      x: pointerX,
-      y: pointerY,
+      x: pointerLocalX,
+      y: pointerLocalY,
     });
   };
 
@@ -1939,6 +1959,7 @@ export function useGraphCanvasController({
     isViewSettingsOpen,
     setIsViewSettingsOpen,
     chronosDropSummary,
+    dismissChronosDropSummary,
     activeDraggingNodeId,
     stageWidth,
     stageHeight,

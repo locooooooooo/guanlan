@@ -1,6 +1,7 @@
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
+  BookMarked,
   BookOpen,
   ClipboardCheck,
   Clock,
@@ -8,6 +9,7 @@ import {
   ExternalLink,
   FolderSearch,
   Scale,
+  X,
 } from 'lucide-react';
 import CanvasMiniMap from '../canvas/CanvasMiniMap';
 import CanvasNarrativeDrawer from '../canvas/CanvasNarrativeDrawer';
@@ -180,43 +182,150 @@ export function GraphNarrativeLinkOverlay({ ctx: _ctx }: { ctx: GraphCanvasCtx }
   return null;
 }
 
-/** ④ 司辰时间机器摘要气泡：拖到有事件刻度松手弹出（8s 自动清除，点击选中该日） */
+function clampStageFloatingPos(params: {
+  worldX: number;
+  worldY: number;
+  zoomTransform: { x: number; y: number; k: number };
+  offsetX: number;
+  offsetY: number;
+  minLeft: number;
+  cardWidth: number;
+  cardHeight: number;
+  stageWidth: number;
+  stageHeight: number;
+  narrativeDrawerOpen: boolean;
+}): { left: number; top: number } {
+  const {
+    worldX,
+    worldY,
+    zoomTransform,
+    offsetX,
+    offsetY,
+    minLeft,
+    cardWidth,
+    cardHeight,
+    stageWidth,
+    stageHeight,
+    narrativeDrawerOpen,
+  } = params;
+  const effectiveWidth = stageWidth > 0 ? stageWidth : 1080;
+  const effectiveHeight = stageHeight > 0 ? stageHeight : 680;
+  const drawerReserve = narrativeDrawerOpen ? 368 : 24;
+  const maxLeft = Math.max(minLeft, effectiveWidth - cardWidth - drawerReserve);
+  const maxTop = Math.max(18, effectiveHeight - cardHeight - 76);
+  const screenX = worldX * zoomTransform.k + zoomTransform.x + offsetX;
+  const screenY = worldY * zoomTransform.k + zoomTransform.y + offsetY;
+  return {
+    left: Math.round(Math.min(Math.max(minLeft, screenX), maxLeft)),
+    top: Math.round(Math.min(Math.max(18, screenY), maxTop)),
+  };
+}
+
+/** ④ 司辰时间机器摘要气泡：拖到有事件刻度松手弹出（8s 自动清除，支持关闭与直达手记） */
 export function GraphChronosDropBubble({ ctx }: { ctx: GraphCanvasCtx }) {
-  const { chronosDropSummary, zoomTransform, selectDate } = ctx;
+  const {
+    chronosDropSummary,
+    dismissChronosDropSummary,
+    onOpenChronosDigest,
+    zoomTransform,
+    selectDate,
+    stageWidth,
+    stageHeight,
+    narrativeDrawerOpen,
+  } = ctx;
   if (!chronosDropSummary) return null;
+  const pos = clampStageFloatingPos({
+    worldX: chronosDropSummary.x,
+    worldY: chronosDropSummary.y,
+    zoomTransform,
+    offsetX: 24,
+    offsetY: 12,
+    minLeft: 150,
+    cardWidth: 320,
+    cardHeight: 170,
+    stageWidth,
+    stageHeight,
+    narrativeDrawerOpen,
+  });
+  const headlines =
+    chronosDropSummary.headlines && chronosDropSummary.headlines.length > 0
+      ? chronosDropSummary.headlines
+      : chronosDropSummary.text
+        ? [chronosDropSummary.text]
+        : [];
   return (
     <div
       role="status"
       data-testid="chronos-drop-summary-bubble"
-      style={{
-        left: `${Math.min(
-          Math.max(150, chronosDropSummary.x * zoomTransform.k + zoomTransform.x + 24),
-          690
-        )}px`,
-        top: `${Math.min(
-          Math.max(18, chronosDropSummary.y * zoomTransform.k + zoomTransform.y + 12),
-          450
-        )}px`,
-      }}
+      data-chronos-carrier="drop-bubble"
+      style={{ left: `${pos.left}px`, top: `${pos.top}px` }}
       onClick={() => selectDate(chronosDropSummary.date)}
-      className="absolute z-30 max-w-[320px] rounded-xl bg-[color:color-mix(in_srgb,var(--cv-card)_98%,transparent)] border border-[color:color-mix(in_srgb,var(--cv-brand)_40%,transparent)] p-3 text-xs text-[color:var(--cv-ink-2)] cursor-pointer shadow-[0_16px_40px_color-mix(in_srgb,var(--cv-shadow-ink)_80%,transparent)]"
+      className="d3-no-pan glx-popover-in absolute z-30 w-[320px] max-w-[calc(100%-32px)] rounded-xl bg-[color:color-mix(in_srgb,var(--cv-card)_98%,transparent)] backdrop-blur-xl border border-[color:color-mix(in_srgb,var(--cv-brand)_40%,transparent)] p-3 text-xs text-[color:var(--cv-ink-2)] cursor-pointer shadow-[0_16px_40px_color-mix(in_srgb,var(--cv-shadow-ink)_80%,transparent)]"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-[11px] font-semibold text-[color:var(--cv-brand-ink)]">
-          {chronosDropSummary.date} · {chronosDropSummary.count} 条事件
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--cv-brand)] shrink-0" aria-hidden="true" />
+          <span className="font-mono text-[11px] font-semibold text-[color:var(--cv-brand-ink)] truncate tabular-nums">
+            {chronosDropSummary.date} · {chronosDropSummary.count} 条事件
+          </span>
+        </div>
+        <button
+          type="button"
+          aria-label="关闭司辰日期气泡"
+          title="关闭"
+          onClick={(e) => {
+            e.stopPropagation();
+            dismissChronosDropSummary();
+          }}
+          className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[color:var(--cv-ink-dim)] hover:text-[color:var(--cv-ink)] hover:bg-[color:color-mix(in_srgb,var(--cv-hairline-ink)_10%,transparent)] cursor-pointer"
+        >
+          <X className="w-3 h-3" aria-hidden="true" />
+        </button>
+      </div>
+
+      <div className="mt-1.5 flex flex-wrap items-center gap-1 font-mono text-[10px] tabular-nums">
+        <span className="rounded bg-[color:var(--cv-slot)] px-1.5 py-0.5 text-[color:var(--cv-ink)]">
+          +{chronosDropSummary.addedCount ?? 0} 新增
         </span>
-        <span className="text-[10px] font-mono text-[color:var(--cv-ink-dim)] shrink-0">
-          点击选中该日
+        <span className="rounded bg-[color:var(--cv-slot)] px-1.5 py-0.5 text-[color:var(--cv-lav-ink)]">
+          {chronosDropSummary.modifiedCount ?? 0} 演进
+        </span>
+        <span className="rounded bg-[color:var(--cv-slot)] px-1.5 py-0.5 text-[color:var(--cv-ink-dim)]">
+          累计 {chronosDropSummary.cumulativeEvents ?? chronosDropSummary.count} 条
         </span>
       </div>
-      {chronosDropSummary.text && (
-        <p className="mt-1.5 leading-relaxed">{chronosDropSummary.text}</p>
+
+      {headlines.length > 0 && (
+        <ul className="mt-2 space-y-1 text-[11px] text-[color:var(--cv-ink-2)] leading-snug">
+          {headlines.map((line, i) => (
+            <li key={i} className="truncate">
+              · {line}
+            </li>
+          ))}
+        </ul>
       )}
+
+      <div className="mt-2.5 pt-2 border-t border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_8%,transparent)] flex items-center justify-between text-[10px] font-mono">
+        <span className="text-[color:var(--cv-ink-dim)]">已锁定该日 · 再次点击重对焦</span>
+        {onOpenChronosDigest && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenChronosDigest();
+            }}
+            className="inline-flex items-center gap-1 text-[color:var(--cv-lav-ink)] hover:underline cursor-pointer"
+          >
+            <BookMarked className="w-3 h-3" aria-hidden="true" />
+            <span>查看司辰手记</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
-/** FLOATING HOVER PREVIEW CARD (Core Summary + Unread Status + Modification Round, plus Chronos Time God Oracle mode)
+/** FLOATING HOVER PREVIEW CARD (Core Summary + Unread Status + Modification Round, plus Chronos Time Telemetry card)
  *  悬停锚点锚定真实文件 */
 export function GraphHoverPreviewCard({ ctx }: { ctx: GraphCanvasCtx }) {
   const {
@@ -228,29 +337,37 @@ export function GraphHoverPreviewCard({ ctx }: { ctx: GraphCanvasCtx }) {
     activeTimeSlice,
     files,
     accumulationSummary,
+    stageWidth,
+    stageHeight,
+    narrativeDrawerOpen,
   } = ctx;
   if (!hoverPreviewData || !hoveredPreviewAnchor || activeDraggingNodeId) return null;
+  const pos = clampStageFloatingPos({
+    worldX: hoveredPreviewAnchor.x,
+    worldY: hoveredPreviewAnchor.y,
+    zoomTransform,
+    offsetX: 22,
+    offsetY: -10,
+    minLeft: 180,
+    cardWidth: 346,
+    cardHeight: 240,
+    stageWidth,
+    stageHeight,
+    narrativeDrawerOpen,
+  });
   return (
     <div
       role="status"
       data-slot="preview-card"
       data-graph-hover-preview=""
+      data-chronos-carrier={hoveredPreviewAnchor.nodeId === 'chronos_deity' ? 'hover-card' : undefined}
       aria-label={`节点悬停预览：${
         hoveredPreviewAnchor.nodeId === 'chronos_deity'
-          ? '司辰 · 掌管时间之神'
+          ? '观澜司辰 · 时间轴锚点'
           : hoverPreviewData.title
       }`}
       data-testid="node-hover-preview-card"
-      style={{
-        left: `${Math.min(
-          Math.max(230, hoveredPreviewAnchor.x * zoomTransform.k + zoomTransform.x + 22),
-          690
-        )}px`,
-        top: `${Math.min(
-          Math.max(18, hoveredPreviewAnchor.y * zoomTransform.k + zoomTransform.y - 10),
-          450
-        )}px`,
-      }}
+      style={{ left: `${pos.left}px`, top: `${pos.top}px` }}
       className="glx-popover-in pointer-events-none absolute z-30 w-[346px] rounded-2xl bg-[color:color-mix(in_srgb,var(--cv-card)_98%,transparent)] backdrop-blur-xl border border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_16%,transparent)] shadow-[0_24px_56px_color-mix(in_srgb,var(--cv-shadow-ink)_88%,transparent)] p-4 text-xs"
     >
       {hoveredPreviewAnchor.nodeId === 'chronos_deity' ? (
@@ -259,50 +376,58 @@ export function GraphHoverPreviewCard({ ctx }: { ctx: GraphCanvasCtx }) {
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="px-1.5 py-0.5 rounded bg-[color:color-mix(in_srgb,var(--cv-brand)_14%,var(--cv-panel))] text-[color:var(--cv-brand-ink)] border border-[color:color-mix(in_srgb,var(--cv-brand)_40%,transparent)] font-mono text-[10px] uppercase shrink-0">
-                  CHRONOS · 司辰
+                  司辰 · CHRONOS
                 </span>
                 <span className="font-serif-claude font-semibold text-[color:var(--cv-ink)] text-[14px] truncate">
-                  观澜司辰 · 掌管时间与版本之神
+                  时间轴锚点
                 </span>
               </div>
-              <div className="text-[10.5px] font-mono text-[color:var(--cv-ink-dim)] truncate mt-1">
+              <div className="text-[10.5px] font-mono text-[color:var(--cv-ink-dim)] truncate mt-1 tabular-nums">
                 {scene.hasRealEvents
-                  ? `司辰 · ${scene.totals.events} 条事件 · SHA-256`
-                  : '司辰 · SHA-256'}
+                  ? `${files.length} 份本地资料 · ${scene.totals.days} 沉淀日 · ${scene.totals.events} 条变更`
+                  : `${files.length} 份本地资料 · 时间轴待命`}
               </div>
             </div>
           </div>
 
-          <div className="mt-2.5 flex items-center justify-between px-3 py-1.5 rounded-lg bg-[color:var(--cv-ctl)] border border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_8%,transparent)]">
-            <span className="text-[11px] text-[color:var(--cv-ink-muted)] flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-[color:var(--cv-brand)]" />
-              <span>当前时间法则</span>
-            </span>
-            <span className="font-mono text-[11px] text-[color:var(--cv-ink)] font-medium">
-              {scene.hasRealEvents
-                ? `${scene.active?.label ?? '—'} · ${scene.active?.count ?? 0} 条事件${
-                    scene.active?.matterCount ? ` · ${scene.active.matterCount} 个事项` : ''
-                  }`
-                : activeTimeSlice === 'all'
-                  ? '全域时间线'
-                  : `锁定时间切片 ${activeTimeSlice}`}
-            </span>
+          <div className="mt-2.5 grid grid-cols-3 gap-1.5 font-mono">
+            <div className="rounded-lg bg-[color:var(--cv-ctl)] border border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_8%,transparent)] px-2 py-1.5 min-w-0">
+              <div className="text-[9.5px] text-[color:var(--cv-ink-dim)]">当前刻度</div>
+              <div className="mt-0.5 truncate text-[11px] font-semibold text-[color:var(--cv-ink)] tabular-nums">
+                {scene.hasRealEvents
+                  ? (scene.active?.label ?? '全域')
+                  : activeTimeSlice === 'all'
+                    ? '全域'
+                    : activeTimeSlice}
+              </div>
+            </div>
+            <div className="rounded-lg bg-[color:var(--cv-ctl)] border border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_8%,transparent)] px-2 py-1.5 min-w-0">
+              <div className="text-[9.5px] text-[color:var(--cv-ink-dim)]">当日变动</div>
+              <div className="mt-0.5 truncate text-[11px] font-semibold text-[color:var(--cv-brand-ink)] tabular-nums">
+                {accumulationSummary
+                  ? `+${accumulationSummary.addedCount} / ↻${accumulationSummary.modifiedCount}`
+                  : `${scene.active?.count ?? 0} 条`}
+              </div>
+            </div>
+            <div className="rounded-lg bg-[color:var(--cv-ctl)] border border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_8%,transparent)] px-2 py-1.5 min-w-0">
+              <div className="text-[9.5px] text-[color:var(--cv-ink-dim)]">累计沉淀</div>
+              <div className="mt-0.5 truncate text-[11px] font-semibold text-[color:var(--cv-lav-ink)] tabular-nums">
+                {accumulationSummary
+                  ? `${accumulationSummary.cumulativeEvents} (${accumulationSummary.cumulativePercent}%)`
+                  : `${scene.totals.events} 条`}
+              </div>
+            </div>
           </div>
 
-          <div className="mt-2.5">
-            <div className="text-[10.5px] font-mono text-[color:var(--cv-ink-dim)] mb-1">
-              时光沉淀 · 可追溯积累
-            </div>
-            <p className="text-[11.5px] text-[color:var(--cv-ink-2)] leading-relaxed">
-              {accumulationSummary
-                ? `截至 ${scene.active?.label ?? '今日'}，已历经 ${accumulationSummary.chronologicalOrder} / ${accumulationSummary.totalActiveDays} 个沉淀日，将 ${files.length} 份本地资料凝聚为 ${accumulationSummary.cumulativeEvents} 条可追溯演变记录（当日新增 ${accumulationSummary.addedCount} · 演进 ${accumulationSummary.modifiedCount}）。`
-                : `左手沙漏凝聚 ${files.length} 份本地资料的版本流沙，右手新月权杖锚定按真实日期聚合的可追溯文档脉络。`}
-            </p>
-          </div>
+          <p className="mt-2.5 text-[11.5px] text-[color:var(--cv-ink-2)] leading-relaxed">
+            {accumulationSummary
+              ? `当前位于第 ${accumulationSummary.chronologicalOrder} / ${accumulationSummary.totalActiveDays} 个沉淀日（当日新增 ${accumulationSummary.addedCount} · 演进 ${accumulationSummary.modifiedCount}）。`
+              : `按真实文件时间聚合 ${files.length} 份本地资料，上下拖拽可直接定位到对应日期分支。`}
+          </p>
 
           <div className="mt-3 pt-2 border-t border-[color:color-mix(in_srgb,var(--cv-hairline-ink)_6%,transparent)] flex items-center justify-between text-[10.5px] font-mono text-[color:var(--cv-ink-dim)]">
-            <span>沿轴上下拖拽吸附日期</span>
-            <span className="text-[color:var(--cv-brand)]">单击切换历史日</span>
+            <span>沿轴上下拖拽定位日期</span>
+            <span className="text-[color:var(--cv-brand)]">单击切换时间切片</span>
           </div>
         </>
       ) : (
