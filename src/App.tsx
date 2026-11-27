@@ -10,6 +10,7 @@ import { AppMainViews } from './components/app/AppMainViews';
 import { AppLibraryStage } from './components/app/AppLibraryStage';
 import { AppModalsStack } from './components/app/AppModalsStack';
 import { GlobalDirectorySidebar } from './components/app/GlobalDirectorySidebar';
+import { ProjectSwitchTransition } from './components/app/ProjectSwitchTransition';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AnchoredToastProvider, ToastProvider } from './components/ui/toast';
 
@@ -68,6 +69,10 @@ function AppContent() {
     hasActiveBackend,
     activeFile,
   } = ctx;
+
+  const switchingProjectId = ctx.multiProjects.activatingProjectId;
+  const switchingProjectName =
+    ctx.multiProjects.projects.find((p) => p.project_id === switchingProjectId)?.name ?? null;
 
   return (
     <ToastProvider position="bottom-right">
@@ -148,6 +153,7 @@ function AppContent() {
         }}
         managedProjects={ctx.multiProjects.projects}
         activeProjectId={ctx.multiProjects.activeProjectId}
+        activatingProjectId={ctx.multiProjects.activatingProjectId}
         onActivateProject={(projectId) => {
           void ctx.multiProjects.handleActivateProject(projectId);
         }}
@@ -182,7 +188,10 @@ function AppContent() {
           }}
         />
       ) : (
-        <div className="flex-1 flex min-h-0 overflow-hidden relative">
+        <div
+          className="flex-1 flex min-h-0 overflow-hidden relative"
+          aria-busy={switchingProjectId ? true : undefined}
+        >
           <GlobalDirectorySidebar ctx={ctx} />
 
           <div className="flex-1 min-w-0 flex flex-col overflow-hidden relative">
@@ -196,6 +205,10 @@ function AppContent() {
       )}
 
       <AppModalsStack ctx={ctx} />
+
+      {switchingProjectId && (
+        <ProjectSwitchTransition projectName={switchingProjectName} />
+      )}
         </div>
       </AnchoredToastProvider>
     </ToastProvider>

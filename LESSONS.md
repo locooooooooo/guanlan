@@ -101,6 +101,8 @@
 - **随机文件名会进截图。** 截图基线用临时目录的随机后缀作为工作区名，曾让同一页面跨跑差异 2.4%。来源：`scripts/visual-baseline.mjs`。
 - **判断材料新鲜度的时间要在首屏可见。** 从「待拍板」点进证据原文时，文件头只有标题、版本与状态，文档日期与采集时刻只藏在折叠的「溯源」面板和版本轴弹层里，用户看不到文章时间、无法判断材料是否过期。现在文件头常驻文档时间胶囊：`source_time`（文档日期）优先，无记载时显式写「采集于」回退 `observed_at`；摘要占位行的 `source_time` 是最早版本时间，不得冒充当前版日期。来源：2026-11-25 用户报告；`src/components/reader/readerChromeSections.tsx` 的 `buildReaderDocTimeView`，`test/reader-doc-time-01.test.ts`。
 - **切换聚焦不是往集合里加一项。** 多项目侧栏的 `expandedProjects` 只 `add` 不 `delete`，切一次项目就多留一棵展开的树，而且持久化到 `localStorage`，重启后两份依旧。切换聚焦项目时要收起旧聚焦项、展开新聚焦项；用户手动展开的其他项目保持，多项目同时展开仍是显式能力。来源：2026-11-25 用户报告；`useMultiProjects.handleActivateProject`、`sidebarTree.expandedProjectsAfterActivate`，`test/multiproject-switch-collapse-01.test.ts`。
+- **切换要有「进行中」的可见状态，并把误触挡在切换之外。** 切换项目会让整个界面重建，期间旧项目的按钮还看得见，用户会顺手点，点下去就落在刚被换掉的界面上。切换期间要给出可见的进行中提示（顶部不确定态进度条 + 顶栏项目下拉转圈），并用一层整窗遮罩吞掉这期间的点击。遮罩的层级要高于弹层、低于 toast，否则切换失败的提示看不见。来源：2026-11-27 用户要求「切换项目加一个 loading 的过渡条，防止期间误触」；`src/components/app/ProjectSwitchTransition.tsx`、`src/hooks/useMultiProjects.ts` 的 `activatingProjectId`，`test/project-switch-transition-01.test.ts`。
+- **快到看不见的等待等于没有反馈。** 切换请求几十毫秒就返回时，过渡条会只闪一帧，用户看到的是「闪了一下」而不是「正在切换」。切换期间的状态要有最短可见时长（观澜取 400 毫秒），请求慢时按实际耗时走。来源：2026-11-27 实现切换过渡条时的取舍；`src/utils/projectSwitchFeedback.ts` 的 `remainingProjectSwitchFeedbackMs`。
 
 ## 做对了的例子
 
@@ -135,4 +137,5 @@
   - 安装包没有代码签名，首次运行会有系统的未知发布者提示。
   - 视觉基线 PNG（`scripts/visual-baseline/`）自开源首快照 `7e0b5fa` 之后没有重拍，其间已有 11 个提交动过前端源码。`node scripts/visual-baseline.mjs compare` 现在对全部 27 个镜头报未声明差异并以退出码 1 结束，没有改动的星图、日历、阅读器也一样，像素比对已经不能当作回归依据；同一轮运行里的 Console 门禁（0 error / 0 warning）与 SSOT 断言仍然有效。按新界面重拍之前，需要有人确认新的外观。
   - 安装包脚本直接启动 `cargo`，不像门禁脚本那样到 `~/.cargo/bin` 去找：cargo 不在 `PATH` 上时（非交互 shell 常常如此），`node scripts/build-windows-installer.mjs` 建完 `dist/` 之后以 `ENOENT` 退出。
+  - 跑 `npm run gate` 期间，`native/crates/guanlan-desktop/app-icon.png` 曾被改写成一张 1254×1254 的 RGB 图（仓库里的是 1024×1024 RGBA），`test/brand-chronos-identity.test.ts` 的「1024px 桌面源图」断言随之变红。逐一复跑门禁的每一步（lint、test、build、安装包核验、cargo fmt/clippy/test）都未能复现，把源图改回来后门禁全绿；改写者未知。做前端改动时若这条断言变红，先确认图源本身有没有被换过。
   - 本机设了 `HTTP_PROXY` / `HTTPS_PROXY`（127.0.0.1:10808），`NO_PROXY` 里只有回环与局域网。Tauri 打包要内嵌 WebView2 引导程序，会去 `https://go.microsoft.com/fwlink/p/?LinkId=2124703` 下载（约 1.8 MB）；这个下载经代理会挂到超时并返回 0 字节，Tauri 读到不完整的文件就报 `failed to bundle project: io: unexpected end of file`，表现为 NSIS 成功而 MSI 失败。直连该地址只要 1.2 秒且完整。打包前把 `go.microsoft.com` 与 `msedge.sf.dl.delivery.mp.microsoft.com` 加进 `NO_PROXY`（大小写两份都要）即可绕过；本机已缓存的 `%LOCALAPPDATA%\tauri\MicrosoftEdgeWebview2Setup.exe` 并不能替代，Tauri 每次仍会下载。

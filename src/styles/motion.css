@@ -1066,6 +1066,30 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   §3.31 切换项目过渡条（ProjectSwitchTransition）
+   —— 不确定态进度：亮段只做 transform 位移（禁 width/left 动画，合成器友好）；
+      匀速用 linear（匀速扫描；spring/fade 会让每圈首尾变速）；
+      时长消费 :root 令牌 calc(var(--dur-pan) * 2)；reduce 下停帧＝轨道整条变实心亮线
+      （不读作百分比进度，遮罩与文案不变）。
+   ══════════════════════════════════════════════════════════════════════════ */
+@keyframes glx-switch-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+.glx-switch-track {
+  background: color-mix(in srgb, var(--accent-iris) 16%, transparent);
+}
+
+.glx-switch-progress {
+  animation: glx-switch-progress calc(var(--dur-pan) * 2) linear infinite;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    §4 prefers-reduced-motion 降级
    块一（本文件逐类降级）：过渡类撤 transition；
    入场/回位类撤 animation＝停帧＋终态可见（终态即完全可见，不藏内容）；
@@ -1135,6 +1159,17 @@
   .glx-badge-pop,
   .glx-read-confirm-pop {
     animation: none;
+  }
+
+  /* 切换项目过渡条：reduce 下亮段停帧并整层隐藏，轨道改为整条实心亮线——
+     亮线表示「正在切换」，不表示百分比进度；遮罩与文案照旧。 */
+  .glx-switch-track {
+    background: var(--accent-iris-deep);
+  }
+
+  .glx-switch-progress {
+    animation: none;
+    display: none;
   }
 
   .glx-sheen-card::after,

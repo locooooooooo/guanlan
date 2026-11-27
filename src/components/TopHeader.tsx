@@ -106,6 +106,7 @@ interface TopHeaderProps {
   onToggleSidebar?: () => void;
   managedProjects?: ProjectEntryDto[];
   activeProjectId?: string;
+  activatingProjectId?: string | null;
   onActivateProject?: (projectId: string) => void;
   onOpenAddProject?: () => void;
   onRemoveManagedProject?: (projectId: string) => void;
@@ -168,6 +169,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onToggleSidebar,
   managedProjects = [],
   activeProjectId = '',
+  activatingProjectId = null,
   onActivateProject,
   onOpenAddProject,
   onRemoveManagedProject,
@@ -200,6 +202,10 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   const handleCycleAppTheme = () => {
     applyAppTheme(nextThemeMode);
   };
+
+  const switchingProjectName =
+    managedProjects.find((p) => p.project_id === activatingProjectId)?.name ?? null;
+  const switchingProject = Boolean(activatingProjectId);
 
   const [basketPulseSeq, setBasketPulseSeq] = useState(0);
   const basketCountPrevRef = useRef<number | null>(null);
@@ -525,15 +531,23 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 type="button"
                 data-workspace-switcher
                 aria-expanded={isWorkspaceMenuOpen}
+                aria-busy={switchingProject || undefined}
+                disabled={switchingProject}
                 onClick={() => setIsWorkspaceMenuOpen((v) => !v)}
                 title={
-                  managedProjects.length > 1
-                    ? `${config.rootPath || '当前项目'}（共 ${managedProjects.length} 个项目，点击下拉切换）`
-                    : config.rootPath || '管理与切换项目文件夹'
+                  switchingProjectName
+                    ? `正在切换到「${switchingProjectName}」…`
+                    : managedProjects.length > 1
+                      ? `${config.rootPath || '当前项目'}（共 ${managedProjects.length} 个项目，点击下拉切换）`
+                      : config.rootPath || '管理与切换项目文件夹'
                 }
-                className="flex items-center gap-1 max-w-[112px] sm:max-w-[144px] h-7 rounded-[var(--r-ctl)] border border-border bg-card hover:border-ring/40 px-2 text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-strong)] cursor-pointer motion-safe:transition-colors overflow-hidden"
+                className="flex items-center gap-1 max-w-[112px] sm:max-w-[144px] h-7 rounded-[var(--r-ctl)] border border-border bg-card hover:border-ring/40 px-2 text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--ink-strong)] cursor-pointer motion-safe:transition-colors overflow-hidden disabled:cursor-not-allowed disabled:opacity-70"
               >
-                <FolderOpen className="w-3 h-3 shrink-0 text-[color:var(--accent-iris-deep)]" />
+                {switchingProject ? (
+                  <Loader2 className="w-3 h-3 shrink-0 animate-spin text-[color:var(--accent-iris-deep)]" />
+                ) : (
+                  <FolderOpen className="w-3 h-3 shrink-0 text-[color:var(--accent-iris-deep)]" />
+                )}
                 <span className="truncate font-medium">
                   {managedProjects.find((p) => p.project_id === activeProjectId)?.name ||
                     managedProjects[0]?.name ||
@@ -609,7 +623,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                             >
                               <button
                                 type="button"
-                                disabled={isOffline}
+                                disabled={isOffline || switchingProject}
                                 data-switcher-project={proj.project_id}
                                 onClick={() => {
                                   setIsWorkspaceMenuOpen(false);

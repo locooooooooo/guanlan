@@ -30,6 +30,7 @@ import {
   saveGlobalPinnedFiles,
   type GlobalPinnedFile,
 } from '../utils/sidebarTree';
+import { remainingProjectSwitchFeedbackMs } from '../utils/projectSwitchFeedback';
 
 export interface ProjectTreeCacheEntry {
   loading: boolean;
@@ -81,6 +82,8 @@ export function useMultiProjects({
 
   const expandedRef = useRef(expandedProjects);
   expandedRef.current = expandedProjects;
+
+  const activatingRef = useRef(false);
 
   const activeProject = useMemo(
     () => projects.find((p) => p.project_id === activeProjectId) ?? projects[0] ?? null,
@@ -249,29 +252,42 @@ export function useMultiProjects({
         onProjectActivated(projectId, pendingTarget);
         return true;
       }
+      if (activatingRef.current) return false;
+      activatingRef.current = true;
       setActivatingProjectId(projectId);
-      const res = await postActivateProject(projectId);
-      setActivatingProjectId(null);
-      if (!res.ok || !res.data) {
-        showToast('error', res.error || '切换项目失败');
-        return false;
+      const startedAt = Date.now();
+      try {
+        const res = await postActivateProject(projectId);
+        if (!res.ok || !res.data) {
+          showToast('error', res.error || '切换项目失败');
+          return false;
+        }
+        setProjects(res.data.projects);
+        setActiveProjectId(res.data.active_project_id);
+        setExpandedProjects((prev) => {
+          const next = new Set(
+            expandedProjectsAfterActivate(
+              prev,
+              activeProjectId,
+              res.data.active_project_id || projectId
+            )
+          );
+          saveExpandedProjects(Array.from(next));
+          return next;
+        });
+        onProjectActivated(projectId, pendingTarget);
+        void refreshAll();
+        return true;
+      } finally {
+        const waitMs = remainingProjectSwitchFeedbackMs(Date.now() - startedAt);
+        if (waitMs > 0) {
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, waitMs);
+          });
+        }
+        activatingRef.current = false;
+        setActivatingProjectId(null);
       }
-      setProjects(res.data.projects);
-      setActiveProjectId(res.data.active_project_id);
-      setExpandedProjects((prev) => {
-        const next = new Set(
-          expandedProjectsAfterActivate(
-            prev,
-            activeProjectId,
-            res.data.active_project_id || projectId
-          )
-        );
-        saveExpandedProjects(Array.from(next));
-        return next;
-      });
-      onProjectActivated(projectId, pendingTarget);
-      void refreshAll();
-      return true;
     },
     [activeProjectId, onProjectActivated, refreshAll, showToast]
   );

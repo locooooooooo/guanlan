@@ -9,7 +9,7 @@
 | 入口 | 导入全局样式，首帧之前同步水合明暗主题，挂载 `App`。 | [`src/main.tsx`](../../src/main.tsx) |
 | 装配层 | `App` 是**唯一**调用 `useWorkspaceStore()` 的地方。它只做装配：顶栏、工作区门禁、五个分节、弹窗栈。 | [`src/App.tsx`](../../src/App.tsx) |
 | 状态 | `useWorkspaceStore` 是一个自定义 Hook，不是状态库。全部状态、副作用与处理器都在里面，返回一个 `ctx` 对象。 | [`src/stores/useWorkspaceStore.tsx`](../../src/stores/useWorkspaceStore.tsx) |
-| 分节渲染 | `AppBanners`、`AppMainViews`、`AppLibraryStage`、`AppModalsStack`、`GlobalDirectorySidebar`（左侧目录栏仅展示当前聚焦的单个项目目录树，多项目切换与增删统一由顶栏 `TopHeader` 下拉触发），都接收 `{ ctx }`。 | [`src/components/app/`](../../src/components/app) |
+| 分节渲染 | `AppBanners`、`AppMainViews`、`AppLibraryStage`、`AppModalsStack`、`GlobalDirectorySidebar`（左侧目录栏仅展示当前聚焦的单个项目目录树，多项目切换与增删统一由顶栏 `TopHeader` 下拉触发）、`ProjectSwitchTransition`（切换聚焦项目期间的过渡条与整层遮罩），都接收 `{ ctx }`。 | [`src/components/app/`](../../src/components/app) |
 | 取数客户端 | `workspaceClient.ts` 是 `src/` 里**唯一**调用 `fetch` 与 `EventSource` 的模块。 | [`src/services/workspaceClient.ts`](../../src/services/workspaceClient.ts) |
 | 契约类型 | `apiTypes.ts` 手工镜像 Rust DTO；`types/guanlan.ts` 是视图模型与既有的 wire 字段名。 | [`src/services/apiTypes.ts`](../../src/services/apiTypes.ts)、[`src/types/guanlan.ts`](../../src/types/guanlan.ts) |
 | 桌面桥 | `desktopBridge.ts` 包装壳注入的全局对象，在浏览器里全部优雅降级。 | [`src/services/desktopBridge.ts`](../../src/services/desktopBridge.ts) |
@@ -31,6 +31,7 @@
 2. 没有可用后端且处于桌面会话时，渲染 `WorkspaceGateModal`（首启引导、切换工作区、`ROOT_IN_USE` 恢复）。
 3. 否则渲染常驻目录侧栏、横幅栈与主视图；资产库页签下再渲染 `AppLibraryStage`。
 4. 最后是抽屉与弹窗栈 `AppModalsStack`。
+5. 切换聚焦项目期间，额外渲染 `ProjectSwitchTransition`（见下）。
 
 ### 取数
 
@@ -48,6 +49,7 @@
 - **代际计数当竞态守卫。** `eventFetchGenRef` 让旧窗口的在途请求作废；`dayQueryRef` 配合 `sameDayQuery` 防止日期窗口串页。
 - **按工作区分桶的持久化。** 阅读状态与静音文件夹按 `workspace_id` 分桶存在本机存储；阅读状态经 `coalescedPersist` 做 800 毫秒尾沿合批写入（页面隐藏、切换工作区或项目前立刻补写）。
 - **切换工作区或项目时整体复位。** `resetWorkspaceScopedState` 重置全部工作区范围内的状态（含 SSE 断连状态与重扫/重试防重锁）。桌面端切换工作区期间，由 `switchingWorkspace` 与同步镜像 `switchingWorkspaceRef` 暂停旧后端的 SSE 订阅、任务与状态轮询以及断连/扫描失败红条，改为在 `AppBanners` 展示中性「正在切换工作区」状态条。
+- **切换聚焦项目有过渡条。** `useMultiProjects` 的 `activatingProjectId` 是「正在激活的项目」的事实源：它在发起激活请求**之前**置上、在请求返回**之后**才清，中间至少维持 `PROJECT_SWITCH_FEEDBACK_MIN_MS`（400 毫秒），请求再快也不会只闪一帧。期间 `App` 渲染 `ProjectSwitchTransition`：窗口顶部一条不确定态进度条（`.glx-switch-progress`，只动 `transform`，`prefers-reduced-motion` 下停帧成整条实心亮线）加一层整窗遮罩，吞掉这期间的点击，避免切到一半误触。遮罩的 `z-index` 高于弹层（z-50）、低于 toast（z-60），切换失败的提示仍能看见。切换期间顶栏的项目下拉按钮禁用并转圈；`handleActivateProject` 用 `activatingRef` 拒绝并发的第二次切换。
 
 ### 订阅方式
 
@@ -83,7 +85,7 @@ npm test
 npm run build
 ```
 
-`npm test` 用 node:test 经 tsx 直接跑 TypeScript，共 94 个测试文件。断言有三种风格并存：调用真实函数或用 `react-dom/server` 渲染真实组件；把源码文件当字符串读出来做子串或正则匹配；个别用例起真实的本地 HTTP 桩服务或子进程。没有 DOM、没有事件模拟，点击与滚动的接线靠代码评审保证。
+`npm test` 用 node:test 经 tsx 直接跑 TypeScript，共 119 个测试文件。断言有三种风格并存：调用真实函数或用 `react-dom/server` 渲染真实组件；把源码文件当字符串读出来做子串或正则匹配；个别用例起真实的本地 HTTP 桩服务或子进程。没有 DOM、没有事件模拟，点击与滚动的接线靠代码评审保证。
 
 单独跑一个文件：
 
