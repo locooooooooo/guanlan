@@ -401,10 +401,10 @@ function InitiativeStageDropdown({ ctx }: { ctx: ReaderCtx }) {
           data-reader-initiative-name=""
           className="max-w-[9rem] truncate font-medium text-[color:var(--ink-strong)]"
         >
-          {activePackage.name}
+          专项 {activePackage.name}
         </span>
         <span data-reader-initiative-sep="" aria-hidden="true" className="opacity-45">·</span>
-        <span className="font-medium text-[color:var(--accent-iris-ink)]">{stageShort}</span>
+        <span className="font-medium text-[color:var(--accent-iris-ink)]">{stageShort}阶段</span>
         <ChevronDown
           className={`w-3 h-3 shrink-0 opacity-60 transition-transform ${open ? 'rotate-180' : ''}`}
         />
@@ -856,7 +856,7 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
               variant={subMode === 'read' ? 'primary' : 'ghost'}
               size="sm"
               className="!h-6 !px-2 !text-[11.5px]"
-              title={`当前版本 ${revisionVersionLabel(currentRev.versionNumber, !hasNewerRevisionWhileReading)}`}
+              title={`阅读当前版本正文（${revisionVersionLabel(currentRev.versionNumber, !hasNewerRevisionWhileReading)}）`}
               onClick={() => onChangeSubMode('read')}
             >
               {hasNewerRevisionWhileReading
@@ -891,6 +891,7 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
                 variant={subMode === 'diff_versions' ? 'primary' : 'ghost'}
                 size="sm"
                 className="!h-6 !px-2 !text-[11.5px]"
+                title="按修订链对比任意两个历史版本（快捷键 D）"
                 onClick={() => onChangeSubMode('diff_versions')}
               >
                 历史快照 ({activeFile.revisions.length})
@@ -1057,7 +1058,7 @@ export function ReaderFileHeaderSection({ ctx }: { ctx: ReaderCtx }) {
               aria-expanded={inspectorOpen}
               aria-label={inspectorOpen ? '收起溯源面板' : '展开溯源面板'}
               className="max-xl:hidden !px-2"
-              title="溯源与关联：版本时间、文件大小、完整路径与上下游阅读顺序"
+              title="溯源与关联：版本时间、文件大小、完整路径与上下游阅读顺序（快捷键 ]）"
             >
               <Info className="w-3.5 h-3.5" />
               <span className="sr-only">溯源</span>

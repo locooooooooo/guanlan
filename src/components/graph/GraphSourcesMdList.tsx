@@ -2,6 +2,7 @@ import React from 'react';
 import { hasUnreadChanges } from '../../utils/guanlanEngine';
 import { taskPackageOf, stageOfPath } from '../../utils/taskPackages';
 import { basenameOf } from '../../utils/documentIdentity';
+import { formatByteSize } from '../../utils/formatMeta';
 import type { FileRecord, ReadingState } from '../../types/guanlan';
 import type { SubAgentCardModel } from './geometry';
 
@@ -44,7 +45,7 @@ export function GraphSourcesMdList({
         const latestRev = file.revisions[file.revisions.length - 1];
         const pkg = taskPackageOf(file.relative_path);
         const docBase = basenameOf(file.relative_path);
-        const revKb = Math.max(1, Math.round((latestRev?.sizeBytes || 0) / 1024));
+        const revSize = formatByteSize(latestRev?.sizeBytes || 0);
         const revFindings = latestRev?.changedSectionsFromPrev?.length ?? 0;
 
         return (
@@ -89,7 +90,7 @@ export function GraphSourcesMdList({
               )}
             </div>
             <div className="mt-0.5 text-[10.5px] font-mono text-[color:var(--cv-ink-dim)] truncate">
-              {revKb} KB · v{latestRev?.versionNumber ?? 1} ·{' '}
+              {revSize} · v{latestRev?.versionNumber ?? 1} ·{' '}
               <span className={unread ? 'text-[color:var(--cv-brand)]' : 'text-[color:var(--cv-ink-dim)]'}>
                 {revFindings} 处发现
               </span>

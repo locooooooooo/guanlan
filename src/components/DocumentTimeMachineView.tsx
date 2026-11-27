@@ -27,6 +27,7 @@ import DiffSummaryCard from './DiffSummaryCard';
 import type { OfficeContentResponse } from '../services/apiTypes';
 import type { DecisionAssertion, FileRecord, RelationEdge } from '../types/guanlan';
 import { basenameOf } from '../utils/documentIdentity';
+import { formatByteSize } from '../utils/formatMeta';
 import { parseMarkdownOutline } from '../utils/guanlanEngine';
 import { stageOfPath, taskPackageOf } from '../utils/taskPackages';
 import { applyCanvasTheme, getCanvasTheme, subscribeCanvasTheme, type CanvasTheme } from '../utils/canvasThemeStore';
@@ -938,7 +939,7 @@ export function DocumentTimeMachineView({
                             {delta.label}
                           </span>
                         )}
-                        {`${delta?.hasData ? '· ' : ''}${relative || nodeDate} · ${(node.sizeBytes / 1024).toFixed(1)}KB`}
+                        {`${delta?.hasData ? '· ' : ''}${relative || nodeDate} · ${formatByteSize(node.sizeBytes)}`}
                       </em>
                       {delta?.hasData && (
                         <span className="machine-node-delta-bar" aria-hidden="true"

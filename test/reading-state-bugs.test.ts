@@ -463,10 +463,10 @@ test('FileContextMenu：单文件标已读/标未读切换，目录支持本目�
 });
 
 test('AtlasView：文件夹卡片展示未读徽标，且筛选条份数不被截断', () => {
-  const files = [
-    makeFile('f1', '报告1', 'docs/guanlan'),
-    makeFile('f2', '报告2', 'docs/guanlan'),
-  ];
+  const f1 = makeFile('f1', '报告1', 'docs/guanlan');
+  const f2 = makeFile('f2', '报告2', 'docs/guanlan');
+  f2.revisions[0].sizeBytes = 11162;
+  const files = [f1, f2];
   const html = renderToStaticMarkup(
     React.createElement(AtlasView, {
       variant: 'embedded',
@@ -485,6 +485,9 @@ test('AtlasView：文件夹卡片展示未读徽标，且筛选条份数不被�
     html.includes('shrink-0 whitespace-nowrap') && html.includes('107'),
     '筛选条中的份数计数应独立于截断标签，避免出现 10...'
   );
+  assert.ok(html.includes('240 B') && html.includes('10.9 KiB'), 'AtlasView 文件卡体积单位统一走 formatByteSize (B / KiB)');
+  assert.ok(!html.includes(' KB'), 'AtlasView 不再出现 KB 单位');
+  assert.ok(html.includes('入库于 '), 'AtlasView 文件卡与资料抽屉日期统一带「入库于」语义前缀');
 });
 
 test('useWorkspaceStore 关键护栏：新版本失效旧详情缓存、单篇标已读/未读落库、handleMarkReadHere 不静默覆写已读基线', () => {

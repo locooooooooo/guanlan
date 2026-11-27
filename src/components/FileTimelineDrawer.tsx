@@ -15,7 +15,7 @@ import {
   type FileHistoryRevision,
 } from '../services/workspaceClient';
 import { formatLocalDateTime, timeBasisLabel } from '../utils/timeFormat';
-import { isPreviewableHtmlFormat } from '../utils/formatMeta';
+import { formatByteSize, isPreviewableHtmlFormat } from '../utils/formatMeta';
 import { buildHtmlSandboxDocument } from '../utils/htmlPreview';
 import { Button } from './ui/primitives';
 import {
@@ -412,7 +412,7 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
                           {rev ? (
                             <span
                               className="px-1.5 py-0.5 rounded bg-muted/80 border border-border font-mono text-[length:var(--text-micro)] text-[color:var(--accent-iris-deep)] shrink-0"
-                              title={`版本 v${rev.seq} · ${(rev.size_bytes / 1024).toFixed(1)} KB${rev.snapshot_available ? '' : ' · 快照已淘汰（仅保留元数据）'}`}
+                              title={`版本 v${rev.seq} · ${formatByteSize(rev.size_bytes)}${rev.snapshot_available ? '' : ' · 快照已淘汰（仅保留元数据）'}`}
                             >
                               v{rev.seq}
                             </span>
@@ -506,7 +506,7 @@ export const FileTimelineDrawer: React.FC<FileTimelineDrawerProps> = ({
                             data-timeline-preview-meta=""
                           >
                             <span>该时点正文 · v{rev.seq}</span>
-                            <span>{(rev.size_bytes / 1024).toFixed(1)} KB</span>
+                            <span>{formatByteSize(rev.size_bytes)}</span>
                           </div>
                           {isPdf ? (
                             <iframe

@@ -1207,6 +1207,48 @@ test('检查器·SSR·时光轨迹卡：链序锚点 + 当前版差异默认展�
   assert.ok(text.includes('进入版本时光机 →'), '时光机入口文案在位');
   assert.ok(html.includes('data-unread-status'), '未读三态标签在轨迹卡头（未读状态消费不丢）');
   assert.ok(text.includes('未读新件（尚未建立阅读基线）'), '无基线时未读文案如实呈现');
+  assert.match(
+    html,
+    /shrink-0 whitespace-nowrap"><svg[\s\S]*?<\/svg><span>时光轨迹<\/span>/,
+    '时光轨迹标签锁定不折行'
+  );
+
+  const singleHtml = renderToString(
+    createElement(
+      RightInspector,
+      u06InspectorProps(
+        u06InspectorFile({
+          relative_path: 'native/crates/guanlan-core/src/application/bootstrap_tests.rs',
+          title: 'bootstrap_tests.rs',
+          revisions: u06Revisions(1) as unknown as FileRecord['revisions'],
+          current_revision_id: 'rev_u06_1',
+        })
+      )
+    )
+  );
+  const singleVisibleText = singleHtml.replace(/<[^>]+>/g, '');
+  assert.equal(
+    singleVisibleText.split('唯一版本 · 初始基线（无更早版本可比对）').length - 1,
+    1,
+    '单版本基线提示在可见文本中仅展示一次，不上下重复'
+  );
+  assert.ok(
+    singleVisibleText.includes('…/application/bootstrap_tests.rs'),
+    '深层路径采用中段省略，保留末级目录与文件名'
+  );
+
+  const outOfFilterHtml = renderToString(
+    createElement(RightInspector, {
+      ...u06InspectorProps(u06InspectorFile()),
+      outOfFilterScope: true,
+      filterScopeLabel: 'docs',
+    })
+  );
+  assert.ok(
+    outOfFilterHtml.includes('data-inspector-out-of-filter') &&
+      outOfFilterHtml.includes('超出筛选范围'),
+    '当前对象不在左侧筛选范围内时，右栏检查器显式标注「超出筛选范围」'
+  );
 
   const pdfHtml = renderToString(
     createElement(
@@ -1384,8 +1426,8 @@ test('检查器·抽屉 SSR·关闭零 DOM + 开启首帧偏移态可见（弹�
 test('检查器·抽屉精简·冗余技术字段收纳 + 竖轴节点锚点在位', () => {
   const drawerSrc = readSrc('components/FileTimelineDrawer.tsx');
 
-  const sizeRefs = drawerSrc.match(/rev\.size_bytes \/ 1024/g) ?? [];
-  assert.equal(sizeRefs.length, 2, `size KB 只允许徽标 title 与预览头两处（实测 ${sizeRefs.length} 处）`);
+  const sizeRefs = drawerSrc.match(/formatByteSize\(rev\.size_bytes\)/g) ?? [];
+  assert.equal(sizeRefs.length, 2, `size KiB 只允许徽标 title 与预览头两处（实测 ${sizeRefs.length} 处）`);
   assert.ok(drawerSrc.includes('title={`版本 v${rev.seq} ·'), '版本徽标 hover 承载 size 元数据');
   assert.ok(drawerSrc.includes('data-timeline-preview-meta'), '正文预览头补版本元数据行');
 

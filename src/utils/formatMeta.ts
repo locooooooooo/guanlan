@@ -517,3 +517,12 @@ export function filterAssetsByDomain<
   );
   return { files: keptFiles, events: keptEvents };
 }
+
+/** 易读字节数格式化（统一采用 1024 进制 IEC 单位：B / KiB / MiB / GiB）。 */
+export function formatByteSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GiB`;
+}

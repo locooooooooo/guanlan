@@ -42,6 +42,7 @@ import { formatRelativeObservedAt } from '../utils/timeFormat';
 import { fetchRevisionContent } from '../services/workspaceClient';
 import type { StateOverviewResponse } from '../services/apiTypes';
 import { basenameOf, minimalDirPrefix } from '../utils/documentIdentity';
+import { formatMiddleEllipsisPath } from '../utils/sidebarTree';
 import { Button } from './ui/primitives';
 import {
   Badge,
@@ -54,7 +55,7 @@ import {
   FileSystemActionBar,
   type DesktopFileActionCallbacks,
 } from './FileContextMenu';
-import { formatUiMeta, isUtf8TextFormat } from '../utils/formatMeta';
+import { formatByteSize, formatUiMeta, isUtf8TextFormat } from '../utils/formatMeta';
 import {
   canOpenTimeMachine,
   summarizeMiniVersionChange,
@@ -340,6 +341,13 @@ interface TimeTrailCardProps {
   onJumpMachine?: () => void;
 }
 
+function shortTrailHeadline(model: TimeTrailModel): string {
+  if (model.boundary === 'single') return '1 版';
+  if (model.boundary === 'evicted') return `共 ${model.totalVersions} 版`;
+  if (model.hiddenCount > 0) return `共 ${model.totalVersions} 版 · 近 ${model.nodes.length}`;
+  return `共 ${model.totalVersions} 版`;
+}
+
 const TimeTrailCard: React.FC<TimeTrailCardProps> = ({
   model,
   unreadLabel,
@@ -353,8 +361,8 @@ const TimeTrailCard: React.FC<TimeTrailCardProps> = ({
   if (model.boundary === 'empty') {
     return (
       <section className="space-y-2" data-inspector-time-trail="" data-trail-boundary="empty">
-        <div className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-semibold text-[color:var(--ink-soft)] flex items-center gap-1.5">
-          <History className="w-3.5 h-3.5 text-[color:var(--accent-iris)]" />
+        <div className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-semibold text-[color:var(--ink-soft)] flex items-center gap-1.5 whitespace-nowrap">
+          <History className="w-3.5 h-3.5 text-[color:var(--accent-iris)] shrink-0" />
           <span>时光轨迹</span>
         </div>
         <div className="depth-2-card p-3.5 text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)] text-[color:var(--ink-soft)]">
@@ -373,27 +381,27 @@ const TimeTrailCard: React.FC<TimeTrailCardProps> = ({
       data-inspector-time-trail=""
       data-trail-boundary={model.boundary}
     >
-      <div className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-semibold text-[color:var(--ink-soft)] flex items-center justify-between">
-        <span className="flex items-center gap-1.5">
-          <History className="w-3.5 h-3.5 text-[color:var(--accent-iris)]" />
-          <span>时光轨迹</span>
-        </span>
-        <span className="flex items-center gap-2">
-          {unreadLabel && (
-            <span
-              data-unread-status=""
-              className="font-mono text-[length:var(--text-micro)] text-[color:var(--stage-ink-decision-text)]"
-            >
-              {unreadLabel}
-            </span>
-          )}
+      <div className="space-y-1">
+        <div className="text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-semibold text-[color:var(--ink-soft)] flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+            <History className="w-3.5 h-3.5 text-[color:var(--accent-iris)] shrink-0" />
+            <span>时光轨迹</span>
+          </span>
           <span
-            className="font-mono text-[length:var(--text-micro)] tabular-nums text-[color:var(--ink-soft)]"
+            className="font-mono text-[length:var(--text-micro)] tabular-nums text-[color:var(--ink-soft)] shrink-0 whitespace-nowrap"
             title={model.headline}
           >
-            {model.headline}
+            {shortTrailHeadline(model)}
           </span>
-        </span>
+        </div>
+        {unreadLabel && (
+          <div
+            data-unread-status=""
+            className="font-mono text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-[color:var(--stage-ink-decision-text)]"
+          >
+            {unreadLabel}
+          </div>
+        )}
       </div>
 
       <div className="depth-2-card p-3">
@@ -605,6 +613,8 @@ interface RightInspectorProps {
   stateOverview?: StateOverviewResponse | null;
   systemActions?: DesktopFileActionCallbacks;
   packages?: TaskPackage[];
+  outOfFilterScope?: boolean;
+  filterScopeLabel?: string;
 }
 
 export const RightInspector: React.FC<RightInspectorProps> = ({
@@ -624,6 +634,8 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
   stateOverview,
   systemActions,
   packages,
+  outOfFilterScope = false,
+  filterScopeLabel,
 }) => {
   const [expandFullPath, setExpandFullPath] = useState(false);
   const [noteInput, setNoteInput] = useState(readingState?.personalNote || '');
@@ -891,13 +903,13 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
         </section>
 
         <section className="space-y-2">
-          <div className="flex items-center justify-between text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-soft)]">
-            <span className="font-semibold tracking-wider">所选对象详情</span>
+          <div className="flex items-center justify-between gap-2 text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-[color:var(--ink-soft)]">
+            <span className="font-semibold tracking-wider shrink-0 whitespace-nowrap">所选对象详情</span>
             {metaExpanded ? (
               <button
                 type="button"
                 onClick={() => setMetaExpanded(false)}
-                className="font-mono text-[length:var(--text-micro)] text-[color:var(--accent-iris-ink)] bg-[color:color-mix(in_srgb,var(--accent-iris)_10%,transparent)] px-2 py-0.5 rounded-full cursor-pointer flex items-center gap-1 transition-colors"
+                className="font-mono text-[length:var(--text-micro)] text-[color:var(--accent-iris-ink)] bg-[color:color-mix(in_srgb,var(--accent-iris)_10%,transparent)] px-2 py-0.5 rounded-full cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap transition-colors"
                 title="收起元数据明细"
               >
                 <Info className="w-3 h-3" />
@@ -907,7 +919,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
               <button
                 type="button"
                 onClick={() => setMetaExpanded(true)}
-                className="font-mono text-[length:var(--text-micro)] text-[color:var(--ink-soft)] hover:text-[color:var(--ink-strong)] cursor-pointer flex items-center gap-1 transition-colors"
+                className="font-mono text-[length:var(--text-micro)] text-[color:var(--ink-soft)] hover:text-[color:var(--ink-strong)] cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap transition-colors"
               >
                 <Info className="w-3 h-3" />
                 <span>详情/溯源</span>
@@ -943,11 +955,13 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
               const base = basenameOf(selectedFile.relative_path);
               const subLabel = expandFullPath
                 ? selectedFile.relative_path
-                : base === selectedFile.title
-                  ? selectedFile.relative_path
-                  : base;
+                : formatMiddleEllipsisPath(
+                    base === selectedFile.title ? selectedFile.relative_path : base,
+                    34
+                  );
               return (
                 <div
+                  data-inspector-subpath=""
                   className={`text-[11.5px] leading-[17px] font-mono text-[color:var(--ink-soft)] ${
                     expandFullPath ? 'break-all' : 'truncate'
                   }`}
@@ -958,7 +972,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
               );
             })()}
             {artifactState && (
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <span
                   data-doc-state={artifactState.state}
                   className={docStatePillClass(artifactState.state)}
@@ -966,18 +980,38 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
                 >
                   {DOC_STATE_LABEL[artifactState.state]}
                 </span>
+                {outOfFilterScope && (
+                  <span
+                    data-inspector-out-of-filter=""
+                    className="rounded-full bg-[color:color-mix(in_srgb,var(--stage-ink-decision)_14%,transparent)] px-2 py-0.5 font-mono text-[10px] font-medium text-[color:var(--stage-ink-decision-text)]"
+                    title={`当前阅读对象不属于左侧筛选范围${filterScopeLabel ? `（${filterScopeLabel}）` : ''}`}
+                  >
+                    超出筛选范围
+                  </span>
+                )}
+              </div>
+            )}
+            {!artifactState && outOfFilterScope && (
+              <div className="flex items-center gap-1.5">
+                <span
+                  data-inspector-out-of-filter=""
+                  className="rounded-full bg-[color:color-mix(in_srgb,var(--stage-ink-decision)_14%,transparent)] px-2 py-0.5 font-mono text-[10px] font-medium text-[color:var(--stage-ink-decision-text)]"
+                  title={`当前阅读对象不属于左侧筛选范围${filterScopeLabel ? `（${filterScopeLabel}）` : ''}`}
+                >
+                  超出筛选范围
+                </span>
               </div>
             )}
             <p className="text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)] text-[color:var(--ink-soft)] pt-1 border-t border-[color:var(--glass-hairline)]">
               {currentRev.summaryNote}
             </p>
             <div className="p-2.5 rounded-[var(--r-block)] bg-muted/70 border border-border/70 space-y-1.5 text-[length:var(--text-ui-body)] leading-[var(--lh-ui-body)]">
-              <div className="flex items-center justify-between">
-                <span className="text-[color:var(--ink-soft)] flex items-center gap-1">
-                  <Tag className="w-3 h-3" />
-                  <span>角色：{selectedFile.role}</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[color:var(--ink-soft)] flex items-center gap-1 min-w-0 truncate">
+                  <Tag className="w-3 h-3 shrink-0" />
+                  <span className="truncate">角色：{selectedFile.role}</span>
                 </span>
-                <span className="font-mono text-[length:var(--text-micro)] text-[color:var(--accent-iris-deep)]">
+                <span className="font-mono text-[length:var(--text-micro)] text-[color:var(--accent-iris-deep)] shrink-0 whitespace-nowrap">
                   {selectedFile.roleProvenance}
                 </span>
               </div>
@@ -1028,7 +1062,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
                 <span className="text-[color:var(--ink-strong)]">
                   {currentRev.commit_time
                     ? currentRev.commit_time.slice(5, 16).replace('T', ' ')
-                    : '未知 (无提交记录)'}
+                    : '未知（无提交记录）'}
                 </span>
               </div>
               <div className="flex items-center justify-between pt-1 border-t border-[color:var(--glass-hairline)]">
@@ -1049,7 +1083,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
               <div className="flex items-center justify-between">
                 <span className="text-[color:var(--ink-soft)] font-sans">文件大小</span>
                 <span className="text-[color:var(--ink-strong)]">
-                  {(currentRev.sizeBytes / 1024).toFixed(1)} KB
+                  {formatByteSize(currentRev.sizeBytes)}
                 </span>
               </div>
               <div className="flex items-start justify-between gap-2">

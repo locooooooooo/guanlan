@@ -256,13 +256,19 @@ export function AppLibraryStage({ ctx }: { ctx: WorkspaceStoreCtx }) {
             {libraryMode === 'read' && sidebarFilterActive && activeFile && !activeFileInFilter && (
               <div
                 data-reader-filter-mismatch=""
-                className="relative shrink-0 px-4 py-1 bg-card/78 dark:bg-card/85 backdrop-blur-md border-b border-[color:var(--glass-hairline)] text-[11.5px] leading-[18px] text-[color:var(--ink-soft)] flex items-center justify-between gap-2"
+                className="relative shrink-0 px-4 py-1.5 bg-[color:color-mix(in_srgb,var(--stage-ink-decision)_10%,var(--card))] backdrop-blur-md border-b border-[color:color-mix(in_srgb,var(--stage-ink-decision)_28%,transparent)] text-[11.5px] leading-[18px] text-[color:var(--ink-strong)] flex items-center justify-between gap-2"
               >
-                <span className="truncate">
-                  {sidebarFilters.folder !== 'all'
-                    ? `当前筛选目录「${sidebarFilters.folder}」（${filteredFiles.length} 份）不含本文档`
-                    : '当前文章不在筛选内'}
-                </span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="shrink-0 rounded-full bg-[color:color-mix(in_srgb,var(--stage-ink-decision)_18%,transparent)] px-2 py-0.5 font-mono text-[10px] font-semibold text-[color:var(--stage-ink-decision-text)]">
+                    超出筛选范围
+                  </span>
+                  <span className="truncate text-[color:var(--ink-soft)]">
+                    正在阅读「<strong className="font-medium text-[color:var(--ink-strong)]">{activeFile.title}</strong>」·{' '}
+                    {sidebarFilters.folder !== 'all'
+                      ? `当前筛选目录「${sidebarFilters.folder}」（${filteredFiles.length} 份）不含本文档`
+                      : `当前筛选（${sidebarFilterLabel || `${filteredFiles.length} 份`}）不含本文档`}
+                  </span>
+                </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {sidebarFilters.folder !== 'all' && (
                     <Button
@@ -428,6 +434,8 @@ export function AppLibraryStage({ ctx }: { ctx: WorkspaceStoreCtx }) {
               indexGeneration={config.runtimeStatus.indexGeneration}
               stateOverview={stateOverview}
               systemActions={systemActions}
+              outOfFilterScope={sidebarFilterActive && Boolean(activeFile) && !activeFileInFilter}
+              filterScopeLabel={sidebarFilterLabel}
             />
           </div>
         )}

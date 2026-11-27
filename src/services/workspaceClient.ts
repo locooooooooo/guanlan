@@ -77,6 +77,7 @@ import type {
   Revision,
 } from '../types/guanlan';
 import { requestRevisionContentsBatch } from '../utils/revisionContentStore';
+import { formatByteSize } from '../utils/formatMeta';
 
 export type {
   BootstrapResponse,
@@ -927,7 +928,7 @@ export function revisionsFromHistory(
     } else {
       summaryParts.push('日期待考');
     }
-    summaryParts.push(`${(rev.size_bytes / 1024).toFixed(1)} KB`);
+    summaryParts.push(formatByteSize(rev.size_bytes));
     if (!rev.snapshot_available) summaryParts.push('快照已过保留期');
 
     return {

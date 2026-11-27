@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import * as d3 from 'd3';
 import type { FileFormat, FileRecord, ReadingState, TimelineEvent } from '../types/guanlan';
-import { formatUiMeta } from '../utils/formatMeta';
+import { formatByteSize, formatUiMeta } from '../utils/formatMeta';
 import type { StateOverviewResponse } from '../services/apiTypes';
 import type { DesktopFileActionCallbacks } from './FileContextMenu';
 import {
@@ -218,8 +218,8 @@ const FileCard = React.memo(function FileCard({
     text: uiMeta.label.slice(0, 4),
     className: uiMeta.badgeClass,
   };
-  const metaLabel = `${(item.sizeBytes / 1024).toFixed(1)} KB · ${
-    item.observedAt ? localDay(item.observedAt) : '日期待考'
+  const metaLabel = `${formatByteSize(item.sizeBytes)} · ${
+    item.observedAt ? `入库于 ${localDay(item.observedAt)}` : '日期待考'
   }`;
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -614,7 +614,7 @@ const FolderCard: React.FC<{
               <span>已读</span>
             </span>
           ) : null}
-          <span className="ml-auto">{latest ? localDay(latest) : '日期待考'}</span>
+          <span className="ml-auto">{latest ? `入库于 ${localDay(latest)}` : '日期待考'}</span>
         </span>
         {row.items.length > 0 && (
           <div
@@ -642,21 +642,27 @@ const FolderWall: React.FC<{
   onOpenFile: (fileId: string, revisionId: string) => void;
   systemActions?: DesktopFileActionCallbacks;
 }> = ({ rows, onOpenFile, systemActions }) => {
+  const totalFiles = rows.reduce((sum, r) => sum + r.items.length, 0);
   const ranked = useMemo(
     () => rows.slice().sort((a, b) => b.items.length - a.items.length),
     [rows]
   );
   const shown = ranked.slice(0, FOLDER_WALL_CAP);
-  if (shown.length === 0) return null;
+  if (shown.length === 0 || (ranked.length <= 1 && totalFiles <= 1)) return null;
   return (
     <Frame aria-label="资料抽屉" className="border border-border/75">
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
         <div className="flex items-baseline gap-2">
-          <span className="text-[13px] font-semibold tracking-tight text-foreground">
+          <span
+            className="text-[13px] font-semibold tracking-tight text-foreground"
+            title="按所在文件夹归纳的快捷入口；右上角标表示未读数，点击直接打开该目录最近更新的文件"
+          >
             资料抽屉
           </span>
           <span className="font-mono text-[length:var(--text-micro)] tabular-nums text-muted-foreground">
-            共 {ranked.length} 组 · 显示前 {shown.length} 组（按收量） · 点击打开最近更新
+            {ranked.length <= shown.length
+              ? `共 ${ranked.length} 个目录 · 点击打开最近更新`
+              : `共 ${ranked.length} 个目录 · 展示前 ${shown.length} 个 · 点击打开最近更新`}
           </span>
         </div>
       </div>
@@ -988,49 +994,57 @@ export const AtlasView: React.FC<AtlasViewProps> = ({
     );
   };
 
-  const renderEmbeddedOverviewSections = () => (
-    <>
-      <Frame className="border border-border/75">
-        <div className="flex flex-wrap items-center gap-2 px-3.5 py-2 font-mono text-[length:var(--text-micro)] tabular-nums text-muted-foreground">
-          <span className="font-sans font-semibold text-[12px] text-foreground pr-2 border-r border-border/80">
-            {packages.length} 个任务包
-          </span>
-          {STAGE_SLOT_ORDER.map((role) => {
-            const count = stageCounts[role];
-            const active = count > 0;
-            return (
+  const renderEmbeddedOverviewSections = () => {
+    const activeStages = STAGE_SLOT_ORDER.filter((role) => stageCounts[role] > 0);
+    const collapseSingleItemContainers = packages.length <= 1 && files.length <= 1;
+    const showStageSummary = !collapseSingleItemContainers && (packages.length > 1 || activeStages.length > 1);
+    if (collapseSingleItemContainers) {
+      return <div data-atlas-single-collapsed="true" className="hidden" />;
+    }
+    return (
+      <>
+        {showStageSummary && (
+          <Frame className="border border-border/75">
+            <div className="flex flex-wrap items-center gap-2 px-3.5 py-2 font-mono text-[length:var(--text-micro)] tabular-nums text-muted-foreground">
               <span
-                key={role}
-                className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 transition-opacity ${
-                  active
-                    ? 'bg-card text-foreground border border-border/70 shadow-xs'
-                    : 'opacity-50'
-                }`}
+                className="font-sans font-semibold text-[12px] text-foreground pr-2 border-r border-border/80"
+                title="按主题目录聚合并排除零值阶段的文档分布"
               >
-                <span
-                  className="size-1.5 rounded-full shrink-0"
-                  style={{ backgroundColor: STAGE_ACCENT[role] }}
-                  aria-hidden="true"
-                />
-                <span>{role}</span>
-                <span className={active ? 'font-semibold text-foreground' : ''}>{count}</span>
+                {packages.length} 个任务包
               </span>
-            );
-          })}
-        </div>
-      </Frame>
-      <TaskPackageGallery
-        packages={packages}
-        fileById={fileById}
-        svgDataUris={svgDataUris}
-        activeFileId={activeFileId}
-        onOpenDoc={openGalleryDoc}
-        stateOverview={stateOverview}
-        onOpenFileContextMenu={systemActions?.onOpenFileContextMenu}
-      />
-      <FolderWall rows={rows} onOpenFile={onOpenFile} systemActions={systemActions} />
-    </>
-  );
+              {activeStages.map((role) => {
+                const count = stageCounts[role];
+                return (
+                  <span
+                    key={role}
+                    className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 bg-card text-foreground border border-border/70 shadow-xs"
+                  >
+                    <span
+                      className="size-1.5 rounded-full shrink-0"
+                      style={{ backgroundColor: STAGE_ACCENT[role] }}
+                      aria-hidden="true"
+                    />
+                    <span>{role}</span>
+                    <span className="font-semibold text-foreground">{count}</span>
+                  </span>
+                );
+              })}
+            </div>
+          </Frame>
+        )}
+        <TaskPackageGallery
+          packages={packages}
+          fileById={fileById}
+          svgDataUris={svgDataUris}
+          activeFileId={activeFileId}
+          onOpenDoc={openGalleryDoc}
+          stateOverview={stateOverview}
+          onOpenFileContextMenu={systemActions?.onOpenFileContextMenu}
+        />
+        <FolderWall rows={rows} onOpenFile={onOpenFile} systemActions={systemActions} />
+      </>
+    );
+  };
 
   return (
     <div
@@ -1090,11 +1104,25 @@ export const AtlasView: React.FC<AtlasViewProps> = ({
           </ToolbarGroup>
 
           <ToolbarGroup className="flex items-center gap-2 shrink-0">
-            <span className="hidden xl:inline font-mono text-[length:var(--text-micro)] text-muted-foreground tabular-nums">
-              {files.length} 文件 · {rows.length} 目录 · MD {formatCounts.md} / SVG {formatCounts.svg} / PDF{' '}
-              {formatCounts.pdf}
-              {formatCounts.other > 0 ? ` / 其它 ${formatCounts.other}` : ''}
-            </span>
+            {(() => {
+              const formatSummaryParts = [
+                ['MD', formatCounts.md],
+                ['SVG', formatCounts.svg],
+                ['PDF', formatCounts.pdf],
+                ['其它', formatCounts.other],
+              ]
+                .filter(([, count]) => Number(count) > 0)
+                .map(([label, count]) => `${label} ${count}`);
+              return (
+                <span
+                  data-atlas-nonzero-stats=""
+                  className="hidden xl:inline font-mono text-[length:var(--text-micro)] text-muted-foreground tabular-nums"
+                >
+                  {files.length} 文件 · {rows.length} 目录
+                  {formatSummaryParts.length > 0 ? ` · ${formatSummaryParts.join(' / ')}` : ''}
+                </span>
+              );
+            })()}
             {viewMode === 'canvas' && (
               <>
                 <ToolbarSeparator className="hidden xl:block" />
