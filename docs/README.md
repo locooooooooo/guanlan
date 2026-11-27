@@ -111,4 +111,4 @@ Markdown、Office（DOCX / XLSX / PPTX）、PDF、SVG、图片、纯文本与代
 
 ---
 
-*当前版本：v1.2.3。更新说明见 [Releases](https://github.com/locooooooooo/guanlan/releases)。*
+*最新版本与更新说明见 [Releases](https://github.com/locooooooooo/guanlan/releases)。*

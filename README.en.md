@@ -14,6 +14,8 @@ Every index, snapshot and reading state lives in a private data directory on you
 
 The detailed documentation under `docs/` is written in Chinese, and so is the [Chinese README](README.md). This page is a translation of it and may lag behind; where the two differ, the Chinese version is the reference. The links on this page are checked by a test.
 
+For what problem it solves, what it deliberately does not do, and who it is for, see the [product introduction](docs/README.md) (Chinese).
+
 ## Features
 
 - **Timeline, calendar, star map and Atlas views** of the same workspace, by when things happened, how active they were and how they relate.
@@ -55,7 +57,7 @@ test/                       Frontend and contract regression tests (node:test + 
 server/                     Early Node pipeline; no longer mounted, kept as the parity baseline and fixture generator
 public/                     Static assets
 scripts/                    Gate, release preflight, smoke, parity, benchmarks, seed data and installer build
-docs/                       Code standards, subsystem references, reference manual, contributor guide
+docs/                       Product introduction, code standards, subsystem references, reference manual, contributor guide
 native/
   crates/guanlan-core/      Domain model, index and read-only queries
   crates/guanlan-service/   HTTP/SSE/MCP service and the guanlan CLI
