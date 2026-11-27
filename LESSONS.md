@@ -134,3 +134,4 @@
   - 安装包没有代码签名，首次运行会有系统的未知发布者提示。
   - 视觉基线 PNG（`scripts/visual-baseline/`）自开源首快照 `7e0b5fa` 之后没有重拍，其间已有 11 个提交动过前端源码。`node scripts/visual-baseline.mjs compare` 现在对全部 27 个镜头报未声明差异并以退出码 1 结束，没有改动的星图、日历、阅读器也一样，像素比对已经不能当作回归依据；同一轮运行里的 Console 门禁（0 error / 0 warning）与 SSOT 断言仍然有效。按新界面重拍之前，需要有人确认新的外观。
   - 安装包脚本直接启动 `cargo`，不像门禁脚本那样到 `~/.cargo/bin` 去找：cargo 不在 `PATH` 上时（非交互 shell 常常如此），`node scripts/build-windows-installer.mjs` 建完 `dist/` 之后以 `ENOENT` 退出。
+  - 本机设了 `HTTP_PROXY` / `HTTPS_PROXY`（127.0.0.1:10808），`NO_PROXY` 里只有回环与局域网。Tauri 打包要内嵌 WebView2 引导程序，会去 `https://go.microsoft.com/fwlink/p/?LinkId=2124703` 下载（约 1.8 MB）；这个下载经代理会挂到超时并返回 0 字节，Tauri 读到不完整的文件就报 `failed to bundle project: io: unexpected end of file`，表现为 NSIS 成功而 MSI 失败。直连该地址只要 1.2 秒且完整。打包前把 `go.microsoft.com` 与 `msedge.sf.dl.delivery.mp.microsoft.com` 加进 `NO_PROXY`（大小写两份都要）即可绕过；本机已缓存的 `%LOCALAPPDATA%\tauri\MicrosoftEdgeWebview2Setup.exe` 并不能替代，Tauri 每次仍会下载。
