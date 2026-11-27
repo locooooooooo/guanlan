@@ -829,3 +829,116 @@ test('时光机 ≥360px 防截断 + 星图首尾安全区/预览卡 + 阅读器
   );
   assert.ok(lightReaderHtml.includes('切换到深色阅读纸'), '全站浅色模式下阅读器应自动呈现暖宣纸');
 });
+
+test('概览页降噪 · 单文件折叠冗余层级 + 零值隐藏 + 单卡适应与术语白话分层', () => {
+  const singleMd = makeFile('f_solo', '01-方案文档/架构单页.md', 'md', [
+    { id: 'rev_solo', v: 1, observedAt: '2026-11-23T10:00:00+08:00' },
+  ]);
+  const singleAtlasHtml = renderToStaticMarkup(
+    React.createElement(AtlasView, {
+      files: [singleMd],
+      readingStates: {},
+      onOpenFile: () => {},
+      activeFileId: 'f_solo',
+      variant: 'embedded',
+    })
+  );
+  assert.ok(
+    singleAtlasHtml.includes('data-atlas-single-collapsed="true"'),
+    '单文件工作区在嵌入式资产库中折叠阶段汇总/专项橱窗/资料抽屉三层冗余外框'
+  );
+  assert.ok(!singleAtlasHtml.includes('aria-label="资料抽屉"'), '单文件不得重复叠出资料抽屉');
+  assert.ok(!singleAtlasHtml.includes('SVG 0'), '顶栏汇总不再展示 SVG 0 等零值噪声');
+  assert.ok(!singleAtlasHtml.includes('PDF 0'), '顶栏汇总不再展示 PDF 0 等零值噪声');
+  assert.ok(
+    singleAtlasHtml.includes('data-atlas-nonzero-stats=""') && singleAtlasHtml.includes('MD 1'),
+    '顶栏汇总保留非零格式统计'
+  );
+
+  const soloPkg: TaskPackage = {
+    id: '01-方案文档/专项A',
+    name: '专项A',
+    kind: 'spec',
+    stage: '执行',
+    docs: [
+      {
+        fileId: 'f_solo',
+        title: '架构单页.md',
+        format: 'md',
+        stage: '执行',
+        conclusion: '',
+        versionNumber: 1,
+      },
+    ],
+    eventCount: 1,
+    lastActivity: '2026-11-23T10:00:00+08:00',
+    latestConclusion: '初稿',
+    readingOrder: [],
+  };
+  const singleGalleryHtml = renderToStaticMarkup(
+    React.createElement(TaskPackageGallery, {
+      packages: [soloPkg],
+      fileById: new Map([[singleMd.file_id, singleMd]]),
+      onOpenDoc: () => {},
+      nowIso: '2026-11-23T12:00:00+08:00',
+    })
+  );
+  assert.ok(
+    singleGalleryHtml.includes('data-gallery-single-card="true"') &&
+      singleGalleryHtml.includes('grid-cols-1 max-w-[680px]'),
+    '单张专项卡启用单列适宽布局，避免右侧大面积留白'
+  );
+  assert.ok(
+    !singleGalleryHtml.includes('data-gallery-filter="awaiting"'),
+    '零值筛选胶囊不再作为噪声常驻显示'
+  );
+  assert.ok(
+    singleGalleryHtml.includes('按主题归组') &&
+      singleGalleryHtml.includes('data-stage-progress-rail="执行"') &&
+      singleGalleryHtml.includes('近 14 天文档改动趋势'),
+    '专项橱窗与折线/五阶段条提供白话分层与悬浮说明'
+  );
+
+  const quietHomeHtml = renderToStaticMarkup(
+    React.createElement(HomeView, {
+      files: [singleMd],
+      readingStates: {},
+      events: [],
+      summary: null,
+      eventDays: {
+        ok: true,
+        index_generation: 1,
+        order: 'occurred',
+        granularity: 'day',
+        from: null,
+        to: null,
+        total: 2,
+        hidden_days: 0,
+        undated_count: 0,
+        groups: [
+          {
+            date: '2026-11-23',
+            count: 2,
+            by_kind: { appeared: 2 },
+            formats: {},
+            decisions: [],
+            samples: [],
+          },
+        ],
+      },
+      recentItems: [],
+      decisions: [],
+      decisionsUnresolvedTotal: 0,
+      onOpenDoc: () => {},
+      onResumeReading: () => {},
+      onMarkFullyRead: () => {},
+      onOpenPackageBoard: () => {},
+      onOpenPanorama: () => {},
+    })
+  );
+  assert.ok(quietHomeHtml.includes('决策已收口'), '0 项待拍板时采用冷静语义文案');
+  assert.ok(quietHomeHtml.includes('暂无决策记录'), '无决策数据时展示明确白话说明');
+  assert.ok(quietHomeHtml.includes('读/决策/格式总览'), '态势卡片头部去掉隐晦英文 ATLAS 缩写');
+  assert.ok(!quietHomeHtml.includes('决策拍板 <span class="font-mono tabular-nums text-foreground">0</span>'), '趋势图例隐藏数量为 0 的分项');
+});
+

@@ -63,7 +63,7 @@ export const REVIEW_BOARD_LANES: ReadonlyArray<{
   { key: 'dispatchable', label: '可派发', description: '阻塞已清零，可交办智能体或推进下一步' },
   { key: 'agent_running', label: '智能体运行中', description: '执行/交付槽活跃运行，等待回执' },
   { key: 'completed', label: '已办结', description: '全部清单、拍板与回执核验已完成' },
-  { key: 'unknown', label: '状态未知', description: '无回执或进程失联，需人工孤儿修复' },
+  { key: 'unknown', label: '异常 · 待排查', description: '状态未知：无回执或进程失联，需人工孤儿修复' },
 ];
 
 /** 按分栏过滤看板卡片（纯函数，单测锁定） */
@@ -317,9 +317,51 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
     total: 0,
   };
   const band = computeReviewBoardRatioBand(counts);
+  const attentionTotal =
+    counts.pending_decision + counts.awaiting_receipt + counts.unknown;
+  const isCleanZero = counts.total === 0 && !loading && !error && !notice;
   const bandAria =
     `批阅看板六态分布，共 ${band.total} 项：` +
     band.segments.map((seg) => `${seg.label} ${seg.count}`).join(' · ');
+
+  const filterChips = (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <button
+        type="button"
+        aria-pressed={filter === 'all'}
+        data-board-filter="all"
+        onClick={() => setFilter('all')}
+        className={`cursor-pointer rounded-full border px-2.5 py-0.5 text-[length:var(--text-micro)] leading-[var(--lh-micro)] transition-colors tabular-nums ${
+          filter === 'all'
+            ? 'border-[color:var(--ink-anchor)] bg-[color:var(--ink-anchor)] text-[color:var(--paper-on-ink)]'
+            : 'border-border bg-card/75 text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        全部 ({counts.total})
+      </button>
+      {REVIEW_BOARD_LANES.map((lane) => {
+        const count = counts[lane.key];
+        const active = filter === lane.key;
+        return (
+          <button
+            key={lane.key}
+            type="button"
+            aria-pressed={active}
+            data-board-filter={lane.key}
+            title={lane.description}
+            onClick={() => setFilter(lane.key)}
+            className={`cursor-pointer rounded-full border px-2.5 py-0.5 text-[length:var(--text-micro)] leading-[var(--lh-micro)] transition-colors tabular-nums ${
+              active
+                ? BUCKET_BADGE_STYLE[lane.key]
+                : 'border-border bg-card/75 text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {lane.label} ({count})
+          </button>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div
@@ -335,7 +377,9 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
     >
       <div
         data-sheet-variant="inset"
-        className="glx-t-panel bg-popover/95 dark:bg-popover/95 backdrop-blur-2xl w-full max-w-2xl h-full flex flex-col overflow-hidden rounded-2xl border border-border/85 text-foreground"
+        className={`glx-t-panel bg-popover/95 dark:bg-popover/95 backdrop-blur-2xl w-full max-w-2xl ${
+          isCleanZero ? 'h-auto max-h-[calc(100vh-24px)] self-start' : 'h-full'
+        } flex flex-col overflow-hidden rounded-2xl border border-border/85 text-foreground`}
         style={{
           transform: entered ? 'none' : 'translateX(32px)',
           opacity: entered ? 1 : 0,
@@ -371,9 +415,17 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
         </div>
 
         <div
-          className="px-6 py-3 border-b border-border/75 bg-muted/35 space-y-2.5"
+          className="px-6 py-3 border-b border-border/75 bg-muted/35 space-y-2"
           data-review-board-lanes=""
         >
+          <div className="flex items-center justify-between gap-2 text-[length:var(--text-micro)] leading-[var(--lh-micro)] text-muted-foreground">
+            <span className="font-medium text-foreground/80">任务状态分布</span>
+            <span className="font-mono tabular-nums">
+              {band.empty
+                ? '暂无任务记录（0 项）'
+                : `共 ${counts.total} 项 · 需处理 ${attentionTotal} 项`}
+            </span>
+          </div>
           {band.empty ? (
             <div
               data-review-board-ratio-band="empty"
@@ -403,42 +455,16 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
               </div>
             </div>
           )}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              aria-pressed={filter === 'all'}
-              data-board-filter="all"
-              onClick={() => setFilter('all')}
-              className={`cursor-pointer rounded-full border px-2.5 py-0.5 text-[length:var(--text-micro)] leading-[var(--lh-micro)] transition-colors tabular-nums ${
-                filter === 'all'
-                  ? 'border-[color:var(--ink-anchor)] bg-[color:var(--ink-anchor)] text-[color:var(--paper-on-ink)]'
-                  : 'border-border bg-card/75 text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              全部 ({counts.total})
-            </button>
-            {REVIEW_BOARD_LANES.map((lane) => {
-              const count = counts[lane.key];
-              const active = filter === lane.key;
-              return (
-                <button
-                  key={lane.key}
-                  type="button"
-                  aria-pressed={active}
-                  data-board-filter={lane.key}
-                  title={lane.description}
-                  onClick={() => setFilter(lane.key)}
-                  className={`cursor-pointer rounded-full border px-2.5 py-0.5 text-[length:var(--text-micro)] leading-[var(--lh-micro)] transition-colors tabular-nums ${
-                    active
-                      ? BUCKET_BADGE_STYLE[lane.key]
-                      : 'border-border bg-card/75 text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {lane.label} ({count})
-                </button>
-              );
-            })}
-          </div>
+          {counts.total === 0 ? (
+            <details data-review-board-filters-collapsed="" className="group">
+              <summary className="cursor-pointer select-none font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors">
+                按状态分栏筛选（当前全部为 0）
+              </summary>
+              <div className="pt-2">{filterChips}</div>
+            </details>
+          ) : (
+            filterChips
+          )}
         </div>
 
         <ScrollArea scrollFade className="flex-1 min-h-0">
@@ -467,16 +493,24 @@ export const ReviewBoardDrawer: React.FC<ReviewBoardDrawerProps> = ({
           )}
 
           {!error && visibleCards.length === 0 && (
-            <Empty className="rounded-2xl border border-dashed border-border/80 bg-card/65 py-10">
+            <Empty className="rounded-2xl border border-dashed border-border/80 bg-card/65 py-8">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <ClipboardList className="size-4" />
                 </EmptyMedia>
-                <EmptyTitle>{loading ? '正在加载批阅看板…' : '当前分栏下暂无事项卡'}</EmptyTitle>
+                <EmptyTitle>
+                  {loading
+                    ? '正在加载批阅看板…'
+                    : counts.total === 0
+                      ? '暂无批阅事项'
+                      : '当前分栏下暂无事项卡'}
+                </EmptyTitle>
                 <EmptyDescription>
                   {loading
                     ? '正在核对本地任务槽位与待拍板陈述'
-                    : '所有需人工拍板与智能体回执事项均已清零，可切换上部分栏查看历史记录'}
+                    : counts.total === 0
+                      ? '当前工作区尚未产生待拍板、智能体回执或异常任务；当长任务出现阻塞决策、提交草案或执行节点失联时，会在此按状态分栏汇总。'
+                      : `该状态分栏当前已清零，可切换上部分栏查看其余 ${counts.total} 项记录`}
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>

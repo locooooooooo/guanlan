@@ -85,11 +85,14 @@ export const HomeWorkspaceVisuals: React.FC<HomeWorkspaceVisualsProps> = ({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-baseline gap-2 min-w-0">
-          <h2 className="text-[15px] leading-[22px] font-semibold tracking-tight text-foreground whitespace-nowrap">
+          <h2
+            title="按已读覆盖、待定案决策、五阶段落位与格式构成汇总当前工作区进度"
+            className="text-[15px] leading-[22px] font-semibold tracking-tight text-foreground whitespace-nowrap"
+          >
             工作区态势
           </h2>
-          <span className="font-mono text-[10.5px] tracking-[0.12em] uppercase text-muted-foreground">
-            ATLAS
+          <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+            读/决策/格式总览
           </span>
         </div>
 
@@ -207,7 +210,7 @@ export const HomeWorkspaceVisuals: React.FC<HomeWorkspaceVisualsProps> = ({
                       title={`${slice.label}：${slice.count} 份（${slice.pct}%）· ${slice.hint}`}
                       className={`flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 motion-safe:transition-colors ${
                         isFocused ? 'bg-accent/80' : 'bg-muted/35 hover:bg-accent/50'
-                      }`}
+                      } ${slice.count === 0 ? 'opacity-50' : ''}`}
                     >
                       <span className="flex items-center gap-2 min-w-0">
                         <span
@@ -270,7 +273,7 @@ export const HomeWorkspaceVisuals: React.FC<HomeWorkspaceVisualsProps> = ({
                       已定案 <span className="font-mono tabular-nums">{decisionGauge.resolvedCount}</span>
                     </>
                   ) : (
-                    '无记录'
+                    '暂无决策记录'
                   )}
                 </span>
               )}
@@ -403,7 +406,7 @@ export const HomeWorkspaceVisuals: React.FC<HomeWorkspaceVisualsProps> = ({
                       title={tooltipText}
                       className={`group flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1 text-left motion-safe:transition-colors ${
                         active ? 'bg-accent/70' : 'hover:bg-accent/45'
-                      }`}
+                      } ${node.docCount === 0 ? 'opacity-55' : ''}`}
                     >
                       <span className="flex w-12 shrink-0 items-center gap-1.5">
                         <span

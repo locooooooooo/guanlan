@@ -46,6 +46,15 @@ test('DecisionRadar displays server SSOT unresolvedTotal over paginated decision
     }),
   );
   assert.match(fallbackHtml, />2</);
+
+  const zeroHtml = renderToStaticMarkup(
+    React.createElement(DecisionRadar, {
+      decisions: [],
+      unresolvedTotal: 0,
+      onOpenDecision: () => {},
+    }),
+  );
+  assert.ok(zeroHtml.includes('>决策<') && zeroHtml.includes('>0<'), '未决为 0 时仍展示「决策」可见按钮标签');
 });
 
 test('HomeView displays server SSOT decisionsUnresolvedTotal consistently in greeting pill and focus card', () => {

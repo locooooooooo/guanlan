@@ -44,7 +44,11 @@ const STAGE_BADGE_PILL_CLASS =
 const FiveStageRail: React.FC<{ stage: StageRole; className?: string }> = ({ stage, className }) => {
   const reachedRank = STAGE_SLOT_ORDER.indexOf(stage);
   return (
-    <span className={`flex items-center gap-1 ${className ?? ''}`} aria-hidden="true">
+    <span
+      data-stage-progress-rail={stage}
+      title={`五阶段推进（蓝图 → 计划 → 决策 → 执行 → 交付），当前：${stage}`}
+      className={`flex items-center gap-1 ${className ?? ''}`}
+    >
       {STAGE_SLOT_ORDER.map((role, i) => (
         <span
           key={role}
@@ -161,10 +165,20 @@ const FeaturedFocusCards: React.FC<FeaturedFocusCardsProps> = ({
 
             <div>
               <h2 className="flex flex-wrap items-baseline gap-2 text-[17px] leading-[24px] font-semibold tracking-tight text-[color:var(--ink-strong)]">
-                <span className="whitespace-nowrap">待拍板</span>
-                <span className="inline-flex items-baseline gap-0.5 font-serif-claude text-[28px] leading-none font-bold tabular-nums text-[color:var(--accent-wave)]">
+                <span className="whitespace-nowrap">
+                  {decisionCount > 0 ? '待拍板' : '决策已收口'}
+                </span>
+                <span
+                  className={`inline-flex items-baseline gap-0.5 font-serif-claude leading-none font-bold tabular-nums ${
+                    decisionCount > 0
+                      ? 'text-[28px] text-[color:var(--accent-wave)]'
+                      : 'text-[18px] text-[color:var(--stage-ink-deliver-text)]'
+                  }`}
+                >
                   <span data-feature-count="decision">{decisionCount}</span>
-                  <span className="font-sans text-[12px] font-medium text-[color:var(--ink-soft)]">项</span>
+                  <span className="font-sans text-[12px] font-medium text-[color:var(--ink-soft)]">
+                    {decisionCount > 0 ? '项' : '项待决'}
+                  </span>
                 </span>
               </h2>
               <p className="mt-1 text-[12px] leading-[18px] text-[color:var(--ink-soft)]">
@@ -241,9 +255,23 @@ const FeaturedFocusCards: React.FC<FeaturedFocusCardsProps> = ({
                     {activePackage.docCount} 份
                   </span>
                   <span aria-hidden="true" className="opacity-35">·</span>
-                  <span className="whitespace-nowrap">
+                  <span
+                    className={`whitespace-nowrap ${activePackage.awaitingAcceptance === 0 ? 'opacity-70' : ''}`}
+                    title={
+                      activePackage.awaitingAcceptance > 0
+                        ? `当前专项共有 ${activePackage.awaitingAcceptance} 项待验收交付`
+                        : '当前专项无待验收交付'
+                    }
+                  >
                     待验收{' '}
-                    <span data-feature-count="package" className="font-mono font-semibold tabular-nums text-[color:var(--accent-iris-ink)]">
+                    <span
+                      data-feature-count="package"
+                      className={`font-mono font-semibold tabular-nums ${
+                        activePackage.awaitingAcceptance > 0
+                          ? 'text-[color:var(--accent-iris-ink)]'
+                          : 'text-[color:var(--ink-soft)]'
+                      }`}
+                    >
                       {activePackage.awaitingAcceptance}
                     </span>
                   </span>

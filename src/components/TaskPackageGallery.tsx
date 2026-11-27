@@ -92,7 +92,11 @@ function coverDataUriOf(
 const FiveStageRail: React.FC<{ stage: StageRole }> = ({ stage }) => {
   const reachedRank = STAGE_SLOT_ORDER.indexOf(stage);
   return (
-    <span className="flex items-center gap-1" aria-hidden="true">
+    <span
+      data-stage-progress-rail={stage}
+      title={`五阶段推进（蓝图 → 计划 → 决策 → 执行 → 交付），当前：${stage}`}
+      className="flex items-center gap-1"
+    >
       {STAGE_SLOT_ORDER.map((role, i) => (
         <span
           key={role}
@@ -124,6 +128,11 @@ const PackageFingerprintVisual: React.FC<{
           data-fingerprint-sparkline=""
           data-sparkline-changes={sparkline14d.totalChanges}
           data-sparkline-active-days={sparkline14d.activeDays}
+          title={
+            sparkline14d.totalChanges > 0
+              ? `近 14 天文档改动趋势（左→右按日分布）：共 ${sparkline14d.totalChanges} 次更新，活跃 ${sparkline14d.activeDays} 天`
+              : '近 14 天文档改动趋势（左→右按日分布）：近 14 天暂无改动'
+          }
           className="relative flex items-center gap-2 rounded-lg border border-border/60 bg-card/85 px-2 py-1"
         >
           <svg
@@ -168,7 +177,15 @@ const PackageFingerprintVisual: React.FC<{
         </span>
       )}
 
-      <span data-fingerprint-ribbon="" className="flex flex-col gap-1">
+      <span
+        data-fingerprint-ribbon=""
+        title={
+          formatSegments.length > 0
+            ? `文件格式占比：${formatSegments.map((s) => `${s.label} ${s.count} 份（${Math.round(s.ratio * 100)}%）`).join(' · ')}`
+            : undefined
+        }
+        className="flex flex-col gap-1"
+      >
         <span
           className="flex h-1.5 w-full overflow-hidden rounded-full bg-muted/80"
           aria-hidden="true"
@@ -266,10 +283,16 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
     <section aria-label="专项橱窗" className={className ?? ''}>
       <Frame className="border border-border/75 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-2.5 px-4 py-2.5">
-          <div className="flex items-center gap-2">
-            <h2 className="text-[14.5px] leading-5 font-semibold tracking-tight text-foreground whitespace-nowrap">
+          <div className="flex items-baseline gap-2">
+            <h2
+              title="按主题目录聚合的一组关联文档与近期改动脉搏（原「任务包」）"
+              className="text-[14.5px] leading-5 font-semibold tracking-tight text-foreground whitespace-nowrap"
+            >
               专项橱窗
             </h2>
+            <span className="hidden md:inline text-[11px] text-muted-foreground whitespace-nowrap">
+              按主题归组
+            </span>
             <Badge variant="outline" size="sm" className="font-mono tabular-nums whitespace-nowrap">
               {packages.length} 项
             </Badge>
@@ -283,7 +306,7 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
                 type="button"
                 onClick={() => setCapsulePreset({ mode: 'export', title: '按时间段自定义范围' })}
                 className="inline-flex h-full cursor-pointer items-center gap-1 whitespace-nowrap rounded-s-[7px] px-2.5 text-[11px] font-medium text-foreground hover:bg-accent motion-safe:transition-colors"
-                title="按选定时间段导出开放事项资料胶囊（含预览体积与脱敏检查）"
+                title="按时间段打包导出开放资料清单与脱敏检查（离线资料胶囊）"
               >
                 <Package className="h-3 w-3 text-[color:var(--accent-iris-deep)] shrink-0" />
                 <span>时段胶囊</span>
@@ -293,55 +316,66 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
                 type="button"
                 onClick={() => setCapsulePreset({ mode: 'inspect' })}
                 className="inline-flex h-full cursor-pointer items-center gap-1 whitespace-nowrap rounded-e-[7px] px-2.5 text-[11px] font-medium text-foreground hover:bg-accent motion-safe:transition-colors"
-                title="打开并校验另一台观澜导出的 capsule-manifest.json 胶囊目录"
+                title="打开并校验从其他设备导出的离线资料包（capsule-manifest.json）"
               >
                 <FolderOpen className="h-3 w-3 text-muted-foreground shrink-0" />
                 <span>打开胶囊</span>
               </button>
             </Group>
 
-            <div
-              className="flex flex-wrap items-center gap-0.5 rounded-lg border border-border/75 bg-background/70 dark:bg-card/60 p-0.5"
-              role="group"
-              aria-label="专项筛选"
-            >
-              {GALLERY_FILTERS.map((f) => {
-                const active = f.key === currentFilter;
-                const isEmpty = counts[f.key] === 0 && !active;
-                return (
-                  <button
-                    key={f.key}
-                    type="button"
-                    data-gallery-filter={f.key}
-                    aria-pressed={active}
-                    onClick={() => changeFilter(f.key)}
-                    className={`flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1 text-[11.5px] leading-4 motion-safe:transition-all ${
-                      active
-                        ? 'bg-[color:var(--ink-anchor)] font-medium text-[color:var(--paper-on-ink)] shadow-xs'
-                        : isEmpty
-                          ? 'text-muted-foreground opacity-55 hover:opacity-100 hover:bg-accent/70'
-                          : 'text-foreground/85 hover:bg-accent/80 hover:text-foreground'
-                    }`}
-                  >
-                    <span>{f.label}</span>
-                    <span
-                      className={`font-mono text-[10px] tabular-nums ${
-                        active ? 'opacity-80' : 'text-muted-foreground'
-                      }`}
-                    >
-                      {counts[f.key]}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            {(() => {
+              const visibleFilters = GALLERY_FILTERS.filter(
+                (f) => f.key === 'all' || f.key === currentFilter || counts[f.key] > 0
+              );
+              if (visibleFilters.length <= 1) return null;
+              return (
+                <div
+                  data-gallery-filter-group=""
+                  className="flex flex-wrap items-center gap-0.5 rounded-lg border border-border/75 bg-background/70 dark:bg-card/60 p-0.5"
+                  role="group"
+                  aria-label="专项筛选"
+                >
+                  {visibleFilters.map((f) => {
+                    const active = f.key === currentFilter;
+                    return (
+                      <button
+                        key={f.key}
+                        type="button"
+                        data-gallery-filter={f.key}
+                        aria-pressed={active}
+                        onClick={() => changeFilter(f.key)}
+                        className={`flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1 text-[11.5px] leading-4 motion-safe:transition-all ${
+                          active
+                            ? 'bg-[color:var(--ink-anchor)] font-medium text-[color:var(--paper-on-ink)] shadow-xs'
+                            : 'text-foreground/85 hover:bg-accent/80 hover:text-foreground'
+                        }`}
+                      >
+                        <span>{f.label}</span>
+                        <span
+                          className={`font-mono text-[10px] tabular-nums ${
+                            active ? 'opacity-80' : 'text-muted-foreground'
+                          }`}
+                        >
+                          {counts[f.key]}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </div>
 
         <FramePanel className="p-3.5">
           <div
             key={currentFilter}
-            className="glx-fade-in grid grid-cols-[repeat(auto-fill,minmax(252px,1fr))] gap-3"
+            data-gallery-single-card={visiblePackages.length === 1 ? 'true' : undefined}
+            className={`glx-fade-in grid gap-3 ${
+              visiblePackages.length === 1
+                ? 'grid-cols-1 max-w-[680px]'
+                : 'grid-cols-[repeat(auto-fill,minmax(252px,1fr))]'
+            }`}
           >
             {visiblePackages.length === 0 && (
               <p className="col-span-full py-8 text-center text-[length:var(--text-ui)] leading-[var(--lh-ui)] text-muted-foreground">
@@ -410,7 +444,12 @@ const TaskPackageGallery: React.FC<TaskPackageGalleryProps> = ({
                     >
                       <span className="relative z-[1] flex items-center justify-between gap-2 min-w-0">
                         {badgeLine ? (
-                          <span className={badgePillClass}>{badgeLine}</span>
+                          <span
+                            className={badgePillClass}
+                            title={`当前阶段与最新主文档版本号（共 ${pkg.docs.length} 份资料）`}
+                          >
+                            {badgeLine}
+                          </span>
                         ) : (
                           <span className="font-mono text-[10px] leading-none text-muted-foreground whitespace-nowrap">
                             {pkg.stage === '待分类' ? '通用专项' : `${pkg.stage}阶段`}

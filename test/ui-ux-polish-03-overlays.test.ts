@@ -445,11 +445,31 @@ test('批阅看板·SSR：六态比例带替代冗长说明、抽屉统一 glx-t
 test('批阅看板·SSR 空态：全零 counts 诚实渲染空比例带（不伪装占比），看板其余锚点不回退', () => {
   const html = renderBoard(makeBoard(makeCounts({ total: 0 }), []));
   assert.ok(html.includes('data-review-board-ratio-band="empty"'), '诚实空态带');
+  assert.ok(html.includes('任务状态分布'), '比例带具备明确标签');
+  assert.ok(html.includes('暂无任务记录（0 项）'), '空态分布标签诚实标示 0 项');
   assert.ok(html.includes('看板暂无在办事项'), '空态文案（sr-only 语义可读）');
+  assert.ok(html.includes('暂无批阅事项'), '全零态区分「从未产生过」与「当前分栏已清零」');
+  assert.ok(
+    !html.includes('可切换上部分栏查看历史记录'),
+    '全零态不再自相矛盾提示切换分栏查看历史'
+  );
+  assert.ok(
+    html.includes('data-review-board-filters-collapsed'),
+    '全零态默认折叠分栏筛选并收缩抽屉高度'
+  );
+  assert.ok(html.includes('h-auto'), '全零空态抽屉高度跟随内容');
   assert.ok(!html.includes('data-board-ratio-seg='), '空态零段');
   assert.ok(html.includes('data-board-filter="unknown"'), '六态过滤药丸完整不回退');
+  assert.ok(html.includes('异常 · 待排查'), 'unknown 分栏使用可操作异常引导文案');
   assert.ok(html.includes('data-review-board-drawer'));
   assert.ok(html.includes('data-esc-layer="open"'), 'Esc 阶梯守卫依赖不回退');
+
+  const partialHtml = renderBoard(
+    makeBoard(makeCounts({ completed: 2, total: 2 }), [])
+  );
+  assert.ok(partialHtml.includes('当前分栏下暂无事项卡'), '有历史记录但当前分栏空时提示分栏已清零');
+  assert.ok(partialHtml.includes('其余 2 项记录'), '如实给出可切换查看的总数');
+  assert.ok(!partialHtml.includes('data-review-board-filters-collapsed'), '非全零时不折叠分栏筛选');
 });
 
 

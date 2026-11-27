@@ -262,11 +262,9 @@ export const DecisionRadar: React.FC<DecisionRadarProps> = ({
         ) : (
           <Scale className="w-3 h-3 shrink-0 opacity-75" />
         )}
-        {unresolvedCount > 0 && (
-          <span className="hidden lg:inline text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-medium">
-            待拍板
-          </span>
-        )}
+        <span className="hidden lg:inline text-[length:var(--text-ui)] leading-[var(--lh-ui)] font-medium">
+          {unresolvedCount > 0 ? '待拍板' : '决策'}
+        </span>
         <span className="font-mono text-[length:var(--text-micro)] font-semibold tabular-nums">
           {unresolvedCount}
         </span>

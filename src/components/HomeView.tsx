@@ -515,11 +515,19 @@ const HomeView: React.FC<HomeViewProps> = ({
                 <span>司辰手记</span>
               </Button>
             )}
-            <Button variant="secondary" onClick={onOpenPanorama}>
+            <Button
+              variant="secondary"
+              onClick={onOpenPanorama}
+              title="按时间轴与关系连线回溯文件更新与决策依据（全景星图）"
+            >
               <Orbit className="h-3.5 w-3.5 text-[color:var(--accent-iris-deep)]" />
               <span>全景星图</span>
             </Button>
-            <Button variant="primary" onClick={onOpenPackageBoard}>
+            <Button
+              variant="primary"
+              onClick={onOpenPackageBoard}
+              title="按主题目录查看全部任务包的五阶段进度与待批阅事项"
+            >
               <Layers className="h-3.5 w-3.5" />
               <span>任务包看板</span>
             </Button>
@@ -685,30 +693,36 @@ const HomeView: React.FC<HomeViewProps> = ({
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
                           {pulse.hasAnyBreakdown ? (
                             <>
-                              <span className="inline-flex items-center gap-1 whitespace-nowrap">
-                                <span
-                                  className="size-2 rounded-full"
-                                  style={{ backgroundColor: 'var(--accent-wave)' }}
-                                  aria-hidden="true"
-                                />
-                                新增纳入 <span className="font-mono tabular-nums text-foreground">{pulse.totalAdded}</span>
-                              </span>
-                              <span className="inline-flex items-center gap-1 whitespace-nowrap">
-                                <span
-                                  className="size-2 rounded-full"
-                                  style={{ backgroundColor: 'var(--stage-ink-decision)' }}
-                                  aria-hidden="true"
-                                />
-                                决策拍板 <span className="font-mono tabular-nums text-foreground">{pulse.totalDecision}</span>
-                              </span>
-                              <span className="inline-flex items-center gap-1 whitespace-nowrap">
-                                <span
-                                  className="size-2 rounded-full"
-                                  style={{ backgroundColor: 'var(--accent-iris-deep)' }}
-                                  aria-hidden="true"
-                                />
-                                内容演进 <span className="font-mono tabular-nums text-foreground">{pulse.totalEvolved}</span>
-                              </span>
+                              {pulse.totalAdded > 0 && (
+                                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                                  <span
+                                    className="size-2 rounded-full"
+                                    style={{ backgroundColor: 'var(--accent-wave)' }}
+                                    aria-hidden="true"
+                                  />
+                                  新增纳入 <span className="font-mono tabular-nums text-foreground">{pulse.totalAdded}</span>
+                                </span>
+                              )}
+                              {pulse.totalDecision > 0 && (
+                                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                                  <span
+                                    className="size-2 rounded-full"
+                                    style={{ backgroundColor: 'var(--stage-ink-decision)' }}
+                                    aria-hidden="true"
+                                  />
+                                  决策拍板 <span className="font-mono tabular-nums text-foreground">{pulse.totalDecision}</span>
+                                </span>
+                              )}
+                              {pulse.totalEvolved > 0 && (
+                                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                                  <span
+                                    className="size-2 rounded-full"
+                                    style={{ backgroundColor: 'var(--accent-iris-deep)' }}
+                                    aria-hidden="true"
+                                  />
+                                  内容演进 <span className="font-mono tabular-nums text-foreground">{pulse.totalEvolved}</span>
+                                </span>
+                              )}
                             </>
                           ) : (
                             <span>
