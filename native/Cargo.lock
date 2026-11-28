@@ -1384,7 +1384,7 @@ dependencies = [
 
 [[package]]
 name = "guanlan-core"
-version = "1.2.3"
+version = "1.2.4"
 dependencies = [
  "flate2",
  "hex",
@@ -1399,7 +1399,7 @@ dependencies = [
 
 [[package]]
 name = "guanlan-desktop"
-version = "1.2.3"
+version = "1.2.4"
 dependencies = [
  "guanlan-service",
  "serde",
@@ -1413,7 +1413,7 @@ dependencies = [
 
 [[package]]
 name = "guanlan-service"
-version = "1.2.3"
+version = "1.2.4"
 dependencies = [
  "axum",
  "fs2",

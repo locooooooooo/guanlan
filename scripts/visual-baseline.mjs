@@ -647,7 +647,7 @@ const SHOT_SCENES = [
   { scene: '⑧ Ctrl+K 双栏命令面板（L4A 富预览）', shots: ['palette'] },
   { scene: '⑨ 批阅看板与轻预览', shots: ['review-board', 'quick-preview'] },
   { scene: '⑩ 司辰手记抽屉（Sheet inset）', shots: ['chronos-digest'] },
-  { scene: '⑪ 设置弹窗与关于观澜（v1.2.3）', shots: ['settings-about'] },
+  { scene: '⑪ 设置弹窗与关于观澜（v1.2.4）', shots: ['settings-about'] },
   {
     scene: '⑫ 全站暗夜沉浸双态（.dark）',
     shots: ['dark-home', 'dark-calendar', 'dark-settings'],
@@ -1266,8 +1266,8 @@ async function captureAllShots(endpoint, gate) {
       return true;
     `);
     await waitFor(
-      () => cdp.eval(`return Boolean(document.querySelector('[data-about-version="1.2.3"]'));`),
-      { label: 'about v1.2.3 badge' }
+      () => cdp.eval(`return Boolean(document.querySelector('[data-about-version="1.2.4"]'));`),
+      { label: 'about v1.2.4 badge' }
     );
     const aboutInfo = await cdp.eval(`
       return {
@@ -1276,7 +1276,7 @@ async function captureAllShots(endpoint, gate) {
         buildTime: document.querySelector('[data-about-build-time]')?.getAttribute('data-about-build-time') || '',
       };
     `);
-    assert.equal(aboutInfo.version, '1.2.3', `关于页版本应为 1.2.3，实得 ${JSON.stringify(aboutInfo)}`);
+    assert.equal(aboutInfo.version, '1.2.4', `关于页版本应为 1.2.4，实得 ${JSON.stringify(aboutInfo)}`);
     assert.ok(aboutInfo.gitSha.length >= 6, `关于页应透出编译期 git-sha，实得 ${JSON.stringify(aboutInfo)}`);
     assert.ok(aboutInfo.buildTime.length >= 10, `关于页应透出编译期构建时间，实得 ${JSON.stringify(aboutInfo)}`);
     console.log(
@@ -1366,8 +1366,8 @@ async function captureAllShots(endpoint, gate) {
       return true;
     `);
     await waitFor(
-      () => cdp.eval(`return Boolean(document.querySelector('[data-about-version="1.2.3"]'));`),
-      { label: 'dark about v1.2.3' }
+      () => cdp.eval(`return Boolean(document.querySelector('[data-about-version="1.2.4"]'));`),
+      { label: 'dark about v1.2.4' }
     );
     await settleFrames(cdp, 500);
     shots.set('dark-settings', await captureShot(cdp));

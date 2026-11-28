@@ -379,7 +379,7 @@ zmij                               1.0.23             MIT
 前两行是两份锁文件内容的 SHA-256（换行统一为 LF 后计算）。锁文件变了，本文件就要重新生成。
 后两行是上面两张表的 SHA-256，表里的任何一处改动都会让它们对不上。
 
-package-lock.json                  sha256:5267378b5b418997e0f24f458cf52f9a57197815d92ac95cd92a39e43fae2461
-native/Cargo.lock                  sha256:71971456ac4e44a9526d1278139fff99550883e50cd5ca222a5c756f55428fc0
+package-lock.json                  sha256:f148c988fa889c5c1dd0f22c606e8c94be8f468e9c993fbd84bdda9ef8e48546
+native/Cargo.lock                  sha256:774de6bc77196137a7f4ededd2fdd97cda1e1fc8d8fd8c46057fde32cb215995
 一、前端                           sha256:ce29004911a5201cb6d5d86cceb3c7ebf02efd1f84d6e6cf2c140d31aee0d1f2
 二、Rust                           sha256:0749a78994c7b3f6287f3e1a77e19d236295e7a105d70d29fdc5f57972f41957

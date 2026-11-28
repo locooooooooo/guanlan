@@ -90,20 +90,20 @@ function keyInput(
 }
 
 
-test('package.json 版本号已升级至 1.2.3', () => {
+test('package.json 版本号已升级至 1.2.4', () => {
   const pkg = JSON.parse(
     readFileSync(new URL('../package.json', import.meta.url), 'utf8')
   ) as { version: string; name: string };
-  assert.equal(pkg.version, '1.2.3');
+  assert.equal(pkg.version, '1.2.4');
   assert.equal(pkg.name, 'guanlan');
 });
 
-test('native/Cargo.toml workspace.package.version 已同步升级至 1.2.3', () => {
+test('native/Cargo.toml workspace.package.version 已同步升级至 1.2.4', () => {
   const toml = readFileSync(new URL('../native/Cargo.toml', import.meta.url), 'utf8');
-  assert.match(toml, /\[workspace\.package\][\s\S]*?version\s*=\s*"1\.2\.3"/);
+  assert.match(toml, /\[workspace\.package\][\s\S]*?version\s*=\s*"1.2.4"/);
 });
 
-test('tauri.conf.json 版本号已同步升级至 1.2.3 且保持 NSIS+MSI 与右键菜单钩子', () => {
+test('tauri.conf.json 版本号已同步升级至 1.2.4 且保持 NSIS+MSI 与右键菜单钩子', () => {
   const conf = JSON.parse(
     readFileSync(
       new URL('../native/crates/guanlan-desktop/tauri.conf.json', import.meta.url),
@@ -115,7 +115,7 @@ test('tauri.conf.json 版本号已同步升级至 1.2.3 且保持 NSIS+MSI 与�
     bundle: { targets: string[]; windows: { nsis: { installerHooks: string } } };
   };
   assert.equal(conf.productName, 'Guanlan');
-  assert.equal(conf.version, '1.2.3');
+  assert.equal(conf.version, '1.2.4');
   assert.ok(conf.bundle.targets.includes('nsis'));
   assert.ok(conf.bundle.targets.includes('msi'));
   assert.equal(conf.bundle.windows.nsis.installerHooks, './installer/windows-context-menu.nsh');
@@ -148,21 +148,21 @@ test('tauri.release.conf.json 与 windows-context-menu.nsh 资产齐备', () => 
 
 
 test('APP_BUILD_INFO 与 formatBuildTimestamp / formatBuildFingerprint 口径稳定', () => {
-  assert.equal(APP_BUILD_INFO.version, '1.2.3');
-  assert.equal(APP_BUILD_INFO.versionTag, 'v1.2.3');
+  assert.equal(APP_BUILD_INFO.version, '1.2.4');
+  assert.equal(APP_BUILD_INFO.versionTag, 'v1.2.4');
   assert.ok(APP_BUILD_INFO.gitSha.length > 0);
   assert.equal(formatBuildTimestamp('2026-11-23T17:30:45.123Z'), '2026-11-23 17:30 UTC');
   assert.equal(formatBuildTimestamp(''), '—');
   const fp = formatBuildFingerprint({
-    version: '1.2.3',
-    versionTag: 'v1.2.3',
+    version: '1.2.4',
+    versionTag: 'v1.2.4',
     gitSha: '8d8e4ab',
     buildTime: '2026-11-23T17:30:00.000Z',
   });
-  assert.equal(fp, 'v1.2.3 (8d8e4ab) · 2026-11-23 17:30 UTC');
+  assert.equal(fp, 'v1.2.4 (8d8e4ab) · 2026-11-23 17:30 UTC');
 });
 
-test('WorkspaceSettingsModal「关于观澜」清晰透出 v1.2.3 / git-sha / 构建时间戳且零 v1.2-dev 残留', () => {
+test('WorkspaceSettingsModal「关于观澜」清晰透出 v1.2.4 / git-sha / 构建时间戳且零 v1.2-dev 残留', () => {
   const html = renderToStaticMarkup(
     React.createElement(WorkspaceSettingsModal, {
       isOpen: true,
@@ -171,8 +171,8 @@ test('WorkspaceSettingsModal「关于观澜」清晰透出 v1.2.3 / git-sha / �
       initialTab: 'about',
     })
   );
-  assert.ok(html.includes('data-about-version="1.2.3"'));
-  assert.ok(html.includes('v1.2.3'));
+  assert.ok(html.includes('data-about-version="1.2.4"'));
+  assert.ok(html.includes('v1.2.4'));
   assert.ok(html.includes('data-about-git-sha='));
   assert.ok(html.includes('data-about-build-time='));
   assert.equal(html.includes('v1.2-dev'), false, '正式版不得残留 v1.2-dev');

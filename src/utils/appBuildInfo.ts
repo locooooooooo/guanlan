@@ -13,7 +13,7 @@ export interface AppBuildInfo {
 const resolvedVersion =
   typeof __GUANLAN_APP_VERSION__ === 'string' && __GUANLAN_APP_VERSION__.trim()
     ? __GUANLAN_APP_VERSION__.trim()
-    : '1.2.3';
+    : '1.2.4';
 
 const resolvedGitSha =
   typeof __GUANLAN_GIT_SHA__ === 'string' && __GUANLAN_GIT_SHA__.trim()
